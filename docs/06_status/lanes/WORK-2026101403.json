@@ -11,8 +11,7 @@
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1757",
   "files_changed": [],
   "file_scope_lock": [
-    "apps/api/src/t1-proof-utv2-1954-promotion-replay.test.ts",
-    ".ops/work/WORK-2026101403.md"
+    "apps/api/src/t1-proof-utv2-1954-promotion-replay.test.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/WORK-2026101403/diff-summary.md",
