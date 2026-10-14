@@ -1,6 +1,6 @@
 # PROOF: WORK-2026101403
 
-MERGE_SHA: pending governed merge
+MERGE_SHA: pending merge
 
 Issue: WORK-2026101403
 Tier: T2
@@ -52,5 +52,5 @@ Writable live-DB proof is blocked/deferred to the protected `staging-ci` GitHub 
 
 ## Merge SHA Binding
 
-Merge SHA: pending governed merge
+Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1757
