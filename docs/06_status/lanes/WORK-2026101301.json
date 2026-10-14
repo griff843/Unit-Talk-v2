@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1972-order/.out/worktrees/claude__work-2026101301-mission-refresh",
   "branch": "claude/work-2026101301-mission-refresh",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "ea4af2c48f75029695410f35c896902670f5c0ba",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1748",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/work/WORK-2026101301.md",
@@ -28,14 +28,22 @@
     "docs/06_status/proof/WORK-2026101301/evidence.json",
     "docs/06_status/proof/WORK-2026101301/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-10-13T13:23:02.132Z",
-  "heartbeat_at": "2026-10-13T13:23:02.132Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-14T19:53:36.315Z",
+  "closed_at": "2026-10-14T19:53:36.315Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026101301-mission-refresh.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-14T19:53:32.445Z",
+      "verdict": "pass",
+      "merge_sha": "ea4af2c48f75029695410f35c896902670f5c0ba",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {
