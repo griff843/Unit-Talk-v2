@@ -1,0 +1,68 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101402",
+  "pr_number": 1755,
+  "source_sha": "3ede34fb4bb94b5642bf925aaa17c76f0b6c9992",
+  "reviewed_head_sha": "3ede34fb4bb94b5642bf925aaa17c76f0b6c9992",
+  "evidence_commit_sha": null,
+  "current_head_sha": "3ede34fb4bb94b5642bf925aaa17c76f0b6c9992",
+  "gate_results": [
+    { "gate": "focused-issue-tests", "verdict": "PASS", "detail": "52 pass, 0 fail" },
+    { "gate": "expanded-smart-form-api-tests", "verdict": "PASS", "detail": "193 pass, 0 fail" },
+    { "gate": "verify-static", "verdict": "PASS", "detail": "pnpm verify:static exited 0 locally" },
+    { "gate": "r-level", "verdict": "PASS", "detail": "operator-ui matched; focused QA behavior passed" },
+    { "gate": "writable-db", "verdict": "SKIP", "detail": "Local target identity refused before writes; protected staging CI required" }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "generated_at": "2026-10-14T11:25:22Z",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "3ede34fb4bb94b5642bf925aaa17c76f0b6c9992",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm verify:static",
+    "conclusion": "success",
+    "verified_source_sha": "3ede34fb4bb94b5642bf925aaa17c76f0b6c9992",
+    "note": "Local static verification exited 0; protected exact-head CI remains pending."
+  },
+  "runtime_proof": {
+    "status": "blocked_deferred_to_protected_ci",
+    "queries": [
+      { "command": "pnpm test:db", "result": "refused_before_write", "reason": "target identity could not be resolved as staging" }
+    ],
+    "row_counts": [
+      { "surface": "writable staging verification", "count": null, "result": "not_observed_due_to_pre-write_identity_guard" }
+    ],
+    "required_staging_ref": "xskgrzbteyqdufktjrjx",
+    "observed_host": "127.0.0.1",
+    "observed_ref": "unidentified",
+    "production_accessed": false
+  },
+  "verification": {
+    "focused_issue_tests": { "pass": 52, "fail": 0 },
+    "expanded_smart_form_api_tests": { "pass": 193, "fail": 0 },
+    "alert_regression_tests": { "pass": 23, "fail": 0 },
+    "type_check": "pass",
+    "test": "pass",
+    "verify_static": "pass",
+    "r_level": "PASS; operator-ui matched",
+    "test_db": "blocked/deferred at staging identity guard",
+    "verify": "static phase passed; live-DB phase exited 1 at staging identity guard"
+  },
+  "pending": [
+    "protected staging writable-DB and unsupported-sport replay receipt",
+    "protected exact-head CI receipt",
+    "outer-wrapper executor-result/v1 publication",
+    "PM approval and governed merge",
+    "authorized deployment and post-migration Track Only acceptance",
+    "post-merge lane finalization and orchestration reconciliation"
+  ]
+}
