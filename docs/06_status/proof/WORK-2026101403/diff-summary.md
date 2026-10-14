@@ -13,5 +13,5 @@ Read-only checks confirmed the WNBA coverage in `promotion-edge-integration.test
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: c2a657ae54dfe21dd324ed4db9fec712d72adb2f
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1757

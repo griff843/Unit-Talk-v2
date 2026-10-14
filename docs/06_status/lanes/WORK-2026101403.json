@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026101403-order/.out/worktrees/codex__work-2026101403-unsupported-sport-fixture",
   "branch": "codex/work-2026101403-unsupported-sport-fixture",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "c2a657ae54dfe21dd324ed4db9fec712d72adb2f",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1757",
   "files_changed": [],
   "file_scope_lock": [
@@ -19,14 +19,22 @@
     "docs/06_status/proof/WORK-2026101403/verification.md",
     "docs/06_status/proof/WORK-2026101403/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-10-14T12:19:35.923Z",
-  "heartbeat_at": "2026-10-14T12:39:20.669Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-14T14:04:11.551Z",
+  "closed_at": "2026-10-14T14:04:11.551Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026101403-unsupported-sport-fixture.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-14T14:04:08.796Z",
+      "verdict": "pass",
+      "merge_sha": "c2a657ae54dfe21dd324ed4db9fec712d72adb2f",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-medium",
