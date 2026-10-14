@@ -134,6 +134,26 @@ test('derives NBA from SGO market key nba-total', () => {
   assert.equal(deriveMarketTypeId(pick), 'game_total_ou');
 });
 
+test('derives WNBA case-insensitively from metadata without changing NBA', () => {
+  assert.equal(deriveSportId(buildPick({}, { sport: 'WNBA' })), 'WNBA');
+  assert.equal(deriveSportId(buildPick({}, { sport: 'wnba' })), 'WNBA');
+  assert.equal(deriveSportId(buildPick({}, { sport: 'NBA' })), 'NBA');
+});
+
+test('derives WNBA and game market types from SGO-format market keys', () => {
+  const cases = [
+    ['wnba-spread', 'spread'],
+    ['wnba-ml', 'moneyline'],
+    ['wnba-total', 'game_total_ou'],
+  ] as const;
+
+  for (const [market, marketTypeId] of cases) {
+    const pick = buildPick({ market }, {});
+    assert.equal(deriveSportId(pick), 'WNBA');
+    assert.equal(deriveMarketTypeId(pick), marketTypeId);
+  }
+});
+
 test('derives NFL from SGO market key nfl-spread when metadata.sport is absent', () => {
   const pick = buildPick({ market: 'nfl-spread' }, {});
   assert.equal(deriveSportId(pick), 'NFL');
