@@ -43,5 +43,5 @@ row. Applying migration `20261010170100_wnba_participant_catalog.sql` is reserve
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: af3df8febecf5bb4e9ae4b356661796c1e55cca1
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1755
