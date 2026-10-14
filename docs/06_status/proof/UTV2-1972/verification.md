@@ -1,6 +1,6 @@
 # PROOF: UTV2-1972 — Verification
 
-MERGE_SHA: pending merge
+MERGE_SHA: 51ca89c3e38b532c350da819aa4bb00d24c451e3
 
 > This is pre-merge executor evidence. It does not claim PM approval, merge,
 > production migration, deployment, event seeding, provider activation, delivery
@@ -104,6 +104,6 @@ Hosted exact-head receipts at `b18134396ebf09ec9a4db87c44e299cd148061a6`:
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 51ca89c3e38b532c350da819aa4bb00d24c451e3
 PR: #1745
 Execution SHA: b18134396ebf09ec9a4db87c44e299cd148061a6

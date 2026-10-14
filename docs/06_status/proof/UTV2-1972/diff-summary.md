@@ -26,6 +26,6 @@ activate modeling, grading, promotion, or delivery behavior.
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 51ca89c3e38b532c350da819aa4bb00d24c451e3
 PR: #1745
 Verified source SHA: `b18134396ebf09ec9a4db87c44e299cd148061a6`

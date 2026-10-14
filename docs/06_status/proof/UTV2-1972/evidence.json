@@ -46,7 +46,7 @@
   "reviewer_verdict": null,
   "pm_verdict": null,
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "51ca89c3e38b532c350da819aa4bb00d24c451e3",
     "verified_source_sha": "b18134396ebf09ec9a4db87c44e299cd148061a6",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -54,7 +54,9 @@
       "verify": "required on the exact PR head",
       "writable_db_proof": "required in the staging-ci environment"
     },
-    "note": "Verified source is the sanctioned-resync exact PR head tested by hosted CI; the substantive repair commit remains fdafdfbabf0dcdba4ced01cb72635d9d3d3a7e20. The evidence commit and current PR head remain CI-bound; no merge SHA is asserted."
+    "note": "Verified source is the sanctioned-resync exact PR head tested by hosted CI; the substantive repair commit remains fdafdfbabf0dcdba4ced01cb72635d9d3d3a7e20. The evidence commit and current PR head remain CI-bound; no merge SHA is asserted.",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-14T00:08:28.626Z"
   },
   "catalog": {
     "league": "WNBA",
@@ -65,14 +67,19 @@
       "Portland Fire",
       "Toronto Tempo"
     ],
-    "excluded_future_franchises": ["Cleveland Sirens (2028)"],
+    "excluded_future_franchises": [
+      "Cleveland Sirens (2028)"
+    ],
     "writes": [
       "public.sports",
       "public.leagues",
       "public.sport_market_type_availability",
       "public.participants"
     ],
-    "forbidden_writes": ["public.teams", "provider identity tables"]
+    "forbidden_writes": [
+      "public.teams",
+      "provider identity tables"
+    ]
   },
   "static_proof": {
     "status": "PASS",
