@@ -8,13 +8,14 @@ Read this before touching any code. Estimated time: 10 minutes.
 
 Unit Talk V2 is a **contract-first, fail-closed sports-betting pick pipeline**. It accepts picks from users, scores and promotes qualified picks, routes them to Discord, grades settled bets against game results, and provides an operator dashboard.
 
-Claude Code is the execution orchestrator: work the Linear backlog, merge on green per tier policy, keep execution truth mechanical rather than narrative.
+Claude Code is the execution orchestrator: discover the work from the live mission, current code, runtime and database evidence (`docs/mission/`), run safe work in parallel in isolated lanes, and merge only through the tier, review and approval controls. Linear is workflow intent, not the authoritative priority queue. Keep execution truth mechanical rather than narrative.
 
 ---
 
 ## Where to Look First (read in this order)
 
 1. **`CLAUDE.md`** — root invariants, commands, tier policy, skill table. Read this first, every session.
+   Then the mission set it imports: `docs/mission/intent.md` (Griff-owned intent, including the 2026-10-13 quantity-first current intent), `docs/mission/spec.md`, and `docs/mission/plan.md` (live state, rebuilt from runtime evidence).
 2. **`docs/CODEBASE_GUIDE.md`** — monorepo structure, package DAG, tech stack, DB schema facts.
 3. **`docs/05_operations/EXECUTION_MAP.md`** — master phase map, what is shipped, what is next.
 4. **Relevant skill** — see Skills Quick-Reference below. Invoke before touching the relevant subsystem.

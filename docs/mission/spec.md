@@ -20,7 +20,9 @@ The mission is complete when all four hold at once:
    no threshold of its own and no alternate scoring.
 
 2. **Milestone 1 has actually been performed**, by Griff, end to end, against the deployed system —
-   not simulated, not asserted from tests. The seven steps are enumerated in `intent.md`.
+   not simulated, not asserted from tests. The seven steps are enumerated in `intent.md`. This is
+   **historically satisfied** (2026-09-09, pick `dfcd9486`; re-proved 2026-09-28) and is evidence,
+   not the remaining finish line. The intermediate outcomes below carry the current work.
 
 3. **The system is operationally usable as the intended product** — a capper can submit, the
    pipeline grades and settles, an operator can observe it through the intended surface, and
@@ -32,6 +34,29 @@ The mission is complete when all four hold at once:
 
 An individual PR merging, a ticket closing, CI turning green, or a subtask completing satisfies
 none of these.
+
+### Intermediate outcomes (ratified by Griff 2026-10-13, issue #1747)
+
+These are stepping stones toward the four outcomes above. They are **not** readiness thresholds and
+define no alternate scoring; the sole readiness definition stays the T1 contract.
+
+- **A. Quantity-driven internal operating milestone.** Real Track Only picks from authorized
+  identities persist with truthful provenance, are observed in the governed Command Center, are
+  manually settled and corrected where real, and capper history and statistics reconcile to the
+  persisted rows — with zero member delivery. Success is measured by quantity, diversity, truthful
+  completion and reconciliation, never by a calendar window. The working measurement lives in
+  `plan.md`; Griff decides whether it is satisfied. Submitting and manually settling a Track Only
+  pick requires neither SGO nor an event feed.
+- **B. Pre-SGO engineering completion.** Every meaningful data-independent P0/P1 prerequisite for
+  provider ingestion, event/result matching, automated grading, CLV plumbing, models, operator
+  views, security, observability, recovery and commerce is built and proven on staging and fixtures
+  before paid SGO activation is requested. Parked ingestion and stale grading are distinguished from
+  implementation defects.
+- **C. SGO activation is a separate Griff gate**, taken only after an evidence-backed minimal
+  usage, coverage, cost and rollback plan. It is never implied by A or B.
+
+Sections below that carry a "Milestone 1" heading index the contracts that governed that historical
+milestone; they remain the canonical contracts for Smart Form submission and Track Only semantics.
 
 ---
 
