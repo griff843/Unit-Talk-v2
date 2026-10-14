@@ -8,7 +8,7 @@ Read this before touching any code. Estimated time: 10 minutes.
 
 Unit Talk V2 is a **contract-first, fail-closed sports-betting pick pipeline**. It accepts picks from users, scores and promotes qualified picks, routes them to Discord, grades settled bets against game results, and provides an operator dashboard.
 
-Claude Code is the execution orchestrator: work the Linear backlog, merge on green per tier policy, keep execution truth mechanical rather than narrative.
+Claude Code is the execution orchestrator: discover the work from the live mission, current code, runtime and database evidence (`docs/mission/`), run safe work in parallel in isolated lanes, and merge only through the tier, review and approval controls. Linear is workflow intent, not the authoritative priority queue. Keep execution truth mechanical rather than narrative.
 
 ---
 

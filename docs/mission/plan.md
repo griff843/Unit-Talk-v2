@@ -1,7 +1,7 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rebuilt from live evidence on 2026-10-13 under WORK-2026101301 (issue #1747). Not a log, not a backlog, not Linear in Markdown.
-**Measured against:** `origin/main` `cef79f9c6`, deployed release `ed89569df`, production `zfzdnfwdarxucxtaojxm` (read-only SQL), GitHub API.
+**Measured against:** `origin/main` `f3a95272b` (re-read 2026-10-14; #1745 merged, UTV2-1972 closed), deployed release `ed89569df`, production `zfzdnfwdarxucxtaojxm` (read-only SQL), GitHub API.
 **Archives, read on demand — never at session start:**
 [`plan-lessons.md`](plan-lessons.md) (operating lessons) ·
 [`plan-history-2026-09.md`](plan-history-2026-09.md) (chronology through 2026-09-14, plus the archived 2026-09-28 edition of this plan)
@@ -43,7 +43,7 @@ graded-pick requirement, nor the membership or Discord entitlement contracts.
 
 | Fact | Reading (2026-10-13) |
 |---|---|
-| `origin/main` | `cef79f9c6` |
+| `origin/main` | `f3a95272b` |
 | Deployed release | `ed89569df` — `Deploy` run `38397434631`, 2026-10-13, success. Confirmed mode `human-capper`: ingestor autorun and scheduling off, worker on, one enabled target (`official-picks`), `killSwitchEngaged: true`. |
 | Runtime drift `deployed..main` | **0 files** under `apps/` and `packages/` (5 lane/proof files only). Re-measure with `git diff --name-only ed89569df..origin/main`. |
 | Containment variables | `UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED=true`, `UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST=griff843`, `UNIT_TALK_COMMAND_CENTER_ENABLED=true`. No `SYNDICATE_MACHINE_MODE` variable exists. |
@@ -57,7 +57,7 @@ graded-pick requirement, nor the membership or Discord entitlement contracts.
 | SGO / ingestion | Parked. Newest `ingestor.cycle` 2026-06-30 (failed); newest `game_results` 2026-06-30; no events in the last 14 days (newest 2026-09-28). |
 | Runtime heartbeats | `worker.heartbeat` and `grading.cron.heartbeat` succeeded 2026-10-13. `governance.awaiting-approval-drift` last run **failed** (10-13 12:45Z). |
 | Readiness ledger | **RED**, generated 2026-10-13T00:23Z — *before* the latest deploy; `deploy_sha_alignment` is therefore stale. Blocking failures: `deploy_sha_alignment` (stale), `ingestor_health` and `grading_health` (SGO parked), `db_tripwires`. `worker_outbox_health` and `dead_letter_count` pass. |
-| Open PRs | #1745 (Codex, T1, WNBA migration), #1739 (Codex, T2, delivery-ui path admission), #1738 (Claude, T1, constitution-matrix annotation), #1736 (website logo), this lane's PR, and the frozen or inadmissible #1556, #1505, #1498, #1495, #1492, #1491, #1451, #1429. |
+| Open PRs | #1754 (Codex, T1, grading read fix, PM-approved, resyncing), #1739 (Codex, T2, delivery-ui path admission), #1738 (Claude, T1, constitution-matrix annotation), #1736 (website logo), this lane's PR, and the frozen or inadmissible #1556, #1505, #1498, #1495, #1492, #1491, #1451, #1429. |
 | Lane manifests on `main` | 881 `done`, 28 `closed`, 37 `merged`, 2 `superseded`. Count with `jq .status docs/06_status/lanes/*.json`. |
 
 **Measured, not assumed:** the cohort has one submitting identity. The deployed allow-list names one
@@ -77,7 +77,7 @@ not a given (§3).
 - **NCAAF reference data is live.** The catalog migration was applied to production on 2026-10-12
   (266 teams; 1,647 pre-existing rows unchanged) and Griff confirmed the teams render in Smart Form.
 - **WNBA is not yet usable.** Three things are missing in order: the migration merged and applied to
-  production (#1745; the apply is Griff's), the Smart Form/API team-sport change merged and deployed,
+  production (#1745 merged at `51ca89c3e`, UTV2-1972 closed; the production apply is Griff's, with a fresh SQL read preflight), the Smart Form/API team-sport change merged and deployed,
   then a real submission (§6.A).
 - **`706b136b`** is a `delivery-eligible` pick, `queued`, whose only outbox row is a `dead_letter`.
   It is held behind the kill switch. Do not requeue or alter it.
@@ -112,7 +112,7 @@ A migration lane is a singleton and is forbidden alongside a runtime lane, whate
 
 | # | Workstream | Owner | State |
 |---|---|---|---|
-| A | WNBA vertical slice | Codex (migration), then Codex (T2 runtime) | #1745 in PM review; runtime lane queued behind it |
+| A | WNBA vertical slice | Codex (migration), then Codex (T2 runtime) | #1745 **merged** (`51ca89c3e`); production apply not yet requested; runtime lane queued behind the apply |
 | B | NCAAF live acceptance | **Griff** (submits), Claude (verifies read-only) | Waiting on Griff |
 | C | NCAAB participant catalog | Codex | SMALL; queued behind the migration singleton |
 | D | Command Center operator view | Codex (Delivery/UI, display only) | **Display gaps closed on `main`** (#1685, #1689, #1692); awaiting a deployed render. No lane to start. |
@@ -139,7 +139,7 @@ Revalidate each item against current code before building on it — the list bel
 | Operator views | Command Center renders decision, mode, participant resolution, eventless-pick notes, voided banner, capper/units (display only) | Implemented on `main`; **not yet observed in the deployed Command Center** until a deploy carries it (Griff dispatches) |
 | Security and recovery | Auth fail-closed, kill-switch release procedure, replay/double-post protection, dead-letter handling | Documented procedure plus proof |
 | Observability | Delivery freshness derived from receipts; `/health` fails closed; `governance.awaiting-approval-drift` failure classified | Proof per defect |
-| Commerce and entitlements | Tier sync authenticates with a scoped credential and surfaces refusal; trial expiry; tier-gated `/live` and `/today`; copy matches what is live | Proof per item; Whop setup remains Griff's |
+| Commerce and entitlements | Tier sync authenticates with a scoped credential and surfaces refusal; tier-gated `/live` and `/today`; copy matches what is live. **Whop is the authority for payment, Trial end, cancellation/nonpayment and paid-role lifecycle:** verify the actual Whop product→role grant/revoke across subscription and Trial lifecycle, then address only a demonstrated guard/mirror gap — do not build a competing expiry or role-grant timer without proved need (#1752 stays parked pending that proof) | Proof per item; Whop setup remains Griff's |
 
 Open governance/reliability work is capped at one lane alongside product work, and only where it
 blocks production, repeatedly strands lanes or threatens data truth. Do not file new governance issues
@@ -185,9 +185,9 @@ never produces delivery, and the kill switches stay as they are.
 
 | # | Decision | Reserved under | Blocks |
 |---|---|---|---|
-| 1 | **#1745 exact-head PM approval** (`pm-verdict/v1` APPROVED and `t1-approved`) | merge authority | WNBA migration merge |
-| 2 | **Apply the WNBA migration to production** (packet to follow the merge) | production DDL | WNBA appearing in Smart Form |
-| 3 | **Dispatch the deployment** carrying the WNBA runtime change | production deployment | WNBA submission |
+| 1 | **Apply the WNBA migration to production** — separate Griff approval, preceded by a fresh read-only SQL preflight and `supabase migration list --linked` (#1745 is merged; nothing is applied) | production DDL | WNBA appearing in Smart Form |
+| 2 | **Dispatch the deployment** carrying the WNBA runtime change, only after the apply and as a separate approval | production deployment | WNBA submission |
+| 3 | **Real contained WNBA acceptance** — one real Track Only pick after the deploy | operator action | WNBA vertical slice done |
 | 4 | **Submit one real NCAAF Track Only pick** | operator action | NCAAF acceptance |
 | 5 | **Authorize a second capper identity** | capper onboarding / allow-list | the ≥ 2 identity measure |
 | 6 | **SGO purchase/activation**, after the evidence-backed minimal-provider plan | paid provider, secrets | live ingestion, CLV, automated grading on live data |

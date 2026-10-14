@@ -79,6 +79,11 @@ section is more specific about the *current* goal, it governs.
    the concurrency configuration, singleton file ownership, staging capacity, exact-HEAD review and
    the reserved decisions above. The separate browser-capable Codex Discord Waves 0–6 program remains
    independent and is not duplicated. No worktree count is authority.
+8. **Whop is the commercial authority** (Griff, 2026-10-13/14). Whop decides payment, Trial end,
+   cancellation/nonpayment and paid-role lifecycle. Unit Talk's bot and API may verify and mirror
+   entitlements, and must not build a competing commercial expiry or role-grant timer without a
+   demonstrated need. Work here verifies the Whop product→role grant/revoke lifecycle first and
+   addresses only a proved guard or mirror gap. The membership contract is unchanged.
 
 ## Source of truth
 
