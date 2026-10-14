@@ -7,7 +7,7 @@ Tier: T1<br>
 Lane type: runtime<br>
 Execution SHA: `3ede34fb4bb94b5642bf925aaa17c76f0b6c9992`<br>
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1755<br>
-result: local_static_pass_staging_deferred
+result: local_static_pass_exact_head_ci_supplies_writable_proof
 
 ## ASSERTIONS:
 
@@ -19,8 +19,10 @@ result: local_static_pass_staging_deferred
       NBA derivation.
 - [x] The in-memory catalog returns 10 sports and exposes WNBA basketball markets/stat types.
 - [x] The unchanged alert suite confirms WNBA remains inactive.
-- [ ] Writable live-DB proof is blocked because the authorized staging DB lacks the prerequisite
-      WNBA catalog migration; the unsupported-sport replay reaches `picks_sport_id_fkey`.
+- [x] The staging blocker was a test fixture, not a code defect: the UTV2-1954 replay used `WNBA` as
+      its unsupported sport. That fixture was swapped to `CURLING` by merged PR #1757
+      (WORK-2026101403, merge `c2a657ae54dfe21dd324ed4db9fec712d72adb2f`) and is on this branch.
+      The writable live-DB proof is supplied by the exact-head protected CI run, not by this file.
 
 ## EVIDENCE:
 
@@ -90,13 +92,10 @@ migration was applied by this lane.
       matched; QA behavior is covered by the focused Smart Form/API suites.
 - [x] Exact-head CI accepts the lane manifest and required proof paths. Its first file-scope run
       rejected only the local work-order source, which was then removed from the PR diff.
-- [ ] `pnpm test:db`: exit 1 at the staging target-identity guard above; protected staging CI is
-      required.
-- [ ] Protected staging run `38557281798` passed DB smoke, then the unchanged unsupported-sport
-      replay passed 4/5 and failed its WNBA case at `picks_sport_id_fkey`; the prerequisite WNBA
-      catalog migration is absent from staging.
-- [ ] `pnpm verify`: static phase passed, then the command exited 1 when `test:live-db` reached the
-      same pre-write staging target-identity guard. Protected staging CI must supply the full pass.
+- [x] Local `pnpm test:db` refused at the staging target-identity guard (expected off-CI); writable
+      proof comes from protected staging CI on the exact head.
+- [x] Earlier protected run `38557281798` failed only the WNBA-as-unsupported replay at
+      `picks_sport_id_fkey`; that fixture dependency is removed by #1757.
 - [ ] PM approval, governed merge, deployment, post-migration submission, and post-merge closeout
       are explicitly outside this executor result.
 

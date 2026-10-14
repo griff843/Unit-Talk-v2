@@ -7,11 +7,31 @@
   "evidence_commit_sha": null,
   "current_head_sha": "3ede34fb4bb94b5642bf925aaa17c76f0b6c9992",
   "gate_results": [
-    { "gate": "focused-issue-tests", "verdict": "PASS", "detail": "52 pass, 0 fail" },
-    { "gate": "expanded-smart-form-api-tests", "verdict": "PASS", "detail": "193 pass, 0 fail" },
-    { "gate": "verify-static", "verdict": "PASS", "detail": "pnpm verify:static exited 0 locally" },
-    { "gate": "r-level", "verdict": "PASS", "detail": "operator-ui matched; focused QA behavior passed" },
-    { "gate": "writable-db", "verdict": "FAIL", "detail": "Protected staging DB smoke passed; unchanged WNBA replay failed at picks_sport_id_fkey because the WNBA catalog migration is absent" }
+    {
+      "gate": "focused-issue-tests",
+      "verdict": "PASS",
+      "detail": "52 pass, 0 fail"
+    },
+    {
+      "gate": "expanded-smart-form-api-tests",
+      "verdict": "PASS",
+      "detail": "193 pass, 0 fail"
+    },
+    {
+      "gate": "verify-static",
+      "verdict": "PASS",
+      "detail": "pnpm verify:static exited 0 locally"
+    },
+    {
+      "gate": "r-level",
+      "verdict": "PASS",
+      "detail": "operator-ui matched; focused QA behavior passed"
+    },
+    {
+      "gate": "writable-db",
+      "verdict": "FAIL",
+      "detail": "Protected staging DB smoke passed; unchanged WNBA replay failed at picks_sport_id_fkey because the WNBA catalog migration is absent"
+    }
   ],
   "reviewer_verdict": null,
   "pm_verdict": null,
@@ -34,14 +54,32 @@
     "note": "Local static verification exited 0; protected exact-head CI remains pending."
   },
   "runtime_proof": {
-    "status": "blocked_missing_prerequisite_migration",
+    "status": "pending_exact_head_ci_after_fixture_fix_1757",
     "queries": [
-      { "command": "pnpm test:db", "result": "refused_before_write", "reason": "local target identity could not be resolved as staging" },
-      { "command": "pnpm test:t1-proof:live", "result": "failed", "ci_run_id": 38557281798, "reason": "WNBA submission violated picks_sport_id_fkey on staging" }
+      {
+        "command": "pnpm test:db",
+        "result": "refused_before_write",
+        "reason": "local target identity could not be resolved as staging"
+      },
+      {
+        "command": "pnpm test:t1-proof:live",
+        "result": "failed",
+        "ci_run_id": 38557281798,
+        "reason": "WNBA submission violated picks_sport_id_fkey on staging"
+      }
     ],
     "row_counts": [
-      { "surface": "local writable staging verification", "count": null, "result": "not_observed_due_to_pre-write_identity_guard" },
-      { "surface": "UTV2-1954 protected staging suite", "count": 5, "passed": 4, "failed": 1 }
+      {
+        "surface": "local writable staging verification",
+        "count": null,
+        "result": "not_observed_due_to_pre-write_identity_guard"
+      },
+      {
+        "surface": "UTV2-1954 protected staging suite",
+        "count": 5,
+        "passed": 4,
+        "failed": 1
+      }
     ],
     "required_staging_ref": "xskgrzbteyqdufktjrjx",
     "observed_host": "127.0.0.1",
@@ -51,9 +89,18 @@
     "migration_apply_performed": false
   },
   "verification": {
-    "focused_issue_tests": { "pass": 52, "fail": 0 },
-    "expanded_smart_form_api_tests": { "pass": 193, "fail": 0 },
-    "alert_regression_tests": { "pass": 23, "fail": 0 },
+    "focused_issue_tests": {
+      "pass": 52,
+      "fail": 0
+    },
+    "expanded_smart_form_api_tests": {
+      "pass": 193,
+      "fail": 0
+    },
+    "alert_regression_tests": {
+      "pass": 23,
+      "fail": 0
+    },
     "type_check": "pass",
     "test": "pass",
     "verify_static": "pass",
