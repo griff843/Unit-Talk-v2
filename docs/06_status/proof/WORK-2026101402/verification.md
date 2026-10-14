@@ -72,9 +72,8 @@ credentials. The locally measured host was `127.0.0.1` with ref `unidentified`.
 - [x] Alert regression suite: 23 pass, 0 fail; WNBA remains inactive.
 - [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS; operator-ui
       matched; QA behavior is covered by the focused Smart Form/API suites.
-- [ ] `pnpm ops:scope-diff -- --issue WORK-2026101402`: reports the separately committed lane
-      manifest and four packet-required proof paths outside the eight-file implementation lock;
-      this is recorded as an authorized governance-artifact exception, not hidden as a clean result.
+- [x] Exact-head CI accepts the lane manifest and required proof paths. Its first file-scope run
+      rejected only the local work-order source, which was then removed from the PR diff.
 - [ ] `pnpm test:db`: exit 1 at the staging target-identity guard above; protected staging CI is
       required.
 - [ ] The unchanged unsupported-sport replay test also requires the same live DB and failed locally

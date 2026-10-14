@@ -29,11 +29,10 @@ PR: https://github.com/griff843/Unit-Talk-v2/pull/1755
 | `packages/db/src/pick-foreign-keys.ts` | Derive WNBA sport and market foreign keys. |
 | `packages/db/src/pick-foreign-keys.test.ts` | Prove metadata, prefix, alias, and NBA separation behavior. |
 
-The repo-owned `.ops/work/WORK-2026101402.md`, lane-link metadata, and this named proof directory
-are governance artifacts. The packet explicitly authorizes the work order and proof paths; the
-machine scope lock enumerates only the eight implementation files. Run after the separate proof
-commit, `ops:scope-diff` therefore reports the lane manifest and four required proof paths as
-governance-path bleed and reports the implementation locks unused because it inspects that commit.
+The lane-link metadata and this named proof directory are governed closeout artifacts. The local
+`.ops/work/WORK-2026101402.md` remains the captured task source but is intentionally excluded from
+the PR because the trusted CI scope lock admits only the eight implementation files plus generated
+lane/proof artifacts.
 
 ## SHA Binding
 
