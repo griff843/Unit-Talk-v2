@@ -1,0 +1,119 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101402",
+  "pr_number": 1755,
+  "source_sha": "3ede34fb4bb94b5642bf925aaa17c76f0b6c9992",
+  "reviewed_head_sha": "3ede34fb4bb94b5642bf925aaa17c76f0b6c9992",
+  "evidence_commit_sha": null,
+  "current_head_sha": "3ede34fb4bb94b5642bf925aaa17c76f0b6c9992",
+  "gate_results": [
+    {
+      "gate": "focused-issue-tests",
+      "verdict": "PASS",
+      "detail": "52 pass, 0 fail"
+    },
+    {
+      "gate": "expanded-smart-form-api-tests",
+      "verdict": "PASS",
+      "detail": "193 pass, 0 fail"
+    },
+    {
+      "gate": "verify-static",
+      "verdict": "PASS",
+      "detail": "pnpm verify:static exited 0 locally"
+    },
+    {
+      "gate": "r-level",
+      "verdict": "PASS",
+      "detail": "operator-ui matched; focused QA behavior passed"
+    },
+    {
+      "gate": "writable-db",
+      "verdict": "FAIL",
+      "detail": "Protected staging DB smoke passed; unchanged WNBA replay failed at picks_sport_id_fkey because the WNBA catalog migration is absent"
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "generated_at": "2026-10-14T11:25:22Z",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "3ede34fb4bb94b5642bf925aaa17c76f0b6c9992",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm verify:static",
+    "conclusion": "success",
+    "verified_source_sha": "3ede34fb4bb94b5642bf925aaa17c76f0b6c9992",
+    "note": "Local static verification exited 0; protected exact-head CI remains pending."
+  },
+  "runtime_proof": {
+    "status": "pending_exact_head_ci_after_fixture_fix_1757",
+    "queries": [
+      {
+        "command": "pnpm test:db",
+        "result": "refused_before_write",
+        "reason": "local target identity could not be resolved as staging"
+      },
+      {
+        "command": "pnpm test:t1-proof:live",
+        "result": "failed",
+        "ci_run_id": 38557281798,
+        "reason": "WNBA submission violated picks_sport_id_fkey on staging"
+      }
+    ],
+    "row_counts": [
+      {
+        "surface": "local writable staging verification",
+        "count": null,
+        "result": "not_observed_due_to_pre-write_identity_guard"
+      },
+      {
+        "surface": "UTV2-1954 protected staging suite",
+        "count": 5,
+        "passed": 4,
+        "failed": 1
+      }
+    ],
+    "required_staging_ref": "xskgrzbteyqdufktjrjx",
+    "observed_host": "127.0.0.1",
+    "observed_ref": "unidentified",
+    "production_accessed": false,
+    "prerequisite_migration": "20261010170100_wnba_participant_catalog.sql",
+    "migration_apply_performed": false
+  },
+  "verification": {
+    "focused_issue_tests": {
+      "pass": 52,
+      "fail": 0
+    },
+    "expanded_smart_form_api_tests": {
+      "pass": 193,
+      "fail": 0
+    },
+    "alert_regression_tests": {
+      "pass": 23,
+      "fail": 0
+    },
+    "type_check": "pass",
+    "test": "pass",
+    "verify_static": "pass",
+    "r_level": "PASS; operator-ui matched",
+    "test_db": "local run blocked/deferred at staging identity guard; protected staging DB smoke passed",
+    "verify": "static phase passed; protected staging T1 suite failed at missing WNBA catalog prerequisite"
+  },
+  "pending": [
+    "apply the already-merged WNBA participant catalog migration to the authorized staging proof DB, then rerun writable proof",
+    "protected exact-head CI receipt",
+    "outer-wrapper executor-result/v1 publication",
+    "PM approval and governed merge",
+    "authorized deployment and post-migration Track Only acceptance",
+    "post-merge lane finalization and orchestration reconciliation"
+  ]
+}

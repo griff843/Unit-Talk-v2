@@ -490,6 +490,7 @@ export const CLIENT_TEAM_SPORT_IDS: ReadonlySet<string> = new Set([
   'NFL',
   'NCAAF',
   'NBA',
+  'WNBA',
   'NCAAB',
   'MLB',
   'NHL',

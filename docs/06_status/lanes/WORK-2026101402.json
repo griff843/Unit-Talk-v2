@@ -1,0 +1,53 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101402",
+  "lane_type": "runtime",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026101402-order/.out/worktrees/codex__work-2026101402-wnba-team-sport",
+  "branch": "codex/work-2026101402-wnba-team-sport",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1755",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/server.test.ts",
+    "apps/api/src/smart-form-validation.ts",
+    "apps/smart-form/app/submit/components/BetForm.tsx",
+    "apps/smart-form/lib/form-utils.ts",
+    "apps/smart-form/test/api-client.test.ts",
+    "packages/contracts/src/reference-data.ts",
+    "packages/db/src/pick-foreign-keys.test.ts",
+    "packages/db/src/pick-foreign-keys.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026101402/diff-summary.md",
+    "docs/06_status/proof/WORK-2026101402/evidence.json",
+    "docs/06_status/proof/WORK-2026101402/verification.md",
+    "docs/06_status/proof/WORK-2026101402/model-routing.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-10-14T11:07:13.951Z",
+  "heartbeat_at": "2026-10-14T11:26:42.945Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/work-2026101402-wnba-team-sport.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-medium",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "2.0.0"
+  },
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026101402-order/.out/worktrees/codex__work-2026101402-wnba-team-sport",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

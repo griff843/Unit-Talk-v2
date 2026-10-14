@@ -412,6 +412,28 @@ test('manual team-sport submission is refused until both sides are entered', () 
   );
 });
 
+test('WNBA manual submission requires two distinct entered participants', () => {
+  const oneSide = evaluateSubmissionGuards({
+    sportId: 'WNBA',
+    identityMode: 'manual',
+    awayParticipantName: 'Minnesota Lynx',
+    homeParticipantName: '',
+    team: 'Minnesota Lynx',
+  });
+  assert.equal(oneSide?.code, 'manual-team-sport-requires-both-sides');
+
+  assert.equal(
+    evaluateSubmissionGuards({
+      sportId: 'WNBA',
+      identityMode: 'manual',
+      awayParticipantName: 'Minnesota Lynx',
+      homeParticipantName: 'New York Liberty',
+      team: 'Minnesota Lynx',
+    }),
+    null,
+  );
+});
+
 test('manual team-sport submission is refused when both sides name the same participant', () => {
   // Two entered names that collapse to one alias key are one participant, not
   // two — the server counts them the same way and would reject the duplicate.
