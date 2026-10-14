@@ -1,0 +1,31 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101301",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "ba16df5bd575212ecbc5b5527121a8c81aaef853",
+    "evidence_commit_sha": "pending proof commit",
+    "current_pr_head_sha": "ba16df5bd575212ecbc5b5527121a8c81aaef853",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-13T13:36:21.000Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "verify_static": { "command": "pnpm verify:static", "status": "PASS", "detail": "exit 0" },
+    "r_level": { "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD", "status": "PASS", "detail": "No R-level artifacts required for this diff." }
+  },
+  "runtime_proof": { "status": "NOT_APPLICABLE", "detail": "Documentation-only mission refresh: no runtime, schema or database change." },
+  "acceptance_criteria": {
+    "plan_rebuilt_from_live_evidence": "PASS",
+    "no_calendar_pilot_defined": "PASS",
+    "intent_records_ratification_history_preserved": "PASS",
+    "spec_and_smart_form_intent_updated_no_competing_threshold": "PASS",
+    "pointer_hygiene_only": "PASS",
+    "readiness_contract_and_entitlements_unchanged": "PASS"
+  },
+  "verdict": "PASS"
+}

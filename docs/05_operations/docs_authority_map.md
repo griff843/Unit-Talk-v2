@@ -51,6 +51,7 @@ If a status doc says something is green but a live command fails, the live comma
 | `docs/03_product/MEMBER_ROLE_ACCESS_AUTHORITY.md` | Primary member tier and role access authority | Product      |
 | `docs/03_product/DISCORD_COMMAND_CATALOG.md`      | Live Discord command registry                 | Product      |
 | `docs/03_product/*CONTRACT.md`                    | Product-surface contracts                     | Product      |
+| `docs/mission/intent.md`, `spec.md`, `plan.md` | Mission set. `intent.md` is Griff-owned (current intent ratified 2026-10-13: quantity-first, Milestone 1 historical, SGO a separate gate); `spec.md` is an outcome and contract index; `plan.md` is Claude-owned live state rebuilt from runtime evidence. Introduce no readiness threshold; `T1_PRODUCTION_READINESS_CONTRACT.md` stays the sole definition. | Griff / Claude |
 | `docs/03_product/*/intent.md`                     | Product intent — what a product is for and must do; indexes the canonical contracts that govern it, reconciles contradictions by correcting them in place, and marks gaps. Not a contract, not a gate, introduces no threshold. Where it disagrees with a canonical contract, the contract wins. | Product      |
 | `docs/discord/*.md`                               | Discord message, embed, and cadence contracts | Product      |
 | `docs/03_contracts/*.md`                          | Domain consumer contracts                     | Architecture |
