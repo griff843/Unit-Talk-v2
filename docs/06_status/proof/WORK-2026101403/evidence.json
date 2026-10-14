@@ -1,0 +1,94 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101403",
+  "pr_number": 1757,
+  "source_sha": "bcfbf571fa7002b1d581b12b3e01ef9afd3a178d",
+  "reviewed_head_sha": "bcfbf571fa7002b1d581b12b3e01ef9afd3a178d",
+  "evidence_commit_sha": null,
+  "current_head_sha": null,
+  "merge_sha": null,
+  "gate_results": [
+    {
+      "gate": "focused-test-guarded",
+      "verdict": "PASS",
+      "detail": "Five live-DB cases skipped under the credential guard; process exited 0."
+    },
+    {
+      "gate": "type-check",
+      "verdict": "PASS",
+      "detail": "pnpm type-check exited 0."
+    },
+    {
+      "gate": "lint",
+      "verdict": "PASS",
+      "detail": "pnpm lint exited 0."
+    },
+    {
+      "gate": "verify-static",
+      "verdict": "PASS",
+      "detail": "pnpm verify:static exited 0."
+    },
+    {
+      "gate": "writable-live-db",
+      "verdict": "SKIP",
+      "detail": "Deferred to the protected staging-ci environment for project xskgrzbteyqdufktjrjx."
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "generated_at": "2026-10-14T12:34:16Z",
+  "tier": "T2",
+  "lane_type": "runtime",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "bcfbf571fa7002b1d581b12b3e01ef9afd3a178d",
+    "evidence_commit_sha": "pending proof commit",
+    "current_pr_head_sha": "bcfbf571fa7002b1d581b12b3e01ef9afd3a178d",
+    "sha_type": "pending_merge",
+    "bound_at": "2026-10-14T12:34:16Z"
+  },
+  "static_proof": {
+    "status": "pass",
+    "commands": [
+      "pnpm type-check",
+      "pnpm lint",
+      "pnpm verify:static",
+      "guarded focused test from a neutral working directory",
+      "direct CURLING versus NBA promotion-score mutation check",
+      "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD"
+    ]
+  },
+  "behavior_proof": {
+    "unsupported_fixture": "CURLING",
+    "derived_sport_id": null,
+    "recorded_score": 85,
+    "capped_score": 60,
+    "supported_nba_score": 85,
+    "cap_assertion_retained": true,
+    "nba_mutation_would_fail_cap_assertion": true,
+    "guarded_focused_test": {
+      "exit_code": 0,
+      "tests": 5,
+      "skipped": 5,
+      "failed": 0
+    }
+  },
+  "runtime_proof": {
+    "status": "blocked_deferred_to_protected_ci",
+    "required_project_ref": "xskgrzbteyqdufktjrjx",
+    "observed_local_host": "127.0.0.1",
+    "observed_local_ref": "unidentified",
+    "production_accessed": false,
+    "reason": "Writable staging identity and CI_SUPABASE_* credentials are available only through the staging-ci GitHub environment."
+  },
+  "verdict": "LOCAL_STATIC_PASS_STAGING_DEFERRED",
+  "pending": [
+    "protected staging-ci live-DB verification",
+    "PM approval",
+    "governed merge",
+    "lane finalization",
+    "post-merge orchestration reconciliation"
+  ]
+}
