@@ -28,14 +28,22 @@
     "docs/06_status/proof/WORK-2026101301/evidence.json",
     "docs/06_status/proof/WORK-2026101301/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-10-13T13:23:02.132Z",
-  "heartbeat_at": "2026-10-14T19:26:59.848Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-14T19:53:36.315Z",
+  "closed_at": "2026-10-14T19:53:36.315Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026101301-mission-refresh.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-14T19:53:32.445Z",
+      "verdict": "pass",
+      "merge_sha": "ea4af2c48f75029695410f35c896902670f5c0ba",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {

@@ -19,5 +19,5 @@ Readiness thresholds, entitlements, containment and merge authority are not touc
 ## SHA Binding
 
 Verified source SHA: `ba16df5bd575212ecbc5b5527121a8c81aaef853`
-Merge SHA: pending merge
+Merge SHA: ea4af2c48f75029695410f35c896902670f5c0ba
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1748

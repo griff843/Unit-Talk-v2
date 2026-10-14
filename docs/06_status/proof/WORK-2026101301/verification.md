@@ -1,6 +1,6 @@
 # PROOF: WORK-2026101301
 
-MERGE_SHA: pending merge
+MERGE_SHA: ea4af2c48f75029695410f35c896902670f5c0ba
 
 Issue: WORK-2026101301
 Tier: T1
@@ -37,5 +37,5 @@ clean - all changes within declared scope
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `ea4af2c48f75029695410f35c896902670f5c0ba`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1748
