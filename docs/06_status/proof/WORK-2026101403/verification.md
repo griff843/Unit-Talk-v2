@@ -7,7 +7,7 @@ Tier: T2
 result: local_static_pass_staging_deferred
 verified source SHA: `bcfbf571fa7002b1d581b12b3e01ef9afd3a178d`
 
-## ASSERTIONS
+## ASSERTIONS:
 
 - [x] `CURLING` is not a supported promotion scoring sport, so its recorded score is capped at 60.
 - [x] `deriveSportId({ sport: 'CURLING', betType: 'moneyline' })` resolves no canonical sport ID, so the pick can be written without a WNBA catalog row.
@@ -15,7 +15,7 @@ verified source SHA: `bcfbf571fa7002b1d581b12b3e01ef9afd3a178d`
 - [x] Mutation reasoning is measured: the fixture scores 60 with `CURLING`, while replacing it with supported sport `NBA` scores 85 and would fail the retained `<= 60` assertion.
 - [x] Existing WNBA references in the three named test files remain unchanged.
 
-## EVIDENCE
+## EVIDENCE:
 
 Focused test with the live-DB guard active, executed from a neutral working directory so repository credentials were not loaded:
 
