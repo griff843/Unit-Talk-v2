@@ -6,12 +6,13 @@
   "proof_profile": "app-runtime",
   "status": "review_pending_exact_head_ci",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "bd5e079398d393293dd5577ea05038ba3ca8098f",
     "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1754",
     "verified_source_sha": "bc679de4e3dfc46cb1a78ebbc6aa3ce83b758313",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "branch_sha"
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-14T10:33:18.991Z"
   },
   "static_proof": {
     "status": "pass_with_t1_live_db_deferred_to_ci",
@@ -25,8 +26,16 @@
         "pass": 115,
         "fail": 0
       },
-      { "command": "pnpm verify:static", "exit_code": 0, "result": "pass" },
-      { "command": "pnpm type-check", "exit_code": 0, "result": "pass" },
+      {
+        "command": "pnpm verify:static",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass"
+      },
       {
         "command": "pnpm test:db",
         "exit_code": 1,
@@ -39,7 +48,11 @@
         "result": "pass",
         "note": "No R-level rules matched the changed paths."
       },
-      { "command": "git diff --check origin/main...HEAD", "exit_code": 0, "result": "pass" }
+      {
+        "command": "git diff --check origin/main...HEAD",
+        "exit_code": 0,
+        "result": "pass"
+      }
     ]
   },
   "runtime_proof": {

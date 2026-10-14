@@ -12,6 +12,6 @@ Lane, sync and proof metadata accompany these paths. No migration, index, fixtur
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: bd5e079398d393293dd5577ea05038ba3ca8098f
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1754
 Execution SHA: bc679de4e3dfc46cb1a78ebbc6aa3ce83b758313
