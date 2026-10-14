@@ -354,8 +354,12 @@ async function executeGradingPass(
   const [postedPicks, evidencePicks, validatedPicks] = await Promise.all([
     fetchAllByLifecycleState(repositories.picks, 'posted'),
     fetchAllByLifecycleState(repositories.picks, 'awaiting_approval'),
-    fetchAllByLifecycleState(repositories.picks, 'validated'),
+    typeof repositories.picks.listTrackOnlyByLifecycleState === 'function'
+      ? repositories.picks.listTrackOnlyByLifecycleState('validated')
+      : fetchAllByLifecycleState(repositories.picks, 'validated'),
   ]);
+  // Keep the contract predicate as a backstop: the optimized repository read
+  // may only remove candidates, never admit a non-Track-Only validated pick.
   const trackOnlyPicks = validatedPicks.filter((pick) =>
     isEvidencePlanePick(pick),
   );

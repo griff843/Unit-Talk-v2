@@ -3458,6 +3458,21 @@ export class DatabasePickRepository implements PickRepository {
     return data ?? [];
   }
 
+  async listTrackOnlyByLifecycleState(
+    lifecycleState: CanonicalPick['lifecycleState'],
+  ): Promise<PickRecord[]> {
+    return readAllOrderedPages<PickRecord>(async (from, to) =>
+      this.client
+        .from('picks')
+        .select('*')
+        .eq('status', lifecycleState)
+        .eq('metadata->>distributionMode', 'track-only')
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to),
+    );
+  }
+
   async listByLifecycleStates(
     lifecycleStates: CanonicalPick['lifecycleState'][],
     limit?: number | undefined,

@@ -146,6 +146,14 @@ export interface PickRepository {
     limit?: number | undefined,
     offset?: number | undefined,
   ): Promise<PickRecord[]>;
+  /**
+   * Lists only Track Only picks in one lifecycle state. Optional so narrow
+   * repository fakes remain source-compatible; callers fall back to paging
+   * `listByLifecycleState` and filtering the result.
+   */
+  listTrackOnlyByLifecycleState?(
+    lifecycleState: CanonicalPick['lifecycleState'],
+  ): Promise<PickRecord[]>;
   listByLifecycleStates(
     lifecycleStates: CanonicalPick['lifecycleState'][],
     limit?: number | undefined,
