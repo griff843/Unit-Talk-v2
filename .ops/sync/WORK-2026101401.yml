@@ -1,0 +1,151 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026101401
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026101401
+  objective: Restore the existing read-only /api/operator/stats and
+    /api/operator/leaderboard responses through canonical apps/api, using
+    complete public-eligible settled official data. Preserve bot commands,
+    response schemas and security. Do not revive operator-web or use Command
+    Center as a backend.
+  acceptance_criteria:
+    - Authenticate only operator or verified existing Discord-bot service
+      identity; reject anonymous, capper JWT, generic submitter and unrelated
+      credentials.
+    - Return strict public-safe aggregate whitelists with existing 7/14/30/90
+      windows, capper/sport filters and bounded rank limit.
+    - Prove canonical official designation, authentic human-capper identity and
+      confirmed public delivery provenance; exclude Track Only,
+      held/undelivered, scanner, fixture/simulation/test, private and active
+      picks. Sent terminal skips are not delivery.
+    - Read complete pick populations, correction histories and outbox
+      provenance. Stable created_at/id pagination must detect errors,
+      duplicate/overlap/non-progress/inconsistent pages or safety-budget
+      exhaustion and never return partial success. Sorting is not atomic
+      isolation; service consistency checks fail closed.
+    - Resolve complete correction chains; reject missing links, branching,
+      duplicates and unverified records. Preserve canonical history and public
+      win/loss/push/void transparency without writes or double counting.
+    - Use recorded stake/odds/effective outcomes for truthful units-weighted
+      ROI. Missing values, CLV and edge remain unavailable. Use canonical capper
+      identity, deterministic ties and one observed UTC window boundary.
+    - Direct API/domain/real Database+InMemory pagination tests cover route
+      wiring, auth/privacy/read-only behavior, equal-timestamp boundaries,
+      server caps/exact-page multiples, corrections, source exclusion, ranking
+      and calculation/null semantics.
+    - Run pnpm verify, sanctioned staging pnpm test:db, exact-head CI, R-level
+      and governed scope/proof checks; return exact PR/HEAD for independent PM
+      review. Never weaken staging guard or substitute historical receipts.
+  guardrails:
+    - No repository interface, schema/types/migration, auth.ts, contracts,
+      worker, bot, Command Center, dependency, provider,
+      lifecycle/write/claim/send or delivery-control edits. If the approved
+      readers cannot independently establish complete public
+      provenance/consistency, return the smallest exact additional scope before
+      editing. No production writes, role/channel changes, deployment, watched
+      release or recaps. All Discord delivery containment stays engaged.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - Exact-head verified PR with tests, complete-population/receipt/correction
+      policy, security threat model and remaining risks submitted for
+      independent PM merge review. No merge or deployment under this packet.
+    - Work identity renamed before admission because WORK-2026101302 was
+      independently consumed by landed Claude governance PR1753. Original
+      never-admitted approved packet f9c2ae9 is retained in Git; no scope or
+      authority change.
+  unmapped_sections:
+    - |-
+      WORK-2026101401 — Restore public Discord stats and leaderboard reads (#1749)
+      Tier: T1
+      Lane type: runtime
+      Executor: codex
+
+      ## Authority
+
+      PM plan: https://github.com/griff843/Unit-Talk-v2/issues/1749#issuecomment-6152054506
+      PM exact scope extension: https://github.com/griff843/Unit-Talk-v2/issues/1749#issuecomment-6152176343
+      User explicitly authorized both decisions in the Discord program chat. Normal scoped admission and implementation only; independent PM exact-head merge review, deployment and delivery authorization remain separate.
+
+      ## File Scope
+
+      - apps/api/src/server.ts
+      - apps/api/src/routes/member-performance.ts
+      - apps/api/src/member-performance-service.ts
+      - apps/api/src/member-performance-service.test.ts
+      - apps/api/src/member-performance-routes.test.ts
+      - packages/domain/src/member-performance.ts
+      - packages/domain/src/member-performance.test.ts
+      - packages/domain/src/index.ts (only minimal new-helper re-export; package exports only its root)
+      - packages/db/src/runtime-repositories.ts (only the three approved readers and matching InMemory ordering)
+      - packages/db/src/member-performance-read-completeness.test.ts
+
+      Generated lane/task/proof bookkeeping is governed metadata; this work order records existing approval and adds no implementation authority.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026101401.md
+    title: WORK-2026101401 — Restore public Discord stats and leaderboard reads
+      (#1749)
+    description: |-
+      # WORK-2026101401 — Restore public Discord stats and leaderboard reads (#1749)
+
+      Tier: T1
+      Lane type: runtime
+      Executor: codex
+
+      ## Authority
+
+      PM plan: https://github.com/griff843/Unit-Talk-v2/issues/1749#issuecomment-6152054506
+      PM exact scope extension: https://github.com/griff843/Unit-Talk-v2/issues/1749#issuecomment-6152176343
+      User explicitly authorized both decisions in the Discord program chat. Normal scoped admission and implementation only; independent PM exact-head merge review, deployment and delivery authorization remain separate.
+
+      ## Objective
+
+      Restore the existing read-only /api/operator/stats and /api/operator/leaderboard responses through canonical apps/api, using complete public-eligible settled official data. Preserve bot commands, response schemas and security. Do not revive operator-web or use Command Center as a backend.
+
+      ## Acceptance Criteria
+
+      - Authenticate only operator or verified existing Discord-bot service identity; reject anonymous, capper JWT, generic submitter and unrelated credentials.
+      - Return strict public-safe aggregate whitelists with existing 7/14/30/90 windows, capper/sport filters and bounded rank limit.
+      - Prove canonical official designation, authentic human-capper identity and confirmed public delivery provenance; exclude Track Only, held/undelivered, scanner, fixture/simulation/test, private and active picks. Sent terminal skips are not delivery.
+      - Read complete pick populations, correction histories and outbox provenance. Stable created_at/id pagination must detect errors, duplicate/overlap/non-progress/inconsistent pages or safety-budget exhaustion and never return partial success. Sorting is not atomic isolation; service consistency checks fail closed.
+      - Resolve complete correction chains; reject missing links, branching, duplicates and unverified records. Preserve canonical history and public win/loss/push/void transparency without writes or double counting.
+      - Use recorded stake/odds/effective outcomes for truthful units-weighted ROI. Missing values, CLV and edge remain unavailable. Use canonical capper identity, deterministic ties and one observed UTC window boundary.
+      - Direct API/domain/real Database+InMemory pagination tests cover route wiring, auth/privacy/read-only behavior, equal-timestamp boundaries, server caps/exact-page multiples, corrections, source exclusion, ranking and calculation/null semantics.
+      - Run pnpm verify, sanctioned staging pnpm test:db, exact-head CI, R-level and governed scope/proof checks; return exact PR/HEAD for independent PM review. Never weaken staging guard or substitute historical receipts.
+
+      ## File Scope
+
+      - apps/api/src/server.ts
+      - apps/api/src/routes/member-performance.ts
+      - apps/api/src/member-performance-service.ts
+      - apps/api/src/member-performance-service.test.ts
+      - apps/api/src/member-performance-routes.test.ts
+      - packages/domain/src/member-performance.ts
+      - packages/domain/src/member-performance.test.ts
+      - packages/domain/src/index.ts (only minimal new-helper re-export; package exports only its root)
+      - packages/db/src/runtime-repositories.ts (only the three approved readers and matching InMemory ordering)
+      - packages/db/src/member-performance-read-completeness.test.ts
+
+      Generated lane/task/proof bookkeeping is governed metadata; this work order records existing approval and adds no implementation authority.
+
+      ## Guardrails
+
+      No repository interface, schema/types/migration, auth.ts, contracts, worker, bot, Command Center, dependency, provider, lifecycle/write/claim/send or delivery-control edits. If the approved readers cannot independently establish complete public provenance/consistency, return the smallest exact additional scope before editing. No production writes, role/channel changes, deployment, watched release or recaps. All Discord delivery containment stays engaged.
+
+      ## Exit Criteria
+
+      Exact-head verified PR with tests, complete-population/receipt/correction policy, security threat model and remaining risks submitted for independent PM merge review. No merge or deployment under this packet.
+
+      Work identity renamed before admission because WORK-2026101302 was independently consumed by landed Claude governance PR1753. Original never-admitted approved packet f9c2ae9 is retained in Git; no scope or authority change.
+    captured_at: 2026-10-14T23:31:46.664Z
+    description_sha256: 3b293f021f87ea8ea943f295d57a02b849c3dd6c9e636ec2c7ec457f41a2a2cd
+  contract_hash: b6b7c3160f4e9cabdd94f906a6485b0ccff5d6879287ed420322f1769660ef70
