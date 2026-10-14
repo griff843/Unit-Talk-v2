@@ -217,7 +217,7 @@ test('UTV2-1954 live-DB: a game line and an unsupported sport replay at their re
   });
   for (const row of gameLine.rows) assertRowReproduces('mlb-moneyline', row);
 
-  const unsupported = await submitTrackOnly('wnba-moneyline', 'moneyline', 'WNBA', {
+  const unsupported = await submitTrackOnly('curling-moneyline', 'moneyline', 'CURLING', {
     edge: 85,
     trust: 85,
     readiness: 85,
@@ -225,7 +225,7 @@ test('UTV2-1954 live-DB: a game line and an unsupported sport replay at their re
     boardFit: 85,
   });
   for (const row of unsupported.rows) {
-    assertRowReproduces('wnba-moneyline', row);
+    assertRowReproduces('curling-moneyline', row);
     // The unsupported-sport cap is part of what replay must reproduce.
     assert.ok(Number(row.payload['score']) <= 60, `${row.target}: capped at 60 for an unsupported sport`);
   }
