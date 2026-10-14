@@ -3258,6 +3258,183 @@ async function createTrackOnlyValidatedPickFixture(
   return { repositories, pickId: created.pick.id, eventName };
 }
 
+async function createMixedValidatedPopulation() {
+  const firstTrackOnly = await createTrackOnlyValidatedPickFixture({
+    eventName: 'Optimized Track Only One',
+  });
+  const repositories = firstTrackOnly.repositories;
+
+  const createValidated = async (
+    eventName: string,
+    distributionMode?: 'track-only' | 'delivery-eligible',
+  ) => {
+    const created = await processSubmission(
+      {
+        source: 'api',
+        market: 'points-all-game-ou',
+        selection: 'Over 24.5',
+        line: 24.5,
+        odds: -105,
+        stakeUnits: 1,
+        eventName,
+      },
+      repositories,
+    );
+    if (distributionMode !== undefined) {
+      mutatePick(repositories, created.pick.id, (existing) => ({
+        ...existing,
+        metadata: {
+          ...(asRecord(existing['metadata']) ?? {}),
+          distributionMode,
+        },
+      }));
+    }
+    assert.equal(
+      (await repositories.picks.findPickById(created.pick.id))?.status,
+      'validated',
+      'mixed-population fixtures must all begin in validated',
+    );
+    return created.pick.id;
+  };
+
+  return {
+    repositories,
+    firstTrackOnlyId: firstTrackOnly.pickId,
+    firstTrackOnlyEventName: firstTrackOnly.eventName,
+    secondTrackOnlyId: await createValidated(
+      'Optimized Track Only Two',
+      'track-only',
+    ),
+    deliveryEligibleId: await createValidated(
+      'Optimized Delivery Eligible',
+      'delivery-eligible',
+    ),
+    noModeId: await createValidated('Optimized No Mode'),
+  };
+}
+
+async function makeFirstTrackOnlyPickGradeable(
+  fixture: Awaited<ReturnType<typeof createMixedValidatedPopulation>>,
+) {
+  const { participant, event } = await attachPlayerEventContext(
+    fixture.repositories,
+    fixture.firstTrackOnlyId,
+    {
+      eventName: fixture.firstTrackOnlyEventName,
+      eventStatus: 'completed',
+    },
+  );
+  await seedGameResult(fixture.repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 27,
+  });
+}
+
+test('runGradingPass uses the filtered validated read without changing population, restriction, or rowsScanned semantics', async () => {
+  const fixture = await createMixedValidatedPopulation();
+  await makeFirstTrackOnlyPickGradeable(fixture);
+
+  const lifecycleReads: CanonicalPick['lifecycleState'][] = [];
+  const listByLifecycleState =
+    fixture.repositories.picks.listByLifecycleState.bind(fixture.repositories.picks);
+  fixture.repositories.picks.listByLifecycleState = async (state, limit, offset) => {
+    lifecycleReads.push(state);
+    return listByLifecycleState(state, limit, offset);
+  };
+
+  const optimizedReads: CanonicalPick['lifecycleState'][] = [];
+  fixture.repositories.picks.listTrackOnlyByLifecycleState = async (state) => {
+    optimizedReads.push(state);
+    const rows = await fixture.repositories.picks.findPicksByIds([
+      fixture.firstTrackOnlyId,
+      fixture.secondTrackOnlyId,
+    ]);
+    return [...rows.values()];
+  };
+
+  const result = await runGradingPass(fixture.repositories, {
+    // The named delivery-eligible row must not be admitted. The restriction is
+    // still applied after population construction and can only remove rows.
+    restrictToPickIds: new Set([
+      fixture.firstTrackOnlyId,
+      fixture.deliveryEligibleId,
+    ]),
+  });
+
+  assert.deepEqual(optimizedReads, ['validated']);
+  assert.deepEqual(
+    lifecycleReads.sort(),
+    ['awaiting_approval', 'posted'],
+    'awaiting_approval and posted keep their existing paged reads',
+  );
+  assert.equal(result.attempted, 1);
+  assert.equal(result.graded, 1);
+  assert.equal(result.details[0]?.pickId, fixture.firstTrackOnlyId);
+  assert.equal(
+    (await fixture.repositories.settlements.listByPick(fixture.deliveryEligibleId)).length,
+    0,
+  );
+  assert.equal(
+    (await fixture.repositories.settlements.listByPick(fixture.noModeId)).length,
+    0,
+  );
+
+  const [run] = await fixture.repositories.runs.listByType('grading.run');
+  const details = run?.details as Record<string, unknown>;
+  assert.equal(
+    details['rows_scanned'],
+    2,
+    'rowsScanned remains the admitted population before restrictToPickIds, not the raw validated table or restricted attempt count',
+  );
+});
+
+test('runGradingPass falls back to the full validated read when the repository lacks the filtered method', async () => {
+  const fixture = await createMixedValidatedPopulation();
+  await makeFirstTrackOnlyPickGradeable(fixture);
+  assert.equal(
+    fixture.repositories.picks.listTrackOnlyByLifecycleState,
+    undefined,
+    'the in-memory repository intentionally exercises the compatibility fallback',
+  );
+
+  const lifecycleReads: CanonicalPick['lifecycleState'][] = [];
+  const listByLifecycleState =
+    fixture.repositories.picks.listByLifecycleState.bind(fixture.repositories.picks);
+  fixture.repositories.picks.listByLifecycleState = async (state, limit, offset) => {
+    lifecycleReads.push(state);
+    return listByLifecycleState(state, limit, offset);
+  };
+
+  const result = await runGradingPass(fixture.repositories);
+
+  assert.equal(
+    lifecycleReads.filter((state) => state === 'validated').length,
+    1,
+    'fallback preserves the prior paged validated read',
+  );
+  assert.equal(result.attempted, 2, 'only the two Track Only rows reach grading');
+  assert.equal(result.graded, 1);
+  assert.equal(result.skipped, 1);
+  assert.deepEqual(
+    result.details.map((detail) => detail.pickId).sort(),
+    [fixture.firstTrackOnlyId, fixture.secondTrackOnlyId].sort(),
+  );
+  assert.equal(
+    (await fixture.repositories.settlements.listByPick(fixture.deliveryEligibleId)).length,
+    0,
+  );
+  assert.equal(
+    (await fixture.repositories.settlements.listByPick(fixture.noModeId)).length,
+    0,
+  );
+
+  const [run] = await fixture.repositories.runs.listByType('grading.run');
+  const details = run?.details as Record<string, unknown>;
+  assert.equal(details['rows_scanned'], 2);
+});
+
 test('runGradingPass grades a Track Only validated pick and records an evidence settlement', async () => {
   const { repositories, pickId, eventName } =
     await createTrackOnlyValidatedPickFixture();

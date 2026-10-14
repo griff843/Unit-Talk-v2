@@ -1,0 +1,199 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026101303
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026101303
+  objective: "`runGradingPass` (`apps/api/src/grading-service.ts`, three full
+    paged scans at ~355-357) scans every `validated` pick, then discards all but
+    Track Only rows in memory (~359-361). Push that Track Only restriction into
+    the database read for the `validated` state, so the pass stops paging the
+    whole `validated` population."
+  acceptance_criteria:
+    - "For a mixed set of `validated` rows (Track Only, delivery-eligible, no
+      mode), the graded population is identical to before: only Track Only rows
+      reach grading."
+    - The fallback path (repository without the new method) behaves exactly as
+      before and is tested.
+    - "`restrictToPickIds` and `rowsScanned` semantics are unchanged and
+      documented in the test."
+    - "`awaiting_approval` and `posted` reads are unchanged."
+    - The writable staging proof passes on the first attempt on a fresh CI run
+      at the exact head.
+  guardrails:
+    - No migration, no index, no fixture deletion, no timeout change, no proof
+      weakening.
+    - No change to `listByLifecycleState` itself, to settlement or to delivery
+      code.
+    - No production apply, deploy or Discord change.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged on green CI with T1 approval (`t1-approved` plus `pm-verdict/v1`
+      for the exact head), then closeout via `post-merge-lane-close.yml`.
+  unmapped_sections:
+    - >-
+      WORK-2026101303 — Grading pass reads only Track Only rows for the
+      validated state
+
+      Tier: T1 · Lane type: runtime · Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Why
+
+
+      - The staging writable proof fails intermittently with `Failed to list
+      picks by lifecycle state: canceling statement due to statement timeout`
+      (code 57014, 120s `statement_timeout`) in the UTV2-1605 grading tests. It
+      has failed merge-SHA CI twice and now blocks even manifest-only PRs.
+
+      - Measured read-only on staging (PM, 2026-10-13): 159,661 `picks`; 50,840
+      `validated`, of which 716 carry `proof_fixture_id`. `picks_status_idx`
+      exists; there is no `(status, created_at)` index. A deep-offset page
+      (`OFFSET 25000 LIMIT 500`) took 684 ms with an external disk sort, and the
+      reader pages 500 rows per request.
+
+      - Fixture cleanup removes ~1.4% of the validated scan and is a destructive
+      staging mutation, so it is not part of this lane.
+
+
+      ## Change
+
+
+      - `packages/db/src/repositories.ts`: add an optional
+      `listTrackOnlyByLifecycleState?` to `PickRepository`, in the style of
+      `listPromotedByLifecycleStates?` (~157-166).
+
+      - `packages/db/src/runtime-repositories.ts`: implement it next to
+      `listByLifecycleState` (~3433-3459) with `.eq('status', state)` and
+      `.eq('metadata->>distributionMode', 'track-only')` (precedent ~3497),
+      ordered `created_at, id`. Edit only this method; another lane (Discord
+      stats/leaderboard reads) may touch other methods in this file.
+
+      - `apps/api/src/grading-service.ts`: in `runGradingPass`, read `validated`
+      through the new method when present, else fall back to the existing paged
+      reader. Keep the in-JS `isEvidencePlanePick` filter as a backstop so the
+      restriction can only remove candidates.
+
+      - Tests: extend `apps/api/src/grading-service.test.ts` (and
+      `grading-cron.test.ts` only if a fake needs it). Do not add a new test
+      file.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026101303.md
+    title: WORK-2026101303 — Grading pass reads only Track Only rows for the
+      validated state
+    description: >-
+      # WORK-2026101303 — Grading pass reads only Track Only rows for the
+      validated state
+
+
+      Tier: T1 · Lane type: runtime · Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Objective
+
+
+      - `runGradingPass` (`apps/api/src/grading-service.ts`, three full paged
+      scans at ~355-357) scans every `validated` pick, then discards all but
+      Track Only rows in memory (~359-361). Push that Track Only restriction
+      into the database read for the `validated` state, so the pass stops paging
+      the whole `validated` population.
+
+
+      ## Why
+
+
+      - The staging writable proof fails intermittently with `Failed to list
+      picks by lifecycle state: canceling statement due to statement timeout`
+      (code 57014, 120s `statement_timeout`) in the UTV2-1605 grading tests. It
+      has failed merge-SHA CI twice and now blocks even manifest-only PRs.
+
+      - Measured read-only on staging (PM, 2026-10-13): 159,661 `picks`; 50,840
+      `validated`, of which 716 carry `proof_fixture_id`. `picks_status_idx`
+      exists; there is no `(status, created_at)` index. A deep-offset page
+      (`OFFSET 25000 LIMIT 500`) took 684 ms with an external disk sort, and the
+      reader pages 500 rows per request.
+
+      - Fixture cleanup removes ~1.4% of the validated scan and is a destructive
+      staging mutation, so it is not part of this lane.
+
+
+      ## Change
+
+
+      - `packages/db/src/repositories.ts`: add an optional
+      `listTrackOnlyByLifecycleState?` to `PickRepository`, in the style of
+      `listPromotedByLifecycleStates?` (~157-166).
+
+      - `packages/db/src/runtime-repositories.ts`: implement it next to
+      `listByLifecycleState` (~3433-3459) with `.eq('status', state)` and
+      `.eq('metadata->>distributionMode', 'track-only')` (precedent ~3497),
+      ordered `created_at, id`. Edit only this method; another lane (Discord
+      stats/leaderboard reads) may touch other methods in this file.
+
+      - `apps/api/src/grading-service.ts`: in `runGradingPass`, read `validated`
+      through the new method when present, else fall back to the existing paged
+      reader. Keep the in-JS `isEvidencePlanePick` filter as a backstop so the
+      restriction can only remove candidates.
+
+      - Tests: extend `apps/api/src/grading-service.test.ts` (and
+      `grading-cron.test.ts` only if a fake needs it). Do not add a new test
+      file.
+
+
+      ## Acceptance Criteria
+
+
+      - For a mixed set of `validated` rows (Track Only, delivery-eligible, no
+      mode), the graded population is identical to before: only Track Only rows
+      reach grading.
+
+      - The fallback path (repository without the new method) behaves exactly as
+      before and is tested.
+
+      - `restrictToPickIds` and `rowsScanned` semantics are unchanged and
+      documented in the test.
+
+      - `awaiting_approval` and `posted` reads are unchanged.
+
+      - The writable staging proof passes on the first attempt on a fresh CI run
+      at the exact head.
+
+
+      ## Guardrails
+
+
+      - No migration, no index, no fixture deletion, no timeout change, no proof
+      weakening.
+
+      - No change to `listByLifecycleState` itself, to settlement or to delivery
+      code.
+
+      - No production apply, deploy or Discord change.
+
+
+      ## Exit Criteria
+
+
+      - PR merged on green CI with T1 approval (`t1-approved` plus
+      `pm-verdict/v1` for the exact head), then closeout via
+      `post-merge-lane-close.yml`.
+    captured_at: 2026-10-14T00:16:48.918Z
+    description_sha256: a751a0b104e69a9026024697f9f13cd7f5e0d65e8039e3e0485cdc8e12a177f6
+  contract_hash: 3c18faebf1d4ced1ae76d543c4b56c35e11b97a468e73b58b64cc35837e2f56c
