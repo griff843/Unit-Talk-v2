@@ -19,7 +19,8 @@ result: local_static_pass_staging_deferred
       NBA derivation.
 - [x] The in-memory catalog returns 10 sports and exposes WNBA basketball markets/stat types.
 - [x] The unchanged alert suite confirms WNBA remains inactive.
-- [ ] Writable live-DB and unsupported-sport replay proof are deferred to protected staging CI.
+- [ ] Writable live-DB proof is blocked because the authorized staging DB lacks the prerequisite
+      WNBA catalog migration; the unsupported-sport replay reaches `picks_sport_id_fkey`.
 
 ## EVIDENCE:
 
@@ -61,6 +62,21 @@ could not be resolved from its URL (host=unparseable). Writable DB verification 
 `xskgrzbteyqdufktjrjx`. Run it through the staging-ci GitHub environment with `CI_SUPABASE_*`
 credentials. The locally measured host was `127.0.0.1` with ref `unidentified`.
 
+Protected staging CI subsequently resolved the approved target in run `38557281798`. Its DB smoke
+passed, but the unchanged UTV2-1954 unsupported-WNBA replay failed at submission:
+
+```text
+process_submission_atomic failed: insert or update on table "picks" violates foreign key
+constraint "picks_sport_id_fkey"
+# tests 5
+# pass 4
+# fail 1
+```
+
+This is the work order's migration-order hazard: once this runtime derives `WNBA`, the target DB
+must already contain the WNBA sport row from `20261010170100_wnba_participant_catalog.sql`. No
+migration was applied by this lane.
+
 ## Verification
 
 - [x] `pnpm type-check`: exit 0.
@@ -76,8 +92,9 @@ credentials. The locally measured host was `127.0.0.1` with ref `unidentified`.
       rejected only the local work-order source, which was then removed from the PR diff.
 - [ ] `pnpm test:db`: exit 1 at the staging target-identity guard above; protected staging CI is
       required.
-- [ ] The unchanged unsupported-sport replay test also requires the same live DB and failed locally
-      only with `TypeError: fetch failed`; its protected staging result remains pending.
+- [ ] Protected staging run `38557281798` passed DB smoke, then the unchanged unsupported-sport
+      replay passed 4/5 and failed its WNBA case at `picks_sport_id_fkey`; the prerequisite WNBA
+      catalog migration is absent from staging.
 - [ ] `pnpm verify`: static phase passed, then the command exited 1 when `test:live-db` reached the
       same pre-write staging target-identity guard. Protected staging CI must supply the full pass.
 - [ ] PM approval, governed merge, deployment, post-migration submission, and post-merge closeout

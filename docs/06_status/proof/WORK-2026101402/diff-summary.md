@@ -34,6 +34,13 @@ The lane-link metadata and this named proof directory are governed closeout arti
 the PR because the trusted CI scope lock admits only the eight implementation files plus generated
 lane/proof artifacts.
 
+## Staging prerequisite
+
+Protected run `38557281798` proved the staging target is reachable and passed DB smoke, then failed
+the unchanged unsupported-WNBA replay at `picks_sport_id_fkey`. The runtime correctly derives
+`WNBA`; the authorized staging proof DB does not yet contain the prerequisite WNBA sport catalog
+row. Applying migration `20261010170100_wnba_participant_catalog.sql` is reserved outside this lane.
+
 ## SHA Binding
 
 Merge SHA: pending merge<br>
