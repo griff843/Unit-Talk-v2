@@ -21,7 +21,8 @@ The human explicitly approved the additional one-line package.json test:apps wir
 - [x] Actual Database/InMemory reader methods: stable complete pagination, caps, exact multiples, duplicates, ordering, errors and realistic PostgREST 416 boundary: member-performance-read-completeness.test.ts. Query doubles, not live database proof.
 - [x] Complete public-safe settled aggregation, source/delivery provenance and resource/consistency refusal: member-performance-service.test.ts.
 - [x] Existing endpoint contracts, operator/bot authentication, privacy and refusal behavior: member-performance-routes.test.ts.
-- [ ] Current-head sanctioned staging persistence proof and required CI.
+- [x] Sanctioned staging persistence proof for candidate c30a0120c and its GitHub integration commit 33e51534a.
+- [ ] Required final current-head CI.
 - [ ] Independent PM exact-head scope and merge approval.
 
 ## EVIDENCE:
@@ -46,7 +47,13 @@ The suite ran against the exact bytes subsequently committed as ccd89881c; no so
 
 Known limitation: two complete stable read snapshots detect observed differences but do not provide database transaction snapshot isolation. Exhaustion or uncertainty returns unavailable instead of a partial aggregate. Member browser acceptance of the repaired commands requires separately authorized deployment; local passing tests are not live acceptance.
 
-## Merge SHA Binding
+## Actual staging persistence proof
+
+CI run https://github.com/griff843/Unit-Talk-v2/actions/runs/38673297386 job116221129046 completed successfully at 2026-10-15T03:00:04Z, including both pnpm test:db and all configured T1 live proof suites. The authenticated CI receipt reports pnpm test:db exit0, 9tests/9pass/0fail/0skip, target xskgrzbteyqdufktjrjx. It ran against GitHub PR integration SHA33e51534a23bfcc88b0c24ae3ccb5b6ea6b526de, whose verified parents are main2be2aec814f54f62578dc3f1c206e1082b604888 and candidate c30a0120c84d651b1ebbc7caf7e142c2c3283921. Do not relabel its integration SHA as the PR head.
+
+Full ci-db-proof-receipt/v2 and exact live smoke query/count assertions are included in evidence.json. Receipt SHA256 adc990170077d26d364c32366662d610b43c7980b47c32b5dc0ecc0e7f20602f. The passing smoke asserts exactly one base settlement after correction and zero rows after invalid settlement/delivery attempts, using unique staging fixtures. These are generic canonical persistence/atomicity gates, not live HTTP performance endpoint acceptance or live large-population pagination stress. The new reader methods have focused query-double tests; deployment/browser acceptance remains separate.
+
+Independent source review of API/domain/wiring and a separate non-author review of the DB readers found no additional confirmed implementation blocker at c30a0120c. Neither review is PM merge authority. Their reports are retained in the control .out evidence directory.
 
 ## Subsequent governed CLI validation
 
@@ -55,6 +62,8 @@ The normal ops:codex-exec runner actually invoked its configured gpt-5.6-sol/med
 ## Remaining command acceptance limitation
 
 An independent offline Discord compatibility review found an existing /stats selected-user issue: the bot sends Discord nickname/global name/username while this API filters canonical capper ID or unique canonical name. A differing nickname can yield an empty filtered response despite canonical history. Static payload/renderer contracts otherwise align. This is not a deployed success claim, and stable Discord-to-capper identity repair requires separate explicit scope. Full selected-user member acceptance remains open.
+
+## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: pending
