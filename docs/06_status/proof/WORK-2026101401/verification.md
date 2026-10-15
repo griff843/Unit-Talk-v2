@@ -68,3 +68,14 @@ An independent offline Discord compatibility review found an existing /stats sel
 Merge SHA: pending merge
 PR: pending
 Execution SHA: b41cc8c7aa71aa3af466f1d0a8e7cf9b2a9598ab
+
+
+## Approved live-reader proof extension — 2026-10-15
+
+Latest source: eac896c5f0d75d8f45369df26505376e5335d1e3. Griff explicitly approved extending only apps/api/src/t1-proof-utv2-1907-capper-attribution.test.ts in the Discord program chat. Original immutable manifest remains unchanged; final exact-HEAD scope exception must cover this file and the previously approved package.json append. Ready-for-review exposed the previously draft-skipped live-proof-coverage gate.
+
+Added a positive approved-staging check before repository construction or original fixture writes. Preserved every original case. Added one read-only case using those original fixture IDs/CLV values: independent PostgREST HEAD exact counts before/after actual complete picks, per-pick settlements and outbox readers; status/filter/unique-ID/created_at+id order; bounded lifecycle slices; original Track Only no-enqueue contract. It adds no writes or forged public receipt. Cross-page live coverage is only claimed if an observed population actually exceeds1000; each controlled child history is1 and outbox0. Existing query-double cases remain larger-page/adversarial evidence. This does not prove deployed HTTP/member commands or positive public delivery.
+
+Actual local pnpm verify completed lint, type-check, build, static tests and Smart Form gates:7841 tests,7828 pass,13 skipped,0 fail. Full command exit1 at the existing localhost staging identity refusal, before writable DB tests. Direct tsx --test of the modified file also exited1 at its new before-hook staging-target assertion, before any client/fixture write. Neither refusal is live proof or a full verify PASS. Raw logs remain in the worktree (.out-proof-verify.log and .out-proof-focused-local.log). Fresh exact-HEAD sanctioned CI must execute the actual new case and supply its own receipt.
+
+Independent bounded non-author test review found no confirmed issue; it performed no live DB calls and is not PM merge authority. Current runtime source remains the approved1749 implementation; all historical receipts below remain historical and are not relabeled as evidence for this new test. Original PM approval6200901501 exists, but the parser rejected its header; source/test changed after that approval, so final independent review must bind the new final HEAD with correct pm-verdict/v1 syntax. No deployment, delivery, entitlement or provider change occurred.

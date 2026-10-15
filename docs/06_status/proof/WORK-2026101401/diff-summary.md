@@ -18,6 +18,7 @@ Pure domain helpers resolve confirmed correction chains and calculate recorded-s
 | packages/domain/src/index.ts | Minimal helper re-export. |
 | packages/db/src/runtime-repositories.ts | Three complete stable readers and matching memory ordering only. |
 | packages/db/src/member-performance-read-completeness.test.ts | Actual reader methods with query doubles, caps/counts/order/416/errors. |
+| apps/api/src/t1-proof-utv2-1907-capper-attribution.test.ts | Separately approved staging guard and read-only real PostgREST count/filter/order/slice proof for the three repaired readers; existing fixtures/cases retained. |
 | package.json | Separately human-approved one-line append of four direct test commands to test:apps. |
 | .ops/sync/WORK-2026101401.yml; docs/06_status/lanes/WORK-2026101401.json; this proof directory | Normal admitted lane and measured proof bookkeeping. |
 
@@ -33,3 +34,7 @@ See verification.md for measured commands, exact source binding and pending gate
 
 Merge SHA: pending merge
 PR: pending
+
+## Latest source extension
+
+eac896c5f0d75d8f45369df26505376e5335d1e3 adds only the existing live-proof test. Its scope was explicitly approved by Griff in the continuation chat. Static verification again reports7828 passes/13 skips/0 failures; full local verify and direct live-proof file run refuse the non-staging target before live DB work. Fresh final-head CI, exact scope exception and independent PM verdict remain required. Prior receipts are historical; no positive live large-page, public receipt or deployed Discord proof is claimed.

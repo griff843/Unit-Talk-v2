@@ -119,5 +119,31 @@
     "subsequent_cli_validation": "Actual governed gpt-5.6-sol medium invocation; measured sidecar retained without modification. Operator interrupted the pass after its stale ten-file contract reverted the separately approved package.json addition. That uncommitted revert was restored from HEAD, preserving ccd89881c exactly.",
     "cli_validation_result": "interrupted_exit_1; not successful execution",
     "merge_review": "pending_independent_pm_exact_head"
+  },
+  "current_candidate": {
+    "verified_source_sha": "eac896c5f0d75d8f45369df26505376e5335d1e3",
+    "scope_authority": "Griff explicitly approved the one existing live-proof-file extension in Discord continuation chat on2026-10-15; final external exact-HEAD exception pending",
+    "changed_test": "apps/api/src/t1-proof-utv2-1907-capper-attribution.test.ts",
+    "static_tests": {
+      "tests": 7841,
+      "pass": 7828,
+      "skipped": 13,
+      "fail": 0
+    },
+    "full_local_verify": {
+      "exit_code": 1,
+      "reason": "final localhost staging-target guard refused before writable DB tests; static checks passed"
+    },
+    "direct_live_proof_local": {
+      "exit_code": 1,
+      "reason": "positive approved-staging before-hook refused configured non-staging target before repository construction or fixture writes"
+    },
+    "change_specific_live_db": {
+      "status": "pending_sanctioned_exact_head_ci",
+      "new_assertions": "read-only exact counts/filter/order/slices using original staging fixtures",
+      "limits": "child settlements1/outbox0; >1000 live pages only if actual observed pick count supports it; no member delivery or positive public cohort claim"
+    },
+    "independent_review": "separate read-only admission_check agent found no confirmed issue; not PM approval",
+    "historical_receipt_notice": "Existing sha_binding/runtime_proof records preserve their original measured source and receipt. They are not substituted for this candidate new proof-case execution."
   }
 }
