@@ -2,25 +2,49 @@
 
 MERGE_SHA: pending merge
 
-> Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command
-> actually executed and its real result before review. `post-merge-lane-close.yml`
-> binds the merge SHA; never write one here by hand.
-
 Issue: WORK-2026101401
 Tier: T1
-result: not_run
+result: pending_exact_head_staging_ci_and_independent_review
+
+Verified source: ccd89881c064aa68de1e0eac8faab9d5686b60b3
+Implementation source: 9c28a7308d28cfbe48a1c3ad48508ec6cd6c9d21
+
+## Continuation context
+
+Desktop root and bounded implementation/review agents completed the candidate before any CLI runner invocation. Preserve that authorship; no historical CLI model execution is claimed. The current task is final validation, honest proof and draft PR preparation, rather than a new implementation. Do not merge, deploy, send Discord messages or release delivery. Required staging DB proof is deferred to CI by the admitted manifest; do not change the localhost staging guard.
+
+The human explicitly approved the additional one-line package.json test:apps wiring in this chat on 2026-10-14 (local date). Commit ccd89881c appends four new direct test commands and retains every prior command. Original immutable ten-file scope lock stays unchanged. An externally authored exact-PR/HEAD package.json scope override and independent PM merge review remain pending.
 
 ## ASSERTIONS:
 
-- [ ] (state each behavior this lane proves, and the test that proves it)
+- [x] Pure canonical capper settlement/correction, units and ROI calculation: member-performance.test.ts.
+- [x] Actual Database/InMemory reader methods: stable complete pagination, caps, exact multiples, duplicates, ordering, errors and realistic PostgREST 416 boundary: member-performance-read-completeness.test.ts. Query doubles, not live database proof.
+- [x] Complete public-safe settled aggregation, source/delivery provenance and resource/consistency refusal: member-performance-service.test.ts.
+- [x] Existing endpoint contracts, operator/bot authentication, privacy and refusal behavior: member-performance-routes.test.ts.
+- [ ] Current-head sanctioned staging persistence proof and required CI.
+- [ ] Independent PM exact-head scope and merge approval.
 
 ## EVIDENCE:
 
-(paste measured output here, in fenced blocks)
+```text
+Source 9c28a7308d28cfbe48a1c3ad48508ec6cd6c9d21:
+Focused new tests + existing member-picks regression: 182 passed, 0 failed.
+New focused files: domain 17; DB reader 100; service 32; routes 6 (155 total).
+
+Source ccd89881c064aa68de1e0eac8faab9d5686b60b3 (same tested source bytes, wiring appended):
+pnpm ops:automation-coverage-check: PASS; new unwired tests 0.
+pnpm verify: static portion PASS, final command exit 1 at staging identity guard.
+Summed node:test suite totals from this verification log: 7841 tests, 7828 pass, 13 skipped, 0 fail.
+pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD: PASS.
+```
+
+Raw logs retained in control checkout .out/discord-server-snapshot-20261014/: performance-approved-pnpm-verify.log, performance-approved-wiring-check.log, performance-approved-r-level.log, performance-exact-head-focused-regression.log. The full verify chain completed lint, type-check, build, full tests, Smart Form verification and command/migration checks before its DB identity refusal.
 
 ## Verification
 
-(record every verification command run on the final code commit, with its real result)
+The suite ran against the exact bytes subsequently committed as ccd89881c; no source changes followed that run. The local writable DB assertion refused host=127.0.0.1, ref=unidentified, expected=xskgrzbteyqdufktjrjx before database smoke execution. This is not a full pnpm verify PASS. The required current-head staging-ci workflow must supply its own actual receipt. No production writes or schema changes occurred.
+
+Known limitation: two complete stable read snapshots detect observed differences but do not provide database transaction snapshot isolation. Exhaustion or uncertainty returns unavailable instead of a partial aggregate. Member browser acceptance of the repaired commands requires separately authorized deployment; local passing tests are not live acceptance.
 
 ## Merge SHA Binding
 
