@@ -38,3 +38,6 @@ PR: pending
 ## Latest source extension
 
 eac896c5f0d75d8f45369df26505376e5335d1e3 adds only the existing live-proof test. Its scope was explicitly approved by Griff in the continuation chat. Static verification again reports7828 passes/13 skips/0 failures; full local verify and direct live-proof file run refuse the non-staging target before live DB work. Fresh final-head CI, exact scope exception and independent PM verdict remain required. Prior receipts are historical; no positive live large-page, public receipt or deployed Discord proof is claimed.
+
+
+Timestamp correction (source512bc3552): variable-precision SQL timestamps now compare as precise instants only in the three approved complete readers and their InMemory counterparts. Added three hand-ordered regression cases in the already-approved completeness test; adjusted the approved live-proof assertion. Direct103/103 pass; old code fails all three new cases. Fresh full verification/staging pending; failed CI38817617158 retained.
