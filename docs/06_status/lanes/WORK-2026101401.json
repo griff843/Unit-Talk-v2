@@ -1,0 +1,55 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101401",
+  "lane_type": "runtime",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/preflight__work-2026101302/.out/worktrees/codex__work-2026101401-public-performance",
+  "branch": "codex/work-2026101401-public-performance",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/member-performance-routes.test.ts",
+    "apps/api/src/member-performance-service.test.ts",
+    "apps/api/src/member-performance-service.ts",
+    "apps/api/src/routes/member-performance.ts",
+    "apps/api/src/server.ts",
+    "packages/db/src/member-performance-read-completeness.test.ts",
+    "packages/db/src/runtime-repositories.ts",
+    "packages/domain/src/index.ts",
+    "packages/domain/src/member-performance.test.ts",
+    "packages/domain/src/member-performance.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026101401/diff-summary.md",
+    "docs/06_status/proof/WORK-2026101401/evidence.json",
+    "docs/06_status/proof/WORK-2026101401/verification.md",
+    "docs/06_status/proof/WORK-2026101401/model-routing.json"
+  ],
+  "status": "started",
+  "started_at": "2026-10-14T23:31:56.354Z",
+  "heartbeat_at": "2026-10-14T23:31:56.354Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/work-2026101401-public-performance.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-medium",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "2.0.0"
+  },
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/preflight__work-2026101302/.out/worktrees/codex__work-2026101401-public-performance",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

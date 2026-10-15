@@ -87,6 +87,10 @@ import {
   handleKillSwitchList,
 } from './routes/index.js';
 import { canSyncMemberTiers } from './routes/member-tiers.js';
+import {
+  canReadMemberPerformance,
+  handleMemberPerformance,
+} from './routes/member-performance.js';
 import { handleTracePickRoute } from './routes/picks.js';
 import {
   handleModelHealthAlerts,
@@ -619,7 +623,12 @@ export async function routeRequest(
   // the trace GET is, and its role policy is stated here for the same reason:
   // auth.ts is outside this lane. Only an operator or the Discord bot's own
   // service key may read it (`canReadMemberPicks`).
-  const memberPicksRoute = method === 'GET' && url.pathname === '/api/member/picks';
+  const memberPicksRoute =
+    method === 'GET' && url.pathname === '/api/member/picks';
+  const memberPerformanceRoute =
+    method === 'GET' &&
+    (url.pathname === '/api/operator/stats' ||
+      url.pathname === '/api/operator/leaderboard');
 
   // WORK-2026101104: the Discord bot syncs tier roles through
   // `POST /api/member-tiers`, but ROUTE_ROLES (auth.ts, Tier C) admits only an
@@ -628,16 +637,21 @@ export async function routeRequest(
   // pick list: an operator, or the bot's own service identity
   // (`canSyncMemberTiers`). `ROUTE_ROLES` is unchanged, so a generic submitter
   // key still gets 403.
-  const memberTiersRoute = method === 'POST' && url.pathname === '/api/member-tiers';
+  const memberTiersRoute =
+    method === 'POST' && url.pathname === '/api/member-tiers';
 
   if (
     method === 'POST' ||
     url.pathname === '/api/discord/kill-switch' ||
     traceMatch ||
-    memberPicksRoute
+    memberPicksRoute ||
+    memberPerformanceRoute
   ) {
     const auth = await authenticateRequest(request, runtime.authConfig);
-    if (!auth) {
+    if (
+      !auth ||
+      (memberPerformanceRoute && auth.identity === 'anonymous:auth-bypass')
+    ) {
       requestLogger.warn('api auth denied', {
         authOutcome: 'missing_or_invalid',
         route: url.pathname,
@@ -663,11 +677,13 @@ export async function routeRequest(
     // to touch auth.ts.
     const routeAuthorized = traceMatch
       ? auth.role === 'operator'
-      : memberPicksRoute
-        ? canReadMemberPicks(auth)
-        : memberTiersRoute
-          ? canSyncMemberTiers(auth)
-          : authorizeRoute(auth, url.pathname);
+      : memberPerformanceRoute
+        ? canReadMemberPerformance(auth)
+        : memberPicksRoute
+          ? canReadMemberPicks(auth)
+          : memberTiersRoute
+            ? canSyncMemberTiers(auth)
+            : authorizeRoute(auth, url.pathname);
     if (!routeAuthorized) {
       requestLogger.warn('api auth forbidden', {
         authOutcome: 'role_denied',
@@ -694,6 +710,10 @@ export async function routeRequest(
     }
     // Attach auth context to request for downstream use
     (request as IncomingMessage & { auth?: AuthContext }).auth = auth;
+  }
+
+  if (memberPerformanceRoute) {
+    return handleMemberPerformance(request, response, runtime);
   }
 
   if (memberPicksRoute) {
