@@ -90,8 +90,8 @@ not a given (§3).
   through a locally run Command Center (reading production, no public URL exists): `2d462c4f` loss,
   `3ba77527` loss, `92789b58` win. All `operator` source, picks remain `validated`/`track-only`, no new
   outbox rows. **Finding:** those rows record `settled_by = command-center:dev-bypass` (the local
-  fail_open bypass), not `griff843`. Whether that attribution is acceptable or needs a correction path
-  is an open decision (§7). Future settlements should run the local app with real operator auth.
+  fail_open bypass), not `griff843`. Griff accepted that attribution for now (§7 #2): the pilot data is test data to
+  be cleared before production, and a logged-in settlement test follows later.
 - **`706b136b`** is a `delivery-eligible` pick, `queued`, whose only outbox row is a `dead_letter`.
   It is held behind the kill switch. Do not requeue or alter it.
 
@@ -110,7 +110,7 @@ contract.
 | Independently verified settled picks, covering relevant results and markets | 10 | 9 operator-settled picks. Results for the three 2026-10-15 settlements were looked up from public reports (Falcons 45-24 Saints; Kraken 6-3 Red Wings; Yankees 2-1 Red Sox). "Independently verified" is otherwise **UNKNOWN**. |
 | Persisted-to-surface and settlement reconciliation | 100% | Not yet measured as a ratio. |
 | Unauthorized deliveries | 0 | 0 in the last 14 days; the dead-lettered `706b136b` row never posted. |
-| Unresolved critical identity or data-truth defects | none | Open: the `dev-bypass` settlement attribution; `dfcd9486` ("Dodgers @ Brewers") has no verifiable matching game and is unsettled. NCAAB participants absent (§6.C). |
+| Unresolved critical identity or data-truth defects | none | None blocking. The `dev-bypass` settlement attribution was accepted by Griff 2026-10-15; `dfcd9486` is unsettled and waived. NCAAB participants absent (§6.C). |
 
 Per-pick measurement is a read-only job over the governed cohort; build it before the next report so
 the readings above stop being UNKNOWN. It must not use the `v_governed_pick_performance` view, which
@@ -189,9 +189,9 @@ never produces delivery, and the kill switches stay as they are.
 | # | Decision | Reserved under | Blocks |
 |---|---|---|---|
 | 1 | ~~Apply the WNBA migration; dispatch the deployment; WNBA acceptance; NCAAF acceptance~~ — **done 2026-10-15** under Griff's explicit authorizations (migration apply, deploy `2be2aec81`, canary gate approved by Griff) | — | — |
-| 2 | **Settlement attribution:** decide whether the three `command-center:dev-bypass` settlements stand as recorded or need a governed correction path; future settlements to run through a locally launched Command Center with real operator auth | production data correction | the "independently verified settlement" reading |
-| 3 | **Dodgers pick `dfcd9486`:** confirm the real event/result so it can be settled, or confirm it should remain unsettled | operator action | one settled-pick reading |
-| 4 | **Settle NCAAF `8968f86c` and WNBA `803a541b`** once the games are final, and keep submitting real Track Only picks (choose Track Only explicitly) | operator action | the quantity measure |
+| 2 | ~~Settlement attribution~~ — **resolved by Griff 2026-10-15:** the three `command-center:dev-bypass` settlements are acceptable for now; the pilot picks and results are test data to be cleared before production. A logged-in Command Center settlement test comes later (needs a real operator login) | — | — |
+| 3 | ~~Dodgers pick `dfcd9486`~~ — **waived by Griff 2026-10-15:** it stays unsettled and does not matter | — | — |
+| 4 | Settle NCAAF `8968f86c` and WNBA `803a541b` after their games (tonight and Saturday). **Not a blocker:** nothing waits on them; keep submitting real Track Only picks (choose Track Only explicitly) | operator action | nothing |
 | 5 | **Authorize a second capper identity** | capper onboarding / allow-list | the ≥ 2 identity measure |
 | 6 | **SGO purchase/activation**, after the evidence-backed minimal-provider plan | paid provider, secrets | live ingestion, CLV, automated grading on live data |
 | 7 | **Whop and Discord setup**: plan ids, webhook secret, roles, refund policy, prices and tier names | secrets, pricing authority | the paid-member path |
