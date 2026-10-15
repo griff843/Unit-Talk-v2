@@ -48,5 +48,14 @@ Known limitation: two complete stable read snapshots detect observed differences
 
 ## Merge SHA Binding
 
+## Subsequent governed CLI validation
+
+The normal ops:codex-exec runner actually invoked its configured gpt-5.6-sol/medium model after candidate validation. Its unchanged measured model-routing.json records exit 1, 17536 prompt bytes and 250828 ms. It reran the 155 focused tests successfully, then incorrectly classified the separately approved package.json addition using the older immutable task packet and reverted it in the working tree. Root interrupted that pass and restored package.json byte-for-byte from the approved commit. The failed invocation is provenance, not a successful validation or replacement for Desktop authorship. No successful CLI result is claimed. Draft CI can proceed; final execution/scope and PM authority remain open.
+
+## Remaining command acceptance limitation
+
+An independent offline Discord compatibility review found an existing /stats selected-user issue: the bot sends Discord nickname/global name/username while this API filters canonical capper ID or unique canonical name. A differing nickname can yield an empty filtered response despite canonical history. Static payload/renderer contracts otherwise align. This is not a deployed success claim, and stable Discord-to-capper identity repair requires separate explicit scope. Full selected-user member acceptance remains open.
+
 Merge SHA: pending merge
 PR: pending
+Execution SHA: b41cc8c7aa71aa3af466f1d0a8e7cf9b2a9598ab

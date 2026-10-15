@@ -1,0 +1,38 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101401",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "ccd89881c064aa68de1e0eac8faab9d5686b60b3",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm verify",
+    "scope": "verify:static completed successfully; subsequent local test:live-db refused staging identity",
+    "full_command_exit_code": 1,
+    "node_test_suite_totals": { "tests": 7841, "pass": 7828, "skipped": 13, "fail": 0 },
+    "automation_coverage": { "result": "pass", "new_unwired_tests": 0 },
+    "r_level_check": "pass",
+    "source_binding": "Exact source and package.json bytes committed in ccd89881c; subsequent commits contain proof only."
+  },
+  "runtime_proof": {
+    "status": "pending_exact_head_staging_ci",
+    "environment": "Local writable proof refused before connection; repository query-double tests are static test evidence only.",
+    "queries": [],
+    "row_counts": [],
+    "local_refusal": "host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx",
+    "note": "No live row counts are invented. This pending bundle is not complete app-runtime proof. The admitted T1 precondition is deferred_to_ci."
+  },
+  "executor_provenance": {
+    "implementation": "Desktop root and bounded agents; implementation commit 9c28a7308d28cfbe48a1c3ad48508ec6cd6c9d21",
+    "subsequent_cli_validation": "Actual governed gpt-5.6-sol medium invocation; measured sidecar retained without modification. Operator interrupted the pass after its stale ten-file contract reverted the separately approved package.json addition. That uncommitted revert was restored from HEAD, preserving ccd89881c exactly.",
+    "cli_validation_result": "interrupted_exit_1; not successful execution",
+    "merge_review": "pending_independent_pm_exact_head"
+  }
+}
