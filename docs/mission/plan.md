@@ -1,7 +1,7 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rebuilt from live evidence on 2026-10-13 under WORK-2026101301 (issue #1747). Not a log, not a backlog, not Linear in Markdown.
-**Measured against:** `origin/main` `f3a95272b` (re-read 2026-10-14; #1745 merged, UTV2-1972 closed), deployed release `ed89569df`, production `zfzdnfwdarxucxtaojxm` (read-only SQL), GitHub API.
+**Measured against:** `origin/main` `4a88bcb49` (re-read 2026-10-15), deployed release `2be2aec81` (Deploy run `38673683471`, 2026-10-15), production `zfzdnfwdarxucxtaojxm` (read-only SQL), GitHub API.
 **Archives, read on demand — never at session start:**
 [`plan-lessons.md`](plan-lessons.md) (operating lessons) ·
 [`plan-history-2026-09.md`](plan-history-2026-09.md) (chronology through 2026-09-14, plus the archived 2026-09-28 edition of this plan)
@@ -41,23 +41,23 @@ graded-pick requirement, nor the membership or Discord entitlement contracts.
 
 ## 1. Current truth
 
-| Fact | Reading (2026-10-13) |
+| Fact | Reading (2026-10-15 unless dated) |
 |---|---|
-| `origin/main` | `f3a95272b` |
-| Deployed release | `ed89569df` — `Deploy` run `38397434631`, 2026-10-13, success. Confirmed mode `human-capper`: ingestor autorun and scheduling off, worker on, one enabled target (`official-picks`), `killSwitchEngaged: true`. |
-| Runtime drift `deployed..main` | **0 files** under `apps/` and `packages/` (5 lane/proof files only). Re-measure with `git diff --name-only ed89569df..origin/main`. |
+| `origin/main` | `4a88bcb49` (readiness-ledger bot commit; re-fetch before citing) |
+| Deployed release | `2be2aec81` — `Deploy` run `38673683471`, 2026-10-15, success (Griff authorized the dispatch and approved the `canary` gate; rollback tag `ed89569df`). Carries #1745, #1754 (grading read fix), #1755 (WNBA Smart Form) and #1757. Confirmed mode `human-capper`: ingestor autorun and scheduling off, worker on, one enabled target (`official-picks`), `killSwitchEngaged: true`. |
+| Runtime drift `deployed..main` | Re-measure with `git diff --name-only 2be2aec81..origin/main` (expected: lane, proof and ledger files only). |
 | Containment variables | `UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED=true`, `UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST=griff843`, `UNIT_TALK_COMMAND_CENTER_ENABLED=true`. No `SYNDICATE_MACHINE_MODE` variable exists. |
 | Kill switches | `official-picks`, `best-bets`, `trader-insights`, `exclusive-insights` all `killed = true`. |
-| Governed pick cohort (`metadata ? 'distributionMode'`) | **14** picks, all submitted by `griff843`: 9 `track-only`, 5 `delivery-eligible`. Status: 9 validated, 2 voided, 1 posted, 1 settled, 1 queued. |
-| Cohort settlement records | 6 over 6 distinct picks, all `operator` source. The table's 37,502 total is overwhelmingly CI fixtures. |
+| Governed pick cohort (`metadata ? 'distributionMode'`) | **17** picks (14 non-voided; reading ~13:10Z), all submitted by `griff843`; 11 `track-only`. Voided includes `22ebe8ea` (a WNBA pick submitted as `delivery-eligible` by mistake; voided with Griff's authorization via `transition_pick_lifecycle`; its `pending` outbox row was not verified as skipped by the worker). |
+| Cohort settlement records | 9 `operator`-source settled picks (4 wins, 5 losses, net -0.66u) after three manual settlements on 2026-10-15 (see §3). The table's 37,502 total is overwhelmingly CI fixtures. |
 | Delivery in the last 14 days | 1 outbox row (`706b136b`, `official-picks`, `dead_letter`, `stale_pending_operator_review`), 0 receipts. |
-| Participants | MLB 981, NHL 350, NBA 284, **NCAAF 266**, NFL 32. **No WNBA, no NCAAB.** |
-| `public.sports` | NBA, NFL, MLB, NHL, NCAAB, NCAAF, Soccer, MMA, Tennis. **No WNBA row.** |
+| Participants | MLB 981, NHL 350, NBA 284, **NCAAF 266**, **WNBA 15**, NFL 32 (total 1,928). **No NCAAB.** |
+| `public.sports` | NBA, NFL, MLB, NHL, NCAAB, NCAAF, WNBA, Soccer, MMA, Tennis. |
 | Members | `member_tiers` has 0 rows. |
 | SGO / ingestion | Parked. Newest `ingestor.cycle` 2026-06-30 (failed); newest `game_results` 2026-06-30; no events in the last 14 days (newest 2026-09-28). |
 | Runtime heartbeats | `worker.heartbeat` and `grading.cron.heartbeat` succeeded 2026-10-13. `governance.awaiting-approval-drift` last run **failed** (10-13 12:45Z). |
 | Readiness ledger | **RED**, generated 2026-10-13T00:23Z — *before* the latest deploy; `deploy_sha_alignment` is therefore stale. Blocking failures: `deploy_sha_alignment` (stale), `ingestor_health` and `grading_health` (SGO parked), `db_tripwires`. `worker_outbox_health` and `dead_letter_count` pass. |
-| Open PRs | #1754 (Codex, T1, grading read fix, PM-approved, resyncing), #1739 (Codex, T2, delivery-ui path admission), #1738 (Claude, T1, constitution-matrix annotation), #1736 (website logo), this lane's PR, and the frozen or inadmissible #1556, #1505, #1498, #1495, #1492, #1491, #1451, #1429. |
+| Open PRs | #1739 (Codex, T2, delivery-ui path admission), #1738 (Claude, T1, constitution-matrix annotation), #1736 (website logo), this lane's PR, and the frozen or inadmissible #1556, #1505, #1498, #1495, #1492, #1491, #1451, #1429. |
 | Lane manifests on `main` | 881 `done`, 28 `closed`, 37 `merged`, 2 `superseded`. Count with `jq .status docs/06_status/lanes/*.json`. |
 
 **Measured, not assumed:** the cohort has one submitting identity. The deployed allow-list names one
@@ -76,9 +76,22 @@ not a given (§3).
   Every `track-only` pick on record has zero outbox rows.
 - **NCAAF reference data is live.** The catalog migration was applied to production on 2026-10-12
   (266 teams; 1,647 pre-existing rows unchanged) and Griff confirmed the teams render in Smart Form.
-- **WNBA is not yet usable.** Three things are missing in order: the migration merged and applied to
-  production (#1745 merged at `51ca89c3e`, UTV2-1972 closed; the production apply is Griff's, with a fresh SQL read preflight), the Smart Form/API team-sport change merged and deployed,
-  then a real submission (§6.A).
+- **WNBA is live and accepted.** Migration `20261010170100_wnba_participant_catalog.sql` was applied to
+  production on 2026-10-15 02:45Z with Griff's authorization (WNBA sport 1, league 1, 15 participants;
+  non-WNBA participant fingerprint unchanged). #1755 (Smart Form team sport) merged at `af3df8feb` and
+  shipped in deploy `2be2aec81`. Acceptance: pick `803a541b` (Atlanta Dream -130 ML, 3.0u) is
+  `track-only`, delivery refused `track-only-requested`, canonical participants, `eventId` null,
+  0 outbox, 0 receipts, 0 intents. An earlier WNBA pick `22ebe8ea` was mistakenly submitted
+  `delivery-eligible` (held by the kill switch, 0 receipts) and was voided at Griff's direction.
+- **NCAAF acceptance passed (2026-10-15).** Pick `8968f86c` (NCAAF total U 70.5, 2.0u): `track-only`,
+  refused `track-only-requested`, canonical participants, `eventId` null, 0 outbox/receipts/intents;
+  Griff confirmed it renders in Command Center.
+- **Manual settlement works through the Command Center.** On 2026-10-15 Griff settled three picks
+  through a locally run Command Center (reading production, no public URL exists): `2d462c4f` loss,
+  `3ba77527` loss, `92789b58` win. All `operator` source, picks remain `validated`/`track-only`, no new
+  outbox rows. **Finding:** those rows record `settled_by = command-center:dev-bypass` (the local
+  fail_open bypass), not `griff843`. Whether that attribution is acceptable or needs a correction path
+  is an open decision (§7). Future settlements should run the local app with real operator auth.
 - **`706b136b`** is a `delivery-eligible` pick, `queued`, whose only outbox row is a `dead_letter`.
   It is held behind the kill switch. Do not requeue or alter it.
 
@@ -90,14 +103,14 @@ This is **not** a readiness threshold, **not** an automatic declaration of succe
 on picks collected. Griff decides whether the evidence satisfies him. The formal bar remains the T1
 contract.
 
-| Measure | Working target | Reading 2026-10-13 |
+| Measure | Working target | Reading 2026-10-15 |
 |---|---|---|
-| Genuine successful submissions | 25 | 14 governed picks in total; 9 `track-only`. Count only genuine, non-fixture, non-voided submissions: **UNKNOWN** until a per-pick review is run. |
+| Genuine successful submissions | 25 | 17 governed picks, 14 non-voided, 11 `track-only`, across MLB, NCAAF, NFL, NHL, WNBA. Genuine/non-fixture review not yet recorded per pick: **UNKNOWN** whether all 14 count. |
 | Distinct authorized identities | ≥ 2 | **1** (`griff843`). A second identity needs allow-list and capper onboarding — Griff's gate. |
-| Independently verified settled picks, covering relevant results and markets | 10 | 6 operator settlement records. "Independently verified" is **UNKNOWN**: no verification step has been recorded. |
+| Independently verified settled picks, covering relevant results and markets | 10 | 9 operator-settled picks. Results for the three 2026-10-15 settlements were looked up from public reports (Falcons 45-24 Saints; Kraken 6-3 Red Wings; Yankees 2-1 Red Sox). "Independently verified" is otherwise **UNKNOWN**. |
 | Persisted-to-surface and settlement reconciliation | 100% | Not yet measured as a ratio. |
 | Unauthorized deliveries | 0 | 0 in the last 14 days; the dead-lettered `706b136b` row never posted. |
-| Unresolved critical identity or data-truth defects | none | None known. WNBA and NCAAB participants are absent (§6.A, §6.C). |
+| Unresolved critical identity or data-truth defects | none | Open: the `dev-bypass` settlement attribution; `dfcd9486` ("Dodgers @ Brewers") has no verifiable matching game and is unsettled. NCAAB participants absent (§6.C). |
 
 Per-pick measurement is a read-only job over the governed cohort; build it before the next report so
 the readings above stop being UNKNOWN. It must not use the `v_governed_pick_performance` view, which
@@ -112,11 +125,11 @@ A migration lane is a singleton and is forbidden alongside a runtime lane, whate
 
 | # | Workstream | Owner | State |
 |---|---|---|---|
-| A | WNBA vertical slice | Codex (migration), then Codex (T2 runtime) | #1745 **merged** (`51ca89c3e`); production apply not yet requested; runtime lane queued behind the apply |
-| B | NCAAF live acceptance | **Griff** (submits), Claude (verifies read-only) | Waiting on Griff |
+| A | WNBA vertical slice | Codex (migration), then Codex (T2 runtime) | **Done:** migration applied, #1755 merged and deployed, real Track Only acceptance passed (`803a541b`) |
+| B | NCAAF live acceptance | **Griff** (submits), Claude (verifies read-only) | **Done:** acceptance passed (`8968f86c`) |
 | C | NCAAB participant catalog | Codex | SMALL; queued behind the migration singleton |
 | D | Command Center operator view | Codex (Delivery/UI, display only) | **Display gaps closed on `main`** (#1685, #1689, #1692); awaiting a deployed render. No lane to start. |
-| E | Mission refresh (this lane) | Claude | WORK-2026101301 |
+| E | Plan refresh | Claude | WORK-2026101405 (this lane) |
 | F | Pre-SGO engineering completion | Codex, in bounded lanes | §5 |
 | G | Discord Waves 0–6 | **Independent Codex worker** | Not duplicated here |
 
@@ -149,22 +162,12 @@ for findings; record them in `plan-lessons.md`.
 
 ## 6. Workstream detail
 
-**A. WNBA.** Reference data exists only as migration `20261010170100_wnba_participant_catalog.sql`
-(15 franchises, governed UUIDv5 ids, `unit-talk:wnba:<key>` external ids) in #1745. The rollback
-refuses before deleting when the migration-created sport or league, or any seeded participant, is
-referenced downstream. After merge: (1) prepare the production-apply packet with read-only pre-checks,
-as was done for NCAAF; (2) Griff authorizes the apply — **reserved**; (3) the T2 runtime lane adds
-WNBA to the three team-sport sets (`apps/smart-form/lib/form-utils.ts`,
-`apps/smart-form/app/submit/components/BetForm.tsx`, `apps/api/src/smart-form-validation.ts`), the
-`sports` count in `apps/api/src/server.test.ts`, contracts `reference-data.ts` and pick foreign-key
-normalization (saved patches exist, to be reviewed and selectively reproduced, not blindly applied);
-(4) Griff dispatches the deploy — **reserved**; (5) Griff submits a real WNBA Track Only pick and
-Claude verifies read-only: persisted row, participant ids, no outbox, receipt or intent, and Command
-Center visibility.
+**A. WNBA — complete.** Migration applied to production, runtime change merged (#1755) and deployed
+(`2be2aec81`), and one real Track Only pick verified read-only (§2). No further WNBA work unless a
+defect appears. WNBA events are not in the event catalog, so WNBA picks submit with `eventId: null`
+(manual fallback, labeled, no provider verification, no CLV).
 
-**B. NCAAF.** No catalog work unless a real defect is found. Acceptance is one real current Track
-Only pick submitted by Griff, then a read-only check of the row, participant ids, absence of
-outbox/receipt/intents, and Command Center visibility.
+**B. NCAAF — complete.** Acceptance verified read-only (§2). No catalog work unless a real defect is found.
 
 **C. NCAAB.** Classified SMALL: a bounded catalog from the NCAA directory (`sportCode=MBB`) reusing
 the participant-catalog seed and reversibility machinery. `sports` and a league row already exist;
@@ -185,10 +188,10 @@ never produces delivery, and the kill switches stay as they are.
 
 | # | Decision | Reserved under | Blocks |
 |---|---|---|---|
-| 1 | **Apply the WNBA migration to production** — separate Griff approval, preceded by a fresh read-only SQL preflight and `supabase migration list --linked` (#1745 is merged; nothing is applied) | production DDL | WNBA appearing in Smart Form |
-| 2 | **Dispatch the deployment** carrying the WNBA runtime change, only after the apply and as a separate approval | production deployment | WNBA submission |
-| 3 | **Real contained WNBA acceptance** — one real Track Only pick after the deploy | operator action | WNBA vertical slice done |
-| 4 | **Submit one real NCAAF Track Only pick** | operator action | NCAAF acceptance |
+| 1 | ~~Apply the WNBA migration; dispatch the deployment; WNBA acceptance; NCAAF acceptance~~ — **done 2026-10-15** under Griff's explicit authorizations (migration apply, deploy `2be2aec81`, canary gate approved by Griff) | — | — |
+| 2 | **Settlement attribution:** decide whether the three `command-center:dev-bypass` settlements stand as recorded or need a governed correction path; future settlements to run through a locally launched Command Center with real operator auth | production data correction | the "independently verified settlement" reading |
+| 3 | **Dodgers pick `dfcd9486`:** confirm the real event/result so it can be settled, or confirm it should remain unsettled | operator action | one settled-pick reading |
+| 4 | **Settle NCAAF `8968f86c` and WNBA `803a541b`** once the games are final, and keep submitting real Track Only picks (choose Track Only explicitly) | operator action | the quantity measure |
 | 5 | **Authorize a second capper identity** | capper onboarding / allow-list | the ≥ 2 identity measure |
 | 6 | **SGO purchase/activation**, after the evidence-backed minimal-provider plan | paid provider, secrets | live ingestion, CLV, automated grading on live data |
 | 7 | **Whop and Discord setup**: plan ids, webhook secret, roles, refund policy, prices and tier names | secrets, pricing authority | the paid-member path |
