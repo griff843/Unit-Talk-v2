@@ -168,6 +168,61 @@ const readers = [
   },
 ];
 for (const reader of readers) {
+  test(`${reader.name}: PostgreSQL timestamp precision and equivalent UTC offsets retain chronological order across pages`, async () => {
+    const template = rows(1)[0]!;
+    // Hand-authored chronological order: never derive this oracle from either
+    // the production comparator or the query double's lexical timestamp sort.
+    // IDs deliberately oppose the two microsecond instants, so Date.parse's
+    // millisecond truncation plus an ID tie-break cannot pass this proof.
+    const chronological = [
+      { ...template, id: 'instant-base', created_at: '2026-10-01T00:00:00+00:00' },
+      { ...template, id: 'micro-z', created_at: '2026-10-01T00:00:00.000001+00:00' },
+      { ...template, id: 'micro-a', created_at: '2026-10-01T00:00:00.000002Z' },
+      { ...template, id: 'milli-a', created_at: '2026-10-01T00:00:00.001Z' },
+      { ...template, id: 'milli-b', created_at: '2026-10-01T01:00:00.001000+01:00' },
+      { ...template, id: 'milli-c', created_at: '2026-09-30T19:00:00.001-05:00' },
+    ];
+    const fillers = Array.from({ length: POSTGREST_MAX_ROWS - 2 }, (_, index) => ({
+      ...template,
+      id: `filler-${String(index).padStart(4, '0')}`,
+      created_at: reader.ascending
+        ? '2026-09-29T00:00:00Z'
+        : '2026-10-02T00:00:00Z',
+    }));
+    const expected = reader.ascending
+      ? [...fillers, ...chronological]
+      : [...fillers.reverse(), ...chronological.reverse()];
+    // Reverse insertion order also makes the InMemory assertion discriminating.
+    const population = [...expected].reverse();
+    const c = client(population, {
+      mutate: (result, request) => ({
+        ...result,
+        data: expected.slice(request.from, request.to + 1),
+      }),
+    });
+    const expectedIds = expected.map((row) => row.id);
+    assert.deepEqual((await reader.database(c)).map((row) => row.id), expectedIds);
+    assert.deepEqual((await reader.memory(population)).map((row) => row.id), expectedIds);
+    assert.deepEqual(c.requests.map((request) => request.from), [0, POSTGREST_MAX_ROWS]);
+
+    // A strict chronological guard must still reject reversed microseconds,
+    // even though both instants collapse to the same Date.parse millisecond
+    // and their deliberately chosen IDs would otherwise look correctly sorted.
+    const reversedMicros = [...expected];
+    const first = reversedMicros.findIndex((row) => row.id === 'micro-z');
+    const second = reversedMicros.findIndex((row) => row.id === 'micro-a');
+    [reversedMicros[first], reversedMicros[second]] = [
+      reversedMicros[second]!, reversedMicros[first]!,
+    ];
+    await assert.rejects(reader.database(client(population, {
+      mutate: (result, request) => ({
+        ...result,
+        data: reversedMicros.slice(request.from, request.to + 1),
+      }),
+    })), /non-progressing|inconsistent page order/);
+  });
+}
+for (const reader of readers) {
   for (const count of [0, 1, 999, 1000, 1001, 2000, 2501]) {
     test(`${reader.name}: complete ${count} rows with equal timestamp boundaries and Database/InMemory parity`, async () => {
       const population = rows(count).reverse();

@@ -493,6 +493,25 @@ export class InMemorySubmissionRepository implements SubmissionRepository {
   }
 }
 
+// PostgreSQL orders timestamp instants, not their variable-precision text.
+// Retain submillisecond digits so distinct database microseconds stay ordered.
+function performanceTimestampKey(timestamp: string): bigint {
+  const milliseconds = Date.parse(timestamp);
+  if (!Number.isFinite(milliseconds)) throw new Error('Invalid reader timestamp');
+  const fraction = timestamp.match(/\.(\d+)/)?.[1] ?? '';
+  return BigInt(milliseconds) * 1_000_000n
+    + BigInt(fraction.slice(3, 9).padEnd(6, '0'));
+}
+
+function comparePerformanceReaderRows(
+  left: { created_at: string; id: string },
+  right: { created_at: string; id: string },
+): number {
+  const leftTime = performanceTimestampKey(left.created_at);
+  const rightTime = performanceTimestampKey(right.created_at);
+  return leftTime < rightTime ? -1 : leftTime > rightTime ? 1 : left.id.localeCompare(right.id);
+}
+
 /** PostgREST `max-rows` on this project: the most rows any single response carries. */
 export const POSTGREST_MAX_ROWS = 1000;
 
@@ -639,9 +658,7 @@ export class InMemoryPickRepository implements PickRepository {
         stateSet.has(pick.status as CanonicalPick['lifecycleState']),
       )
       .sort(
-        (left, right) =>
-          left.created_at.localeCompare(right.created_at) ||
-          left.id.localeCompare(right.id),
+        comparePerformanceReaderRows,
       )
       .slice(start);
     const result = limit === undefined ? sorted : sorted.slice(0, limit);
@@ -1134,8 +1151,7 @@ export class InMemoryOutboxRepository implements OutboxRepository {
       .filter((e) => e.pick_id === pickId)
       .sort(
         (left, right) =>
-          right.created_at.localeCompare(left.created_at) ||
-          right.id.localeCompare(left.id),
+          comparePerformanceReaderRows(right, left),
       );
     if (result.length > 100_000)
       throw new Error('listByPickId exceeds 100000-row safety budget');
@@ -1667,7 +1683,7 @@ export class InMemorySettlementRepository implements SettlementRepository {
   async listByPick(pickId: string): Promise<SettlementRecord[]> {
     const result = this.settlements
       .filter((record) => record.pick_id === pickId)
-      .sort(compareSettlementRecordsDescending);
+      .sort((left, right) => comparePerformanceReaderRows(right, left));
     if (result.length > 100_000)
       throw new Error('listByPick exceeds 100000-row safety budget');
     return result;
@@ -3582,8 +3598,7 @@ export class DatabasePickRepository implements PickRepository {
         if (seen.has(row.id)) fail('duplicate or overlapping page identity');
         if (previous) {
           const order =
-            previous.created_at.localeCompare(row.created_at) ||
-            previous.id.localeCompare(row.id);
+            comparePerformanceReaderRows(previous, row);
           if (!(order < 0)) fail('non-progressing or inconsistent page order');
         }
         seen.add(row.id);
@@ -4483,8 +4498,7 @@ export class DatabaseOutboxRepository implements OutboxRepository {
         if (seen.has(row.id)) fail('duplicate or overlapping page identity');
         if (previous) {
           const order =
-            previous.created_at.localeCompare(row.created_at) ||
-            previous.id.localeCompare(row.id);
+            comparePerformanceReaderRows(previous, row);
           if (!(order > 0)) fail('non-progressing or inconsistent page order');
         }
         seen.add(row.id);
@@ -5208,8 +5222,7 @@ export class DatabaseSettlementRepository implements SettlementRepository {
         if (seen.has(row.id)) fail('duplicate or overlapping page identity');
         if (previous) {
           const order =
-            previous.created_at.localeCompare(row.created_at) ||
-            previous.id.localeCompare(row.id);
+            comparePerformanceReaderRows(previous, row);
           if (!(order > 0)) fail('non-progressing or inconsistent page order');
         }
         seen.add(row.id);

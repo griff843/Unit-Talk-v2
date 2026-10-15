@@ -390,8 +390,15 @@ function assertReaderOrder(
   for (let index = 1; index < rows.length; index++) {
     const previous = rows[index - 1]!;
     const current = rows[index]!;
-    const comparison = previous.created_at.localeCompare(current.created_at)
-      || previous.id.localeCompare(current.id);
+    const instant = (timestamp: string): bigint => {
+      const milliseconds = Date.parse(timestamp);
+      assert.ok(Number.isFinite(milliseconds), 'valid reader timestamp');
+      const fractionalDigits = timestamp.match(/\.(\d+)/)?.[1] ?? '';
+      return BigInt(milliseconds) * 1_000_000n
+        + BigInt(fractionalDigits.padEnd(9, '0').slice(3, 9));
+    };
+    const delta = instant(previous.created_at) - instant(current.created_at);
+    const comparison = delta < 0n ? -1 : delta > 0n ? 1 : previous.id.localeCompare(current.id);
     assert.ok(ascending ? comparison < 0 : comparison > 0, 'created_at/id total order');
   }
 }
