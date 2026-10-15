@@ -1,0 +1,40 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101405",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": "pending merge",
+    "verified_source_sha": "1ea69519420d1a6a704804922b77611949069022",
+    "evidence_commit_sha": "pending proof commit",
+    "current_pr_head_sha": "1ea69519420d1a6a704804922b77611949069022",
+    "sha_type": "head_sha",
+    "bound_at": "2026-10-15T19:44:41Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "detail": "exit 0"
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "detail": "No R-level artifacts required for this diff."
+    }
+  },
+  "runtime_proof": {
+    "status": "NOT_APPLICABLE",
+    "detail": "Documentation-only plan refresh: no runtime, schema or database change."
+  },
+  "acceptance_criteria": {
+    "plan_records_deploy_and_acceptances": "PASS",
+    "dev_bypass_attribution_disclosed": "PASS",
+    "stale_statements_corrected": "PASS",
+    "no_intent_spec_or_containment_change": "PASS"
+  },
+  "verdict": "PASS"
+}
