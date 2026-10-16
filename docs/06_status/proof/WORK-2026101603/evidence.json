@@ -7,23 +7,34 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "dec9bfc7b9a92f5ac9435c8a5103b32353db1f98",
+    "verified_source_sha": "5c0e3446fea4ff71891cfbf28b3dd59d20d4cba1",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "merge_sha",
     "bound_at": "2026-10-16T09:28:39.000Z",
     "ci_sentinels": {
-      "head_sha": "dec9bfc7b9a92f5ac9435c8a5103b32353db1f98",
-      "ci_run": 38878744462,
-      "verify": { "conclusion": "success" },
-      "note": "Carried because .claude/hooks/pre-proof-validator.sh required a non-empty sha_binding.ci_sentinels for a pre-merge bundle; the value is the observed conclusion of ci.yml run 38878744462 on the exact head."
+      "head_sha": "5c0e3446fea4ff71891cfbf28b3dd59d20d4cba1",
+      "ci_run": "pending",
+      "note": "Carried because the pre-proof hook required a non-empty ci_sentinels for a pre-merge bundle. No CI conclusion is asserted for this head: the exact-head result is the PR's required checks. Prior code head dec9bfc7b9a92f5ac9435c8a5103b32353db1f98 passed ci.yml run 38878744462 before the numeric schema_version correction."
     }
   },
   "static_proof": {
     "status": "PASS",
-    "verify_static": { "command": "pnpm verify:static", "status": "PASS", "detail": "exit 0" },
-    "unit_tests": { "command": "pnpm exec tsx --test scripts/ops/proof-check.test.ts", "status": "PASS", "detail": "57 pass, 0 fail" },
-    "r_level": { "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD", "status": "PASS", "detail": "No R-level artifacts required for this diff." }
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "detail": "exit 0"
+    },
+    "unit_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/proof-check.test.ts",
+      "status": "PASS",
+      "detail": "57 pass, 0 fail (includes the numeric schema_version negatives and their mutation check)"
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "detail": "No R-level artifacts required for this diff."
+    }
   },
   "runtime_proof": {
     "status": "NOT_APPLICABLE",

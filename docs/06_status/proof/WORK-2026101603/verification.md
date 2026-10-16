@@ -16,7 +16,7 @@ result: local hook-compatibility change; no runtime, schema or database change, 
 
 ## EVIDENCE:
 
-Commands run in the lane worktree at source head `dec9bfc7b9a92f5ac9435c8a5103b32353db1f98`:
+Commands run in the lane worktree at source head `5c0e3446fea4ff71891cfbf28b3dd59d20d4cba1`:
 
 ```
 $ pnpm exec tsx --test scripts/ops/proof-check.test.ts
@@ -32,7 +32,7 @@ $ pnpm ops:scope-diff -- --issue WORK-2026101603
 clean - all changes within declared scope
 ```
 
-Exact-head CI: ci.yml run 38878744462, conclusion success on `dec9bfc7b9a92f5ac9435c8a5103b32353db1f98`.
+Exact-head CI: the PR's required checks on `5c0e3446fea4ff71891cfbf28b3dd59d20d4cba1`. An earlier code head, `dec9bfc7b9a92f5ac9435c8a5103b32353db1f98`, passed ci.yml run 38878744462; the later numeric schema_version correction is verified locally (57 pass, mutation-checked).
 
 ## Verification
 
