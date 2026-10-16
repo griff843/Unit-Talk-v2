@@ -427,7 +427,9 @@ try:
     full_sha = lambda v: isinstance(v, str) and re.fullmatch(r'[0-9a-f]{40}', v) is not None
     flat_text = lambda v: isinstance(v, str) and v.strip() != ''
     canonical_v2_post_merge = (
-        str(d.get('schema_version')) == '2'
+        isinstance(d.get('schema_version'), int)
+        and not isinstance(d.get('schema_version'), bool)
+        and d.get('schema_version') == 2
         and sb.get('sha_type') == 'merge_sha'
         and full_sha(sb.get('merge_sha'))
         and full_sha(sb.get('verified_source_sha'))
