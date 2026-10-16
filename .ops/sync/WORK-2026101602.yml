@@ -1,0 +1,184 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026101602
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026101602
+  objective: "Canonical main still shows WORK-2026101401 as `started` with
+    `pr_url: null`, although PR #1759 merged at
+    `6e62d30b3565cb2c7a5dd6f0402b6f9fcad2af8c` and the original executor
+    completed `ops:lane-close --repair-merged` locally (truth PASS, lease
+    released). Publish the five generated files so main reflects the terminal
+    state and the runtime singleton is released."
+  acceptance_criteria:
+    - The five files on main equal the executor's generated state (hashes
+      recorded in the proof).
+    - "Manifest: `status: done`, `pr_url` #1759, `commit_sha`
+      6e62d30b3565cb2c7a5dd6f0402b6f9fcad2af8c, no lease. Historical execution
+      outcome (`codex_exit_code: 1`) is untouched."
+    - This PR does not bind WORK-2026101401 to this PR's own SHA.
+    - "Not changed: workflow or closeout code (#1763's underlying defect stays
+      open), any other lane, containment, kill switches."
+  guardrails:
+    - No deployment, delivery, provider, Whop or `--admin`. No fabricated
+      artifacts.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026101602 — Publish WORK-2026101401's measured terminal closeout
+      state (issue #1763)
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Repo-owned work order. PM decision (issue #1763, comment
+      IC_kwDORr3vD88AAAABcdIRBQ): publish the existing measured terminal state
+      of WORK-2026101401 through one bounded metadata-only, tier-labeled PR
+      under normal controls. No direct-main edit, no rewrite of historical
+      provenance.
+
+
+      ## Change
+
+
+      Apply the original executor's mechanically generated patch
+      (`pr1759-generated-terminal-closeout.patch`, SHA256
+      `2e0f0160587e2c20a3483f83b3bb9d648483b8b3881a115198e3f9434cef8ba7`,
+      byte-identical to the live `git diff` of the source worktree, verified)
+      touching ONLY:
+
+
+      - docs/06_status/lanes/WORK-2026101401.json
+
+      - docs/06_status/proof/WORK-2026101401/diff-summary.md
+
+      - docs/06_status/proof/WORK-2026101401/evidence.json
+
+      - docs/06_status/proof/WORK-2026101401/model-routing.json
+
+      - docs/06_status/proof/WORK-2026101401/verification.md
+
+
+      ## File Scope
+
+
+      - docs/06_status/lanes/WORK-2026101401.json
+
+      - docs/06_status/proof/WORK-2026101401/diff-summary.md
+
+      - docs/06_status/proof/WORK-2026101401/evidence.json
+
+      - docs/06_status/proof/WORK-2026101401/model-routing.json
+
+      - docs/06_status/proof/WORK-2026101401/verification.md
+
+      - .ops/work/WORK-2026101602.md
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026101602.md
+    title: "WORK-2026101602 — Publish WORK-2026101401's measured terminal closeout
+      state (issue #1763)"
+    description: >-
+      # WORK-2026101602 — Publish WORK-2026101401's measured terminal closeout
+      state (issue #1763)
+
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Repo-owned work order. PM decision (issue #1763, comment
+      IC_kwDORr3vD88AAAABcdIRBQ): publish the existing measured terminal state
+      of WORK-2026101401 through one bounded metadata-only, tier-labeled PR
+      under normal controls. No direct-main edit, no rewrite of historical
+      provenance.
+
+
+      ## Objective
+
+
+      Canonical main still shows WORK-2026101401 as `started` with `pr_url:
+      null`, although PR #1759 merged at
+      `6e62d30b3565cb2c7a5dd6f0402b6f9fcad2af8c` and the original executor
+      completed `ops:lane-close --repair-merged` locally (truth PASS, lease
+      released). Publish the five generated files so main reflects the terminal
+      state and the runtime singleton is released.
+
+
+      ## Change
+
+
+      Apply the original executor's mechanically generated patch
+      (`pr1759-generated-terminal-closeout.patch`, SHA256
+      `2e0f0160587e2c20a3483f83b3bb9d648483b8b3881a115198e3f9434cef8ba7`,
+      byte-identical to the live `git diff` of the source worktree, verified)
+      touching ONLY:
+
+
+      - docs/06_status/lanes/WORK-2026101401.json
+
+      - docs/06_status/proof/WORK-2026101401/diff-summary.md
+
+      - docs/06_status/proof/WORK-2026101401/evidence.json
+
+      - docs/06_status/proof/WORK-2026101401/model-routing.json
+
+      - docs/06_status/proof/WORK-2026101401/verification.md
+
+
+      ## Acceptance Criteria
+
+
+      - The five files on main equal the executor's generated state (hashes
+      recorded in the proof).
+
+      - Manifest: `status: done`, `pr_url` #1759, `commit_sha`
+      6e62d30b3565cb2c7a5dd6f0402b6f9fcad2af8c, no lease. Historical execution
+      outcome (`codex_exit_code: 1`) is untouched.
+
+      - This PR does not bind WORK-2026101401 to this PR's own SHA.
+
+      - Not changed: workflow or closeout code (#1763's underlying defect stays
+      open), any other lane, containment, kill switches.
+
+
+      ## Guardrails
+
+
+      - No deployment, delivery, provider, Whop or `--admin`. No fabricated
+      artifacts.
+
+
+      ## File Scope
+
+
+      - docs/06_status/lanes/WORK-2026101401.json
+
+      - docs/06_status/proof/WORK-2026101401/diff-summary.md
+
+      - docs/06_status/proof/WORK-2026101401/evidence.json
+
+      - docs/06_status/proof/WORK-2026101401/model-routing.json
+
+      - docs/06_status/proof/WORK-2026101401/verification.md
+
+      - .ops/work/WORK-2026101602.md
+    captured_at: 2026-10-16T07:34:11.286Z
+    description_sha256: c31a22abc621ca65014db1ae0f7e45e9f3ae201226d049e7cafaf492a036a0b4
+  contract_hash: cd833b294bda2883404c7e96e6eb3b9a5c659b0cf4f2044a9c0813aa7396aa88
