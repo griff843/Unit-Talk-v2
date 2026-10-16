@@ -1,0 +1,164 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101401",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "c30a0120c84d651b1ebbc7caf7e142c2c3283921",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm verify",
+    "scope": "verify:static completed successfully; subsequent local test:live-db refused staging identity",
+    "full_command_exit_code": 1,
+    "node_test_suite_totals": {
+      "tests": 7841,
+      "pass": 7828,
+      "skipped": 13,
+      "fail": 0
+    },
+    "automation_coverage": {
+      "result": "pass",
+      "new_unwired_tests": 0
+    },
+    "r_level_check": "pass",
+    "source_binding": "Exact source and package.json bytes committed in ccd89881c; subsequent commits contain proof only."
+  },
+  "runtime_proof": {
+    "status": "pass_staging_persistence",
+    "environment": "GitHub staging-ci; approved project xskgrzbteyqdufktjrjx; namespaced synthetic fixtures only",
+    "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/38673297386",
+    "job_id": 116221129046,
+    "tested_integration_sha": "33e51534a23bfcc88b0c24ae3ccb5b6ea6b526de",
+    "tested_pr_head": "c30a0120c84d651b1ebbc7caf7e142c2c3283921",
+    "integration_parents": [
+      "2be2aec814f54f62578dc3f1c206e1082b604888",
+      "c30a0120c84d651b1ebbc7caf7e142c2c3283921"
+    ],
+    "queries": [
+      {
+        "test": "UTV2-996: re-settling a settled pick creates correction \u2014 no true duplicate base rows",
+        "table": "settlement_records",
+        "query": "SELECT count(id) WHERE pick_id = generated smoke pick AND corrects_id IS NULL",
+        "assertion": "baseCount === 1",
+        "source": "apps/api/src/database-smoke.test.ts"
+      },
+      {
+        "test": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+        "table": "settlement_records",
+        "query": "SELECT count(id) WHERE pick_id = generated invalid-settlement smoke pick",
+        "assertion": "settlementCount === 0",
+        "source": "apps/api/src/database-smoke.test.ts"
+      },
+      {
+        "test": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+        "table": "distribution_receipts",
+        "query": "SELECT count(id) WHERE outbox_id = generated smoke outbox",
+        "assertion": "receiptCount === 0",
+        "source": "apps/api/src/database-smoke.test.ts"
+      }
+    ],
+    "row_counts": [
+      {
+        "scope": "UTV2-996 unique smoke pick base settlement",
+        "count": 1,
+        "basis": "Passing exact-count live DB assertion"
+      },
+      {
+        "scope": "UTV2-920 unique invalid-settlement smoke pick settlement rows",
+        "count": 0,
+        "basis": "Passing exact-count live DB assertion"
+      },
+      {
+        "scope": "UTV2-920 unique invalid-delivery smoke outbox receipts",
+        "count": 0,
+        "basis": "Passing exact-count live DB assertion"
+      }
+    ],
+    "ci_db_proof_receipt": {
+      "schema": "ci-db-proof-receipt/v2",
+      "repository": "griff843/Unit-Talk-v2",
+      "workflow": "CI",
+      "workflow_ref": "griff843/Unit-Talk-v2/.github/workflows/ci.yml@refs/pull/1759/merge",
+      "github_run_id": "38673297386",
+      "github_run_attempt": "1",
+      "github_job": "staging-db-proof",
+      "github_sha": "33e51534a23bfcc88b0c24ae3ccb5b6ea6b526de",
+      "github_ref_name": "1759/merge",
+      "command": "pnpm test:db",
+      "started_at": "2026-10-15T02:53:07.149Z",
+      "finished_at": "2026-10-15T02:53:47.074Z",
+      "exit_code": 0,
+      "observed_project_ref": "xskgrzbteyqdufktjrjx",
+      "observed_host": "xskgrzbteyqdufktjrjx.supabase.co",
+      "expected_staging_project_ref": "xskgrzbteyqdufktjrjx",
+      "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+      "tap": {
+        "tests": 9,
+        "pass": 9,
+        "fail": 0,
+        "skipped": 0
+      },
+      "captured_output": "\n> @unit-talk/v2@0.1.0 test:db /home/runner/work/Unit-Talk-v2/Unit-Talk-v2\n> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts\n\n\n> @unit-talk/v2@0.1.0 ci:assert-staging /home/runner/work/Unit-Talk-v2/Unit-Talk-v2\n> tsx scripts/ci/assert-staging-target.ts\n\n[assert-staging] host=xskgrzbteyqdufktjrjx.supabase.co ref=xskgrzbteyqdufktjrjx expected=xskgrzbteyqdufktjrjx\n[assert-staging] OK: target is the approved staging project xskgrzbteyqdufktjrjx\nTAP version 13\n# Subtest: ingestor health check canonical freshness SELECT executes against staging\nok 1 - ingestor health check canonical freshness SELECT executes against staging\n  ---\n  duration_ms: 883.950504\n  type: 'test'\n  ...\n# SELECT succeeded; latestOfferUpdatedAt=2026-10-14T23:26:54.602+00:00\n# Subtest: ingestor supervisor canonical freshness SELECT executes against staging\nok 2 - ingestor supervisor canonical freshness SELECT executes against staging\n  ---\n  duration_ms: 1035.854052\n  type: 'test'\n  ...\n# SELECT succeeded; latestOfferUpdatedAt=2026-10-14T23:26:54.602+00:00\n# Subtest: database repository bundle persists a submission and settlement when Supabase is configured\nok 3 - database repository bundle persists a submission and settlement when Supabase is configured\n  ---\n  duration_ms: 5778.203503\n  type: 'test'\n  ...\n# Subtest: UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row\nok 4 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row\n  ---\n  duration_ms: 2703.111744\n  type: 'test'\n  ...\n# Subtest: UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes\nok 5 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes\n  ---\n  duration_ms: 3168.187027\n  type: 'test'\n  ...\n# Subtest: UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row\nok 6 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row\n  ---\n  duration_ms: 3046.867487\n  type: 'test'\n  ...\n# Subtest: UTV2-883: no duplicate participants for the same external_id and sport\nok 7 - UTV2-883: no duplicate participants for the same external_id and sport\n  ---\n  duration_ms: 345.482492\n  type: 'test'\n  ...\n# Subtest: UTV2-996: re-settling a settled pick creates correction \u2014 no true duplicate base rows\nok 8 - UTV2-996: re-settling a settled pick creates correction \u2014 no true duplicate base rows\n  ---\n  duration_ms: 9765.534358\n  type: 'test'\n  ...\n# Subtest: UTV2-996: correction chain is additive \u2014 original settlement row is not mutated\nok 9 - UTV2-996: correction chain is additive \u2014 original settlement row is not mutated\n  ---\n  duration_ms: 11863.839704\n  type: 'test'\n  ...\n1..9\n# tests 9\n# suites 0\n# pass 9\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 39123.536015\n",
+      "output_sha256": "ab13cc0d8b813e54757eaa5cfb924fb9725d6f4c81ea9e5371360970df0a195a",
+      "repo_migration_head": "20261010170100_wnba_participant_catalog.sql",
+      "fixture_run_id": "utv2-1630-38673297386-1",
+      "cleanup_result": null,
+      "receipt_sha256": "adc990170077d26d364c32366662d610b43c7980b47c32b5dc0ecc0e7f20602f"
+    },
+    "t1_live_suites": "Same staging job Run the T1 live proof suites against staging step success; raw job log retained in control .out",
+    "limitations": "These are actual staging persistence/correction/atomicity assertions from the mandated generic DB gate, not a live HTTP exercise of the new performance endpoints or a live 50k pagination stress test. New three-reader pagination and API behavior are proven by focused query-double/route tests. No deployed Discord command acceptance is claimed."
+  },
+  "executor_provenance": {
+    "implementation": "Desktop root and bounded agents; implementation commit 9c28a7308d28cfbe48a1c3ad48508ec6cd6c9d21",
+    "subsequent_cli_validation": "Actual governed gpt-5.6-sol medium invocation; measured sidecar retained without modification. Operator interrupted the pass after its stale ten-file contract reverted the separately approved package.json addition. That uncommitted revert was restored from HEAD, preserving ccd89881c exactly.",
+    "cli_validation_result": "interrupted_exit_1; not successful execution",
+    "merge_review": "pending_independent_pm_exact_head"
+  },
+  "current_candidate": {
+    "verified_source_sha": "512bc3552046b61bc28086d2221412a2edd94595",
+    "scope_authority": "Griff explicitly approved the one existing live-proof-file extension in Discord continuation chat on2026-10-15; final external exact-HEAD exception pending",
+    "changed_test": "apps/api/src/t1-proof-utv2-1907-capper-attribution.test.ts",
+    "full_local_verify": {
+      "status": "running_for_timestamp_fix",
+      "log": ".out-timestamp-verify.log",
+      "previous_candidate_exit_code": 1,
+      "previous_candidate_reason": "localhost staging guard refusal"
+    },
+    "direct_live_proof_local": {
+      "exit_code": 1,
+      "reason": "positive approved-staging before-hook refused configured non-staging target before repository construction or fixture writes"
+    },
+    "change_specific_live_db": {
+      "status": "pending_fresh_exact_head_ci_after_timestamp_fix",
+      "new_assertions": "read-only exact counts/filter/order/slices using original staging fixtures",
+      "limits": "child settlements1/outbox0; >1000 live pages only if actual observed pick count supports it; no member delivery or positive public cohort claim"
+    },
+    "independent_review": "Non-author onboarding_packet reviewed the three-file fix; no confirmed actionable defect. Not PM approval.",
+    "historical_receipt_notice": "Existing sha_binding/runtime_proof records preserve their original measured source and receipt. They are not substituted for this candidate new proof-case execution.",
+    "previous_candidate_static_tests": {
+      "tests": 7841,
+      "pass": 7828,
+      "skipped": 13,
+      "fail": 0
+    },
+    "direct_reader_regression": {
+      "tests": 103,
+      "pass": 103,
+      "fail": 0,
+      "skipped": 0,
+      "old_code_new_regression_failures": 3
+    },
+    "failed_live_candidate": {
+      "head": "cd630357653c407ab77ba34061e49a82b863c7b1",
+      "run_id": "38817617158",
+      "result": "failure",
+      "reason": "localeCompare rejects valid variable-fraction timestamp order in actual pick reader"
+    }
+  }
+}
