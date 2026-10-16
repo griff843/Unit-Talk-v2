@@ -12,5 +12,5 @@ intent.md and spec.md are untouched. Readiness thresholds, entitlements, contain
 ## SHA Binding
 
 Verified source SHA: `1ea69519420d1a6a704804922b77611949069022`
-Merge SHA: pending merge
+Merge SHA: 29d61b7cb6fa69fa24d493ee1faabdfb5ba380c3
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1760

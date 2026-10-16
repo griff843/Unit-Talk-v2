@@ -1,6 +1,6 @@
 # PROOF: WORK-2026101405
 
-MERGE_SHA: pending merge
+MERGE_SHA: 29d61b7cb6fa69fa24d493ee1faabdfb5ba380c3
 
 Issue: WORK-2026101405
 Tier: T1
@@ -41,5 +41,5 @@ Production facts cited in plan.md were read from production (read-only SQL) and 
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `29d61b7cb6fa69fa24d493ee1faabdfb5ba380c3`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1760

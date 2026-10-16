@@ -6,12 +6,12 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "29d61b7cb6fa69fa24d493ee1faabdfb5ba380c3",
     "verified_source_sha": "1ea69519420d1a6a704804922b77611949069022",
     "evidence_commit_sha": "pending proof commit",
     "current_pr_head_sha": "1ea69519420d1a6a704804922b77611949069022",
-    "sha_type": "head_sha",
-    "bound_at": "2026-10-15T19:44:41Z"
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-16T04:44:26.498Z"
   },
   "static_proof": {
     "status": "PASS",
