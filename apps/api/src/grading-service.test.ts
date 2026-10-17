@@ -11,7 +11,9 @@ import {
   postSettlementRecapIfPossible,
   classifyMarketFamilyForGrading,
   classifyGradingOutcome,
+  EVENT_MATCH_AMBIGUITY_WINDOW_MS,
   GRADING_INPUT_FRESHNESS_THRESHOLD_MS,
+  GRADING_SKIP_EVIDENCE_LIMIT,
   type GradingRetryState,
 } from './grading-service.js';
 import { recordEvidenceSettlement, recordGradedSettlement } from './settlement-service.js';
@@ -93,6 +95,7 @@ async function attachPlayerEventContext(
     ingestionCycleRunId?: string | null;
   } = {},
 ) {
+  const startsAt = options.startsAt ?? '2026-03-26T23:30:00.000Z';
   const participant = await repositories.participants.upsertByExternalId({
     externalId: options.participantExternalId ?? `PLAYER_${pickId}`,
     displayName: options.participantName ?? 'Fixture Player',
@@ -109,7 +112,7 @@ async function attachPlayerEventContext(
     eventDate: options.eventDate ?? '2026-03-26',
     status: options.eventStatus ?? 'completed',
     metadata: trustedEventMetadata({
-      startsAt: options.startsAt ?? '2026-03-26T23:30:00.000Z',
+      startsAt,
       ...('providerKey' in options ? { providerKey: options.providerKey } : {}),
       ...('ingestionCycleRunId' in options
         ? { ingestionCycleRunId: options.ingestionCycleRunId }
@@ -129,6 +132,7 @@ async function attachPlayerEventContext(
     metadata: {
       ...(asRecord(existing.metadata) ?? {}),
       eventName: options.eventName ?? 'Fixture Event',
+      eventStartTime: startsAt,
     },
   }));
 
@@ -154,6 +158,61 @@ async function seedGameResult(
     source: input.source ?? 'sgo',
     sourcedAt: input.sourcedAt ?? '2026-03-27T00:00:00.000Z',
   });
+}
+
+async function attachPlayerEventCandidates(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  pickId: string,
+  input: {
+    pickEventName: string;
+    referenceTime: string;
+    candidates: Array<{ eventName: string; startsAt: string }>;
+  },
+) {
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: `PLAYER_CANDIDATES_${pickId}`,
+    displayName: 'Candidate Fixture Player',
+    participantType: 'player',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+  const events = [];
+  for (const [index, candidate] of input.candidates.entries()) {
+    const event = await repositories.events.upsertByExternalId({
+      externalId: `evt-candidate-${pickId}-${index}`,
+      sportId: 'NBA',
+      eventName: candidate.eventName,
+      eventDate: candidate.startsAt.slice(0, 10),
+      status: 'completed',
+      metadata: trustedEventMetadata({ startsAt: candidate.startsAt }),
+    });
+    await repositories.eventParticipants.upsert({
+      eventId: event.id,
+      participantId: participant.id,
+      role: 'competitor',
+    });
+    await seedGameResult(repositories, {
+      eventId: event.id,
+      participantId: participant.id,
+      marketKey: 'points-all-game-ou',
+      actualValue: 30 + index,
+      sourcedAt: candidate.startsAt,
+    });
+    events.push(event);
+  }
+
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    participant_id: participant.id,
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      eventName: input.pickEventName,
+      eventStartTime: input.referenceTime,
+    },
+  }));
+
+  return { participant, events };
 }
 
 function trustedEventMetadata(input: {
@@ -1030,6 +1089,99 @@ test('runGradingPass skips picks when no event link can be resolved', async () =
   assert.equal(result.details[0]?.reason, 'event_link_not_found');
 });
 
+test('runGradingPass does not fall back to unrelated linked events when the named event is absent', async () => {
+  const { repositories, pickId } = await createPostedPickFixture({
+    eventName: 'Named Final',
+  });
+  await attachPlayerEventCandidates(repositories, pickId, {
+    pickEventName: 'Named Final',
+    referenceTime: '2026-04-18T20:00:00.000Z',
+    candidates: [
+      { eventName: 'Unrelated Early Game', startsAt: '2026-04-18T19:00:00.000Z' },
+      { eventName: 'Unrelated Late Game', startsAt: '2026-04-19T04:00:00.000Z' },
+    ],
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  assert.equal(result.details[0]?.reason, 'event_name_mismatch');
+  assert.equal((await repositories.settlements.listByPick(pickId)).length, 0);
+});
+
+test('runGradingPass skips equidistant named events instead of using sort order', async () => {
+  const { repositories, pickId } = await createPostedPickFixture({
+    eventName: 'Same Name Event',
+  });
+  await attachPlayerEventCandidates(repositories, pickId, {
+    pickEventName: 'Same Name Event',
+    referenceTime: '2026-04-18T20:00:00.000Z',
+    candidates: [
+      { eventName: 'Same Name Event', startsAt: '2026-04-18T18:00:00.000Z' },
+      { eventName: 'Same Name Event', startsAt: '2026-04-18T22:00:00.000Z' },
+    ],
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  assert.equal(result.details[0]?.reason, 'event_match_ambiguous');
+  assert.equal((await repositories.settlements.listByPick(pickId)).length, 0);
+});
+
+test('runGradingPass skips non-tied candidates inside the ambiguity window', async () => {
+  const { repositories, pickId } = await createPostedPickFixture({
+    eventName: 'Window Event',
+  });
+  const referenceTime = '2026-04-18T20:00:00.000Z';
+  await attachPlayerEventCandidates(repositories, pickId, {
+    pickEventName: 'Window Event',
+    referenceTime,
+    candidates: [
+      { eventName: 'Window Event', startsAt: '2026-04-18T21:00:00.000Z' },
+      {
+        eventName: 'Window Event',
+        startsAt: new Date(
+          new Date(referenceTime).getTime() +
+            60 * 60 * 1000 +
+            EVENT_MATCH_AMBIGUITY_WINDOW_MS,
+        ).toISOString(),
+      },
+    ],
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  assert.equal(result.details[0]?.reason, 'event_match_ambiguous');
+  assert.equal((await repositories.settlements.listByPick(pickId)).length, 0);
+});
+
+test('runGradingPass keeps a unique correct name match among unrelated candidates', async () => {
+  const { repositories, pickId } = await createPostedPickFixture({
+    eventName: 'Correct Event',
+  });
+  const { events } = await attachPlayerEventCandidates(repositories, pickId, {
+    pickEventName: 'Correct Event',
+    referenceTime: '2026-04-18T20:00:00.000Z',
+    candidates: [
+      { eventName: 'Wrong Event A', startsAt: '2026-04-18T19:30:00.000Z' },
+      { eventName: 'Correct Event', startsAt: '2026-04-18T21:00:00.000Z' },
+      { eventName: 'Wrong Event B', startsAt: '2026-04-18T20:30:00.000Z' },
+    ],
+  });
+
+  const result = await runGradingPass(repositories);
+  const [settlement] = await repositories.settlements.listByPick(pickId);
+  const gradingContext = (settlement?.payload as Record<string, unknown> | null)?.[
+    'gradingContext'
+  ] as Record<string, unknown> | undefined;
+
+  assert.equal(result.graded, 1);
+  assert.equal(result.details[0]?.result, 'win');
+  assert.equal(gradingContext?.['eventId'], events[1]?.id);
+});
+
 test('runGradingPass skips picks whose betting line is null', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture({
     line: null,
@@ -1123,7 +1275,7 @@ test('runGradingPass uses pick eventStartTime to disambiguate repeat player even
   assert.notEqual(gradingContext?.eventId, wrongApril16Event.id);
 });
 
-test('runGradingPass skips historical event mismatch when explicit pick time is far away', async () => {
+test('runGradingPass skips an event outside the 36-hour selection bound', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture({
     eventName: 'Knicks vs Heat',
     selection: 'Fixture Player Over 24.5',
@@ -1173,7 +1325,7 @@ test('runGradingPass skips historical event mismatch when explicit pick time is 
   assert.equal(result.skipped, 1);
   assert.equal(
     result.details[0]?.reason,
-    'event_provenance_historical_mismatch',
+    'event_time_mismatch',
   );
   assert.equal((await repositories.settlements.listByPick(pickId)).length, 0);
 });
@@ -1800,6 +1952,8 @@ test('fresh empty grading input is a no-op, never successful work', async () => 
   assert.equal(details['gradeable_rows'], 0);
   assert.equal(details['graded_count'], 0);
   assert.deepEqual(details['skipped_reasons'], {});
+  assert.deepEqual(details['skipped_picks'], []);
+  assert.equal(details['skipped_picks_truncated_count'], 0);
   assert.equal(
     details['newest_game_result_sourced_at'],
     '2026-09-19T11:00:00.000Z',
@@ -1870,6 +2024,38 @@ test('a skips-only pass is nothing-gradeable, never succeeded_with_work and neve
   assert.equal(details['outcome_class'], 'no_op_nothing_gradeable');
   assert.ok((details['rows_scanned'] as number) > 0);
   assert.equal(run?.status, 'succeeded');
+});
+
+test('grading run details persist bounded per-pick skip evidence and count overflow', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const pickIds: string[] = [];
+  for (let index = 0; index < GRADING_SKIP_EVIDENCE_LIMIT + 1; index += 1) {
+    const fixture = await createPostedPickFixture({
+      repositories,
+      market: 'unsupported-proof-market',
+      eventName: `Bounded Skip Evidence ${index}`,
+    });
+    pickIds.push(fixture.pickId);
+  }
+
+  const result = await runGradingPass(repositories);
+  const [run] = await repositories.runs.listByType('grading.run');
+  const details = run?.details as Record<string, unknown>;
+  const skippedPicks = details['skipped_picks'] as Array<{
+    pick_id: string;
+    reason: string;
+  }>;
+
+  assert.equal(result.skipped, GRADING_SKIP_EVIDENCE_LIMIT + 1);
+  assert.deepEqual(details['skipped_reasons'], {
+    unsupported_market_family: GRADING_SKIP_EVIDENCE_LIMIT + 1,
+  });
+  assert.equal(skippedPicks.length, GRADING_SKIP_EVIDENCE_LIMIT);
+  assert.deepEqual(skippedPicks[0], {
+    pick_id: pickIds[0],
+    reason: 'unsupported_market_family',
+  });
+  assert.equal(details['skipped_picks_truncated_count'], 1);
 });
 
 test('examined-and-skipped and examined-nothing are distinguishable at the class, not only in the histogram', () => {
@@ -2115,7 +2301,11 @@ async function createPostedGameLinePickFixture(
   // Inject it so resolvePickEventByName can find the event.
   mutatePick(repositories, created.pick.id, (existing) => ({
     ...existing,
-    metadata: { ...(asRecord(existing.metadata) ?? {}), eventName },
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      eventName,
+      eventStartTime: '2026-04-04T19:30:00.000Z',
+    },
   }));
 
   return { repositories, pickId: created.pick.id, eventName };
@@ -2170,6 +2360,38 @@ test('runGradingPass grades a game_total_ou pick as win when actual > line', asy
   assert.ok(detail);
   assert.equal(detail.outcome, 'graded');
   assert.equal(detail.result, 'win');
+});
+
+test('game-line event resolution propagates an ambiguity skip reason', async () => {
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture();
+  const startsAt = [
+    '2026-04-04T17:30:00.000Z',
+    '2026-04-04T21:30:00.000Z',
+  ];
+  for (const [index, candidateStartsAt] of startsAt.entries()) {
+    const event = await repositories.events.upsertByExternalId({
+      externalId: `evt-game-line-ambiguous-${index}`,
+      sportId: 'NBA',
+      eventName,
+      eventDate: '2026-04-04',
+      status: 'completed',
+      metadata: trustedEventMetadata({ startsAt: candidateStartsAt }),
+    });
+    await seedGameResult(repositories, {
+      eventId: event.id,
+      participantId: null,
+      marketKey: 'game_total_ou',
+      actualValue: 230 + index,
+      sourcedAt: candidateStartsAt,
+    });
+  }
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  assert.equal(result.details[0]?.reason, 'event_match_ambiguous');
+  assert.equal((await repositories.settlements.listByPick(pickId)).length, 0);
 });
 
 test('runGradingPass grades a legacy totals pick as a game-line market', async () => {
@@ -2254,6 +2476,7 @@ async function createSpreadResultFixture(
       ...(options.attachParticipant === false ? {} : { teamId: team.id }),
       team: 'Lakers',
       eventName,
+      eventStartTime: '2026-04-04T19:30:00.000Z',
     },
   }));
 
@@ -2563,6 +2786,7 @@ test('runGradingPass does not match an earlier-season same-name event when event
     metadata: {
       ...(asRecord(existing.metadata) ?? {}),
       eventName,
+      eventStartTime: '2026-04-18T02:30:00.000Z',
       eventTime: '2026-04-18T02:30:00.000Z',
     },
   }));
@@ -2854,6 +3078,7 @@ test('runGradingPass resolves participant via metadata.player fuzzy match when p
       player: 'LeBron James',
       sport: 'NBA',
       eventName: 'Lakers vs Celtics',
+      eventStartTime: '2026-04-15T23:30:00.000Z',
     },
   }));
 
@@ -3257,6 +3482,47 @@ async function createTrackOnlyValidatedPickFixture(
 
   return { repositories, pickId: created.pick.id, eventName };
 }
+
+test('Track Only WNBA and NCAAF picks with explicit null event ids stay unsettled without an event link', async () => {
+  for (const sport of ['WNBA', 'NCAAF'] as const) {
+    const repositories = createInMemoryRepositoryBundle();
+    const created = await processSubmission(
+      {
+        source: 'smart-form',
+        market: 'game_total',
+        selection: 'Over 44.5',
+        line: 44.5,
+        odds: -110,
+        stakeUnits: 1,
+        eventName: `${sport} Track Only Missing Event`,
+        metadata: {
+          distributionMode: 'track-only',
+          sport,
+          eventId: null,
+        },
+      },
+      repositories,
+    );
+
+    const result = await runGradingPass(repositories);
+    const detail = result.details.find(
+      (candidate) => candidate.pickId === created.pick.id,
+    );
+
+    assert.equal(detail?.outcome, 'skipped', sport);
+    assert.equal(detail?.reason, 'event_link_not_found', sport);
+    assert.equal(
+      (await repositories.settlements.listByPick(created.pick.id)).length,
+      0,
+      sport,
+    );
+    assert.equal(
+      (await repositories.picks.findPickById(created.pick.id))?.status,
+      'validated',
+      sport,
+    );
+  }
+});
 
 async function createMixedValidatedPopulation() {
   const firstTrackOnly = await createTrackOnlyValidatedPickFixture({
@@ -3677,6 +3943,7 @@ async function createMoneylineResultFixture(
       teamId: team.id,
       team: 'Lakers',
       eventName,
+      eventStartTime: '2026-04-04T19:30:00.000Z',
     },
   }));
 
@@ -3924,6 +4191,7 @@ async function createTrackOnlyMoneylineFixture() {
       teamId: team.id,
       team: 'Dodgers',
       eventName,
+      eventStartTime: '2026-09-09T23:10:00.000Z',
     },
   }));
 
