@@ -8,7 +8,7 @@
   "branch": "codex/work-2026101501-retired-onboarding-buttons",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1767",
   "files_changed": [],
   "file_scope_lock": [
     "apps/discord-bot/src/discord-bot-foundation.test.ts",
@@ -20,9 +20,9 @@
     "docs/06_status/proof/WORK-2026101501/verification.md",
     "docs/06_status/proof/WORK-2026101501/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-10-17T10:49:10.982Z",
-  "heartbeat_at": "2026-10-17T10:49:10.982Z",
+  "heartbeat_at": "2026-10-17T11:14:06.533Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026101501-retired-onboarding-buttons.json",

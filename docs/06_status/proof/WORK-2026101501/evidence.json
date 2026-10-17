@@ -1,17 +1,84 @@
 {
-  "issue": "WORK-2026101501",
-  "scope": [
-    "apps/discord-bot/src/router.ts",
-    "apps/discord-bot/src/discord-bot-foundation.test.ts"
-  ],
-  "focused_test": { "status": "pass", "tests": 114 },
-  "verify_static": { "status": "pass", "exit_code": 0 },
-  "verify": {
-    "status": "deferred_at_staging_preflight",
-    "exit_code": 1,
-    "reason": "target identity could not be resolved from URL (host=127.0.0.1); writable proof requires xskgrzbteyqdufktjrjx via staging-ci"
+  "schema_version": 2,
+  "issue_id": "WORK-2026101501",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "799c713e01a7489b59b0a025a7bbd26dc9cf760e",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
   },
-  "r_level": { "status": "pass", "artifacts_required": false },
-  "runtime_acceptance": "deferred_until_authorized_deployment",
-  "live_db_writes": false
+  "static_proof": {
+    "result": "PASS",
+    "verified_source_sha": "799c713e01a7489b59b0a025a7bbd26dc9cf760e",
+    "commands": [
+      {
+        "command": "pnpm exec tsx --test apps/discord-bot/src/discord-bot-foundation.test.ts",
+        "result": "PASS",
+        "tests": 114
+      },
+      {
+        "command": "pnpm verify:static",
+        "result": "PASS",
+        "note": "The single final pnpm verify completed its full static stage before the staging-target guard refused writable proof."
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "result": "PASS",
+        "matched": "discord-delivery"
+      }
+    ],
+    "test_run_logs": [
+      "/tmp/work-2026101501-pnpm-verify.log"
+    ]
+  },
+  "executor_observations": {
+    "issue": "WORK-2026101501",
+    "scope": [
+      "apps/discord-bot/src/router.ts",
+      "apps/discord-bot/src/discord-bot-foundation.test.ts"
+    ],
+    "focused_test": {
+      "status": "pass",
+      "tests": 114
+    },
+    "verify_static": {
+      "status": "pass",
+      "exit_code": 0
+    },
+    "verify": {
+      "status": "deferred_at_staging_preflight",
+      "exit_code": 1,
+      "reason": "target identity could not be resolved from URL (host=127.0.0.1); writable proof requires xskgrzbteyqdufktjrjx via staging-ci"
+    },
+    "r_level": {
+      "status": "pass",
+      "artifacts_required": false
+    },
+    "runtime_acceptance": "deferred_until_authorized_deployment",
+    "live_db_writes": false
+  },
+  "live_discord_acceptance": {
+    "status": "pending_separately_authorized_deployment",
+    "reason": "No deployment or live Discord send is authorized."
+  },
+  "ci_attempts": [
+    {
+      "head": "799c713e01a7489b59b0a025a7bbd26dc9cf760e",
+      "run": 39027893441,
+      "job": 117382400098,
+      "result": "FAIL",
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/39027893441/job/117382400098",
+      "detail": "T1 promotion-replay tests 4 and 5 failed: listByLifecycleStates and getPromotionBoardState statement timeouts. Required verify correctly failed. No CI pass is claimed."
+    }
+  ],
+  "runtime_proof": {
+    "status": "blocked",
+    "queries": [],
+    "row_counts": [],
+    "reason": "No successful complete staging proof receipt is available. DB smoke passed, but the containing required job failed its promotion-replay suites."
+  }
 }
