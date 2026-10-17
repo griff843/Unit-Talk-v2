@@ -1700,6 +1700,150 @@ test('router ignores non-chat-input interactions silently', async () => {
   assert.equal(mock.replies.length, 0, 'no reply for non-chat-input');
 });
 
+test('router privately acknowledges current bot retired onboarding buttons in guilds and DMs', async () => {
+  for (const guildId of ['guild-1', null] as const) {
+    for (const customId of [
+      'capper_submit_first_pick',
+      'capper_handbook',
+      'capper_dashboard',
+    ]) {
+      const replies: unknown[] = [];
+      const interaction = {
+        customId,
+        isButton: () => true,
+        isChatInputCommand: () => false,
+        message: { author: { id: 'bot-1' } },
+        client: { user: { id: 'bot-1' } },
+        guildId,
+        inGuild: () => guildId !== null,
+        replied: false,
+        deferred: false,
+        reply: async (options: unknown) => replies.push(options),
+      } as unknown as Interaction;
+
+      await createInteractionHandler(makeRegistry([]))(interaction);
+
+      assert.deepEqual(replies, [
+        {
+          content:
+            'This older onboarding button is no longer available. Open the Unit Talk server and use /help for current commands.',
+          ...(guildId !== null ? { ephemeral: true } : {}),
+        },
+      ]);
+    }
+  }
+});
+
+test('router ignores unknown, foreign, malformed, and already acknowledged buttons', async () => {
+  const cases = [
+    { customId: 'unknown', message: { author: { id: 'bot-1' } } },
+    { customId: 'capper_handbook', message: { author: { id: 'foreign' } } },
+    { customId: 'capper_handbook', message: undefined },
+    { customId: 'capper_handbook', message: { author: { id: '' } } },
+    { customId: 'capper_handbook', message: { author: { id: 123 } } },
+    { customId: 'capper_handbook', message: { author: { id: 'bot-1' } }, replied: true },
+    { customId: 'capper_handbook', message: { author: { id: 'bot-1' } }, deferred: true },
+  ];
+
+  for (const options of cases) {
+    let replyCount = 0;
+    const interaction = {
+      ...options,
+      isButton: () => true,
+      isChatInputCommand: () => false,
+      client: { user: { id: 'bot-1' } },
+      guildId: 'guild-1',
+      inGuild: () => true,
+      replied: options.replied ?? false,
+      deferred: options.deferred ?? false,
+      reply: async () => {
+        replyCount += 1;
+      },
+    } as unknown as Interaction;
+
+    await createInteractionHandler(makeRegistry([]))(interaction);
+    assert.equal(replyCount, 0);
+  }
+
+  for (const botUser of [{ id: '' }, {}, { id: 123 }] as const) {
+    let replyCount = 0;
+    const interaction = {
+      customId: 'capper_handbook',
+      isButton: () => true,
+      isChatInputCommand: () => false,
+      message: { author: { id: 'bot-1' } },
+      client: { user: botUser },
+      inGuild: () => true,
+      replied: false,
+      deferred: false,
+      reply: async () => {
+        replyCount += 1;
+      },
+    } as unknown as Interaction;
+
+    await createInteractionHandler(makeRegistry([]))(interaction);
+    assert.equal(replyCount, 0);
+  }
+});
+
+test('router retired-button acknowledgement bypasses registry, member, and defer paths', async () => {
+  let replyCount = 0;
+  const interaction = {
+    customId: 'capper_dashboard',
+    isButton: () => true,
+    isChatInputCommand: () => false,
+    message: { author: { id: 'bot-1' } },
+    client: { user: { id: 'bot-1' } },
+    inGuild: () => true,
+    replied: false,
+    deferred: false,
+    get commandName(): never {
+      throw new Error('commandName should not be read');
+    },
+    get member(): never {
+      throw new Error('member should not be read');
+    },
+    deferReply: async () => {
+      throw new Error('deferReply should not be called');
+    },
+    reply: async () => {
+      replyCount += 1;
+    },
+  } as unknown as Interaction;
+  const registry = {
+    get: () => {
+      throw new Error('registry should not be read');
+    },
+  } as unknown as CommandRegistry;
+
+  await createInteractionHandler(registry)(interaction);
+  assert.equal(replyCount, 1);
+});
+
+test('router logs retired-button reply failures without retrying or logging private content', async () => {
+  const errors: string[] = [];
+  const interaction = {
+    customId: 'capper_handbook',
+    isButton: () => true,
+    isChatInputCommand: () => false,
+    message: { author: { id: 'bot-1' } },
+    client: { user: { id: 'bot-1' } },
+    guildId: 'guild-1',
+    inGuild: () => true,
+    replied: false,
+    deferred: false,
+    reply: async () => {
+      throw new Error('private reply payload');
+    },
+  } as unknown as Interaction;
+
+  await createInteractionHandler(makeRegistry([]), {
+    error: (message: string) => errors.push(message),
+  })(interaction);
+
+  assert.deepEqual(errors, ['[router] Retired onboarding button reply failed']);
+});
+
 test('router replies with unknown-command when command not in registry', async () => {
   const registry = makeRegistry([]);
   const handler = createInteractionHandler(registry);

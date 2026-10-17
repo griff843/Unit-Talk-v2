@@ -1,0 +1,17 @@
+{
+  "issue": "WORK-2026101501",
+  "scope": [
+    "apps/discord-bot/src/router.ts",
+    "apps/discord-bot/src/discord-bot-foundation.test.ts"
+  ],
+  "focused_test": { "status": "pass", "tests": 114 },
+  "verify_static": { "status": "pass", "exit_code": 0 },
+  "verify": {
+    "status": "deferred_at_staging_preflight",
+    "exit_code": 1,
+    "reason": "target identity could not be resolved from URL (host=127.0.0.1); writable proof requires xskgrzbteyqdufktjrjx via staging-ci"
+  },
+  "r_level": { "status": "pass", "artifacts_required": false },
+  "runtime_acceptance": "deferred_until_authorized_deployment",
+  "live_db_writes": false
+}
