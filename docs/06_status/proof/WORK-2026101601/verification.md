@@ -6,7 +6,7 @@ Issue: WORK-2026101601<br>
 Tier: T1<br>
 Lane type: runtime<br>
 Execution SHA: `052d64ff5c5f0db57410a902a859d6e5792a7610`<br>
-PR: pending<br>
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1766<br>
 result: local_static_pass_staging_deferred
 
 ## ASSERTIONS:
@@ -74,10 +74,11 @@ changed: 2 declared_scope: 2
 - [x] Mutation checks for fallback, ambiguity, distance bound, and evidence cap: every targeted test failed when its guard was removed; full suite passed after restoration.
 - [x] `pnpm verify:static`: exit 0, including lint, type-check, build, root tests, Smart Form verification, command-manifest checks, and migration checks.
 - [ ] `pnpm verify`: executed in full; its complete `verify:static` phase passed, then `test:live-db` exited 1 at the same staging-target identity guard before any DB test or write. Protected staging CI is required to turn this gate green.
-- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS; 6 changed files at the implementation-proof scaffold head; no rules matched.
+- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS; 8 committed files at the published proof head; no rules matched.
+- [x] `pnpm ops:proof-check WORK-2026101601 --pr 1766 --json`: PASS against published head `b10876f90529b7ed1e7ac221945a8060b63074e8`; expected pre-merge warning that `evidence_commit_sha` remains for the authorized binder.
 - [x] `pnpm ops:scope-diff -- --issue WORK-2026101601`: clean; both implementation files are in declared scope.
 - [ ] `pnpm test:db`: executed locally and refused before any write because the target resolved to `host=127.0.0.1 ref=unidentified`, not staging ref `xskgrzbteyqdufktjrjx`.
-- [ ] Protected staging-CI writable DB proof and exact-head receipts: pending draft PR publication.
+- [ ] Protected staging-CI writable DB proof and exact-head receipts: pending on draft PR #1766.
 - [ ] PM approval, governed merge, lane finalization, and post-merge reconciliation: explicitly post-executor; not claimed.
 
 Local DB refusal (exit 1):
@@ -92,5 +93,5 @@ No deployment, production access, production write, migration, or admin path was
 ## Merge SHA Binding
 
 Merge SHA: pending merge<br>
-PR: pending<br>
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1766<br>
 Execution SHA: `052d64ff5c5f0db57410a902a859d6e5792a7610`

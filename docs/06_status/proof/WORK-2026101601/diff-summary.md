@@ -3,7 +3,7 @@
 Source SHA: `052d64ff5c5f0db57410a902a859d6e5792a7610`<br>
 Base SHA: `1ea22eb8b1aaa199b94ae0d7629824d4d2ce4adb`<br>
 Merge SHA: pending merge<br>
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1766
 
 | File | Change |
 |---|---|
@@ -27,5 +27,5 @@ Implementation diff: 2 files changed, 353 insertions, 29 deletions.
 ## SHA Binding
 
 Merge SHA: pending merge<br>
-PR: pending<br>
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1766<br>
 Verified source SHA: `052d64ff5c5f0db57410a902a859d6e5792a7610`

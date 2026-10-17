@@ -8,7 +8,7 @@
   "branch": "codex/work-2026101601-grading-fail-closed",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1766",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/grading-service.test.ts",
@@ -20,9 +20,9 @@
     "docs/06_status/proof/WORK-2026101601/verification.md",
     "docs/06_status/proof/WORK-2026101601/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-10-17T09:29:08.983Z",
-  "heartbeat_at": "2026-10-17T09:29:08.983Z",
+  "heartbeat_at": "2026-10-17T09:50:20.547Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026101601-grading-fail-closed.json",

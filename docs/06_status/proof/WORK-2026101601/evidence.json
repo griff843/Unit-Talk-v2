@@ -1,6 +1,12 @@
 {
   "schema_version": 2,
   "issue_id": "WORK-2026101601",
+  "pr_number": 1766,
+  "source_sha": "b10876f90529b7ed1e7ac221945a8060b63074e8",
+  "reviewed_head_sha": "b10876f90529b7ed1e7ac221945a8060b63074e8",
+  "evidence_commit_sha": null,
+  "current_head_sha": "b10876f90529b7ed1e7ac221945a8060b63074e8",
+  "merge_sha": null,
   "tier": "T1",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
@@ -20,7 +26,7 @@
     "focused_pass": 109,
     "focused_fail": 0,
     "verified_source_sha": "052d64ff5c5f0db57410a902a859d6e5792a7610",
-    "r_level": "PASS; 6 changed files; no rules matched",
+    "r_level": "PASS; 8 committed files; no rules matched",
     "scope_diff": "clean; 2 implementation files within declared scope"
   },
   "runtime_proof": {
@@ -55,7 +61,12 @@
     {
       "gate": "r-level",
       "verdict": "PASS",
-      "detail": "6 changed files; no rules matched"
+      "detail": "8 committed files; no rules matched"
+    },
+    {
+      "gate": "proof-check",
+      "verdict": "PASS",
+      "detail": "Passed against published PR head b10876f90529b7ed1e7ac221945a8060b63074e8; evidence_commit_sha binding remains pending the authorized closeout path"
     },
     {
       "gate": "writable-db",
@@ -63,6 +74,8 @@
       "detail": "Local target identity refused before writes; protected staging CI required"
     }
   ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
   "mutation_controls": [
     {
       "guard": "named-event no-fallback",
