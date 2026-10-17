@@ -15,11 +15,11 @@ result: pending_ci
 
 ## EVIDENCE:
 
-~~~text
+```text
 Focused foundation suite: 114 passed, 0 failed.
 Single final pnpm verify: static stage passed; writable stage refused unidentified local target before writes.
 Final committed-head R-level check: PASS; matched discord-delivery (R1).
-~~~
+```
 
 ## Verification
 
@@ -40,9 +40,9 @@ Staging-only CI proof is pending; no live Discord acceptance is claimed. Deploym
 
 ## Merge SHA Binding
 
-Merge SHA: pending
+Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1767
-Approved PR head: pending
+Approved PR head: pending merge
 Execution SHA: e071c9e19060cfe3c51456c2de571a0815d794d9
 
 ## Current CI blocker
