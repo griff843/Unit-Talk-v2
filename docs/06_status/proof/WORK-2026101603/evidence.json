@@ -6,12 +6,12 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "2acd36fd69785078075e8d8d7e37cdcdc836c702",
     "verified_source_sha": "5c0e3446fea4ff71891cfbf28b3dd59d20d4cba1",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "merge_sha",
-    "bound_at": "2026-10-16T09:28:39.000Z",
+    "bound_at": "2026-10-17T03:20:13.047Z",
     "ci_sentinels": {
       "head_sha": "5c0e3446fea4ff71891cfbf28b3dd59d20d4cba1",
       "ci_run": "pending",
