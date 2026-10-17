@@ -32,7 +32,7 @@ See verification.md for measured commands, exact source binding and pending gate
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 6e62d30b3565cb2c7a5dd6f0402b6f9fcad2af8c
 PR: pending
 
 ## Latest source extension
