@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101602",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "f9412010ec1c3133c8acfdecb70edc799f3c4470",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-17T03:30:00.000Z",
+    "ci_sentinels": {
+      "head_sha": "f9412010ec1c3133c8acfdecb70edc799f3c4470",
+      "ci_run": "pending",
+      "note": "Carried because the pre-proof hook requires a non-empty ci_sentinels for a pre-merge bundle. No CI conclusion is asserted for this head: the exact-head result is the PR required checks."
+    }
+  },
+  "static_proof": {
+    "status": "PASS",
+    "byte_identity": {
+      "command": "sha256sum docs/06_status/proof/WORK-2026101401/*",
+      "status": "PASS",
+      "detail": "four proof files match the executor generated hashes"
+    },
+    "precommit_hook": {
+      "command": "git commit (repaired pre-proof hook)",
+      "status": "PASS",
+      "detail": "accepted without exemption"
+    }
+  },
+  "runtime_proof": {
+    "status": "NOT_APPLICABLE",
+    "detail": "Records-only publication: no runtime, schema or database change."
+  },
+  "acceptance_criteria": {
+    "proof_files_byte_identical": "PASS",
+    "manifest_reconciler_history_preserved": "PASS",
+    "no_exemption_or_disablement": "PASS",
+    "recorded_pr_confirmed_merged": "PASS"
+  },
+  "verdict": "PASS"
+}

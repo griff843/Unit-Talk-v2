@@ -1,6 +1,6 @@
 # PROOF: WORK-2026101401
 
-MERGE_SHA: pending merge
+MERGE_SHA: 6e62d30b3565cb2c7a5dd6f0402b6f9fcad2af8c
 
 Issue: WORK-2026101401
 Tier: T1
@@ -65,7 +65,7 @@ An independent offline Discord compatibility review found an existing /stats sel
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 6e62d30b3565cb2c7a5dd6f0402b6f9fcad2af8c
 PR: pending
 Execution SHA: b41cc8c7aa71aa3af466f1d0a8e7cf9b2a9598ab
 
