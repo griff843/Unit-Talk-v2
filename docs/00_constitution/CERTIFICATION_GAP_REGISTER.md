@@ -30,6 +30,7 @@
 - **Evidence bundle SHAs:** UTV2-1217: 98552597 (CLV evidence) · UTV2-1218: 00eaa61c (R2 determinism) · UTV2-1219: 43ed4621 (V-R4 fault injection)
 - **Empirical evidence deferred:** UTV2-1217 found insufficient graded production volume (corpus is synthetic/smoke-test, sport_id=NULL). CLV/edge empirical certification deferred to UTV2-1042 (state:data-gated).
 - **P3 status:** ACTIVE_NOT_CERTIFIED (unchanged — structural resolution does not advance P3 certification).
+- **Annotation 2026-10-11 (WORK-2026101103), measured against `main` `9ff70858c`; the claim above is kept as history and is not supported by current code.** `git grep -n -w computeStatProjection origin/main -- apps packages scripts ':!*.test.ts' ':!**/dist/**' ':!*.d.ts' ':!*.md'` returns only the definition (`packages/domain/src/models/stat-distribution.ts:128`); `computeStatMarketBlend` (`stat-market-blend.ts:79`) likewise has no non-test caller. The `player-form`, `opportunity`, `efficiency` and `game-context` feature modules have no production caller. Only matchup context reaches production scoring, through `apps/api/src/candidate-scoring-service.ts:473-474,:631` (scheduled, and live only when the syndicate/containment mode runs it), not through `computeStatProjection`. So "wired into `computeStatProjection`" is a tested primitive, not an active production control (`PRIMITIVE_ONLY` in `CONSTITUTION_IMPLEMENTATION_MATRIX.md`). This annotation changes no ruling: P3 stays ACTIVE_NOT_CERTIFIED, and whether to wire these modules is a PM decision, not recommended here.
 - **Validation gaps tracked:** 4 NaN/zero boundary gaps from UTV2-1219 deferred to hardening follow-up; 1 (negative variance clamp) accepted as correct defensive behavior.
 
 ## D-CONST-6 — Ingestion stale / runtime freshness drift
@@ -61,7 +62,7 @@
 | D-CONST-2 Activation state | **PM_RATIFIED** |
 | D-CONST-3 Missing cert records | **RESOLVED** (UTV2-1195, PR #950) |
 | D-CONST-4 Proof gate string-bound | **RESOLVED** (UTV2-1196, PR #954) |
-| D-CONST-5 Edge as echo | **RESOLVED** structural (UTV2-1220, PR #983) — empirical deferred to UTV2-1042 |
+| D-CONST-5 Edge as echo | **RESOLVED** structural (UTV2-1220, PR #983) — empirical deferred to UTV2-1042. *Annotated 2026-10-11: the `computeStatProjection` wiring claim is not supported by current code (see D-CONST-5).* |
 | D-CONST-6 Ingestion stale | **RESOLVED** (UTV2-1227, PR #985, 2026-06-07) — full pipeline activated, downstream evidence confirmed |
 | D-CONST-7 types drift | **RESOLVED** (UTV2-1198, PR #957) |
 | D-CONST-8 doc fail-open | **RESOLVED** (UTV2-1199, PR #956) |
