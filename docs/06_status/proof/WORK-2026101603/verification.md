@@ -1,6 +1,6 @@
 # PROOF: WORK-2026101603
 
-MERGE_SHA: pending merge
+MERGE_SHA: 2acd36fd69785078075e8d8d7e37cdcdc836c702
 
 Issue: WORK-2026101603
 Tier: T1
@@ -41,5 +41,5 @@ Exact-head CI: the PR's required checks on `5c0e3446fea4ff71891cfbf28b3dd59d20d4
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `2acd36fd69785078075e8d8d7e37cdcdc836c702`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1764

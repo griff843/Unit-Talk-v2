@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026101603-order/.out/worktrees/claude__work-2026101603-pre-proof-hook-binding",
   "branch": "claude/work-2026101603-pre-proof-hook-binding",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "2acd36fd69785078075e8d8d7e37cdcdc836c702",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1764",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,14 +20,22 @@
     "docs/06_status/proof/WORK-2026101603/evidence.json",
     "docs/06_status/proof/WORK-2026101603/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-10-16T09:03:34.042Z",
-  "heartbeat_at": "2026-10-16T09:03:34.042Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-17T03:20:15.937Z",
+  "closed_at": "2026-10-17T03:20:15.937Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026101603-pre-proof-hook-binding.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-17T03:20:13.050Z",
+      "verdict": "pass",
+      "merge_sha": "2acd36fd69785078075e8d8d7e37cdcdc836c702",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {

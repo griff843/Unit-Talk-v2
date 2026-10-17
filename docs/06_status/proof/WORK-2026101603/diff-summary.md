@@ -11,5 +11,5 @@ Pre-proof hook accepts the canonical post-merge v2 SHA binding. Local commit hoo
 ## SHA Binding
 
 Verified source SHA: `5c0e3446fea4ff71891cfbf28b3dd59d20d4cba1`
-Merge SHA: pending merge
+Merge SHA: 2acd36fd69785078075e8d8d7e37cdcdc836c702
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1764
