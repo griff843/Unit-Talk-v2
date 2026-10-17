@@ -15,4 +15,4 @@ Publishes the measured terminal closeout state of a lane whose PR already merged
 
 Verified source SHA: `f9412010ec1c3133c8acfdecb70edc799f3c4470`
 Merge SHA: pending merge
-PR: https://github.com/griff843/Unit-Talk-v2/pull/PENDING
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1765

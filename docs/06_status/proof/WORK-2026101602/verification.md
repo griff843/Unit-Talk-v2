@@ -34,4 +34,4 @@ Source head: `f9412010ec1c3133c8acfdecb70edc799f3c4470`.
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: https://github.com/griff843/Unit-Talk-v2/pull/PENDING
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1765
