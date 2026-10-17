@@ -43,8 +43,12 @@ Staging-only CI proof is pending; no live Discord acceptance is claimed. Deploym
 Merge SHA: pending
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1767
 Approved PR head: pending
-Execution SHA: 799c713e01a7489b59b0a025a7bbd26dc9cf760e
+Execution SHA: e071c9e19060cfe3c51456c2de571a0815d794d9
 
 ## Current CI blocker
 
 Source HEAD 799c713e01a7489b59b0a025a7bbd26dc9cf760e; CI run 39027893441, staging job 117382400098: failed. Promotion-replay proof tests 4 and 5 hit database statement timeouts in listByLifecycleStates and getPromotionBoardState. Required verify failed closed. Runtime proof and merge remain blocked; no unrelated API/DB change is authorized.
+
+## Successful pre-merge staging proof
+
+CI run 39028456349, staging job 117383991011 passed on source e071c9e19060cfe3c51456c2de571a0815d794d9. Receipt hash, TAP and staging identity checked; GitHub verified the receipt synthetic merge ref has this PR head as second parent. 9 passing query observations and 8 measured seed counts captured. Overall CI static verification remains pending. This proves staging DB checks, not deployed Discord interactions.
