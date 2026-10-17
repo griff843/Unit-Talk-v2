@@ -44,6 +44,51 @@
         "heartbeat_at 26.3h old — exceeded 24h stranded threshold"
       ],
       "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-10-16T10:13:11.646Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 34.7h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-10-16T10:26:40.912Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 34.9h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-10-16T15:38:53.218Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 40.1h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-10-16T20:08:47.956Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 44.6h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-10-17T01:45:23.678Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 50.2h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
     }
   ],
   "reopen_history": [],
