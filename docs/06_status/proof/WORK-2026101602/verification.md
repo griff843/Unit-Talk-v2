@@ -1,6 +1,6 @@
 # PROOF: WORK-2026101602
 
-MERGE_SHA: pending merge
+MERGE_SHA: 617a250aec4dbb152a2f8f709c2ecf5320280ba3
 
 Issue: WORK-2026101602
 Tier: T1
@@ -33,5 +33,5 @@ Source head: `f9412010ec1c3133c8acfdecb70edc799f3c4470`.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `617a250aec4dbb152a2f8f709c2ecf5320280ba3`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1765

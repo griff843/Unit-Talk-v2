@@ -14,5 +14,5 @@ Publishes the measured terminal closeout state of a lane whose PR already merged
 ## SHA Binding
 
 Verified source SHA: `f9412010ec1c3133c8acfdecb70edc799f3c4470`
-Merge SHA: pending merge
+Merge SHA: 617a250aec4dbb152a2f8f709c2ecf5320280ba3
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1765
