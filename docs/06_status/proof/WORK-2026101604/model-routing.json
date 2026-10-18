@@ -4,17 +4,14 @@
   "model_profile": "codex-sol-medium",
   "model": "gpt-5.6-sol",
   "reasoning_effort": "medium",
-  "execution_sha": "35aeb09ef96e912ca4ff7cfb317c576ec8d0c97a",
   "policy_version": "2.0.0",
   "codex_cli_version": "codex-cli 0.162.1",
   "legacy_compatibility_used": false,
   "override_used": false,
   "override_authorized_by": null,
-  "generated_at": "2026-10-18T02:34:37.000Z",
-  "closeout_binding": {
-    "sha_type": "merge_sha",
-    "merge_sha": null,
-    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1768",
-    "bound_at": null
-  }
+  "codex_exit_code": 0,
+  "prompt_bytes": 18312,
+  "estimated_prompt_tokens": 4578,
+  "wall_time_ms": 2379528,
+  "generated_at": "2026-10-18T02:54:06.932Z"
 }
