@@ -2,27 +2,114 @@
 
 MERGE_SHA: pending merge
 
-> Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command
-> actually executed and its real result before review. `post-merge-lane-close.yml`
-> binds the merge SHA; never write one here by hand.
-
 Issue: WORK-2026101604
 Tier: T1
-result: not_run
+Implementation source SHA: `35aeb09ef96e912ca4ff7cfb317c576ec8d0c97a`
+Result: static PASS; writable staging DB proof BLOCKED/DEFERRED as authorized by the lane precondition
 
-## ASSERTIONS:
+## Assertions
 
-- [ ] (state each behavior this lane proves, and the test that proves it)
+- Picks are never graded from a fallback, time-distance ranking, time window, or tie.
+- Eligible participant-linked candidates are restricted to the pick sport.
+- Explicit event id, exact normalized event name, and unique-link-only selection fail closed with distinct reasons.
+- Identity failures do not contribute to stale-data counters or degraded-stale-input classification.
+- Each skipped pick is observable in existing run details up to a 100-entry cap, with exact overflow count.
+- Null-event WNBA and NCAAF shapes are classified and never settled.
+- Existing Track Only containment, CLV, provider, delivery, kill-switch, and manual-settlement behavior remains under the passing regression suite.
 
-## EVIDENCE:
+## Focused issue suite
 
-(paste measured output here, in fenced blocks)
+Command:
 
-## Verification
+```text
+pnpm exec tsx --test 'apps/api/src/grading-service.test.ts'
+```
 
-(record every verification command run on the final code commit, with its real result)
+Measured final output:
+
+```text
+1..109
+# tests 112
+# suites 0
+# pass 112
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1403.888238
+```
+
+The suite includes load-bearing tests for wrong/correct explicit id, cross-sport same-name exclusion, same-name ambiguity, distinct-name selection independent of time, name mismatch without fallback, one/multiple unnamed linked candidates, near/far time independence, null-event WNBA/NCAAF skips, stale-health separation, per-pick evidence, and truncation.
+
+## Mutation evidence
+
+```text
+Mutant: choose first candidate before identity checks
+Targeted result: tests 4; pass 1; fail 3
+Observed failures: explicit eventId mismatch, unique exact-name selection, multiple unnamed candidates
+
+Mutant: remove eventMatchesPickSport predicate
+Targeted result: tests 1; pass 0; fail 1
+Observed failure: cross-sport same-name candidate exclusion
+
+Mutant: change evidence-cap comparison from < to <=
+Targeted result: tests 1; pass 0; fail 1
+Observed diagnostic: 101 !== 100
+```
+
+All mutants were removed before the final 112/112 focused run.
+
+## Static verification
+
+Command: `pnpm verify:static`
+
+Result: exit 0. Measured stages included:
+
+```text
+[db-client-boundary] OK
+[system-alignment] verdict=PASS fail=0 warn=0
+[automation-coverage] verdict=PASS fail=0 warn=1 classified=15
+Environment files passed validation.
+lint: PASS
+type-check: PASS
+build: PASS
+test: PASS
+test:production-post-migration: 14 pass, 0 fail
+smart-form verify: 211 pass, 0 fail; browser E2E not requested
+[command-manifest] Verified 14 command definition(s)
+[check-migration-versions] 139 migration file(s) verified
+[lint-migrations] 138 migration file(s) checked — no findings
+```
+
+The automation warning is the repository baseline `WIRING_GLOB_SHADOWED` for `apps/qa-agent/src/**/*.test.ts`; the guard reported `baselined=119 new=0`.
+
+## Canonical verification and writable DB disposition
+
+Command: `pnpm verify`
+
+The full static phase again passed. The command then invoked `test:live-db -> test:db` and the staging target guard refused before opening a writable database:
+
+```text
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
+Command failed with exit code 1.
+```
+
+Disposition required by the lane packet: writable live-DB proof is blocked/deferred to the protected `staging-ci` GitHub environment. No production access, database write, or database mutation occurred locally.
+
+## R-level check
+
+Command: `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`
+
+Measured output on the implementation commit:
+
+```text
+Verdict: PASS
+Changed files: 6
+Rules matched: (none) — no R-level artifacts required for this diff
+```
 
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: pending at artifact creation

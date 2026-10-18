@@ -1,0 +1,20 @@
+{
+  "issue_id": "WORK-2026101604",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-medium",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "medium",
+  "execution_sha": "35aeb09ef96e912ca4ff7cfb317c576ec8d0c97a",
+  "policy_version": "2.0.0",
+  "codex_cli_version": "codex-cli 0.162.1",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "generated_at": "2026-10-18T02:34:37.000Z",
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": null,
+    "pr_url": null,
+    "bound_at": null
+  }
+}
