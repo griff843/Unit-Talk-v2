@@ -1,0 +1,185 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026101601
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026101601
+  objective: "`chooseEventForPick` (`apps/api/src/grading-service.ts`, ~line 1317)
+    never returns null on ambiguity: when the pick's event name matches no
+    candidate it falls back to every candidate, then picks the nearest by start
+    time with no tie check and no distance bound. An ambiguous or wrong match
+    can settle a pick against the wrong game. Make event selection deterministic
+    and fail-closed, and make each skip observable per pick."
+  acceptance_criteria:
+    - No pick is graded against an event chosen by fallback, tie or out-of-bound
+      distance.
+    - Existing grading tests still pass; existing skip reasons and run-detail
+      keys are unchanged (additive only).
+    - "`pnpm verify`-equivalent static checks pass; `pnpm test:db` evidence per
+      T1 rules; proof files under `docs/06_status/proof/WORK-2026101601/`
+      genuine (verification.md with real command output, diff-summary.md,
+      evidence.json with `sha_binding.merge_sha` null)."
+    - Operator manual settlement path (`recordOperatorEvidenceSettlement`), CLV,
+      providers, delivery, containment and kill switches are untouched.
+  guardrails:
+    - No migration, no production write, no deployment, no `--admin`. Do not
+      edit `database.types.ts`, `lifecycle.ts`, `repositories.ts`,
+      `runtime-repositories.ts`, `distribution-service.ts`, `auth.ts`.
+    - If the per-pick evidence cannot fit in existing run details, STOP and
+      report; do not add schema.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026101601 — Grading event matching fails closed on ambiguity;
+      per-pick skip evidence
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex
+
+
+      Repo-owned work order (tracker independence). PM approved the bounded T1
+      plan (2026-10-16). New schema or expanded persistence scope requires a
+      separate plan decision: NO migration, NO new table, NO new column.
+
+
+      ## Change
+
+
+      1. `chooseEventForPick` returns no event, with a classified skip reason,
+      when:
+         - the pick names an event (`metadata.eventName`) and no candidate matches that name (remove the fall-back to all candidates);
+         - two or more candidates are equidistant from the pick reference time, or the two nearest are within an ambiguity window that you define as a named constant and justify in the diff;
+         - the nearest candidate is further from the reference time than `MAX_EXPLICIT_EVENT_TIME_MISMATCH_MS` (36h; currently applied only to the explicit-event provenance path).
+         Both callers (`resolvePickEvent`, `resolvePickEventByName`) must propagate the reason; new skip reasons (e.g. `event_match_ambiguous`, `event_time_mismatch`) are normalized by `normalizeSkipReason` and added to `DATA_DEPENDENT_SKIP_REASONS` only if the existing semantics of that set fit (justify).
+      2. Per-pick skip evidence using EXISTING persistence only: extend the
+      existing grading run `details` JSON (alongside `skipped_reasons`) with a
+      bounded list of `{pick_id, reason}` for skipped picks (cap the list size
+      and record the truncation count; no unbounded growth). No schema change.
+
+      3. Fixtures in `apps/api/src/grading-service.test.ts` (node:test,
+      in-memory repos):
+         - name given, no name match, multiple unrelated candidates -> skipped, not graded;
+         - equidistant candidates -> skipped as ambiguous;
+         - nearest candidate beyond 36h -> skipped as time mismatch;
+         - explicit `eventId: null` WNBA and NCAAF Track Only style picks with no event link -> skipped with a classified reason, never settled;
+         - regression: a single unambiguous candidate, and a correct name match among several, still grade as before;
+         - per-pick skip list present in run details, bounded, truncation counted.
+         Every new guard must have a test that fails if the guard is removed (mutation-tested; state how you checked).
+
+      ## File Scope
+
+
+      - apps/api/src/grading-service.ts
+
+      - apps/api/src/grading-service.test.ts
+
+      - (plus the proof paths and work order)
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026101601.md
+    title: WORK-2026101601 — Grading event matching fails closed on ambiguity;
+      per-pick skip evidence
+    description: >-
+      # WORK-2026101601 — Grading event matching fails closed on ambiguity;
+      per-pick skip evidence
+
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex
+
+
+      Repo-owned work order (tracker independence). PM approved the bounded T1
+      plan (2026-10-16). New schema or expanded persistence scope requires a
+      separate plan decision: NO migration, NO new table, NO new column.
+
+
+      ## Objective
+
+
+      `chooseEventForPick` (`apps/api/src/grading-service.ts`, ~line 1317) never
+      returns null on ambiguity: when the pick's event name matches no candidate
+      it falls back to every candidate, then picks the nearest by start time
+      with no tie check and no distance bound. An ambiguous or wrong match can
+      settle a pick against the wrong game. Make event selection deterministic
+      and fail-closed, and make each skip observable per pick.
+
+
+      ## Change
+
+
+      1. `chooseEventForPick` returns no event, with a classified skip reason,
+      when:
+         - the pick names an event (`metadata.eventName`) and no candidate matches that name (remove the fall-back to all candidates);
+         - two or more candidates are equidistant from the pick reference time, or the two nearest are within an ambiguity window that you define as a named constant and justify in the diff;
+         - the nearest candidate is further from the reference time than `MAX_EXPLICIT_EVENT_TIME_MISMATCH_MS` (36h; currently applied only to the explicit-event provenance path).
+         Both callers (`resolvePickEvent`, `resolvePickEventByName`) must propagate the reason; new skip reasons (e.g. `event_match_ambiguous`, `event_time_mismatch`) are normalized by `normalizeSkipReason` and added to `DATA_DEPENDENT_SKIP_REASONS` only if the existing semantics of that set fit (justify).
+      2. Per-pick skip evidence using EXISTING persistence only: extend the
+      existing grading run `details` JSON (alongside `skipped_reasons`) with a
+      bounded list of `{pick_id, reason}` for skipped picks (cap the list size
+      and record the truncation count; no unbounded growth). No schema change.
+
+      3. Fixtures in `apps/api/src/grading-service.test.ts` (node:test,
+      in-memory repos):
+         - name given, no name match, multiple unrelated candidates -> skipped, not graded;
+         - equidistant candidates -> skipped as ambiguous;
+         - nearest candidate beyond 36h -> skipped as time mismatch;
+         - explicit `eventId: null` WNBA and NCAAF Track Only style picks with no event link -> skipped with a classified reason, never settled;
+         - regression: a single unambiguous candidate, and a correct name match among several, still grade as before;
+         - per-pick skip list present in run details, bounded, truncation counted.
+         Every new guard must have a test that fails if the guard is removed (mutation-tested; state how you checked).
+
+      ## Acceptance Criteria
+
+
+      - No pick is graded against an event chosen by fallback, tie or
+      out-of-bound distance.
+
+      - Existing grading tests still pass; existing skip reasons and run-detail
+      keys are unchanged (additive only).
+
+      - `pnpm verify`-equivalent static checks pass; `pnpm test:db` evidence per
+      T1 rules; proof files under `docs/06_status/proof/WORK-2026101601/`
+      genuine (verification.md with real command output, diff-summary.md,
+      evidence.json with `sha_binding.merge_sha` null).
+
+      - Operator manual settlement path (`recordOperatorEvidenceSettlement`),
+      CLV, providers, delivery, containment and kill switches are untouched.
+
+
+      ## Guardrails
+
+
+      - No migration, no production write, no deployment, no `--admin`. Do not
+      edit `database.types.ts`, `lifecycle.ts`, `repositories.ts`,
+      `runtime-repositories.ts`, `distribution-service.ts`, `auth.ts`.
+
+      - If the per-pick evidence cannot fit in existing run details, STOP and
+      report; do not add schema.
+
+
+      ## File Scope
+
+
+      - apps/api/src/grading-service.ts
+
+      - apps/api/src/grading-service.test.ts
+
+      - (plus the proof paths and work order)
+    captured_at: 2026-10-17T09:28:59.278Z
+    description_sha256: a0989477223aeb9c0defeb7508db3c304899e04028ca39ec44d39d73a7b2b054
+  contract_hash: 716fda3f9a3b9b1beabf4efd14687066a080286dbf0b51679f0ccf4913b2a0ab

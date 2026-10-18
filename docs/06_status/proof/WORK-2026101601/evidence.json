@@ -1,0 +1,123 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101601",
+  "pr_number": 1766,
+  "source_sha": "b10876f90529b7ed1e7ac221945a8060b63074e8",
+  "reviewed_head_sha": "b10876f90529b7ed1e7ac221945a8060b63074e8",
+  "evidence_commit_sha": null,
+  "current_head_sha": "b10876f90529b7ed1e7ac221945a8060b63074e8",
+  "merge_sha": null,
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "052d64ff5c5f0db57410a902a859d6e5792a7610",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm verify:static",
+    "exit_code": 0,
+    "focused_command": "pnpm exec tsx --test 'apps/api/src/grading-service.test.ts'",
+    "focused_tests": 109,
+    "focused_pass": 109,
+    "focused_fail": 0,
+    "verified_source_sha": "052d64ff5c5f0db57410a902a859d6e5792a7610",
+    "r_level": "PASS; 8 committed files; no rules matched",
+    "scope_diff": "clean; 2 implementation files within declared scope"
+  },
+  "runtime_proof": {
+    "status": "blocked_deferred_to_protected_ci",
+    "command": "pnpm test:db",
+    "exit_code": 1,
+    "reason": "Local target identity guard refused host=127.0.0.1 ref=unidentified before any write; protected staging CI must provide genuine runtime queries and row counts.",
+    "queries": [],
+    "row_counts": []
+  },
+  "gate_results": [
+    {
+      "gate": "focused-grading-tests",
+      "verdict": "PASS",
+      "detail": "109 pass, 0 fail"
+    },
+    {
+      "gate": "mutation-controls",
+      "verdict": "PASS",
+      "detail": "Fallback, ambiguity, 36-hour bound, and evidence-cap removals each caused the targeted regression test to fail"
+    },
+    {
+      "gate": "verify-static",
+      "verdict": "PASS",
+      "detail": "pnpm verify:static exited 0 locally"
+    },
+    {
+      "gate": "verify",
+      "verdict": "SKIP",
+      "detail": "Full command ran: verify:static passed, then test:live-db was refused before writes by the staging-target identity guard"
+    },
+    {
+      "gate": "r-level",
+      "verdict": "PASS",
+      "detail": "8 committed files; no rules matched"
+    },
+    {
+      "gate": "proof-check",
+      "verdict": "PASS",
+      "detail": "Passed against published PR head b10876f90529b7ed1e7ac221945a8060b63074e8; evidence_commit_sha binding remains pending the authorized closeout path"
+    },
+    {
+      "gate": "writable-db",
+      "verdict": "SKIP",
+      "detail": "Local target identity refused before writes; protected staging CI required"
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "mutation_controls": [
+    {
+      "guard": "named-event no-fallback",
+      "observed_failure": "graded=1, expected 0"
+    },
+    {
+      "guard": "ambiguity window",
+      "observed_failure": "3 targeted tests graded=1, expected 0"
+    },
+    {
+      "guard": "36-hour maximum distance",
+      "observed_failure": "event_provenance_historical_mismatch observed, event_time_mismatch expected"
+    },
+    {
+      "guard": "bounded per-pick evidence",
+      "observed_failure": "101 entries observed, 100 expected"
+    }
+  ],
+  "db_verification": {
+    "status": "blocked_deferred_to_protected_ci",
+    "observed_host": "127.0.0.1",
+    "observed_ref": "unidentified",
+    "required_staging_ref": "xskgrzbteyqdufktjrjx",
+    "refused_before_write": true,
+    "production_accessed": false
+  },
+  "scope": {
+    "schema_changed": false,
+    "migration_changed": false,
+    "operator_manual_settlement_changed": false,
+    "clv_changed": false,
+    "providers_changed": false,
+    "delivery_changed": false,
+    "containment_changed": false,
+    "kill_switches_changed": false
+  },
+  "pending": [
+    "protected staging-CI writable DB proof with non-empty runtime queries and row counts",
+    "protected exact-head CI receipts",
+    "outer-wrapper executor-result/v1 publication",
+    "PM approval and governed merge",
+    "post-merge lane finalization and orchestration reconciliation"
+  ],
+  "generated_at": "2026-10-17T09:41:54Z"
+}

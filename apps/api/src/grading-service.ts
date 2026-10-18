@@ -125,11 +125,21 @@ const MONEYLINE_OUTCOME_BY_ACTUAL_VALUE = new Map<
   [0.5, 'push'],
 ]);
 const MAX_EXPLICIT_EVENT_TIME_MISMATCH_MS = 36 * 60 * 60 * 1000;
+// Time proximity is only a safe discriminator when it produces a clearly unique
+// candidate. A six-hour separation rejects duplicate provider events, doubleheaders,
+// and same-day reschedules instead of guessing between operationally plausible games.
+export const EVENT_MATCH_AMBIGUITY_WINDOW_MS = 6 * 60 * 60 * 1000;
+export const GRADING_SKIP_EVIDENCE_LIMIT = 100;
 const GRADING_FETCH_PAGE_SIZE = 500;
 export const GRADING_INPUT_FRESHNESS_THRESHOLD_MS = 6 * 60 * 60 * 1000;
 
 const DATA_DEPENDENT_SKIP_REASONS = new Set([
   'event_link_not_found',
+  // These three reflect missing or non-unique provider event identity, so they
+  // have the same stale-input semantics as the existing event-link skips.
+  'event_name_mismatch',
+  'event_match_ambiguous',
+  'event_time_mismatch',
   'event_not_completed',
   'event_provenance_missing_external_id',
   'event_provenance_untrusted_provider',
@@ -221,6 +231,7 @@ export async function runGradingPass(
       dataDependentSkipped: 0,
       errors: 0,
       errorDetails: [],
+      skipDetails: [],
       inputFreshness: classifyInputFreshness(null, readNow(), thresholdMs),
     }),
   });
@@ -273,6 +284,7 @@ export async function runGradingPass(
         dataDependentSkipped,
         errors: execution.errors,
         errorDetails,
+        skipDetails: execution.details,
         inputFreshness,
       }),
     });
@@ -307,6 +319,7 @@ export async function runGradingPass(
           dataDependentSkipped: 0,
           errors: 1,
           errorDetails: [{ reason: message }],
+          skipDetails: [],
           inputFreshness,
         }),
       });
@@ -447,7 +460,7 @@ async function executeGradingPass(
         continue;
       }
 
-      const event =
+      const eventResolution =
         marketRule.participantRequirement === 'forbidden'
           ? await resolvePickEventByName(pick, repositories)
           : await resolvePickEvent(
@@ -456,14 +469,15 @@ async function executeGradingPass(
               repositories,
             );
 
-      if (!event) {
+      if (!eventResolution.event) {
         details.push({
           pickId: pick.id,
           outcome: 'skipped',
-          reason: 'event_link_not_found',
+          reason: eventResolution.reason,
         });
         continue;
       }
+      const event = eventResolution.event;
 
       if (event.status !== 'completed') {
         details.push({
@@ -814,8 +828,21 @@ function buildGradingRunDetails(input: {
   dataDependentSkipped: number;
   errors: number;
   errorDetails: Array<{ pickId?: string; reason?: string }>;
+  skipDetails: readonly GradingPickResult[];
   inputFreshness: GradingInputFreshness;
 }): Record<string, unknown> {
+  const persistedSkippedPicks: Array<{ pick_id: string; reason: string }> = [];
+  let skippedPickCount = 0;
+  for (const detail of input.skipDetails) {
+    if (detail.outcome !== 'skipped') continue;
+    skippedPickCount += 1;
+    if (persistedSkippedPicks.length < GRADING_SKIP_EVIDENCE_LIMIT) {
+      persistedSkippedPicks.push({
+        pick_id: detail.pickId,
+        reason: normalizeSkipReason(detail.reason),
+      });
+    }
+  }
   return {
     outcome_class: input.outcomeClass,
     rows_scanned: input.rowsScanned,
@@ -823,6 +850,9 @@ function buildGradingRunDetails(input: {
     graded_count: input.graded,
     skipped_count: input.skipped,
     skipped_reasons: input.skipReasons,
+    skipped_picks: persistedSkippedPicks,
+    skipped_picks_truncated_count:
+      skippedPickCount - persistedSkippedPicks.length,
     data_dependent_skipped_count: input.dataDependentSkipped,
     error_count: input.errors,
     newest_game_result_sourced_at: input.inputFreshness.newestSourcedAt,
@@ -1231,11 +1261,11 @@ async function resolvePickEvent(
   pick: PickRecord,
   participantId: string,
   repositories: Pick<RepositoryBundle, 'events' | 'eventParticipants'>,
-): Promise<EventRow | null> {
+): Promise<PickEventResolution> {
   const links =
     await repositories.eventParticipants.listByParticipant(participantId);
   if (links.length === 0) {
-    return null;
+    return { event: null, reason: 'event_link_not_found' };
   }
 
   const candidateEvents = (
@@ -1245,7 +1275,7 @@ async function resolvePickEvent(
   ).filter((event): event is EventRow => event !== null);
 
   if (candidateEvents.length === 0) {
-    return null;
+    return { event: null, reason: 'event_link_not_found' };
   }
 
   return chooseEventForPick(pick, candidateEvents);
@@ -1317,7 +1347,7 @@ function readFirstString(
 function chooseEventForPick(
   pick: PickRecord,
   events: EventRow[],
-): EventRow | null {
+): PickEventResolution {
   const metadata = asRecord(pick.metadata);
   const eventName =
     typeof metadata?.eventName === 'string' ? metadata.eventName.trim() : null;
@@ -1327,28 +1357,54 @@ function chooseEventForPick(
           event.event_name.trim().toLowerCase() === eventName.toLowerCase(),
       )
     : [];
-  const eventCandidates = namedCandidates.length > 0 ? namedCandidates : events;
+  if (eventName && namedCandidates.length === 0) {
+    return { event: null, reason: 'event_name_mismatch' };
+  }
+  const eventCandidates = eventName ? namedCandidates : events;
 
   if (eventCandidates.length === 0) {
-    return null;
+    return { event: null, reason: 'event_link_not_found' };
   }
 
   const referenceTime =
     readPickEventReferenceTime(pick) ?? new Date(pick.created_at).getTime();
-  return (
-    [...eventCandidates].sort((left, right) => {
-      const leftRaw = readEventStartTime(left);
-      const rightRaw = readEventStartTime(right);
-      const leftDistance = leftRaw != null
-        ? Math.abs(new Date(leftRaw).getTime() - referenceTime)
-        : Number.POSITIVE_INFINITY;
-      const rightDistance = rightRaw != null
-        ? Math.abs(new Date(rightRaw).getTime() - referenceTime)
-        : Number.POSITIVE_INFINITY;
-      return leftDistance - rightDistance;
-    })[0] ?? null
-  );
+  const rankedCandidates = eventCandidates
+    .map((event) => {
+      const rawStartTime = readEventStartTime(event);
+      const startTime = rawStartTime === null
+        ? Number.NaN
+        : new Date(rawStartTime).getTime();
+      return {
+        event,
+        distance: Number.isFinite(referenceTime) && Number.isFinite(startTime)
+          ? Math.abs(startTime - referenceTime)
+          : Number.POSITIVE_INFINITY,
+      };
+    })
+    .sort(
+      (left, right) =>
+        left.distance - right.distance || left.event.id.localeCompare(right.event.id),
+    );
+
+  const nearest = rankedCandidates[0];
+  if (!nearest || nearest.distance > MAX_EXPLICIT_EVENT_TIME_MISMATCH_MS) {
+    return { event: null, reason: 'event_time_mismatch' };
+  }
+
+  const secondNearest = rankedCandidates[1];
+  if (
+    secondNearest &&
+    secondNearest.distance - nearest.distance <= EVENT_MATCH_AMBIGUITY_WINDOW_MS
+  ) {
+    return { event: null, reason: 'event_match_ambiguous' };
+  }
+
+  return { event: nearest.event };
 }
+
+type PickEventResolution =
+  | { event: EventRow; reason?: never }
+  | { event: null; reason: string };
 
 function readPickEventReferenceTime(pick: PickRecord): number | null {
   const metadata = asRecord(pick.metadata);
@@ -1385,15 +1441,15 @@ export function readEventStartTime(event: EventRow): string | null {
 async function resolvePickEventByName(
   pick: PickRecord,
   repositories: Pick<RepositoryBundle, 'events'>,
-): Promise<EventRow | null> {
+): Promise<PickEventResolution> {
   const eventName = readPickEventName(pick);
   if (!eventName) {
-    return null;
+    return { event: null, reason: 'event_link_not_found' };
   }
 
   const candidates = await repositories.events.listByName(eventName);
   if (candidates.length === 0) {
-    return null;
+    return { event: null, reason: 'event_link_not_found' };
   }
 
   return chooseEventForPick(pick, candidates);
