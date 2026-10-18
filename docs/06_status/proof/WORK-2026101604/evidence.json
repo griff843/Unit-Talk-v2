@@ -2,14 +2,18 @@
   "schema_version": 2,
   "issue_id": "WORK-2026101604",
   "pr_number": 1768,
+  "source_sha": "a22bfd76fb2101fa40adfb88f9bd411d3550eb81",
+  "reviewed_head_sha": "a22bfd76fb2101fa40adfb88f9bd411d3550eb81",
+  "evidence_commit_sha": null,
+  "merge_sha": null,
   "tier": "T1",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
   "status": "review_candidate",
-  "generated_at": "2026-10-18T02:34:37.000Z",
+  "generated_at": "2026-10-18T12:59:20.000Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "35aeb09ef96e912ca4ff7cfb317c576ec8d0c97a",
+    "verified_source_sha": "a22bfd76fb2101fa40adfb88f9bd411d3550eb81",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
@@ -19,12 +23,12 @@
     {
       "gate": "focused-grading-tests",
       "verdict": "PASS",
-      "detail": "112 pass, 0 fail"
+      "detail": "117 pass, 0 fail"
     },
     {
       "gate": "mutation-checks",
       "verdict": "PASS",
-      "detail": "first-candidate mutant failed 3 tests; sport-filter mutant failed 1; cap-bound mutant failed 1; restored suite 112/112"
+      "detail": "existing first-candidate, sport-filter, and cap-bound mutants failed; rework missing-link, wrong-id fallback, name-consistency, and game-line sport-filter mutants each failed their behavior guards; restored suite 117/117"
     },
     {
       "gate": "verify-static",
@@ -34,7 +38,7 @@
     {
       "gate": "r-level",
       "verdict": "PASS",
-      "detail": "8 changed files; no rules matched"
+      "detail": "16 changed files; discord-delivery rule matched; verdict PASS"
     },
     {
       "gate": "writable-db",
@@ -46,8 +50,8 @@
     "focused_test": {
       "command": "pnpm exec tsx --test 'apps/api/src/grading-service.test.ts'",
       "exit_code": 0,
-      "tests": 112,
-      "pass": 112,
+      "tests": 117,
+      "pass": 117,
       "fail": 0
     },
     "verify_static": {
@@ -64,8 +68,10 @@
     "r_level": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "verdict": "PASS",
-      "changed_files": 8,
-      "rules_matched": []
+      "changed_files": 16,
+      "rules_matched": [
+        "discord-delivery"
+      ]
     }
   },
   "runtime_proof": {

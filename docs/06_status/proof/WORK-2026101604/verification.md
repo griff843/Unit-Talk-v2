@@ -4,7 +4,7 @@ MERGE_SHA: pending merge
 
 Issue: WORK-2026101604
 Tier: T1
-Implementation source SHA: `35aeb09ef96e912ca4ff7cfb317c576ec8d0c97a`
+Implementation source SHA: `a22bfd76fb2101fa40adfb88f9bd411d3550eb81`
 Result: static PASS; writable staging DB proof BLOCKED/DEFERRED as authorized by the lane precondition
 
 ## Verification
@@ -17,6 +17,8 @@ ASSERTIONS:
 - [x] Identity failures do not contribute to stale-data counters or degraded-stale-input classification.
 - [x] Each skipped pick is observable in existing run details up to a 100-entry cap, with exact overflow count.
 - [x] Null-event WNBA and NCAAF shapes are classified and never settled.
+- [x] Zero eligible participant-linked candidates report `event_link_not_found`, including named, explicit-id, WNBA and NCAAF fixtures; mismatch reasons are reserved for conflicts against an eligible candidate set.
+- [x] Participant-forbidden game totals use canonical event id + exact name (when supplied) + sport as their authorized event-scoped identity and reject wrong ids, cross-sport ids, and conflicting name/id pairs without participant linkage.
 - [x] Existing Track Only containment, CLV, provider, delivery, kill-switch, and manual-settlement behavior remains under the passing regression suite.
 
 EVIDENCE:
@@ -32,18 +34,18 @@ pnpm exec tsx --test 'apps/api/src/grading-service.test.ts'
 Measured final output:
 
 ```text
-1..109
-# tests 112
+1..114
+# tests 117
 # suites 0
-# pass 112
+# pass 117
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 1403.888238
+# duration_ms 1651.923132
 ```
 
-The suite includes load-bearing tests for wrong/correct explicit id, cross-sport same-name exclusion, same-name ambiguity, distinct-name selection independent of time, name mismatch without fallback, one/multiple unnamed linked candidates, near/far time independence, null-event WNBA/NCAAF skips, stale-health separation, per-pick evidence, and truncation.
+The suite includes load-bearing tests for wrong/correct explicit id, cross-sport same-name exclusion, same-name ambiguity, distinct-name selection independent of time, name mismatch without fallback, one/multiple unnamed linked candidates, near/far time independence, null-event WNBA/NCAAF missing-link skips, stale-health separation, per-pick evidence, truncation, and the participant-forbidden game-total wrong-id/cross-sport/conflicting-name/accepted-identity matrix.
 
 ## Mutation evidence
 
@@ -61,7 +63,25 @@ Targeted result: tests 1; pass 0; fail 1
 Observed diagnostic: 101 !== 100
 ```
 
-All mutants were removed before the final 112/112 focused run.
+```text
+Mutant: classify zero eligible links as event_id_mismatch
+Targeted result: tests 2; pass 0; fail 2
+Observed failures: ordinary no-link and explicit-id/name missing-link precedence
+
+Mutant: fall back to the sole named event after a wrong explicit game-line id
+Targeted result: tests 1; pass 0; fail 1
+Observed diagnostic: graded 1 !== expected 0
+
+Mutant: bypass exact-name consistency when a game-line eventId is present
+Targeted result: tests 1; pass 0; fail 1
+Observed diagnostic: graded 1 !== expected 0
+
+Mutant: remove same-sport filtering from game-line named candidates
+Targeted result: tests 1; pass 0; fail 1
+Observed diagnostic: graded 1 !== expected 0
+```
+
+All mutants were removed before the final 117/117 focused run.
 
 ## Static verification
 
@@ -105,12 +125,12 @@ Disposition required by the lane packet: writable live-DB proof is blocked/defer
 
 Command: `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`
 
-Measured output on the implementation commit:
+Measured output on implementation commit `a22bfd76fb2101fa40adfb88f9bd411d3550eb81`:
 
 ```text
 Verdict: PASS
-Changed files: 8
-Rules matched: (none) — no R-level artifacts required for this diff
+Changed files: 16
+Rules matched: discord-delivery
 ```
 
 ## Merge SHA Binding
