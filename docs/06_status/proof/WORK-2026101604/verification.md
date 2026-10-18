@@ -7,15 +7,19 @@ Tier: T1
 Implementation source SHA: `35aeb09ef96e912ca4ff7cfb317c576ec8d0c97a`
 Result: static PASS; writable staging DB proof BLOCKED/DEFERRED as authorized by the lane precondition
 
-## Assertions
+## Verification
 
-- Picks are never graded from a fallback, time-distance ranking, time window, or tie.
-- Eligible participant-linked candidates are restricted to the pick sport.
-- Explicit event id, exact normalized event name, and unique-link-only selection fail closed with distinct reasons.
-- Identity failures do not contribute to stale-data counters or degraded-stale-input classification.
-- Each skipped pick is observable in existing run details up to a 100-entry cap, with exact overflow count.
-- Null-event WNBA and NCAAF shapes are classified and never settled.
-- Existing Track Only containment, CLV, provider, delivery, kill-switch, and manual-settlement behavior remains under the passing regression suite.
+ASSERTIONS:
+
+- [x] Picks are never graded from a fallback, time-distance ranking, time window, or tie.
+- [x] Eligible participant-linked candidates are restricted to the pick sport.
+- [x] Explicit event id, exact normalized event name, and unique-link-only selection fail closed with distinct reasons.
+- [x] Identity failures do not contribute to stale-data counters or degraded-stale-input classification.
+- [x] Each skipped pick is observable in existing run details up to a 100-entry cap, with exact overflow count.
+- [x] Null-event WNBA and NCAAF shapes are classified and never settled.
+- [x] Existing Track Only containment, CLV, provider, delivery, kill-switch, and manual-settlement behavior remains under the passing regression suite.
+
+EVIDENCE:
 
 ## Focused issue suite
 
@@ -105,11 +109,11 @@ Measured output on the implementation commit:
 
 ```text
 Verdict: PASS
-Changed files: 6
+Changed files: 8
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending at artifact creation
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1768

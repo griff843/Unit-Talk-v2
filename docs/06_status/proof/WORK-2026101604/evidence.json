@@ -1,6 +1,7 @@
 {
   "schema_version": 2,
   "issue_id": "WORK-2026101604",
+  "pr_number": 1768,
   "tier": "T1",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
@@ -33,7 +34,7 @@
     {
       "gate": "r-level",
       "verdict": "PASS",
-      "detail": "6 changed files; no rules matched"
+      "detail": "8 changed files; no rules matched"
     },
     {
       "gate": "writable-db",
@@ -63,7 +64,7 @@
     "r_level": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "verdict": "PASS",
-      "changed_files": 6,
+      "changed_files": 8,
       "rules_matched": []
     }
   },

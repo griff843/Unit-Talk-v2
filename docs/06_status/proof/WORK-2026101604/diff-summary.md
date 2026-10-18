@@ -31,4 +31,4 @@ Manual operator settlement, Track Only delivery containment, CLV computation, pr
 ## SHA Binding
 
 Merge SHA: pending merge (`null` in `evidence.json`)
-PR: pending at artifact creation
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1768
