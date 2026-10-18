@@ -1,0 +1,63 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101801",
+  "tier": "T2",
+  "lane_type": "hygiene",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "e2a78c586978c8212e1d60ae107ff5eea689d0cf",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "command": "pnpm verify",
+    "exit_code": 1,
+    "static_checks": "PASS",
+    "writable_db": "REFUSED_BEFORE_WRITES_UNIDENTIFIED_LOOPBACK_TARGET",
+    "local_log": "/tmp/1750-proof-anchor-serial-verify.log",
+    "ci_required": "pending",
+    "focused_proof_rebind": {
+      "command": "pnpm exec tsx --test scripts/ops/proof-rebind.test.ts",
+      "passed": 75,
+      "failed": 0
+    },
+    "independent_anchor_check": {
+      "verified": true,
+      "original_pr": 1767,
+      "original_merge_sha": "e22d68f9c8153afbabf4d88ad0ca102660cba26f",
+      "only_anchor_added": true,
+      "prose_preserved": true,
+      "tolerant_rebinder": "unchanged"
+    },
+    "r_level": {
+      "result": "PASS",
+      "required_artifacts": []
+    }
+  },
+  "executor_result": {
+    "codex_exit_code": 0,
+    "wrapper_exit_code": 1,
+    "code": "INCOMPLETE_PHASE_PROGRESSION",
+    "missing_phases": [
+      "verify",
+      "closeout"
+    ],
+    "status": "BLOCKED_NO_SUCCESS_RECEIPT",
+    "model_routing": "actual generated sidecar preserved"
+  },
+  "control_analysis": {
+    "markdown_only_scope": true,
+    "non_source_prefix": "docs/",
+    "external_evidence_corrobation": "explicitly authorized JSON only; Markdown excluded",
+    "disposition": "CONTROL_OWNER_REQUIRED_NO_BYPASS"
+  },
+  "production_actions": {
+    "deployment": false,
+    "discord_interaction": false,
+    "permissions": false,
+    "entitlements": false,
+    "delivery": false
+  }
+}

@@ -1,10 +1,9 @@
 # Diff summary: WORK-2026101801
 
-> Scaffolded by `ops:lane-start`. Replace this note with the files this lane changed
-> and why. Until then this file records nothing.
+MERGE_SHA: pending merge
 
-| File | Change |
-|---|---|
+Adds only the original implementation merge-SHA anchor and separator to the original PR1767 diff summary. Authored prose, runtime sources and other original proof artifacts are unchanged.
+This lane also records its own measured verification and actual executor provenance. Governed executor success remains blocked; no completion, deployment or member-delivery claim.
 
 ## SHA Binding
 
