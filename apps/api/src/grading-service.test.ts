@@ -1129,6 +1129,32 @@ test('runGradingPass skips picks when no event link can be resolved', async () =
   assert.equal(result.details[0]?.reason, 'event_link_not_found');
 });
 
+test('runGradingPass reports a missing link before explicit-id or name conflicts', async () => {
+  for (const identity of [
+    { eventId: 'unlinked-event', eventName: 'Named Unlinked Event' },
+    { eventName: 'Named Unlinked Event' },
+  ]) {
+    const { repositories, pickId } = await createPostedPickFixture();
+    mutatePick(repositories, pickId, (existing) => ({
+      ...existing,
+      participant_id: 'unlinked-participant',
+      metadata: {
+        ...(asRecord(existing.metadata) ?? {}),
+        ...identity,
+      },
+    }));
+
+    const result = await runGradingPass(repositories);
+
+    assert.equal(result.graded, 0);
+    assert.equal(result.details[0]?.reason, 'event_link_not_found');
+    assert.equal(
+      (await repositories.settlements.listByPick(pickId)).length,
+      0,
+    );
+  }
+});
+
 test('runGradingPass fails closed when explicit eventId is not an eligible linked event', async () => {
   const { repositories, pickId } = await createPostedPickFixture({
     eventName: 'Explicit Identity Event',
@@ -1307,9 +1333,17 @@ test('null-event WNBA and NCAAF picks are classified and never settled', async (
     const { repositories, pickId } = await createPostedPickFixture({
       eventName: `${sportId} Track Only Event`,
     });
+    const participant = await repositories.participants.upsertByExternalId({
+      externalId: `${sportId}_TRACK_ONLY_PARTICIPANT`,
+      displayName: `${sportId} Track Only Participant`,
+      participantType: 'player',
+      sport: sportId,
+      league: sportId,
+      metadata: {},
+    });
     mutatePick(repositories, pickId, (existing) => ({
       ...existing,
-      participant_id: null,
+      participant_id: participant.id,
       sport_id: sportId,
       metadata: {
         ...(asRecord(existing.metadata) ?? {}),
@@ -1321,7 +1355,7 @@ test('null-event WNBA and NCAAF picks are classified and never settled', async (
     const result = await runGradingPass(repositories);
 
     assert.equal(result.graded, 0, sportId);
-    assert.equal(result.details[0]?.reason, 'missing_participant_id', sportId);
+    assert.equal(result.details[0]?.reason, 'event_link_not_found', sportId);
     assert.equal(
       (await repositories.settlements.listByPick(pickId)).length,
       0,
@@ -2515,6 +2549,121 @@ async function attachGameLineEventContext(
     metadata: trustedEventMetadata({ startsAt: '2026-04-04T19:30:00.000Z' }),
   });
 }
+
+async function seedGameLineResult(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  eventId: string,
+) {
+  await repositories.gradeResults.insert({
+    eventId,
+    participantId: null,
+    marketKey: 'game_total_ou',
+    actualValue: 227,
+    source: 'sgo',
+    sourcedAt: '2026-04-04T22:00:00.000Z',
+  });
+}
+
+test('game-line grading rejects an explicit event id outside canonical event identity', async () => {
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture();
+  const event = await attachGameLineEventContext(repositories, eventName);
+  await seedGameLineResult(repositories, event.id);
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      eventId: 'not-a-canonical-event',
+    },
+  }));
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  assert.equal(result.details[0]?.reason, 'event_id_mismatch');
+  assert.equal((await repositories.settlements.listByPick(pickId)).length, 0);
+});
+
+test('game-line grading rejects a cross-sport explicit event id with the same name', async () => {
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture();
+  const nbaEvent = await attachGameLineEventContext(repositories, eventName);
+  const crossSportEvent = await repositories.events.upsertByExternalId({
+    externalId: 'evt-game-line-cross-sport',
+    sportId: 'NFL',
+    eventName,
+    eventDate: '2026-04-04',
+    status: 'completed',
+    metadata: trustedEventMetadata({ startsAt: '2026-04-04T19:30:00.000Z' }),
+  });
+  await seedGameLineResult(repositories, nbaEvent.id);
+  await seedGameLineResult(repositories, crossSportEvent.id);
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      eventId: crossSportEvent.id,
+    },
+  }));
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  assert.equal(result.details[0]?.reason, 'event_id_mismatch');
+  assert.equal((await repositories.settlements.listByPick(pickId)).length, 0);
+});
+
+test('game-line grading rejects conflicting canonical event id and event name', async () => {
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture();
+  const selectedEvent = await attachGameLineEventContext(
+    repositories,
+    eventName,
+  );
+  await attachGameLineEventContext(repositories, 'LAL vs GSW');
+  await seedGameLineResult(repositories, selectedEvent.id);
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      eventId: selectedEvent.id,
+      eventName: 'LAL vs GSW',
+    },
+  }));
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  assert.equal(result.details[0]?.reason, 'event_id_mismatch');
+  assert.equal((await repositories.settlements.listByPick(pickId)).length, 0);
+});
+
+test('game-line grading accepts a same-sport canonical id with matching exact name', async () => {
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture();
+  const event = await attachGameLineEventContext(repositories, eventName);
+  await seedGameLineResult(repositories, event.id);
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      eventId: event.id,
+      eventName,
+    },
+  }));
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1);
+  assert.equal(result.details[0]?.outcome, 'graded');
+  const settlements = await repositories.settlements.listByPick(pickId);
+  assert.equal(settlements.length, 1);
+  assert.equal(asRecord(settlements[0]?.payload)?.gradingContext != null, true);
+  assert.equal(
+    asRecord(asRecord(settlements[0]?.payload)?.gradingContext)?.eventId,
+    event.id,
+  );
+});
 
 test('runGradingPass grades a game_total_ou pick as win when actual > line', async () => {
   const { repositories, pickId, eventName } =

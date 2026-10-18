@@ -1286,7 +1286,7 @@ async function resolvePickEvent(
   const links =
     await repositories.eventParticipants.listByParticipant(participantId);
   if (links.length === 0) {
-    return { event: null, reason: emptyCandidateReason(pick) };
+    return { event: null, reason: 'event_link_not_found' };
   }
 
   const candidateEvents = (
@@ -1297,6 +1297,10 @@ async function resolvePickEvent(
     (event): event is EventRow =>
       event !== null && eventMatchesPickSport(pick, event),
   );
+
+  if (candidateEvents.length === 0) {
+    return { event: null, reason: 'event_link_not_found' };
+  }
 
   return chooseEventForPick(pick, candidateEvents);
 }
@@ -1429,17 +1433,6 @@ function normalizeEventName(value: string): string {
   return value.trim().toLowerCase();
 }
 
-function emptyCandidateReason(pick: PickRecord): string {
-  const metadata = asRecord(pick.metadata);
-  if (readNonEmptyString(metadata?.eventId)) {
-    return 'event_id_mismatch';
-  }
-  if (readNonEmptyString(metadata?.eventName)) {
-    return 'event_name_mismatch';
-  }
-  return 'event_link_not_found';
-}
-
 export function readEventStartTime(event: EventRow): string | null {
   const metadata = asRecord(event.metadata);
   const startsAt = metadata?.starts_at;
@@ -1459,14 +1452,21 @@ async function resolvePickEventByName(
 ): Promise<PickEventResolution> {
   const metadata = asRecord(pick.metadata);
   const explicitEventId = readNonEmptyString(metadata?.eventId);
+  const eventName = readPickEventName(pick);
   if (explicitEventId) {
+    if (eventName) {
+      const namedCandidates = (
+        await repositories.events.listByName(eventName)
+      ).filter((event) => eventMatchesPickSport(pick, event));
+      return chooseEventForPick(pick, namedCandidates);
+    }
+
     const explicitEvent = await repositories.events.findById(explicitEventId);
     return explicitEvent && eventMatchesPickSport(pick, explicitEvent)
       ? { event: explicitEvent }
       : { event: null, reason: 'event_id_mismatch' };
   }
 
-  const eventName = readPickEventName(pick);
   if (!eventName) {
     return { event: null, reason: 'event_link_not_found' };
   }
