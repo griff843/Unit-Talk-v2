@@ -20,9 +20,9 @@
     "docs/06_status/proof/WORK-2026101601/verification.md",
     "docs/06_status/proof/WORK-2026101601/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "superseded",
   "started_at": "2026-10-17T09:29:08.983Z",
-  "heartbeat_at": "2026-10-17T09:50:20.547Z",
+  "heartbeat_at": "2026-10-18T02:05:30.942Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026101601-grading-fail-closed.json",
