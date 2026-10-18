@@ -45,7 +45,8 @@
       "closeout"
     ],
     "status": "BLOCKED_NO_SUCCESS_RECEIPT",
-    "model_routing": "actual generated sidecar preserved"
+    "model_routing": "actual generated sidecar preserved",
+    "controller_followup": "Serial verification and draft handoff completed after the failed attempt; protected checkpoint correctly refuses terminal-attempt mutation. Original failed outcome is retained. No state editing or success receipt fabricated."
   },
   "control_analysis": {
     "markdown_only_scope": true,
@@ -59,5 +60,6 @@
     "permissions": false,
     "entitlements": false,
     "delivery": false
-  }
+  },
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1769"
 }

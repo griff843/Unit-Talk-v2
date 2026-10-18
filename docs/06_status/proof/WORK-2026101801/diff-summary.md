@@ -8,4 +8,4 @@ This lane also records its own measured verification and actual executor provena
 ## SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1769
