@@ -1,0 +1,153 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026101501
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026101501
+  objective: Give a truthful private acknowledgement when a member clicks one of
+    the three retired Unit Talk bot onboarding buttons, preserving all current
+    slash-command and unrelated component behavior.
+  acceptance_criteria:
+    - Handle only button interactions with exact IDs capper_submit_first_pick,
+      capper_handbook or capper_dashboard, and only when the message author
+      matches the actual current Unit Talk bot identity. Fail closed for foreign
+      or malformed interactions.
+    - "Reply privately once within Discord's interaction deadline. Guild replies
+      are ephemeral; DM replies are visible only to the invoking user. Exact
+      static wording: \"This older onboarding button is no longer available.
+      Open the Unit Talk server and use /help for current commands.\""
+    - Do not invoke APIs, repositories, services, commands, role inference or
+      operational side effects. Unknown IDs and other components retain existing
+      behavior. Existing slash-command guards and responses stay unchanged.
+    - Log reply/defer failures safely without private content, retry or double
+      acknowledgement. Test guild/DM, Free/no-cap entitlement, exact and unknown
+      IDs, foreign/malformed authors, acknowledgement state, failure logging and
+      unchanged unrelated commands/components.
+  guardrails:
+    - Prior public-performance lane WORK-2026101401 must be canonically done and
+      its actual lease released. Freshly verify both.
+    - Classify this two-file, member-visible, side-effect-free acknowledgement
+      as Delivery/UI under LANE_TAXONOMY section7; it touches no pick write
+      path. LANE_CONCURRENCY_POLICY section4 allows disjoint Runtime +
+      Delivery/UI. Preserve the grading Runtime lane, its lease, scope and
+      merge/closeout ownership.
+    - Use normal preflight/lane-start and current capacity/ownership checks; no
+      forced coexistence, capacity waiver or lane-type substitution outside the
+      canonical taxonomy.
+    - Implementation belongs only in the worktree returned by ops:lane-start.
+      This checkout is control/work-order preparation only.
+    - Preserve every historical message and all containment/kill switches. No
+      production deployment or live test send is authorized here.
+    - "Scope remains exactly the two implementation files. No
+      package/test-wiring change is needed: foundation tests already run in
+      required test:apps-rest."
+  non_goals:
+    - No functionality restoration, new button IDs, DM campaigns,
+      dashboard/handbook integration, pick intake,
+      API/domain/contracts/auth/database/migration/roles/worker/bot-client/dependency
+      changes.
+    - No deployment, delivery, membership/entitlement or provider activation.
+    - No selected-user stats identity changes; that is the separately approved
+      issue1761.
+  required_evidence:
+    - Run pnpm exec tsx --test
+      apps/discord-bot/src/discord-bot-foundation.test.ts directly.
+    - Run pnpm verify and the required R-level check; record actual results and
+      any safe staging-target refusal accurately. Current-head CI/proof must
+      pass all required controls.
+    - Keep exact two-file scope and no new any casts or reduced test count.
+      Preserve actual model/executor provenance.
+    - Independent exact-HEAD review and sanctioned merge/closeout; no authority
+      inferred from green tests alone.
+    - Following separately authorized deployment, reverify bot identity, click a
+      preserved historical button, prove private acknowledgement and no
+      canonical API/pick/outbox writes or watched delivery. This runtime
+      acceptance is not claimed by offline tests.
+  exit_criteria:
+    - Bounded implementation and meaningful direct/full checks pass with honest
+      proof and exact-HEAD independent merge approval.
+    - Required controls green, sanctioned merge complete, exact-merge proof and
+      governed closeout complete. Deployment/live acceptance remain explicitly
+      reserved until authorized.
+  unmapped_sections:
+    - >-
+      WORK-2026101501 — Acknowledge retired Discord onboarding buttons
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Authority: https://github.com/griff843/Unit-Talk-v2/issues/1750 (PM
+      approved, queued two-file plan)
+
+
+      ## File Scope
+
+
+      - apps/discord-bot/src/router.ts
+
+      - apps/discord-bot/src/discord-bot-foundation.test.ts
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026101501.md
+    title: WORK-2026101501 — Acknowledge retired Discord onboarding buttons
+    description: |-
+      # WORK-2026101501 — Acknowledge retired Discord onboarding buttons
+
+      Tier: T2
+      Lane type: delivery-ui
+      Authority: https://github.com/griff843/Unit-Talk-v2/issues/1750 (PM approved, queued two-file plan)
+
+      ## Objective
+
+      Give a truthful private acknowledgement when a member clicks one of the three retired Unit Talk bot onboarding buttons, preserving all current slash-command and unrelated component behavior.
+
+      ## File Scope
+
+      - apps/discord-bot/src/router.ts
+      - apps/discord-bot/src/discord-bot-foundation.test.ts
+
+      ## Acceptance Criteria
+
+      - Handle only button interactions with exact IDs capper_submit_first_pick, capper_handbook or capper_dashboard, and only when the message author matches the actual current Unit Talk bot identity. Fail closed for foreign or malformed interactions.
+      - Reply privately once within Discord's interaction deadline. Guild replies are ephemeral; DM replies are visible only to the invoking user. Exact static wording: "This older onboarding button is no longer available. Open the Unit Talk server and use /help for current commands."
+      - Do not invoke APIs, repositories, services, commands, role inference or operational side effects. Unknown IDs and other components retain existing behavior. Existing slash-command guards and responses stay unchanged.
+      - Log reply/defer failures safely without private content, retry or double acknowledgement. Test guild/DM, Free/no-cap entitlement, exact and unknown IDs, foreign/malformed authors, acknowledgement state, failure logging and unchanged unrelated commands/components.
+
+      ## Guardrails
+
+      - Prior public-performance lane WORK-2026101401 must be canonically done and its actual lease released. Freshly verify both.
+      - Classify this two-file, member-visible, side-effect-free acknowledgement as Delivery/UI under LANE_TAXONOMY section7; it touches no pick write path. LANE_CONCURRENCY_POLICY section4 allows disjoint Runtime + Delivery/UI. Preserve the grading Runtime lane, its lease, scope and merge/closeout ownership.
+      - Use normal preflight/lane-start and current capacity/ownership checks; no forced coexistence, capacity waiver or lane-type substitution outside the canonical taxonomy.
+      - Implementation belongs only in the worktree returned by ops:lane-start. This checkout is control/work-order preparation only.
+      - Preserve every historical message and all containment/kill switches. No production deployment or live test send is authorized here.
+      - Scope remains exactly the two implementation files. No package/test-wiring change is needed: foundation tests already run in required test:apps-rest.
+
+      ## Non-goals
+
+      - No functionality restoration, new button IDs, DM campaigns, dashboard/handbook integration, pick intake, API/domain/contracts/auth/database/migration/roles/worker/bot-client/dependency changes.
+      - No deployment, delivery, membership/entitlement or provider activation.
+      - No selected-user stats identity changes; that is the separately approved issue1761.
+
+      ## Required Evidence
+
+      - Run pnpm exec tsx --test apps/discord-bot/src/discord-bot-foundation.test.ts directly.
+      - Run pnpm verify and the required R-level check; record actual results and any safe staging-target refusal accurately. Current-head CI/proof must pass all required controls.
+      - Keep exact two-file scope and no new any casts or reduced test count. Preserve actual model/executor provenance.
+      - Independent exact-HEAD review and sanctioned merge/closeout; no authority inferred from green tests alone.
+      - Following separately authorized deployment, reverify bot identity, click a preserved historical button, prove private acknowledgement and no canonical API/pick/outbox writes or watched delivery. This runtime acceptance is not claimed by offline tests.
+
+      ## Exit Criteria
+
+      - Bounded implementation and meaningful direct/full checks pass with honest proof and exact-HEAD independent merge approval.
+      - Required controls green, sanctioned merge complete, exact-merge proof and governed closeout complete. Deployment/live acceptance remain explicitly reserved until authorized.
+    captured_at: 2026-10-17T10:49:00.242Z
+    description_sha256: 75dcfa0a80f5660c357d5d2c1c0878d694a2596d96ed9359be7d468ef94368e1
+  contract_hash: 5bf612947dba8386c88665238acce4eac5f93e790b82a6846dfc016f5dbc0ad5

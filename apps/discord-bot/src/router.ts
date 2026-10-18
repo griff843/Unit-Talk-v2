@@ -9,6 +9,13 @@ const ACCESS_DENIED_REPLY = "You don't have access to this command.";
 const ERROR_REPLY = 'An unexpected error occurred. Please try again later.';
 const UNAVAILABLE_REPLY =
   'Service temporarily unavailable - try again shortly.';
+const RETIRED_ONBOARDING_BUTTON_IDS = new Set([
+  'capper_submit_first_pick',
+  'capper_handbook',
+  'capper_dashboard',
+]);
+const RETIRED_ONBOARDING_REPLY =
+  'This older onboarding button is no longer available. Open the Unit Talk server and use /help for current commands.';
 
 export { UNAVAILABLE_REPLY };
 
@@ -32,6 +39,30 @@ export function createInteractionHandler(
   logger: { error(msg: string, err?: unknown): void } = console,
 ) {
   return async (interaction: Interaction): Promise<void> => {
+    if (typeof interaction.isButton === 'function' && interaction.isButton()) {
+      const isCurrentBotMessage =
+        RETIRED_ONBOARDING_BUTTON_IDS.has(interaction.customId) &&
+        typeof interaction.message?.author?.id === 'string' &&
+        interaction.message.author.id.length > 0 &&
+        typeof interaction.client?.user?.id === 'string' &&
+        interaction.client.user.id.length > 0 &&
+        interaction.message.author.id === interaction.client.user.id;
+
+      if (!isCurrentBotMessage || interaction.replied || interaction.deferred) {
+        return;
+      }
+
+      try {
+        await interaction.reply({
+          content: RETIRED_ONBOARDING_REPLY,
+          ...(interaction.inGuild() ? { ephemeral: true } : {}),
+        });
+      } catch {
+        logger.error('[router] Retired onboarding button reply failed');
+      }
+      return;
+    }
+
     if (!interaction.isChatInputCommand()) return;
 
     const command = registry.get(interaction.commandName);
