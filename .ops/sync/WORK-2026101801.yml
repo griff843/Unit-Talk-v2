@@ -1,0 +1,200 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026101801
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026101801
+  objective: Permit normal GitHub-attested closeout of the original merged
+    implementation by adding its truthful merge-SHA anchor to its existing
+    diff-summary proof. Do not change code, controls, or historical execution
+    facts.
+  acceptance_criteria:
+    - "Add exactly one metadata line MERGE_SHA:
+      e22d68f9c8153afbabf4d88ad0ca102660cba26f after the existing title and
+      blank separator, preserving all authored summary prose."
+    - "Reverify original PR #1767 is merged at that exact SHA before editing. Do
+      not substitute this repair PR's eventual merge SHA for the original
+      implementation identity."
+    - Keep all implementation sources, original lane manifest, original
+      evidence.json, verification.md and model-routing.json untouched.
+    - Verify the corrected file binds to the real original merge through the
+      existing tolerant rebinder and unchanged closeout checks; do not bypass or
+      edit those controls.
+    - "Generate honest proof for this repair, with MERGE_SHA: pending merge
+      anchors in this repair's own authored Markdown proof so it does not repeat
+      the defect. Preserve actual executor/model provenance."
+    - Required pnpm verify and R-level checks, current-head CI and independent
+      review remain required; report actual failures, never invent success.
+  guardrails:
+    - Normal preflight and lane-start; implementation only in the returned
+      worktree.
+    - T2 hygiene preserves the original review standard because this correction
+      changes an audited immutable merge-identity assertion and gates closeout;
+      it has no runtime behavior, schema, persistence, entitlement or tooling
+      change. Do not relabel runtime work or alter the original lane's
+      tier/type/status.
+    - Original source ownership remains with its existing lane until actual
+      governed closeout. No grading code, lease, manifest, retry or
+      staging-control changes.
+    - No direct main edit or push, no admin merge, no fabricated approval, no
+      manual original manifest changes.
+    - No deployment, live Discord interaction, permissions, role, delivery,
+      Whop, paid provider or production data action.
+    - "Keep PR title/body and commit subjects bound only to this work identity;
+      refer to original implementation by PR #1767 rather than spelling another
+      canonical work ID in PR prose. Exact allowed path remains in this work
+      order and manifest."
+  non_goals: []
+  required_evidence:
+    - Exact original GitHub merge attestation and one-line diff.
+    - Existing proof Markdown SHA rebinder accepts this anchor and preserves
+      authored content.
+    - pnpm verify, R-level, exact-head CI and independent review; ordinary PR
+      and governed merge.
+    - Original closeout replay only after original merge-SHA CI passes, with
+      actual truth-check result inspected. This proof repair does not claim that
+      original lane is already done.
+  exit_criteria:
+    - The one-line proof correction is merged through normal controls; this
+      repair's own proof/closeout and original governed closeout remain truthful
+      and separately verified.
+  unmapped_sections:
+    - >-
+      WORK-2026101801 — Repair original Discord closeout proof anchor
+
+      Tier: T2
+
+      Lane type: hygiene
+
+      Authority: User-authorized completion of original onboarding-button proof,
+      normal merge and lane closeout. Original implementation is merged PR
+      #1767; initial governed closeout run39128842042 refused an unbindable
+      authored diff summary. This is a proof-only companion correction, not
+      expanded runtime scope.
+
+
+      ## File Scope
+
+
+      - docs/06_status/proof/WORK-2026101501/diff-summary.md
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026101801.md
+    title: WORK-2026101801 — Repair original Discord closeout proof anchor
+    description: >-
+      # WORK-2026101801 — Repair original Discord closeout proof anchor
+
+
+      Tier: T2
+
+      Lane type: hygiene
+
+      Authority: User-authorized completion of original onboarding-button proof,
+      normal merge and lane closeout. Original implementation is merged PR
+      #1767; initial governed closeout run39128842042 refused an unbindable
+      authored diff summary. This is a proof-only companion correction, not
+      expanded runtime scope.
+
+
+      ## Objective
+
+
+      Permit normal GitHub-attested closeout of the original merged
+      implementation by adding its truthful merge-SHA anchor to its existing
+      diff-summary proof. Do not change code, controls, or historical execution
+      facts.
+
+
+      ## File Scope
+
+
+      - docs/06_status/proof/WORK-2026101501/diff-summary.md
+
+
+      ## Acceptance Criteria
+
+
+      - Add exactly one metadata line MERGE_SHA:
+      e22d68f9c8153afbabf4d88ad0ca102660cba26f after the existing title and
+      blank separator, preserving all authored summary prose.
+
+      - Reverify original PR #1767 is merged at that exact SHA before editing.
+      Do not substitute this repair PR's eventual merge SHA for the original
+      implementation identity.
+
+      - Keep all implementation sources, original lane manifest, original
+      evidence.json, verification.md and model-routing.json untouched.
+
+      - Verify the corrected file binds to the real original merge through the
+      existing tolerant rebinder and unchanged closeout checks; do not bypass or
+      edit those controls.
+
+      - Generate honest proof for this repair, with MERGE_SHA: pending merge
+      anchors in this repair's own authored Markdown proof so it does not repeat
+      the defect. Preserve actual executor/model provenance.
+
+      - Required pnpm verify and R-level checks, current-head CI and independent
+      review remain required; report actual failures, never invent success.
+
+
+      ## Guardrails
+
+
+      - Normal preflight and lane-start; implementation only in the returned
+      worktree.
+
+      - T2 hygiene preserves the original review standard because this
+      correction changes an audited immutable merge-identity assertion and gates
+      closeout; it has no runtime behavior, schema, persistence, entitlement or
+      tooling change. Do not relabel runtime work or alter the original lane's
+      tier/type/status.
+
+      - Original source ownership remains with its existing lane until actual
+      governed closeout. No grading code, lease, manifest, retry or
+      staging-control changes.
+
+      - No direct main edit or push, no admin merge, no fabricated approval, no
+      manual original manifest changes.
+
+      - No deployment, live Discord interaction, permissions, role, delivery,
+      Whop, paid provider or production data action.
+
+
+      - Keep PR title/body and commit subjects bound only to this work identity;
+      refer to original implementation by PR #1767 rather than spelling another
+      canonical work ID in PR prose. Exact allowed path remains in this work
+      order and manifest.
+
+
+      ## Required Evidence
+
+
+      - Exact original GitHub merge attestation and one-line diff.
+
+      - Existing proof Markdown SHA rebinder accepts this anchor and preserves
+      authored content.
+
+      - pnpm verify, R-level, exact-head CI and independent review; ordinary PR
+      and governed merge.
+
+      - Original closeout replay only after original merge-SHA CI passes, with
+      actual truth-check result inspected. This proof repair does not claim that
+      original lane is already done.
+
+
+      ## Exit Criteria
+
+
+      - The one-line proof correction is merged through normal controls; this
+      repair's own proof/closeout and original governed closeout remain truthful
+      and separately verified.
+    captured_at: 2026-10-18T13:10:34.215Z
+    description_sha256: 221d578096dd185d7e9dc4dc04cde40ac8e2eb869328366a99466c9a0839cb50
+  contract_hash: 5d4d3a19dcabd15d3ef40608f694e2aab760bb5e2009381363676e4ced7cf7ba
