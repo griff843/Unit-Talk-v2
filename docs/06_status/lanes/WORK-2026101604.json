@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026101604-order/.out/worktrees/codex__work-2026101604-grading-identity-first",
   "branch": "codex/work-2026101604-grading-identity-first",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "3afaa0fa3858ec9b7aa75b3f24c8db47ee20472f",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1768",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/grading-service.test.ts",
@@ -20,7 +20,7 @@
     "docs/06_status/proof/WORK-2026101604/verification.md",
     "docs/06_status/proof/WORK-2026101604/model-routing.json"
   ],
-  "status": "blocked",
+  "status": "merged",
   "started_at": "2026-10-18T02:14:12.146Z",
   "heartbeat_at": "2026-10-18T02:14:12.146Z",
   "closed_at": null,
@@ -34,6 +34,15 @@
       "merge_sha": null,
       "failures": [
         "heartbeat_at 33.1h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-10-19T11:45:45.986Z",
+      "verdict": "fail",
+      "merge_sha": "3afaa0fa3858ec9b7aa75b3f24c8db47ee20472f",
+      "failures": [
+        "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1768 merged while manifest status was \"blocked\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
       ],
       "runner": "ops:reconcile"
     }

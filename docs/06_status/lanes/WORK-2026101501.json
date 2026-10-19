@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026101501/.out/worktrees/codex__work-2026101501-retired-onboarding-buttons",
   "branch": "codex/work-2026101501-retired-onboarding-buttons",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "e22d68f9c8153afbabf4d88ad0ca102660cba26f",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1767",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,7 +20,7 @@
     "docs/06_status/proof/WORK-2026101501/verification.md",
     "docs/06_status/proof/WORK-2026101501/model-routing.json"
   ],
-  "status": "blocked",
+  "status": "merged",
   "started_at": "2026-10-17T10:49:10.982Z",
   "heartbeat_at": "2026-10-17T11:14:06.533Z",
   "closed_at": null,
@@ -61,6 +61,15 @@
       "merge_sha": null,
       "failures": [
         "heartbeat_at 48.1h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-10-19T11:45:45.518Z",
+      "verdict": "fail",
+      "merge_sha": "e22d68f9c8153afbabf4d88ad0ca102660cba26f",
+      "failures": [
+        "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1767 merged while manifest status was \"blocked\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
       ],
       "runner": "ops:reconcile"
     }
