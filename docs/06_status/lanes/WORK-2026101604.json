@@ -20,14 +20,24 @@
     "docs/06_status/proof/WORK-2026101604/verification.md",
     "docs/06_status/proof/WORK-2026101604/model-routing.json"
   ],
-  "status": "started",
+  "status": "blocked",
   "started_at": "2026-10-18T02:14:12.146Z",
   "heartbeat_at": "2026-10-18T02:14:12.146Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026101604-grading-identity-first.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-19T11:22:04.408Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 33.1h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-medium",
