@@ -5,7 +5,10 @@ import {
   resolveStakeUnits,
 } from '@unit-talk/domain';
 import type { StakeUnitsResolution } from '@unit-talk/domain';
-import { isHumanCapperDeliveryAuthorized, type CanonicalPick } from '@unit-talk/contracts';
+import {
+  isHumanCapperDeliveryAuthorized,
+  type CanonicalPick,
+} from '@unit-talk/contracts';
 import type {
   EventRow,
   PickRecord,
@@ -13,7 +16,10 @@ import type {
   SettlementRecord,
 } from '@unit-talk/db';
 import { atomicClaimForTransition } from '@unit-talk/db';
-import { observeSettlementRecap, type SettlementRecapOutcome } from './settlement-recap-observation.js';
+import {
+  observeSettlementRecap,
+  type SettlementRecapOutcome,
+} from './settlement-recap-observation.js';
 import { isHumanCapperRecapStopped } from './human-capper-recap-gate.js';
 import {
   isEvidencePlanePick,
@@ -124,9 +130,15 @@ const MONEYLINE_OUTCOME_BY_ACTUAL_VALUE = new Map<
   [0, 'loss'],
   [0.5, 'push'],
 ]);
-const MAX_EXPLICIT_EVENT_TIME_MISMATCH_MS = 36 * 60 * 60 * 1000;
+export const GRADING_SKIP_EVIDENCE_LIMIT = 100;
 const GRADING_FETCH_PAGE_SIZE = 500;
 export const GRADING_INPUT_FRESHNESS_THRESHOLD_MS = 6 * 60 * 60 * 1000;
+
+const IDENTITY_SKIP_REASONS = new Set([
+  'event_id_mismatch',
+  'event_name_mismatch',
+  'event_match_ambiguous',
+]);
 
 const DATA_DEPENDENT_SKIP_REASONS = new Set([
   'event_link_not_found',
@@ -158,7 +170,11 @@ export async function fetchAllByLifecycleState(
   const all: PickRecord[] = [];
   let offset = 0;
   while (true) {
-    const page = await picks.listByLifecycleState(state, GRADING_FETCH_PAGE_SIZE, offset);
+    const page = await picks.listByLifecycleState(
+      state,
+      GRADING_FETCH_PAGE_SIZE,
+      offset,
+    );
     all.push(...page);
     if (page.length < GRADING_FETCH_PAGE_SIZE) break;
     offset += GRADING_FETCH_PAGE_SIZE;
@@ -221,6 +237,7 @@ export async function runGradingPass(
       dataDependentSkipped: 0,
       errors: 0,
       errorDetails: [],
+      skipDetails: [],
       inputFreshness: classifyInputFreshness(null, readNow(), thresholdMs),
     }),
   });
@@ -242,6 +259,7 @@ export async function runGradingPass(
     );
     const skipReasons = countSkipReasons(execution.details);
     const dataDependentSkipped = countDataDependentSkips(execution.details);
+    const identitySkipped = countIdentitySkips(execution.details);
     const outcomeClass = classifyGradingOutcome({
       graded: execution.graded,
       errors: execution.errors,
@@ -271,8 +289,10 @@ export async function runGradingPass(
         skipped: execution.skipped,
         skipReasons,
         dataDependentSkipped,
+        identitySkipped,
         errors: execution.errors,
         errorDetails,
+        skipDetails: execution.details,
         inputFreshness,
       }),
     });
@@ -287,7 +307,8 @@ export async function runGradingPass(
       inputFreshness,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'unknown grading error';
+    const message =
+      error instanceof Error ? error.message : 'unknown grading error';
     const inputFreshness = classifyInputFreshness(
       newestGameResultSourcedAt,
       readNow(),
@@ -305,8 +326,10 @@ export async function runGradingPass(
           skipped: 0,
           skipReasons: {},
           dataDependentSkipped: 0,
+          identitySkipped: 0,
           errors: 1,
           errorDetails: [{ reason: message }],
+          skipDetails: [],
           inputFreshness,
         }),
       });
@@ -447,7 +470,7 @@ async function executeGradingPass(
         continue;
       }
 
-      const event =
+      const eventResolution =
         marketRule.participantRequirement === 'forbidden'
           ? await resolvePickEventByName(pick, repositories)
           : await resolvePickEvent(
@@ -456,14 +479,15 @@ async function executeGradingPass(
               repositories,
             );
 
-      if (!event) {
+      if (!eventResolution.event) {
         details.push({
           pickId: pick.id,
           outcome: 'skipped',
-          reason: 'event_link_not_found',
+          reason: eventResolution.reason,
         });
         continue;
       }
+      const event = eventResolution.event;
 
       if (event.status !== 'completed') {
         details.push({
@@ -684,7 +708,9 @@ async function executeGradingPass(
             receipts: repositories.receipts,
             runs: repositories.runs,
             // WORK-2026092901: the recap gate needs the live kill switch.
-            ...(repositories.killSwitch ? { killSwitch: repositories.killSwitch } : {}),
+            ...(repositories.killSwitch
+              ? { killSwitch: repositories.killSwitch }
+              : {}),
           },
           options,
         );
@@ -729,9 +755,8 @@ export function classifyInputFreshness(
   now: Date,
   thresholdMs: number = GRADING_INPUT_FRESHNESS_THRESHOLD_MS,
 ): GradingInputFreshness {
-  const sourcedAtMs = newestSourcedAt === null
-    ? Number.NaN
-    : new Date(newestSourcedAt).getTime();
+  const sourcedAtMs =
+    newestSourcedAt === null ? Number.NaN : new Date(newestSourcedAt).getTime();
   if (!Number.isFinite(sourcedAtMs)) {
     return {
       status: 'missing',
@@ -796,11 +821,21 @@ function countSkipReasons(
   return counts;
 }
 
-function countDataDependentSkips(details: readonly GradingPickResult[]): number {
+function countDataDependentSkips(
+  details: readonly GradingPickResult[],
+): number {
   return details.filter(
     (detail) =>
       detail.outcome === 'skipped' &&
       DATA_DEPENDENT_SKIP_REASONS.has(normalizeSkipReason(detail.reason)),
+  ).length;
+}
+
+function countIdentitySkips(details: readonly GradingPickResult[]): number {
+  return details.filter(
+    (detail) =>
+      detail.outcome === 'skipped' &&
+      IDENTITY_SKIP_REASONS.has(normalizeSkipReason(detail.reason)),
   ).length;
 }
 
@@ -812,10 +847,25 @@ function buildGradingRunDetails(input: {
   skipped: number;
   skipReasons: Record<string, number>;
   dataDependentSkipped: number;
+  identitySkipped?: number;
   errors: number;
   errorDetails: Array<{ pickId?: string; reason?: string }>;
+  skipDetails: readonly GradingPickResult[];
   inputFreshness: GradingInputFreshness;
 }): Record<string, unknown> {
+  const skippedPicks: Array<{ pick_id: string; reason: string }> = [];
+  let skippedPickCount = 0;
+  for (const detail of input.skipDetails) {
+    if (detail.outcome !== 'skipped') continue;
+    skippedPickCount += 1;
+    if (skippedPicks.length < GRADING_SKIP_EVIDENCE_LIMIT) {
+      skippedPicks.push({
+        pick_id: detail.pickId,
+        reason: normalizeSkipReason(detail.reason),
+      });
+    }
+  }
+
   return {
     outcome_class: input.outcomeClass,
     rows_scanned: input.rowsScanned,
@@ -823,7 +873,10 @@ function buildGradingRunDetails(input: {
     graded_count: input.graded,
     skipped_count: input.skipped,
     skipped_reasons: input.skipReasons,
+    skipped_picks: skippedPicks,
+    skipped_picks_truncated_count: skippedPickCount - skippedPicks.length,
     data_dependent_skipped_count: input.dataDependentSkipped,
+    identity_skipped_count: input.identitySkipped ?? 0,
     error_count: input.errors,
     newest_game_result_sourced_at: input.inputFreshness.newestSourcedAt,
     input_freshness: {
@@ -842,7 +895,9 @@ function buildGradingRunDetails(input: {
   };
 }
 
-export function classifyMarketFamilyForGrading(marketKey: string): MarketFamilyRule {
+export function classifyMarketFamilyForGrading(
+  marketKey: string,
+): MarketFamilyRule {
   if (marketKey === 'moneyline' || marketKey === 'game_moneyline') {
     return {
       family: 'game_moneyline',
@@ -1017,20 +1072,14 @@ function validateEventProvenanceForGrading(
   if (!ingestionCycleRunId) {
     return { ok: false, reason: 'event_provenance_missing_ingestion_cycle' };
   }
-  const requiredIngestionSource = REQUIRED_INGESTION_SOURCE_BY_PROVIDER[provider];
+  const requiredIngestionSource =
+    REQUIRED_INGESTION_SOURCE_BY_PROVIDER[provider];
   if (!requiredIngestionSource) {
     return { ok: false, reason: 'event_provenance_untrusted_provider' };
   }
   const ingestionSource = readNonEmptyString(metadata?.ingestionSource);
   if (ingestionSource !== requiredIngestionSource) {
     return { ok: false, reason: 'event_provenance_invalid_ingestion_cycle' };
-  }
-
-  if (
-    hasExplicitEventReferenceTime(pick) &&
-    eventReferenceMismatchMs(pick, event) > MAX_EXPLICIT_EVENT_TIME_MISMATCH_MS
-  ) {
-    return { ok: false, reason: 'event_provenance_historical_mismatch' };
   }
 
   return { ok: true };
@@ -1044,30 +1093,6 @@ function readNonEmptyString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0
     ? value.trim()
     : null;
-}
-
-function hasExplicitEventReferenceTime(pick: PickRecord) {
-  const metadata = asRecord(pick.metadata);
-  return [
-    metadata?.eventStartTime,
-    metadata?.eventTime,
-    metadata?.starts_at,
-  ].some(
-    (candidate) => typeof candidate === 'string' && candidate.trim().length > 0,
-  );
-}
-
-function eventReferenceMismatchMs(pick: PickRecord, event: EventRow) {
-  const referenceTime = readPickEventReferenceTime(pick);
-  if (referenceTime === null) {
-    return 0;
-  }
-
-  const rawTime = readEventStartTime(event);
-  const eventTime = rawTime != null ? new Date(rawTime).getTime() : NaN;
-  return Number.isFinite(eventTime)
-    ? Math.abs(eventTime - referenceTime)
-    : Number.POSITIVE_INFINITY;
 }
 
 /**
@@ -1089,95 +1114,121 @@ export async function postSettlementRecapIfPossible(
     Partial<Pick<RepositoryBundle, 'killSwitch'>>,
   options: RunGradingPassOptions,
 ): Promise<SettlementRecapOutcome> {
-  return observeSettlementRecap(pick.id, settlementRecord.id, repositories.runs, async () => {
-    // WORK-2026092901 HUMAN_CAPPER_RECAP_GATE_START
-    // The chokepoint for every per-pick recap, including the automated grading
-    // pass, which never checked a kill switch. A recap about an authorized
-    // human-capper pick is member-facing publication; it waits on both
-    // official-picks and the separate recap control. Fails closed when the
-    // caller supplies no kill switch.
-    if (
-      isHumanCapperDeliveryAuthorized(asRecord(pick.metadata)) &&
-      (await isHumanCapperRecapStopped(repositories))
-    ) {
-      return { posted: false, reason: 'human-capper-recap-stopped' };
-    }
-    // WORK-2026092901 HUMAN_CAPPER_RECAP_GATE_END
+  return observeSettlementRecap(
+    pick.id,
+    settlementRecord.id,
+    repositories.runs,
+    async () => {
+      // WORK-2026092901 HUMAN_CAPPER_RECAP_GATE_START
+      // The chokepoint for every per-pick recap, including the automated grading
+      // pass, which never checked a kill switch. A recap about an authorized
+      // human-capper pick is member-facing publication; it waits on both
+      // official-picks and the separate recap control. Fails closed when the
+      // caller supplies no kill switch.
+      if (
+        isHumanCapperDeliveryAuthorized(asRecord(pick.metadata)) &&
+        (await isHumanCapperRecapStopped(repositories))
+      ) {
+        return { posted: false, reason: 'human-capper-recap-stopped' };
+      }
+      // WORK-2026092901 HUMAN_CAPPER_RECAP_GATE_END
 
-    const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
-    if (!botToken) {
-      return { posted: false, reason: 'no_discord_bot_token' };
-    }
+      const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
+      if (!botToken) {
+        return { posted: false, reason: 'no_discord_bot_token' };
+      }
 
-    const resolution = await resolveRecapChannel(pick.id, repositories);
-    if (!resolution.ok) {
-      options.logger?.warn?.(
-        `Skipping recap for pick ${pick.id}: ${resolution.reason}`,
+      const resolution = await resolveRecapChannel(pick.id, repositories);
+      if (!resolution.ok) {
+        options.logger?.warn?.(
+          `Skipping recap for pick ${pick.id}: ${resolution.reason}`,
+        );
+        return { posted: false, reason: resolution.reason };
+      }
+
+      // UTV2-1815: fail closed on an unknown stake. The recap renders a
+      // profit/loss figure, and `RecapEmbedInput.profitLossUnits` is a bare
+      // non-nullable number -- so publishing here with an unknown stake is exactly
+      // the "emit a value indistinguishable from an observed one" failure. Refuse
+      // to publish and say why, rather than substituting a stake of 1. Changing how
+      // the embed RENDERS an unknown stake is deliberately not in this scope.
+      const stakeResolution = readStakeUnitsResolution(pick);
+      const profitLossUnits = computeProfitLossUnits(
+        normalizeSettlementResult(settlementRecord.result),
+        stakeResolution.stake_units,
+        pick.odds,
       );
-      return { posted: false, reason: resolution.reason };
-    }
+      if (stakeResolution.status !== 'canonical' || profitLossUnits === null) {
+        options.logger?.warn?.(
+          `Skipping recap for pick ${pick.id}: stake_units is ` +
+            `${stakeResolution.status}; refusing to publish a profit/loss figure ` +
+            'computed against an assumed stake',
+        );
+        return {
+          posted: false,
+          reason: `stake_units_${stakeResolution.status}`,
+        };
+      }
 
-    // UTV2-1815: fail closed on an unknown stake. The recap renders a
-    // profit/loss figure, and `RecapEmbedInput.profitLossUnits` is a bare
-    // non-nullable number -- so publishing here with an unknown stake is exactly
-    // the "emit a value indistinguishable from an observed one" failure. Refuse
-    // to publish and say why, rather than substituting a stake of 1. Changing how
-    // the embed RENDERS an unknown stake is deliberately not in this scope.
-    const stakeResolution = readStakeUnitsResolution(pick);
-    const profitLossUnits = computeProfitLossUnits(
-      normalizeSettlementResult(settlementRecord.result),
-      stakeResolution.stake_units,
-      pick.odds,
-    );
-    if (stakeResolution.status !== 'canonical' || profitLossUnits === null) {
-      options.logger?.warn?.(
-        `Skipping recap for pick ${pick.id}: stake_units is ` +
-          `${stakeResolution.status}; refusing to publish a profit/loss figure ` +
-          'computed against an assumed stake',
-      );
-      return { posted: false, reason: `stake_units_${stakeResolution.status}` };
-    }
-
-    const response = await fetch(
-      `https://discord.com/api/v10/channels/${resolution.channelId}/messages`,
-      {
-        method: 'POST',
-        signal: AbortSignal.timeout(8_000),
-        headers: {
-          Authorization: `Bot ${botToken}`,
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        `https://discord.com/api/v10/channels/${resolution.channelId}/messages`,
+        {
+          method: 'POST',
+          signal: AbortSignal.timeout(8_000),
+          headers: {
+            Authorization: `Bot ${botToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            embeds: [
+              buildRecapEmbedData({
+                market: pick.market,
+                selection: pick.selection,
+                result: normalizeSettlementResult(settlementRecord.result),
+                stakeUnits: stakeResolution.stake_units,
+                profitLossUnits,
+                clvPercent: readClvPercent(settlementRecord.payload),
+                submittedBy: readSubmittedBy(pick),
+              }),
+            ],
+          }),
         },
-        body: JSON.stringify({
-          embeds: [
-            buildRecapEmbedData({
-              market: pick.market,
-              selection: pick.selection,
-              result: normalizeSettlementResult(settlementRecord.result),
-              stakeUnits: stakeResolution.stake_units,
-              profitLossUnits,
-              clvPercent: readClvPercent(settlementRecord.payload),
-              submittedBy: readSubmittedBy(pick),
-            }),
-          ],
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      options.logger?.warn?.(
-        `Recap post failed for pick ${pick.id}: ${response.status} ${errorText}`,
       );
-      return { posted: false, reason: `discord_post_failed_${response.status}`, channel: resolution.channelId, failed: true };
-    }
 
-    let messageId: string | undefined;
-    try {
-      const body: unknown = await response.json();
-      if (body && typeof body === 'object' && 'id' in body && typeof body.id === 'string') messageId = body.id;
-    } catch { /* Destination and the successful response remain recorded even without a message ID. */ }
-    return { posted: true, channel: resolution.channelId, ...(messageId ? { messageId } : {}) };
-  }, (message) => options.logger?.warn?.(message));
+      if (!response.ok) {
+        const errorText = await response.text();
+        options.logger?.warn?.(
+          `Recap post failed for pick ${pick.id}: ${response.status} ${errorText}`,
+        );
+        return {
+          posted: false,
+          reason: `discord_post_failed_${response.status}`,
+          channel: resolution.channelId,
+          failed: true,
+        };
+      }
+
+      let messageId: string | undefined;
+      try {
+        const body: unknown = await response.json();
+        if (
+          body &&
+          typeof body === 'object' &&
+          'id' in body &&
+          typeof body.id === 'string'
+        )
+          messageId = body.id;
+      } catch {
+        /* Destination and the successful response remain recorded even without a message ID. */
+      }
+      return {
+        posted: true,
+        channel: resolution.channelId,
+        ...(messageId ? { messageId } : {}),
+      };
+    },
+    (message) => options.logger?.warn?.(message),
+  );
 }
 
 async function resolveRecapChannel(
@@ -1231,21 +1282,24 @@ async function resolvePickEvent(
   pick: PickRecord,
   participantId: string,
   repositories: Pick<RepositoryBundle, 'events' | 'eventParticipants'>,
-): Promise<EventRow | null> {
+): Promise<PickEventResolution> {
   const links =
     await repositories.eventParticipants.listByParticipant(participantId);
   if (links.length === 0) {
-    return null;
+    return { event: null, reason: 'event_link_not_found' };
   }
 
   const candidateEvents = (
     await Promise.all(
       links.map((link) => repositories.events.findById(link.event_id)),
     )
-  ).filter((event): event is EventRow => event !== null);
+  ).filter(
+    (event): event is EventRow =>
+      event !== null && eventMatchesPickSport(pick, event),
+  );
 
   if (candidateEvents.length === 0) {
-    return null;
+    return { event: null, reason: 'event_link_not_found' };
   }
 
   return chooseEventForPick(pick, candidateEvents);
@@ -1317,56 +1371,66 @@ function readFirstString(
 function chooseEventForPick(
   pick: PickRecord,
   events: EventRow[],
-): EventRow | null {
+): PickEventResolution {
   const metadata = asRecord(pick.metadata);
-  const eventName =
-    typeof metadata?.eventName === 'string' ? metadata.eventName.trim() : null;
-  const namedCandidates = eventName
-    ? events.filter(
-        (event) =>
-          event.event_name.trim().toLowerCase() === eventName.toLowerCase(),
-      )
-    : [];
-  const eventCandidates = namedCandidates.length > 0 ? namedCandidates : events;
+  const explicitEventId = readNonEmptyString(metadata?.eventId);
+  const candidates = [
+    ...new Map(events.map((event) => [event.id, event])).values(),
+  ];
 
-  if (eventCandidates.length === 0) {
-    return null;
+  if (explicitEventId) {
+    const idMatches = candidates.filter(
+      (event) => event.id === explicitEventId,
+    );
+    return idMatches.length === 1
+      ? { event: idMatches[0]! }
+      : { event: null, reason: 'event_id_mismatch' };
   }
 
-  const referenceTime =
-    readPickEventReferenceTime(pick) ?? new Date(pick.created_at).getTime();
+  const eventName =
+    typeof metadata?.eventName === 'string' ? metadata.eventName.trim() : null;
+  if (eventName) {
+    const normalizedEventName = normalizeEventName(eventName);
+    const nameMatches = candidates.filter(
+      (event) => normalizeEventName(event.event_name) === normalizedEventName,
+    );
+    if (nameMatches.length === 1) {
+      return { event: nameMatches[0]! };
+    }
+    return nameMatches.length === 0
+      ? { event: null, reason: 'event_name_mismatch' }
+      : { event: null, reason: 'event_match_ambiguous' };
+  }
+
+  if (candidates.length === 1) {
+    return { event: candidates[0]! };
+  }
+  return candidates.length === 0
+    ? { event: null, reason: 'event_link_not_found' }
+    : { event: null, reason: 'event_match_ambiguous' };
+}
+
+type PickEventResolution =
+  | { event: EventRow; reason?: never }
+  | { event: null; reason: string };
+
+function readPickSport(pick: PickRecord): string | null {
+  const metadata = asRecord(pick.metadata);
   return (
-    [...eventCandidates].sort((left, right) => {
-      const leftRaw = readEventStartTime(left);
-      const rightRaw = readEventStartTime(right);
-      const leftDistance = leftRaw != null
-        ? Math.abs(new Date(leftRaw).getTime() - referenceTime)
-        : Number.POSITIVE_INFINITY;
-      const rightDistance = rightRaw != null
-        ? Math.abs(new Date(rightRaw).getTime() - referenceTime)
-        : Number.POSITIVE_INFINITY;
-      return leftDistance - rightDistance;
-    })[0] ?? null
+    readNonEmptyString(pick.sport_id) ?? readNonEmptyString(metadata?.sport)
   );
 }
 
-function readPickEventReferenceTime(pick: PickRecord): number | null {
-  const metadata = asRecord(pick.metadata);
-  const candidates = [
-    metadata?.eventStartTime,
-    metadata?.eventTime,
-    metadata?.starts_at,
-  ];
-  for (const candidate of candidates) {
-    if (typeof candidate !== 'string' || candidate.trim().length === 0) {
-      continue;
-    }
-    const timestamp = new Date(candidate).getTime();
-    if (Number.isFinite(timestamp)) {
-      return timestamp;
-    }
-  }
-  return null;
+function eventMatchesPickSport(pick: PickRecord, event: EventRow): boolean {
+  const pickSport = readPickSport(pick);
+  return (
+    pickSport !== null &&
+    event.sport_id.trim().toLowerCase() === pickSport.toLowerCase()
+  );
+}
+
+function normalizeEventName(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 export function readEventStartTime(event: EventRow): string | null {
@@ -1385,15 +1449,33 @@ export function readEventStartTime(event: EventRow): string | null {
 async function resolvePickEventByName(
   pick: PickRecord,
   repositories: Pick<RepositoryBundle, 'events'>,
-): Promise<EventRow | null> {
+): Promise<PickEventResolution> {
+  const metadata = asRecord(pick.metadata);
+  const explicitEventId = readNonEmptyString(metadata?.eventId);
   const eventName = readPickEventName(pick);
-  if (!eventName) {
-    return null;
+  if (explicitEventId) {
+    if (eventName) {
+      const namedCandidates = (
+        await repositories.events.listByName(eventName)
+      ).filter((event) => eventMatchesPickSport(pick, event));
+      return chooseEventForPick(pick, namedCandidates);
+    }
+
+    const explicitEvent = await repositories.events.findById(explicitEventId);
+    return explicitEvent && eventMatchesPickSport(pick, explicitEvent)
+      ? { event: explicitEvent }
+      : { event: null, reason: 'event_id_mismatch' };
   }
 
-  const candidates = await repositories.events.listByName(eventName);
+  if (!eventName) {
+    return { event: null, reason: 'event_link_not_found' };
+  }
+
+  const candidates = (await repositories.events.listByName(eventName)).filter(
+    (event) => eventMatchesPickSport(pick, event),
+  );
   if (candidates.length === 0) {
-    return null;
+    return { event: null, reason: 'event_name_mismatch' };
   }
 
   return chooseEventForPick(pick, candidates);
@@ -1476,7 +1558,11 @@ function normalizeSettlementResult(result: string | null) {
  * caller fall through to the receipt column and then refuse.
  */
 function readReceiptPayloadChannelId(payload: unknown): string | null {
-  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+  if (
+    typeof payload !== 'object' ||
+    payload === null ||
+    Array.isArray(payload)
+  ) {
     return null;
   }
   const channelId = (payload as Record<string, unknown>)['channelId'];

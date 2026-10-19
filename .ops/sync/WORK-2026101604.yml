@@ -1,0 +1,315 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026101604
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026101604
+  objective: "`chooseEventForPick` (`apps/api/src/grading-service.ts`) can fall
+    back to every candidate and pick the nearest by start time, so an ambiguous
+    or wrong match can settle a pick against the wrong game. Make event
+    selection deterministic, identity-based and fail-closed, and make each skip
+    observable per pick. **Elapsed hours or time windows MUST NOT decide whether
+    an event matches or is ambiguous** (Griff's explicit direction). Time may
+    appear only as supporting context in skip evidence, never as an acceptance,
+    rejection or tie-break condition. Remove any hour-based constants from the
+    decision path."
+  acceptance_criteria:
+    - No pick is graded against an event chosen by fallback, tie, or any
+      time-based rule.
+    - Existing skip reasons and run-detail keys unchanged (additive only);
+      stale-health semantics preserved.
+    - Static checks pass; `pnpm test:db` evidence per T1 rules where runnable;
+      proof under `docs/06_status/proof/WORK-2026101604/` genuine
+      (verification.md with real command output, diff-summary.md, evidence.json
+      with `sha_binding.merge_sha` null).
+    - Manual operator settlement (`recordOperatorEvidenceSettlement`), Track
+      Only non-delivery, CLV, providers, delivery, containment and kill switches
+      untouched.
+  guardrails:
+    - No migration, no production write, no deployment, no `--admin`, no scoring
+      activation, no database mutation. Do not edit `database.types.ts`,
+      `lifecycle.ts`, `repositories.ts`, `runtime-repositories.ts`,
+      `distribution-service.ts`, `auth.ts`.
+    - If identity constraints cannot be satisfied within the two scoped files,
+      STOP and return a scope escalation.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026101604 — Grading event matching is identity-first and fails
+      closed; per-pick skip evidence
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex
+
+
+      Repo-owned work order (tracker independence). Replaces the superseded
+      WORK-2026101601 / PR #1766 (its frozen contract required hour-window
+      selection, which conflicts with Griff's identity-first direction; PM
+      disposition: comment 6244457009 on PR #1766). The reviewed candidate
+      70d8677f5 on `codex/work-2026101601-grading-fail-closed` may be READ for
+      reusable test scaffolding and the skip-evidence plumbing; do not copy its
+      hour-window logic. NO migration, NO new table, NO new column.
+
+
+      ## Matching rules (in order)
+
+
+      1. Candidate set: events linked to the pick's authorized canonical
+      participant (`pick.participant_id`, via the existing participant-event
+      linkage) AND with `event.sport_id` equal to the pick's sport. Cross-sport
+      events are never candidates.
+
+      2. If the pick carries an explicit event id (`metadata.eventId`): it must
+      uniquely match exactly one eligible linked candidate. A wrong id, an id
+      not in the candidate set, or a cross-sport id fails closed with a
+      classified identity-mismatch reason. Do not fall back to name or nearest.
+
+      3. Else if the pick supplies an event name (`metadata.eventName`): require
+      an exact (existing normalization) name match among candidates. Exactly one
+      match selects it; several same-name candidates (e.g. a doubleheader) fail
+      closed as ambiguous; none fails closed as a name mismatch. Remove the
+      fall-back-to-all-candidates behavior.
+
+      4. Else (no id, no name): only a single uniquely linked candidate may
+      match. Zero candidates keeps the existing no-event-link skip behavior; two
+      or more fail closed as ambiguous.
+
+      5. Null-event picks (`eventId: null`, e.g. WNBA / NCAAF Track Only style)
+      with no linkable event are skipped with a classified reason and never
+      settled.
+
+
+      ## Observability
+
+
+      - New identity skip reasons (e.g. `event_id_mismatch`,
+      `event_name_mismatch`, `event_match_ambiguous`) must be observably
+      DISTINCT from stale provider data: do NOT add them to
+      `DATA_DEPENDENT_SKIP_REASONS` (stale-input semantics stay unchanged), and
+      make that distinction visible in grading run details/counters. Both
+      callers (`resolvePickEvent`, `resolvePickEventByName`) propagate the
+      reason; `normalizeSkipReason` classifies them.
+
+      - Per-pick skip evidence uses EXISTING persistence only: extend the
+      existing grading run `details` JSON (alongside `skipped_reasons`) with a
+      bounded list of `{pick_id, reason}`, capped, with a recorded truncation
+      count. Document in the diff-summary: where an operator reads it (run
+      `details`), what the cap is, that the list is NOT full history when
+      truncated, and its failure/truncation behavior. No schema change. If the
+      evidence cannot fit existing run details, STOP and report.
+
+
+      ## Tests (`apps/api/src/grading-service.test.ts`, node:test, in-memory
+      repos)
+
+
+      - wrong event id (not linked) -> skipped, not graded; explicit id matching
+      a linked event -> graded;
+
+      - cross-sport candidate with the same name -> never selected;
+
+      - same-name doubleheader -> ambiguous skip; distinct-name doubleheader
+      with correct name -> correct one selected regardless of start times;
+
+      - name given, no match among several candidates -> name-mismatch skip, no
+      fallback;
+
+      - absent id and name: single linked candidate -> matches; multiple ->
+      ambiguous;
+
+      - near and far candidates by time MUST NOT change the outcome
+      (time-independence fixture);
+
+      - null-event WNBA and NCAAF picks -> classified skip, never settled;
+
+      - identity skips are not counted as stale-data skips; per-pick skip list
+      present, bounded, truncation counted;
+
+      - regression: existing grading tests still pass.
+
+      Every new guard needs a test that fails if the guard is removed
+      (mutation-tested; state how you checked).
+
+
+      ## File Scope
+
+
+      - apps/api/src/grading-service.ts
+
+      - apps/api/src/grading-service.test.ts
+
+      - (plus the proof paths and work order)
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026101604.md
+    title: WORK-2026101604 — Grading event matching is identity-first and fails
+      closed; per-pick skip evidence
+    description: >-
+      # WORK-2026101604 — Grading event matching is identity-first and fails
+      closed; per-pick skip evidence
+
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex
+
+
+      Repo-owned work order (tracker independence). Replaces the superseded
+      WORK-2026101601 / PR #1766 (its frozen contract required hour-window
+      selection, which conflicts with Griff's identity-first direction; PM
+      disposition: comment 6244457009 on PR #1766). The reviewed candidate
+      70d8677f5 on `codex/work-2026101601-grading-fail-closed` may be READ for
+      reusable test scaffolding and the skip-evidence plumbing; do not copy its
+      hour-window logic. NO migration, NO new table, NO new column.
+
+
+      ## Objective
+
+
+      `chooseEventForPick` (`apps/api/src/grading-service.ts`) can fall back to
+      every candidate and pick the nearest by start time, so an ambiguous or
+      wrong match can settle a pick against the wrong game. Make event selection
+      deterministic, identity-based and fail-closed, and make each skip
+      observable per pick. **Elapsed hours or time windows MUST NOT decide
+      whether an event matches or is ambiguous** (Griff's explicit direction).
+      Time may appear only as supporting context in skip evidence, never as an
+      acceptance, rejection or tie-break condition. Remove any hour-based
+      constants from the decision path.
+
+
+      ## Matching rules (in order)
+
+
+      1. Candidate set: events linked to the pick's authorized canonical
+      participant (`pick.participant_id`, via the existing participant-event
+      linkage) AND with `event.sport_id` equal to the pick's sport. Cross-sport
+      events are never candidates.
+
+      2. If the pick carries an explicit event id (`metadata.eventId`): it must
+      uniquely match exactly one eligible linked candidate. A wrong id, an id
+      not in the candidate set, or a cross-sport id fails closed with a
+      classified identity-mismatch reason. Do not fall back to name or nearest.
+
+      3. Else if the pick supplies an event name (`metadata.eventName`): require
+      an exact (existing normalization) name match among candidates. Exactly one
+      match selects it; several same-name candidates (e.g. a doubleheader) fail
+      closed as ambiguous; none fails closed as a name mismatch. Remove the
+      fall-back-to-all-candidates behavior.
+
+      4. Else (no id, no name): only a single uniquely linked candidate may
+      match. Zero candidates keeps the existing no-event-link skip behavior; two
+      or more fail closed as ambiguous.
+
+      5. Null-event picks (`eventId: null`, e.g. WNBA / NCAAF Track Only style)
+      with no linkable event are skipped with a classified reason and never
+      settled.
+
+
+      ## Observability
+
+
+      - New identity skip reasons (e.g. `event_id_mismatch`,
+      `event_name_mismatch`, `event_match_ambiguous`) must be observably
+      DISTINCT from stale provider data: do NOT add them to
+      `DATA_DEPENDENT_SKIP_REASONS` (stale-input semantics stay unchanged), and
+      make that distinction visible in grading run details/counters. Both
+      callers (`resolvePickEvent`, `resolvePickEventByName`) propagate the
+      reason; `normalizeSkipReason` classifies them.
+
+      - Per-pick skip evidence uses EXISTING persistence only: extend the
+      existing grading run `details` JSON (alongside `skipped_reasons`) with a
+      bounded list of `{pick_id, reason}`, capped, with a recorded truncation
+      count. Document in the diff-summary: where an operator reads it (run
+      `details`), what the cap is, that the list is NOT full history when
+      truncated, and its failure/truncation behavior. No schema change. If the
+      evidence cannot fit existing run details, STOP and report.
+
+
+      ## Tests (`apps/api/src/grading-service.test.ts`, node:test, in-memory
+      repos)
+
+
+      - wrong event id (not linked) -> skipped, not graded; explicit id matching
+      a linked event -> graded;
+
+      - cross-sport candidate with the same name -> never selected;
+
+      - same-name doubleheader -> ambiguous skip; distinct-name doubleheader
+      with correct name -> correct one selected regardless of start times;
+
+      - name given, no match among several candidates -> name-mismatch skip, no
+      fallback;
+
+      - absent id and name: single linked candidate -> matches; multiple ->
+      ambiguous;
+
+      - near and far candidates by time MUST NOT change the outcome
+      (time-independence fixture);
+
+      - null-event WNBA and NCAAF picks -> classified skip, never settled;
+
+      - identity skips are not counted as stale-data skips; per-pick skip list
+      present, bounded, truncation counted;
+
+      - regression: existing grading tests still pass.
+
+      Every new guard needs a test that fails if the guard is removed
+      (mutation-tested; state how you checked).
+
+
+      ## Acceptance Criteria
+
+
+      - No pick is graded against an event chosen by fallback, tie, or any
+      time-based rule.
+
+      - Existing skip reasons and run-detail keys unchanged (additive only);
+      stale-health semantics preserved.
+
+      - Static checks pass; `pnpm test:db` evidence per T1 rules where runnable;
+      proof under `docs/06_status/proof/WORK-2026101604/` genuine
+      (verification.md with real command output, diff-summary.md, evidence.json
+      with `sha_binding.merge_sha` null).
+
+      - Manual operator settlement (`recordOperatorEvidenceSettlement`), Track
+      Only non-delivery, CLV, providers, delivery, containment and kill switches
+      untouched.
+
+
+      ## Guardrails
+
+
+      - No migration, no production write, no deployment, no `--admin`, no
+      scoring activation, no database mutation. Do not edit `database.types.ts`,
+      `lifecycle.ts`, `repositories.ts`, `runtime-repositories.ts`,
+      `distribution-service.ts`, `auth.ts`.
+
+      - If identity constraints cannot be satisfied within the two scoped files,
+      STOP and return a scope escalation.
+
+
+      ## File Scope
+
+
+      - apps/api/src/grading-service.ts
+
+      - apps/api/src/grading-service.test.ts
+
+      - (plus the proof paths and work order)
+    captured_at: 2026-10-18T02:14:00.576Z
+    description_sha256: e3e47c2fe4ddfe3778b315594352be6fb39e4c1963c190ff14c6cd39ae0e7706
+  contract_hash: a964daaa7a4f940a7c28e954e2cfdacf387e762d545d65c4f60c27cf0216a2bf

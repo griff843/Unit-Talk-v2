@@ -1,0 +1,119 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101604",
+  "pr_number": 1768,
+  "source_sha": "a22bfd76fb2101fa40adfb88f9bd411d3550eb81",
+  "reviewed_head_sha": "a22bfd76fb2101fa40adfb88f9bd411d3550eb81",
+  "evidence_commit_sha": null,
+  "merge_sha": null,
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "review_candidate",
+  "generated_at": "2026-10-18T12:59:20.000Z",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "a22bfd76fb2101fa40adfb88f9bd411d3550eb81",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "The verified source SHA is the implementation commit. This proof commit changes only the required proof bundle; authoritative merge binding remains null until governed post-merge closeout."
+  },
+  "gate_results": [
+    {
+      "gate": "focused-grading-tests",
+      "verdict": "PASS",
+      "detail": "117 pass, 0 fail"
+    },
+    {
+      "gate": "mutation-checks",
+      "verdict": "PASS",
+      "detail": "existing first-candidate, sport-filter, and cap-bound mutants failed; rework missing-link, wrong-id fallback, name-consistency, and game-line sport-filter mutants each failed their behavior guards; restored suite 117/117"
+    },
+    {
+      "gate": "verify-static",
+      "verdict": "PASS",
+      "detail": "pnpm verify:static exited 0; lint, type-check, build, root tests, production post-migration tests, Smart Form verify, and command checks passed"
+    },
+    {
+      "gate": "r-level",
+      "verdict": "PASS",
+      "detail": "8 changed files; no R-level rules matched; verdict PASS (measured on head 5e1d295e9 after resync; the earlier 16-file reading was against a stale base)"
+    },
+    {
+      "gate": "writable-db",
+      "verdict": "SKIP",
+      "detail": "Blocked/deferred by assert-staging: host=127.0.0.1 ref=unidentified; protected staging-ci must target xskgrzbteyqdufktjrjx"
+    }
+  ],
+  "static_proof": {
+    "focused_test": {
+      "command": "pnpm exec tsx --test 'apps/api/src/grading-service.test.ts'",
+      "exit_code": 0,
+      "tests": 117,
+      "pass": 117,
+      "fail": 0
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "exit_code": 1,
+      "static_phase": "PASS",
+      "live_db_phase": "BLOCKED_DEFERRED_BY_STAGING_TARGET_GUARD"
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "changed_files": 8,
+      "rules_matched": []
+    }
+  },
+  "runtime_proof": {
+    "status": "BLOCKED_DEFERRED_TO_PROTECTED_CI",
+    "required_project_ref": "xskgrzbteyqdufktjrjx",
+    "observed_host": "127.0.0.1",
+    "observed_ref": "unidentified",
+    "guard_ran_before_database_test": true,
+    "production_accessed": false,
+    "production_writes": 0,
+    "note": "Run pnpm test:db through the staging-ci GitHub environment with CI_SUPABASE_* credentials."
+  },
+  "observability": {
+    "operator_surface": "system_runs.details for run_type grading.run",
+    "per_pick_key": "skipped_picks",
+    "entry_shape": {
+      "pick_id": "string",
+      "reason": "normalized skip reason"
+    },
+    "cap": 100,
+    "truncation_key": "skipped_picks_truncated_count",
+    "full_history_when_truncated": false,
+    "identity_counter": "identity_skipped_count",
+    "stale_counter": "data_dependent_skipped_count"
+  },
+  "scope": {
+    "implementation_files": [
+      "apps/api/src/grading-service.ts",
+      "apps/api/src/grading-service.test.ts"
+    ],
+    "migration": false,
+    "database_mutation": false,
+    "containment_changed": false,
+    "manual_operator_settlement_changed": false,
+    "clv_changed": false,
+    "provider_changed": false,
+    "delivery_changed": false,
+    "kill_switch_changed": false
+  },
+  "pending": [
+    "protected exact-head CI",
+    "writable staging DB receipt",
+    "independent T1 review and PM approval",
+    "governed merge",
+    "post-merge lane finalization and orchestration reconcile"
+  ]
+}
