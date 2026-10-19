@@ -38,7 +38,7 @@
     {
       "gate": "r-level",
       "verdict": "PASS",
-      "detail": "16 changed files; discord-delivery rule matched; verdict PASS"
+      "detail": "8 changed files; no R-level rules matched; verdict PASS (measured on head 5e1d295e9 after resync; the earlier 16-file reading was against a stale base)"
     },
     {
       "gate": "writable-db",
@@ -68,10 +68,8 @@
     "r_level": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "verdict": "PASS",
-      "changed_files": 16,
-      "rules_matched": [
-        "discord-delivery"
-      ]
+      "changed_files": 8,
+      "rules_matched": []
     }
   },
   "runtime_proof": {

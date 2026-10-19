@@ -125,12 +125,20 @@ Disposition required by the lane packet: writable live-DB proof is blocked/defer
 
 Command: `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`
 
-Measured output on implementation commit `a22bfd76fb2101fa40adfb88f9bd411d3550eb81`:
+Earlier measurement (preserved, superseded): taken on implementation commit `a22bfd76fb2101fa40adfb88f9bd411d3550eb81` against a stale `origin/main`, so it counted files that were not part of this lane's diff. It does not describe the current PR diff.
 
 ```text
 Verdict: PASS
 Changed files: 16
 Rules matched: discord-delivery
+```
+
+Current measurement after resync, on head `5e1d295e95caf6da16f46b694a5c8bf3d200272d` (merge of current `origin/main`), genuine output:
+
+```text
+Verdict: PASS
+Changed files: 8
+Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
 ## Merge SHA Binding
