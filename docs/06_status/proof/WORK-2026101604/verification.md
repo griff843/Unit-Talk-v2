@@ -1,6 +1,6 @@
 # PROOF: WORK-2026101604
 
-MERGE_SHA: pending merge
+MERGE_SHA: 3afaa0fa3858ec9b7aa75b3f24c8db47ee20472f
 
 Issue: WORK-2026101604
 Tier: T1
@@ -143,5 +143,5 @@ Rules matched: (none) — no R-level artifacts required for this diff
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `3afaa0fa3858ec9b7aa75b3f24c8db47ee20472f`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1768
