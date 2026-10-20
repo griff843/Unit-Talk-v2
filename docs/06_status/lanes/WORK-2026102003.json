@@ -8,7 +8,7 @@
   "branch": "claude/work-2026102003-discord-proof-repair",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1771",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/WORK-2026101501/diff-summary.md",
@@ -19,7 +19,7 @@
     "docs/06_status/proof/WORK-2026102003/evidence.json",
     "docs/06_status/proof/WORK-2026102003/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-10-20T09:40:41.224Z",
   "heartbeat_at": "2026-10-20T09:40:41.224Z",
   "closed_at": null,

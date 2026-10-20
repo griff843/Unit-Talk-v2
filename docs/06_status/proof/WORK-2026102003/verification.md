@@ -59,4 +59,4 @@ Writable DB proof is not run locally; it runs in the protected `staging-ci` GitH
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1771
