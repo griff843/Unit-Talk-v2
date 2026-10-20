@@ -1,5 +1,7 @@
 # WORK-2026101501 diff summary
 
+MERGE_SHA: e22d68f9c8153afbabf4d88ad0ca102660cba26f
+
 Scope is limited to the two approved implementation files:
 
 - `apps/discord-bot/src/router.ts`
