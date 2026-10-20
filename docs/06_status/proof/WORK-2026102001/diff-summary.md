@@ -19,4 +19,4 @@ Not changed on purpose: `docs/06_status/proof/WORK-2026101604/model-routing.json
 ## SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1770
