@@ -1,6 +1,7 @@
 {
   "schema_version": 2,
   "issue_id": "WORK-2026102201",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1773",
   "tier": "T1",
   "lane_type": "migration",
   "proof_profile": "migration",

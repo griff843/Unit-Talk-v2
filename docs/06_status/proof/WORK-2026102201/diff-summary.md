@@ -19,5 +19,5 @@ was changed.
 ## SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1773
 Verified source SHA: `aa83590a8a98e366c3bf502e68d176b490011860`
