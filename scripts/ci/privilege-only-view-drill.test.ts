@@ -197,6 +197,24 @@ for (const [name, sql] of [
       ),
   ],
   [
+    'EXECUTE operand concatenated with a second literal',
+    PR_1775_WITH_MARKER.replace(
+      "EXECUTE 'GRANT SELECT ON TABLE public.v_governed_pick_performance TO service_role';",
+      "EXECUTE 'GRANT SELECT ON TABLE public.v_governed_pick_performance TO service_role' || '; DROP TABLE public.victim';",
+    ),
+  ],
+  [
+    'EXECUTE operand continued by an adjacent literal',
+    PR_1775_WITH_MARKER.replace(
+      "EXECUTE 'GRANT SELECT ON TABLE public.v_governed_pick_performance TO service_role';",
+      "EXECUTE 'GRANT SELECT ON TABLE public.v_governed_pick_performance TO service_role'\n'; DROP TABLE public.victim';",
+    ),
+  ],
+  [
+    'non-ASCII whitespace in executable SQL',
+    PR_1775_WITH_MARKER.replace('ALTER VIEW', 'ALTER\u00a0VIEW'),
+  ],
+  [
     'unknown DO content',
     `${marker()}\nALTER VIEW public.test_privilege_view SET (security_invoker = true);\nDO $$ BEGIN PERFORM pg_sleep(1); END $$;`,
   ],

@@ -268,7 +268,11 @@ function validateDoBlock(statement: string, target: string): string[] {
     errors.push('DO block contains a non-allowlisted executable keyword');
 
   const executePattern =
-    /\bEXECUTE\s+(?:format\(\s*)?'((?:''|[^'])*)'(?:\s*,\s*role_name\s*\))?/gi;
+    /\bEXECUTE\s+(?:format\(\s*)?'((?:''|[^'])*)'(?:\s*,\s*role_name\s*\))?(?=\s*;)/gi;
+  // Nothing may follow the EXECUTE operand but its terminating semicolon: a
+  // trailing `|| '; DROP ...'` or an adjacent string literal would otherwise be
+  // concatenated and run as extra commands while only the first literal is checked.
+  if (body.includes('||')) errors.push('DO block must not concatenate strings');
   const executes = [...body.matchAll(executePattern)];
   const executeCount = [...body.matchAll(/\bEXECUTE\b/gi)].length;
   if (executeCount === 0 || executes.length !== executeCount)
@@ -401,6 +405,10 @@ export function classifyPrivilegeOnlyViewMigration(
     errors.push(
       'PRIVILEGE-ONLY-VIEW cannot be combined with another precondition declaration',
     );
+  // JS \s folds Unicode whitespace that PostgreSQL treats as identifier text.
+  // Executable SQL (outside comments) must be printable ASCII.
+  if (/[^\t\n\r\x20-\x7e]/.test(stripPlpgsqlComments(sql)))
+    errors.push('executable SQL must be printable ASCII outside comments');
   const statements = splitSqlStatements(sql);
   if (statements.length === 0) errors.push('marker has no executable SQL');
   const targets = new Set<string>();
