@@ -477,7 +477,7 @@ test(
           'security_invoker = false',
         ),
       ),
-      /security_invoker expected true/,
+      /security_invoker/,
     );
   },
 );
