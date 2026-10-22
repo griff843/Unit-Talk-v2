@@ -179,6 +179,24 @@ for (const [name, sql] of [
     ),
   ],
   [
+    'DO block hiding code behind a nested dollar-quoted string under a tagged outer quote',
+    PR_1775_WITH_MARKER.replace('DO $$', 'DO $g$')
+      .replace(/END\s*\$\$;/, 'END\n$g$;')
+      .replace(
+        "  FOREACH role_name IN ARRAY ARRAY['anon'",
+        "  role_name := $$'$$; DROP TABLE public.victim; role_name := $$'$$;\n  FOREACH role_name IN ARRAY ARRAY['anon'",
+      ),
+  ],
+  [
+    'DO block hiding code behind a dollar-quoted dash-dash',
+    PR_1775_WITH_MARKER.replace('DO $$', 'DO $g$')
+      .replace(/END\s*\$\$;/, 'END\n$g$;')
+      .replace(
+        "  FOREACH role_name IN ARRAY ARRAY['anon'",
+        "  role_name := $$--$$; DELETE FROM public.victim;\n  FOREACH role_name IN ARRAY ARRAY['anon'",
+      ),
+  ],
+  [
     'unknown DO content',
     `${marker()}\nALTER VIEW public.test_privilege_view SET (security_invoker = true);\nDO $$ BEGIN PERFORM pg_sleep(1); END $$;`,
   ],
