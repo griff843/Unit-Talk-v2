@@ -174,8 +174,8 @@ for (const [name, sql] of [
   [
     'DO block smuggling SQL behind a fake comment inside a double-quoted alias (full #1775 body)',
     PR_1775_WITH_MARKER.replace(
-      '  FOREACH role_name IN ARRAY ARRAY[\'anon\'',
-      '  role_name := (SELECT 1 "end--"); EXECUTE \'DROP TABLE public.victim\';\n  FOREACH role_name IN ARRAY ARRAY[\'anon\'',
+      "  FOREACH role_name IN ARRAY ARRAY['anon'",
+      "  role_name := (SELECT 1 \"end--\"); EXECUTE 'DROP TABLE public.victim';\n  FOREACH role_name IN ARRAY ARRAY['anon'",
     ),
   ],
   [
