@@ -36,6 +36,10 @@ Implementation anchor:
 ed93caf31b7d196d8fde86cd1f22aef7315a9908
 feat(ops): WORK-2026102205 add privilege-only view drill
 4 files changed, 1193 insertions(+)
+
+3d913d88631c193efc56a7ee29d7a51e13d4bfe1
+fix(ops): WORK-2026102205 accept governed work ids
+2 files changed, 8 insertions(+), 4 deletions(-)
 ```
 
 Focused combined suite:
