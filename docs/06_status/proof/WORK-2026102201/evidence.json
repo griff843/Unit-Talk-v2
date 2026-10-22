@@ -1,0 +1,110 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102201",
+  "tier": "T1",
+  "lane_type": "migration",
+  "proof_profile": "migration",
+  "status": "blocked_pending_staging_and_reversibility_scope",
+  "generated_at": "2026-10-22T09:53:32Z",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "aa83590a8a98e366c3bf502e68d176b490011860",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "commands": [
+      {
+        "command": "pnpm lint:migrations",
+        "result": "PASS; 139 forward migrations checked with no findings"
+      },
+      {
+        "command": "pnpm verify:static",
+        "result": "PASS"
+      },
+      {
+        "command": "pnpm verify",
+        "result": "STATIC PASS; live-DB phase REFUSED before database access by the staging-target guard"
+      },
+      {
+        "command": "pnpm exec tsx --test apps/api/src/market-family-trust-service.test.ts",
+        "tests": 8,
+        "pass": 8,
+        "fail": 0
+      },
+      {
+        "command": "pnpm exec tsx --test apps/command-center/src/lib/data/client.test.ts",
+        "tests": 5,
+        "pass": 5,
+        "fail": 0
+      },
+      {
+        "command": "pnpm exec tsx --test packages/db/src/privileged-client-boundary.test.ts",
+        "tests": 17,
+        "pass": 17,
+        "fail": 0
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "result": "PASS; tool reported 16 changed-file records and no R-level rules matched"
+      }
+    ],
+    "reader_service_role_provenance": {
+      "api_board_route": "createServiceRoleDatabaseConnectionConfig(env)",
+      "market_family_trust_service": "receives the service-role-backed governedPerformance repository from the API board route",
+      "command_center_board": "getDataClient() constructs createServiceRoleDatabaseConnectionConfig(env)",
+      "phase6_proof_script": "requires SUPABASE_SERVICE_ROLE_KEY"
+    }
+  },
+  "runtime_proof": {
+    "status": "BLOCKED_DEFERRED",
+    "command": "pnpm test:db",
+    "target_required": "xskgrzbteyqdufktjrjx",
+    "local_result": "REFUSED before database tests or mutation: host=127.0.0.1 ref=unidentified",
+    "required_staging_evidence": [
+      "has_table_privilege matrix before apply",
+      "has_table_privilege matrix after apply",
+      "service-role execution of all four named readers",
+      "documented recovery application and privilege snapshot",
+      "migration reapplication and final privilege snapshot"
+    ]
+  },
+  "reversibility": {
+    "status": "BLOCKED_SCOPE_CONFLICT",
+    "documented_recovery": "Present in the migration and paired with exact has_table_privilege snapshot SQL",
+    "gate_command": "pnpm exec tsx scripts/ci/migration-reversibility-gate.ts --base origin/main --json",
+    "gate_result": "FAIL: missing db/migrations-rollback/20261022090000_revoke_governed_pick_performance_anon.down.sql",
+    "scope_constraint": "The authoritative packet allows only .ops/work/WORK-2026102201.md and the forward migration as implementation paths"
+  },
+  "execution_checkpoint": {
+    "status": "UNAVAILABLE",
+    "epoch_id": "3136a4d3-0334-4673-b62a-2ead37699b22",
+    "result": "execution_checkpoint_missing: primary checkpoint and sidecar are both absent; no phase completion was fabricated"
+  },
+  "scope_diff": {
+    "implementation_result": "PASS while the forward migration was the pending implementation delta",
+    "proof_tip_result": "BLEED after commit because the command classified the three packet-required proof artifacts outside the two implementation paths",
+    "disposition": "retained required proof artifacts and surfaced the tool/packet discrepancy for governed review"
+  },
+  "acceptance_criteria": {
+    "least_privilege_migration": "PASS",
+    "staging_effective_privileges": "DEFERRED",
+    "service_role_readers": "STATIC_PASS_RUNTIME_DEFERRED",
+    "recovery_reversible": "DOCUMENTED_NOT_PROVEN",
+    "production_ddl_not_applied": "PASS"
+  },
+  "pending": [
+    "scope authority for the repository-required down script or a governed gate-compatible exception",
+    "protected staging privilege, recovery, and reader proof",
+    "independent PM review and governed merge",
+    "separately authorized production apply and post-merge closeout"
+  ],
+  "sign_off": {
+    "executor": "codex-cli",
+    "self_certified_done": false,
+    "pm_approval_self_applied": false,
+    "production_mutation": false
+  },
+  "verdict": "BLOCKED"
+}
