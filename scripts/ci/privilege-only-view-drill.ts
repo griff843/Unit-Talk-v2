@@ -247,8 +247,17 @@ function validateDoBlock(statement: string, target: string): string[] {
     statement.trim(),
   );
   if (!match) return ['DO block must use one closed dollar-quoted body'];
-  const body = stripPlpgsqlComments(match[2] ?? '');
+  const rawBody = match[2] ?? '';
+  const body = stripPlpgsqlComments(rawBody);
   const errors: string[] = [];
+
+  // The lexer above only understands single quotes and comments. Double-quoted
+  // identifiers, backslashes (E'' escapes) and U& forms let attacker text hide
+  // behind a fake comment marker, so none is admitted in a guard block.
+  if (/["\\]/.test(rawBody) || /\bU&/i.test(rawBody))
+    errors.push(
+      'DO block must not contain double quotes, backslashes or U& literals',
+    );
 
   if (
     /\b(?:CREATE|DROP|ALTER|INSERT|UPDATE|DELETE|TRUNCATE|MERGE|COPY|CALL|PERFORM)\b/i.test(
