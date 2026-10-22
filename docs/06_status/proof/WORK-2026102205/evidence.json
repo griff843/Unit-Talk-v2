@@ -1,0 +1,124 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102205",
+  "pr_number": 1776,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1776",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "review_candidate_pending_ci",
+  "generated_at": "2026-10-22T20:03:26Z",
+  "source_sha": "ed93caf31b7d196d8fde86cd1f22aef7315a9908",
+  "reviewed_head_sha": "ed93caf31b7d196d8fde86cd1f22aef7315a9908",
+  "evidence_commit_sha": null,
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "ed93caf31b7d196d8fde86cd1f22aef7315a9908",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "gate_results": [
+    {
+      "gate": "focused-drill-tests",
+      "verdict": "PASS",
+      "detail": "23 pass, 0 fail, 17 real-Postgres fixtures skipped locally and explicitly wired to the workflow PostgreSQL service"
+    },
+    {
+      "gate": "verify-static",
+      "verdict": "PASS",
+      "detail": "pnpm verify:static exited 0"
+    },
+    {
+      "gate": "verify",
+      "verdict": "SKIP",
+      "detail": "pnpm verify completed all static gates successfully, then exited 1 at the live-DB staging identity guard before database tests or writes"
+    },
+    {
+      "gate": "r-level",
+      "verdict": "PASS",
+      "detail": "11 changed files; no r1-r5 rules matched"
+    },
+    {
+      "gate": "writable-db",
+      "verdict": "SKIP",
+      "detail": "Blocked/deferred: local host 127.0.0.1 had unidentified project ref; required staging project is xskgrzbteyqdufktjrjx"
+    },
+    {
+      "gate": "protected-exact-head-ci",
+      "verdict": "SKIP",
+      "detail": "Pending draft PR publication and protected staging-ci execution"
+    },
+    {
+      "gate": "independent-control-review",
+      "verdict": "SKIP",
+      "detail": "Pending authorized reviewer"
+    }
+  ],
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm verify:static",
+    "conclusion": "success",
+    "verified_source_sha": "ed93caf31b7d196d8fde86cd1f22aef7315a9908"
+  },
+  "focused_proof": {
+    "command": "pnpm exec tsx --test scripts/ci/migration-precondition-drill.test.ts scripts/ci/privilege-only-view-drill.test.ts scripts/ci/participant-catalog-seed-drill.test.ts",
+    "tests": 40,
+    "pass": 23,
+    "fail": 0,
+    "skipped": 17,
+    "note": "Real-Postgres cases require the workflow PostgreSQL service; local skips are disclosed and are not runtime proof."
+  },
+  "runtime_proof": {
+    "status": "blocked_deferred_to_protected_ci",
+    "environment": "local contained worktree",
+    "positive_assertions_implemented": [
+      "target resolves to pg_class.relkind v",
+      "security_invoker=true is present in pg_class.reloptions",
+      "all seven table privileges match each role posture derived from the marker",
+      "down script restores exact reloptions, ACL, and effective privileges",
+      "reapply snapshot equals first-apply snapshot"
+    ],
+    "negative_fixtures_wired": [
+      "omitted anon revocation",
+      "anon SELECT left behind",
+      "wrong security_invoker",
+      "down script does not restore",
+      "CREATE TABLE",
+      "schema mutation",
+      "mixed migration",
+      "fake or comment-only declaration",
+      "unresolved target",
+      "non-view target"
+    ],
+    "local_command": "pnpm test:db",
+    "local_exit_code": 1,
+    "observed_host": "127.0.0.1",
+    "observed_ref": "unidentified",
+    "required_staging_ref": "xskgrzbteyqdufktjrjx",
+    "production_accessed": false,
+    "database_write_attempted": false
+  },
+  "scope": {
+    "implementation_paths": [
+      ".github/workflows/migration-reversibility-gate.yml",
+      "package.json",
+      "scripts/ci/privilege-only-view-drill.ts",
+      "scripts/ci/privilege-only-view-drill.test.ts"
+    ],
+    "existing_drill_sources_modified": false,
+    "pr_1775_modified": false,
+    "production_ddl_applied": false,
+    "merge_authority_changed": false
+  },
+  "known_gaps": [
+    "Writable staging DB proof and the real-Postgres adversarial suite require protected staging-ci credentials and remain pending.",
+    "Protected exact-head CI, independent control review, and PM T1 verdict remain pending.",
+    "Merge and post-merge closeout are outside executor authority."
+  ],
+  "sign_off": {
+    "executor": "codex-cli",
+    "self_certified_done": false,
+    "pm_approval_self_applied": false,
+    "ready_state": "draft_review_candidate_after_exact_head_ci"
+  }
+}

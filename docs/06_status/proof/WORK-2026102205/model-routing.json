@@ -1,0 +1,14 @@
+{
+  "issue_id": "WORK-2026102205",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-high",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "high",
+  "execution_sha": "ed93caf31b7d196d8fde86cd1f22aef7315a9908",
+  "policy_version": "2.0.0",
+  "codex_cli_version": "codex-cli 0.162.1",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "generated_at": "2026-10-22T20:03:26Z"
+}
