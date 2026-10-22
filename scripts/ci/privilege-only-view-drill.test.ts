@@ -359,6 +359,10 @@ test('workflow routes the classifier before legacy marker greps and runs adversa
   assert.ok(classifier > 0 && classifier < legacyGreps);
   assert.ok(workflow.includes('PRIVILEGE_ONLY_VIEW_TEST_ADMIN_URL'));
   assert.ok(
+    workflow.includes("grep -oiE '(utv2|uni|work)-[0-9]+'"),
+    'proof binding must recognize the canonical WORK lane identity without weakening issue matching',
+  );
+  assert.ok(
     workflow.includes(
       'tsx --test scripts/ci/privilege-only-view-drill.test.ts',
     ),

@@ -77,12 +77,12 @@ jobs:
         run: |
           # Detect issue ID from PR branch name — validates the current PR's proof.
           BRANCH="${{ github.head_ref }}"
-          ISSUE_ID=$(echo "$BRANCH" | grep -oiE 'utv2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
+          ISSUE_ID=$(echo "$BRANCH" | grep -oiE '(utv2|uni|work)-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
 
           if [ -z "$ISSUE_ID" ]; then
-            # Fail-closed: migration PRs must have a UTV2 issue ID in the branch name.
-            echo "::error title=proof-binding::No UTV2 issue ID found in branch name '${BRANCH}'."
-            echo "Migration PRs must use branch name format: <prefix>/utv2-NNN-<description>"
+            # Fail-closed: migration PRs must have a canonical issue ID in the branch name.
+            echo "::error title=proof-binding::No UTV2, UNI, or WORK issue ID found in branch name '${BRANCH}'."
+            echo "Migration PRs must use branch name format: <prefix>/<utv2|uni|work>-NNN-<description>"
             exit 1
           fi
 
