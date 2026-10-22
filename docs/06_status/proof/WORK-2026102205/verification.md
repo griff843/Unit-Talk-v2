@@ -57,9 +57,8 @@ service.
 Implementation anchor (last non-proof commit):
 
 ```text
-e4cd7ff5fe337f08b186126aea38f6721bcbf229
-fix(ci): WORK-2026102205 pin marker postures, single transaction, ACL grantee
-check, no backslash in down script, size cap
+76dc875a142b5589da21dbe317c967ec80497c28
+test(ci): wrong-security_invoker case is now refused statically as well as by the drill
 ```
 
 ## Control review log
@@ -122,4 +121,4 @@ is an executor review candidate, not approval or merge authority.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1776
-Execution SHA: e4cd7ff5fe337f08b186126aea38f6721bcbf229
+Execution SHA: 76dc875a142b5589da21dbe317c967ec80497c28

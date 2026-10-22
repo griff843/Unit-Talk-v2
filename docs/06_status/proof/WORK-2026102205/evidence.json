@@ -8,12 +8,12 @@
   "proof_profile": "static",
   "status": "review_candidate_pending_ci",
   "generated_at": "2026-10-22T21:47:33Z",
-  "source_sha": "e4cd7ff5fe337f08b186126aea38f6721bcbf229",
-  "reviewed_head_sha": "e4cd7ff5fe337f08b186126aea38f6721bcbf229",
+  "source_sha": "76dc875a142b5589da21dbe317c967ec80497c28",
+  "reviewed_head_sha": "76dc875a142b5589da21dbe317c967ec80497c28",
   "evidence_commit_sha": null,
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "e4cd7ff5fe337f08b186126aea38f6721bcbf229",
+    "verified_source_sha": "76dc875a142b5589da21dbe317c967ec80497c28",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -53,7 +53,7 @@
     "status": "pass",
     "command": "pnpm verify:static",
     "conclusion": "success",
-    "verified_source_sha": "e4cd7ff5fe337f08b186126aea38f6721bcbf229"
+    "verified_source_sha": "76dc875a142b5589da21dbe317c967ec80497c28"
   },
   "focused_proof": {
     "command": "pnpm exec tsx --test scripts/ci/migration-precondition-drill.test.ts scripts/ci/privilege-only-view-drill.test.ts scripts/ci/participant-catalog-seed-drill.test.ts",
