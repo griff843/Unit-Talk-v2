@@ -7,13 +7,13 @@
   "lane_type": "governance",
   "proof_profile": "static",
   "status": "review_candidate_pending_ci",
-  "generated_at": "2026-10-22T20:03:26Z",
-  "source_sha": "3d913d88631c193efc56a7ee29d7a51e13d4bfe1",
-  "reviewed_head_sha": "3d913d88631c193efc56a7ee29d7a51e13d4bfe1",
+  "generated_at": "2026-10-22T21:47:33Z",
+  "source_sha": "e4cd7ff5fe337f08b186126aea38f6721bcbf229",
+  "reviewed_head_sha": "e4cd7ff5fe337f08b186126aea38f6721bcbf229",
   "evidence_commit_sha": null,
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "3d913d88631c193efc56a7ee29d7a51e13d4bfe1",
+    "verified_source_sha": "e4cd7ff5fe337f08b186126aea38f6721bcbf229",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -21,17 +21,12 @@
     {
       "gate": "focused-drill-tests",
       "verdict": "PASS",
-      "detail": "23 pass, 0 fail, 17 real-Postgres fixtures skipped locally and explicitly wired to the workflow PostgreSQL service"
+      "detail": "64 tests, 47 pass, 0 fail, 17 real-Postgres fixtures skipped locally (no psql); run in CI against the workflow PostgreSQL service"
     },
     {
       "gate": "verify-static",
       "verdict": "PASS",
-      "detail": "pnpm verify:static exited 0"
-    },
-    {
-      "gate": "verify",
-      "verdict": "SKIP",
-      "detail": "pnpm verify completed all static gates successfully, then exited 1 at the live-DB staging identity guard before database tests or writes"
+      "detail": "pnpm verify:static exited 0 at the anchor"
     },
     {
       "gate": "r-level",
@@ -41,29 +36,29 @@
     {
       "gate": "writable-db",
       "verdict": "SKIP",
-      "detail": "Blocked/deferred: local host 127.0.0.1 had unidentified project ref; required staging project is xskgrzbteyqdufktjrjx"
+      "detail": "Not runnable locally under containment; obtained only in protected staging CI at the PR head"
     },
     {
       "gate": "protected-exact-head-ci",
       "verdict": "SKIP",
-      "detail": "Pending draft PR publication and protected staging-ci execution"
+      "detail": "Prior heads: run 39850668340 at 25ccee5cc concluded success; run 39853380814 at f8614b560 ci.yml success but Down-script presence failed proof binding (source changed after anchor). Final-head result is read from the PR checks, not asserted here"
     },
     {
       "gate": "independent-control-review",
       "verdict": "SKIP",
-      "detail": "Pending authorized reviewer"
+      "detail": "Seven independent adversarial rounds ran; every true bypass found was fixed with a regression test that fails without the fix. The final fix commit (e4cd7ff5f) has not itself been re-reviewed. See verification.md"
     }
   ],
   "static_proof": {
     "status": "pass",
     "command": "pnpm verify:static",
     "conclusion": "success",
-    "verified_source_sha": "3d913d88631c193efc56a7ee29d7a51e13d4bfe1"
+    "verified_source_sha": "e4cd7ff5fe337f08b186126aea38f6721bcbf229"
   },
   "focused_proof": {
     "command": "pnpm exec tsx --test scripts/ci/migration-precondition-drill.test.ts scripts/ci/privilege-only-view-drill.test.ts scripts/ci/participant-catalog-seed-drill.test.ts",
-    "tests": 40,
-    "pass": 23,
+    "tests": 64,
+    "pass": 47,
     "fail": 0,
     "skipped": 17,
     "note": "Real-Postgres cases require the workflow PostgreSQL service; local skips are disclosed and are not runtime proof."
@@ -111,9 +106,10 @@
     "merge_authority_changed": false
   },
   "known_gaps": [
-    "Writable staging DB proof and the real-Postgres adversarial suite require protected staging-ci credentials and remain pending.",
-    "Protected exact-head CI, independent control review, and PM T1 verdict remain pending.",
-    "Merge and post-merge closeout are outside executor authority."
+    "Writable staging DB proof and the real-Postgres drill fixtures run only in protected CI at the PR head.",
+    "The last source commit has had no review after its own fix; a further PM-requested review is advisable before the T1 verdict.",
+    "The classifier admits exactly one DO template and requires anon=none authenticated=none service_role=none|select; a consumer with a different posture needs a new reviewed template.",
+    "PM T1 verdict, merge and post-merge closeout are outside executor authority."
   ],
   "sign_off": {
     "executor": "codex-cli",

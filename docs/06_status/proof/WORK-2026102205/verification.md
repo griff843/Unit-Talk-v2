@@ -42,17 +42,47 @@ fix(ops): WORK-2026102205 accept governed work ids
 2 files changed, 8 insertions(+), 4 deletions(-)
 ```
 
-Focused combined suite:
+Focused combined suite (re-measured at the anchor):
 
 ```text
 pnpm exec tsx --test scripts/ci/migration-precondition-drill.test.ts scripts/ci/privilege-only-view-drill.test.ts scripts/ci/participant-catalog-seed-drill.test.ts
-tests 40; pass 23; fail 0; skipped 17
+tests 64; pass 47; fail 0; skipped 17
 ```
 
-The 17 local skips are the existing and new real-Postgres fixtures because this
-worktree has no `psql` or scratch server. They are not represented as runtime
-passes. The workflow supplies both explicit scratch admin URLs and executes those
-fixtures against its PostgreSQL service.
+The 17 local skips are the real-Postgres fixtures because this worktree has no
+`psql` or scratch server. They are not represented as runtime passes. The
+workflow supplies the scratch admin URLs and runs them against its PostgreSQL
+service.
+
+Implementation anchor (last non-proof commit):
+
+```text
+e4cd7ff5fe337f08b186126aea38f6721bcbf229
+fix(ci): WORK-2026102205 pin marker postures, single transaction, ACL grantee
+check, no backslash in down script, size cap
+```
+
+## Control review log
+
+Seven independent read-only reviewers attacked the classifier. Each true bypass
+was fixed and given a regression test that fails without the fix:
+
+1. `--` inside a double-quoted identifier hid SQL in the DO body.
+2. A nested `$$..$$` string under a tagged outer quote hid SQL.
+3. An EXECUTE operand concatenated with `|| '; DROP ...'` or an adjacent literal.
+4. A bare CR ended a PostgreSQL comment but not the lexers; extra role in the
+   FOREACH array; role_name reassignment; GRANT to PUBLIC.
+5. Environment-conditional grants behind `IF EXISTS (... rolname = 'x')`, PUBLIC
+   via a declared-variable default, a neutralised RAISE, an unbounded LOOP. This
+   replaced the token allowlist with an exact canonical DO-template match.
+6. Case-folded role literals, block comments gluing tokens, case-insensitive
+   closing tag, statement ordering.
+7. Down-script meta-commands on the same line, mid-file COMMIT/BEGIN, marker
+   postures such as `anon=all`, a PUBLIC or third-role ACL entry invisible to
+   `has_table_privilege` on the three roles, ReDoS size cap, ALTER ... RESET.
+
+The final fix commit has not itself been re-reviewed. Local tests cannot exercise
+the Postgres-backed ACL query added in round 7; it runs for the first time in CI.
 
 Required writable DB command:
 
@@ -71,16 +101,16 @@ GitHub environment with `CI_SUPABASE_*` credentials.
 
 ## Verification
 
-| Command                                                                                                                                                               | Result                                                                                         |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `pnpm exec tsx --test scripts/ci/migration-precondition-drill.test.ts scripts/ci/privilege-only-view-drill.test.ts scripts/ci/participant-catalog-seed-drill.test.ts` | PASS: 23 pass, 0 fail, 17 real-Postgres tests skipped locally and wired to workflow PostgreSQL |
-| `pnpm type-check`                                                                                                                                                     | PASS                                                                                           |
-| `pnpm lint`                                                                                                                                                           | PASS                                                                                           |
-| `pnpm verify:static`                                                                                                                                                  | PASS                                                                                           |
-| `pnpm verify`                                                                                                                                                         | STATIC PASS, then BLOCKED/DEFERRED at the live-DB staging identity guard; no DB write attempted |
-| `pnpm test:db`                                                                                                                                                        | BLOCKED/DEFERRED at staging identity guard; no DB write attempted                              |
-| `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`                                                                                            | PASS: 11 changed files, no R-level rules matched                                               |
-| Exact-head protected CI                                                                                                                                               | Required before PM review verdict; not yet claimed                                             |
+| Command                                                                                                                                                               | Result                                                                                                    |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `pnpm exec tsx --test scripts/ci/migration-precondition-drill.test.ts scripts/ci/privilege-only-view-drill.test.ts scripts/ci/participant-catalog-seed-drill.test.ts` | PASS: 47 pass, 0 fail, 17 real-Postgres tests skipped locally (64 total) and wired to workflow PostgreSQL |
+| `pnpm type-check`                                                                                                                                                     | PASS                                                                                                      |
+| `pnpm lint`                                                                                                                                                           | PASS                                                                                                      |
+| `pnpm verify:static`                                                                                                                                                  | PASS                                                                                                      |
+| `pnpm verify`                                                                                                                                                         | STATIC PASS, then BLOCKED/DEFERRED at the live-DB staging identity guard; no DB write attempted           |
+| `pnpm test:db`                                                                                                                                                        | BLOCKED/DEFERRED at staging identity guard; no DB write attempted                                         |
+| `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`                                                                                            | PASS: 11 changed files, no R-level rules matched (re-run at the anchor)                                   |
+| Exact-head protected CI                                                                                                                                               | Read from the PR checks at the final head; not asserted here                                              |
 
 ## Remaining authority
 
@@ -92,3 +122,4 @@ is an executor review candidate, not approval or merge authority.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1776
+Execution SHA: e4cd7ff5fe337f08b186126aea38f6721bcbf229
