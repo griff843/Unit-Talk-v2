@@ -369,6 +369,36 @@ function validateDoBlock(statement: string, target: string): string[] {
     errors.push('DO block lacks an allowlisted pg_roles existence guard');
   if (!/\bFOREACH\s+role_name\s+IN\s+ARRAY\s+ARRAY\s*\[/i.test(scrubbed))
     errors.push('DO block lacks the allowlisted role-name FOREACH');
+  // Every FOREACH array must be one of the two exact literal lists, so the role
+  // loop can only ever touch the three declared roles and the seven privileges.
+  const foreachAll = [...body.matchAll(/\bFOREACH\b/gi)].length;
+  const foreachArrays = [
+    ...body.matchAll(
+      /\bFOREACH\s+([a-z_][a-z0-9_]*)\s+IN\s+ARRAY\s+ARRAY\s*\[([^\]]*)\]\s*LOOP\b/gi,
+    ),
+  ];
+  if (foreachAll !== foreachArrays.length)
+    errors.push('every FOREACH must iterate an exact literal ARRAY');
+  const compact = (value: string): string =>
+    value.replace(/\s+/g, '').toLowerCase();
+  const exactRoles = compact("'anon','authenticated','service_role'");
+  const exactPrivileges = compact(PRIVILEGES.map((p) => `'${p}'`).join(','));
+  for (const item of foreachArrays) {
+    const variable = (item[1] ?? '').toLowerCase();
+    const list = compact(item[2] ?? '');
+    const ok =
+      (variable === 'role_name' && list === exactRoles) ||
+      (variable === 'priv' && list === exactPrivileges);
+    if (!ok)
+      errors.push(
+        'FOREACH array is not the exact declared role/privilege list',
+      );
+  }
+  if (
+    /\brole_name\s*:=/i.test(body) ||
+    /(?:;|\bTHEN\b|\bLOOP\b|\bBEGIN\b|\bELSE\b)\s*role_name\s*=/i.test(body)
+  )
+    errors.push('role_name must not be reassigned inside the DO block');
   if (!/\bhas_table_privilege\s*\(/i.test(scrubbed))
     errors.push('DO block lacks positive has_table_privilege checks');
   if (!/\bRAISE\s+EXCEPTION\b/i.test(scrubbed))
@@ -391,6 +421,10 @@ function validateDoBlock(statement: string, target: string): string[] {
 }
 
 /** Classify only migrations carrying the anchored policy marker; invalid markers fail closed. */
+function hasForbiddenControlCode(code: number): boolean {
+  return (code < 0x20 && code !== 0x09 && code !== 0x0a) || code === 0x7f;
+}
+
 export function classifyPrivilegeOnlyViewMigration(
   sql: string,
 ): PrivilegeOnlyClassification {
@@ -405,6 +439,11 @@ export function classifyPrivilegeOnlyViewMigration(
     errors.push(
       'PRIVILEGE-ONLY-VIEW cannot be combined with another precondition declaration',
     );
+  // PostgreSQL ends a -- comment at \r as well as \n; the lexers here end it
+  // only at \n. Any control character other than tab/newline (CR included) is
+  // refused anywhere, comments too, so the two views of the file cannot differ.
+  if ([...sql].some((ch) => hasForbiddenControlCode(ch.charCodeAt(0))))
+    errors.push('migration contains control characters (including CR)');
   // JS \s folds Unicode whitespace that PostgreSQL treats as identifier text.
   // Executable SQL (outside comments) must be printable ASCII.
   if (/[^\t\n\r\x20-\x7e]/.test(stripPlpgsqlComments(sql)))
@@ -439,6 +478,11 @@ export function classifyPrivilegeOnlyViewMigration(
         errors.push(
           `statement ${index + 1} has mismatched GRANT/REVOKE direction`,
         );
+      if (
+        privilege[1]!.toUpperCase() === 'GRANT' &&
+        privilege[5]!.toUpperCase() === 'PUBLIC'
+      )
+        errors.push(`statement ${index + 1} grants to PUBLIC`);
       privilegeCount += 1;
       targets.add(privilege[3]!.toLowerCase());
       continue;

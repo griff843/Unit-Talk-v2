@@ -215,6 +215,41 @@ for (const [name, sql] of [
     PR_1775_WITH_MARKER.replace('ALTER VIEW', 'ALTER\u00a0VIEW'),
   ],
   [
+    'carriage return ending a top-level comment',
+    PR_1775_WITH_MARKER.replace(
+      'COMMIT;',
+      '-- x\rDROP TABLE public.victim;\nCOMMIT;',
+    ),
+  ],
+  [
+    'carriage return ending a comment inside the DO body',
+    PR_1775_WITH_MARKER.replace(
+      '  -- Fail-closed end-state check for every role that exists.',
+      "  -- x\r EXECUTE 'DROP TABLE public.victim';",
+    ),
+  ],
+  [
+    'extra role in the FOREACH array',
+    PR_1775_WITH_MARKER.replace(
+      "ARRAY['anon', 'authenticated', 'service_role'] LOOP",
+      "ARRAY['anon', 'authenticated', 'service_role', 'postgres'] LOOP",
+    ),
+  ],
+  [
+    'role_name reassigned inside the DO block',
+    PR_1775_WITH_MARKER.replace(
+      'IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = role_name) THEN\n      EXECUTE format(',
+      "IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = role_name) THEN\n      role_name := 'attacker';\n      EXECUTE format(",
+    ),
+  ],
+  [
+    'top-level GRANT to PUBLIC',
+    PR_1775_WITH_MARKER.replace(
+      'COMMIT;',
+      'GRANT SELECT ON TABLE public.v_governed_pick_performance TO PUBLIC;\nCOMMIT;',
+    ),
+  ],
+  [
     'unknown DO content',
     `${marker()}\nALTER VIEW public.test_privilege_view SET (security_invoker = true);\nDO $$ BEGIN PERFORM pg_sleep(1); END $$;`,
   ],
