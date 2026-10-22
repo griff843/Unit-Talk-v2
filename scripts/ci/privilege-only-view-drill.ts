@@ -242,6 +242,72 @@ function stripPlpgsqlComments(value: string): string {
   return result;
 }
 
+/**
+ * The ONLY role-guard DO block this gate admits, parameterised by the view.
+ *
+ * Token and regex allowlists proved insufficient: successive adversarial reviews
+ * found conditional grants hidden behind environment-dependent IF branches,
+ * PUBLIC grants through declared-variable defaults, and neutralised RAISE checks,
+ * none of which a lexical scan can see. The block is therefore matched as a whole,
+ * after comment removal and whitespace normalisation, against this template. Any
+ * deviation (an added branch, variable default, role literal, loop or condition)
+ * makes the migration not privilege-only and returns it to the ordinary drill.
+ */
+function canonicalDoBody(view: string): string {
+  const shortName = view.slice(view.indexOf('.') + 1);
+  return `
+DECLARE
+  role_name text;
+  priv text;
+  expected boolean;
+BEGIN
+  FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = role_name) THEN
+      EXECUTE format(
+        'REVOKE ALL PRIVILEGES ON TABLE ${view} FROM %I',
+        role_name
+      );
+    END IF;
+  END LOOP;
+
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'service_role') THEN
+    EXECUTE 'GRANT SELECT ON TABLE ${view} TO service_role';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_class
+    WHERE oid = '${view}'::regclass
+      AND 'security_invoker=true' = ANY (coalesce(reloptions, ARRAY[]::text[]))
+  ) THEN
+    RAISE EXCEPTION '${shortName} is not security_invoker after migration';
+  END IF;
+
+  FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = role_name) THEN
+      FOREACH priv IN ARRAY ARRAY[
+        'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'
+      ] LOOP
+        expected := (role_name = 'service_role' AND priv = 'SELECT');
+        IF has_table_privilege(role_name, '${view}', priv)
+           IS DISTINCT FROM expected THEN
+          RAISE EXCEPTION '${shortName} end-state wrong: % % expected % ',
+            role_name, priv, expected;
+        END IF;
+      END LOOP;
+    END IF;
+  END LOOP;
+END
+`;
+}
+
+function normalizeDoBody(value: string): string {
+  return stripPlpgsqlComments(value)
+    .replace(/\s+/g, ' ')
+    .replace(/\s*([()[\],;])\s*/g, '$1')
+    .trim()
+    .toLowerCase();
+}
+
 function validateDoBlock(statement: string, target: string): string[] {
   const match = /^DO\s+(\$[a-z_][a-z0-9_]*\$|\$\$)([\s\S]*)\1$/i.exec(
     statement.trim(),
@@ -250,6 +316,11 @@ function validateDoBlock(statement: string, target: string): string[] {
   const rawBody = match[2] ?? '';
   const body = stripPlpgsqlComments(rawBody);
   const errors: string[] = [];
+
+  if (normalizeDoBody(rawBody) !== normalizeDoBody(canonicalDoBody(target)))
+    errors.push(
+      'DO block does not match the single admitted role-guard template for the target view',
+    );
 
   // The lexer above only understands single quotes and comments. Double-quoted
   // identifiers, backslashes (E'' escapes), nested dollar-quoted strings and U&
@@ -674,6 +745,22 @@ export function runPrivilegeOnlyViewDrill(
     return [
       ...cases,
       { name: 'down script', status: 'fail', detail: `missing ${downPath}` },
+    ];
+
+  // The down script is applied through psql on the runner: refuse psql
+  // meta-commands (a leading backslash can run a shell) and control characters.
+  const downText = readFileSync(downPath, 'utf8');
+  if (
+    /^[ \t]*\\/m.test(downText) ||
+    [...downText].some((ch) => hasForbiddenControlCode(ch.charCodeAt(0)))
+  )
+    return [
+      ...cases,
+      {
+        name: 'down script',
+        status: 'fail',
+        detail: 'down script contains psql meta-commands or control characters',
+      },
     ];
 
   const relation = psql(dsn, [

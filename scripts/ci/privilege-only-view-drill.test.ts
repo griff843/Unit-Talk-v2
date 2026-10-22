@@ -184,7 +184,8 @@ for (const [name, sql] of [
       .replace(/END\s*\$\$;/, 'END\n$g$;')
       .replace(
         "  FOREACH role_name IN ARRAY ARRAY['anon'",
-        "  role_name := $$'$$; DROP TABLE public.victim; role_name := $$'$$;\n  FOREACH role_name IN ARRAY ARRAY['anon'",
+        () =>
+          "  role_name := $$'$$; DROP TABLE public.victim; role_name := $$'$$;\n  FOREACH role_name IN ARRAY ARRAY['anon'",
       ),
   ],
   [
@@ -193,7 +194,8 @@ for (const [name, sql] of [
       .replace(/END\s*\$\$;/, 'END\n$g$;')
       .replace(
         "  FOREACH role_name IN ARRAY ARRAY['anon'",
-        "  role_name := $$--$$; DELETE FROM public.victim;\n  FOREACH role_name IN ARRAY ARRAY['anon'",
+        () =>
+          "  role_name := $$--$$; DELETE FROM public.victim;\n  FOREACH role_name IN ARRAY ARRAY['anon'",
       ),
   ],
   [
@@ -247,6 +249,38 @@ for (const [name, sql] of [
     PR_1775_WITH_MARKER.replace(
       'COMMIT;',
       'GRANT SELECT ON TABLE public.v_governed_pick_performance TO PUBLIC;\nCOMMIT;',
+    ),
+  ],
+  [
+    'environment-conditional grant hidden behind an IF on a role absent from scratch',
+    PR_1775_WITH_MARKER.replace(
+      '\nEND\n$$;',
+      () =>
+        "\n  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'supabase_admin') THEN\n    EXECUTE 'GRANT SELECT ON TABLE public.v_governed_pick_performance TO anon';\n  END IF;\nEND\n$$;",
+    ),
+  ],
+  [
+    'GRANT to PUBLIC via a declared-variable default',
+    PR_1775_WITH_MARKER.replace(
+      '  role_name text;',
+      "  role_name text := 'public';",
+    ).replace(
+      'BEGIN\n  FOREACH',
+      "BEGIN\n  EXECUTE format('GRANT SELECT ON TABLE public.v_governed_pick_performance TO %I', role_name);\n  FOREACH",
+    ),
+  ],
+  [
+    'fail-closed check neutralised',
+    PR_1775_WITH_MARKER.replace(
+      'IF has_table_privilege(',
+      'IF false AND has_table_privilege(',
+    ),
+  ],
+  [
+    'bare unbounded LOOP',
+    PR_1775_WITH_MARKER.replace(
+      '\nEND\n$$;',
+      () => '\n  LOOP END LOOP;\nEND\n$$;',
     ),
   ],
   [
