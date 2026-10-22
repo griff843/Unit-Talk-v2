@@ -172,6 +172,13 @@ for (const [name, sql] of [
     `${marker()}\n-- ALTER VIEW public.test_privilege_view SET (security_invoker = true);`,
   ],
   [
+    'DO block smuggling SQL behind a fake comment inside a double-quoted alias (full #1775 body)',
+    PR_1775_WITH_MARKER.replace(
+      '  FOREACH role_name IN ARRAY ARRAY[\'anon\'',
+      '  role_name := (SELECT 1 "end--"); EXECUTE \'DROP TABLE public.victim\';\n  FOREACH role_name IN ARRAY ARRAY[\'anon\'',
+    ),
+  ],
+  [
     'unknown DO content',
     `${marker()}\nALTER VIEW public.test_privilege_view SET (security_invoker = true);\nDO $$ BEGIN PERFORM pg_sleep(1); END $$;`,
   ],
