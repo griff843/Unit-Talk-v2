@@ -284,6 +284,35 @@ for (const [name, sql] of [
     ),
   ],
   [
+    'role literals changed in case so the guards never match',
+    PR_1775_WITH_MARKER.replaceAll(
+      "ARRAY['anon', 'authenticated', 'service_role']",
+      () => "ARRAY['ANON', 'Authenticated', 'SERVICE_ROLE']",
+    ),
+  ],
+  [
+    'block comment gluing tokens inside the DO body',
+    PR_1775_WITH_MARKER.replace(
+      'pg_catalog.pg_roles',
+      () => 'pg_catalog.pg_ro/**/les',
+    ),
+  ],
+  [
+    'block comment gluing tokens at top level',
+    PR_1775_WITH_MARKER.replace(
+      'ALTER VIEW public.v_gov',
+      () => 'ALTER VIEW pub/**/lic.v_gov',
+    ),
+  ],
+  [
+    'grant after the verifying DO block',
+    PR_1775_WITH_MARKER.replace(
+      'COMMIT;',
+      'GRANT ALL ON TABLE public.v_governed_pick_performance TO anon;\nCOMMIT;',
+    ),
+  ],
+  ['COMMIT removed', PR_1775_WITH_MARKER.replace(/COMMIT;\s*$/, '')],
+  [
     'unknown DO content',
     `${marker()}\nALTER VIEW public.test_privilege_view SET (security_invoker = true);\nDO $$ BEGIN PERFORM pg_sleep(1); END $$;`,
   ],

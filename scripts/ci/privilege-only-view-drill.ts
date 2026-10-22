@@ -88,6 +88,7 @@ export function splitSqlStatements(sql: string): string[] {
         index += 2;
       } else if (char === '*' && next === '/') {
         blockDepth -= 1;
+        if (blockDepth === 0) current += ' ';
         index += 2;
       } else index += 1;
       continue;
@@ -213,6 +214,7 @@ function stripPlpgsqlComments(value: string): string {
         index += 2;
       } else if (char === '*' && next === '/') {
         blockDepth -= 1;
+        if (blockDepth === 0) result += ' ';
         index += 2;
       } else index += 1;
       continue;
@@ -301,18 +303,24 @@ END
 }
 
 function normalizeDoBody(value: string): string {
-  return stripPlpgsqlComments(value)
+  // Fold case only outside single-quoted literals: PostgreSQL compares string
+  // literals (role names, format specifiers) case-sensitively.
+  const collapsed = stripPlpgsqlComments(value)
     .replace(/\s+/g, ' ')
     .replace(/\s*([()[\],;])\s*/g, '$1')
-    .trim()
-    .toLowerCase();
+    .trim();
+  return collapsed
+    .split(/('(?:''|[^'])*')/)
+    .map((part, index) => (index % 2 === 0 ? part.toLowerCase() : part))
+    .join('');
 }
 
 function validateDoBlock(statement: string, target: string): string[] {
   const match = /^DO\s+(\$[a-z_][a-z0-9_]*\$|\$\$)([\s\S]*)\1$/i.exec(
     statement.trim(),
   );
-  if (!match) return ['DO block must use one closed dollar-quoted body'];
+  if (!match || !statement.trim().endsWith(match[1] ?? ''))
+    return ['DO block must use one closed dollar-quoted body'];
   const rawBody = match[2] ?? '';
   const body = stripPlpgsqlComments(rawBody);
   const errors: string[] = [];
@@ -521,6 +529,26 @@ export function classifyPrivilegeOnlyViewMigration(
     errors.push('executable SQL must be printable ASCII outside comments');
   const statements = splitSqlStatements(sql);
   if (statements.length === 0) errors.push('marker has no executable SQL');
+  // Order is part of the end state: the migration must be one transaction whose
+  // last executable step is the verifying DO block (when one is present), so no
+  // later statement can undo what that block checked.
+  const compactStatements = statements.map((value) =>
+    value.replace(/\s+/g, ' ').trim(),
+  );
+  if (
+    compactStatements.length > 0 &&
+    (!/^BEGIN$/i.test(compactStatements[0]!) ||
+      !/^COMMIT$/i.test(compactStatements[compactStatements.length - 1]!))
+  )
+    errors.push('migration must be a single BEGIN ... COMMIT transaction');
+  const doIndexes = compactStatements
+    .map((value, position) => (/^DO\b/i.test(value) ? position : -1))
+    .filter((position) => position >= 0);
+  if (
+    doIndexes.length > 1 ||
+    (doIndexes.length === 1 && doIndexes[0] !== compactStatements.length - 2)
+  )
+    errors.push('the verifying DO block must be the last step before COMMIT');
   const targets = new Set<string>();
   let alterCount = 0;
   let privilegeCount = 0;
