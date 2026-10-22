@@ -4,49 +4,42 @@ MERGE_SHA: pending merge
 
 Issue: UTV2-1980
 Tier: T1
-result: blocked (migration is not portable to scratch Postgres; see Verification)
+result: blocked (precondition drill cannot be satisfied by a privilege-only migration; evidence.json withheld until drills have real PASS receipts)
 
 ## ASSERTIONS:
 
-- [x] Migration and down script are byte-identical to PR #1774 head 8a46cc1bd (sha256 compared with `git show 8a46cc1bd:<path>`).
-- [x] On staging (xskgrzbteyqdufktjrjx) the migration statements make anon and authenticated lose every privilege and leave service_role SELECT only, with security_invoker=true; the down statements restore the measured pre-change posture; reapply converges again (rolled-back transaction, nothing persisted).
-- [x] A control view in the same schema without the REVOKE keeps full anon/authenticated ACLs, so the revoke is load-bearing.
-- [ ] migration-reversibility-gate drills pass: NOT MET. Both scratch-Postgres drills fail at migration line 36 with `role "anon" does not exist` (scratch Postgres has no Supabase roles; the migration has no role-existence guard).
-- [ ] proof-binding / evidence.json: NOT MET. No evidence.json exists, because the migration proof profile requires PASS receipts for precondition_drill and schema_roundtrip_drill, which do not exist.
+- [x] Migration and down script are role-guarded: every role-specific REVOKE/GRANT runs only if the role exists in pg_roles; `security_invoker` and the PUBLIC revoke are unconditional; a fail-closed DO check raises if an existing role ends with wrong privileges (up: anon/authenticated none, service_role SELECT only, view security_invoker; down: all three hold ALL, no security_invoker).
+- [x] Schema round-trip drill passes on scratch Postgres (run 39805611542, job 119917901417).
+- [x] Live Schema Parity passes (run 39805611447, job 119917945208).
+- [x] On staging (xskgrzbteyqdufktjrjx), verbatim statements of the guarded SQL replayed in a rolled-back transaction: before/after/recovered/reapplied snapshots correct; a tamper (GRANT SELECT to anon) makes the end-state check raise (fail closed).
+- [ ] Fail-closed precondition drill: NOT MET. `[FAIL] declaration - ... has no "-- FAIL-CLOSED-PRECONDITION:" declaration`. The drill (scripts/ci/migration-precondition-drill.ts) seeds a declared relation as a decoy and requires SQLSTATE 42P07; a privilege-only migration on an existing view has no such relation. The NO-PRECONDITION-REQUIRED exemption is unreachable on a single-migration PR (drilled-0 backstop). No drill-shaped guard was added.
+- [ ] Down-script presence check: NOT MET. The script exists; the step fails only at proof binding (`evidence.json not found`). evidence.json is withheld because the migration profile requires PASS receipts for precondition_drill, which does not exist.
 
 ## EVIDENCE:
 
-Staging snapshots, project xskgrzbteyqdufktjrjx, executed as one DO block that ended in RAISE EXCEPTION so every change rolled back. Post-check confirmed no `zz_control_view`, reloptions null, and the original ACL.
+Staging replay (project xskgrzbteyqdufktjrjx, ci.yml idle at run time, one DO block ending in RAISE EXCEPTION so everything rolled back; post-check confirmed original ACL and no options). Statements were taken from the files programmatically (the migration file text at ca6287f23; the later commit only added a `-- lint-override` comment inside a plpgsql array line):
 
 ```
-0 BEFORE:     anon, authenticated, service_role = SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ; opts=null
-              acl={postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}
-1 AFTER:      anon=- ; authenticated=- ; service_role=SELECT ; opts={security_invoker=true}
-              acl={postgres=arwdDxtm/postgres,service_role=r/postgres}
-CONTROL:      acl={postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}
-service_role: SELECT count=0 (staging view is empty; no permission error on underlying tables under security_invoker)
-anon:         SELECT denied: permission denied for view v_governed_pick_performance
-authenticated:SELECT denied: permission denied for view v_governed_pick_performance
-2 RECOVERED:  identical to BEFORE (all privileges for the three roles, opts=null)
-3 REAPPLIED:  identical to AFTER
+0 BEFORE:   all 3 roles = all 7 privileges ; opts=null ; acl={postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}
+1 AFTER:    anon=- ; authenticated=- ; service_role=SEL ; opts={security_invoker=true} ; acl={postgres=arwdDxtm/postgres,service_role=r/postgres}
+service_role count=0 (empty staging view); anon denied; authenticated denied (permission denied for view)
+2 RECOVERED: identical to BEFORE
+3 REAPPLIED: identical to AFTER
+NEGATIVE ok: after GRANT SELECT to anon the end-state check raised "end-state wrong: anon SELECT expected f"
 ```
 
-Caveat: the statements were replayed verbatim inside a DO block (the migration file's own BEGIN/COMMIT cannot nest); the file itself was not executed against staging.
+Control-view evidence (identical view without revoke keeps full anon/authenticated ACLs) is recorded from the first staging replay of the unguarded SQL: acl={postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}.
 
-Static reader check (all four readers use the service-role client): apps/api/src/routes/board.ts and market-family-trust-service.ts via createServiceRoleDatabaseConnectionConfig; apps/command-center/src/lib/data/board.ts via getDataClient (service role, authenticated operator); apps/api/src/scripts/utv2-481-phase6-proof.ts via SUPABASE_SERVICE_ROLE_KEY; scripts/evidence-truthworthiness/run-scoring.ts via createDatabaseClient({useServiceRole: true}).
+Reader check (static): board route, market-family-trust-service, Command Center board data, phase6 proof script and run-scoring all use the service-role client.
 
 ## Verification
 
-Exact head under test: bb07260246e04774bb1a86db8aca55af4b2bdaf9 (implementation commit d8578932dc4c6d333ccffc1ed746d4fd8934d8ec; the head also carries the bot PR-binding commit bb0726024 and manifest-only changes). Results read from GitHub:
+Implementation head under test: 3877c791035d1a20041f354e42cc0cb5b58cdfa4 (guard commit ca6287f23, lint-override commit 3877c7910). Results read from GitHub:
 
-- CI run 39796870799: success (Writable DB proof (staging only) success, verify success).
-- Live Schema Parity run 39796870713: success.
-- migration-reversibility-gate run 39796870641: FAILURE. Fail-closed precondition drill step failed and Schema round-trip drill failed, both `psql ...sql:36: ERROR: role "anon" does not exist`; Down-script presence check failed at the proof-binding step (`evidence.json not found`).
-- Branch Discipline Guard, File Scope Lock Check, R-Level, Tier Label, P0 Protocol: success.
-- Lane Authority Check: failure, `Issue not found: UTV2-1980` from the Linear lookup in CI.
-- Proof Gate, Executor Result Validator, Return Review Packet, Merge Gate, Close Eligibility Preflight: failure/not satisfied pending proof and the drills above.
-
-Classification: the drill failures are a genuine migration portability defect (unguarded role references), not a workflow defect. Prior art guards role grants with `pg_roles` existence checks (20260901150000_utv2_1811_rate_limit_buckets.sql). The migration is intentionally unchanged pending PM disposition.
+- migration-reversibility-gate run 39805611542: Schema round-trip drill PASS; Fail-closed precondition drill FAIL (declaration missing, see above); Down-script presence check FAIL (evidence.json not found).
+- Live Schema Parity run 39805611447: PASS.
+- On ca6287f23, CI verify failed on lint-migrations D3 (TRUNCATE privilege name inside the guard); fixed by a lint-override in 3877c7910. CI Writable DB proof (staging) passed on ca6287f23.
+- Lane Authority Check: fails with `Issue not found: UTV2-1980` (non-required Linear lookup; PM item).
 
 ## Merge SHA Binding
 
