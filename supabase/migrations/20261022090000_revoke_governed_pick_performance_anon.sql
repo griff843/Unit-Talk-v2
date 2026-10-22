@@ -66,7 +66,7 @@ BEGIN
 
   FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
     IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = role_name) THEN
-      FOREACH priv IN ARRAY ARRAY[
+      FOREACH priv IN ARRAY ARRAY[ -- lint-override: truncate (privilege name, not a TRUNCATE statement)
         'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'
       ] LOOP
         expected := (role_name = 'service_role' AND priv = 'SELECT');
