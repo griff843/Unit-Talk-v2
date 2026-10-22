@@ -252,11 +252,12 @@ function validateDoBlock(statement: string, target: string): string[] {
   const errors: string[] = [];
 
   // The lexer above only understands single quotes and comments. Double-quoted
-  // identifiers, backslashes (E'' escapes) and U& forms let attacker text hide
+  // identifiers, backslashes (E'' escapes), nested dollar-quoted strings and U&
+  // forms let attacker text hide
   // behind a fake comment marker, so none is admitted in a guard block.
-  if (/["\\]/.test(rawBody) || /\bU&/i.test(rawBody))
+  if (/["\\$]/.test(rawBody) || /\bU&/i.test(rawBody))
     errors.push(
-      'DO block must not contain double quotes, backslashes or U& literals',
+      'DO block must not contain double quotes, backslashes, dollar signs or U& literals',
     );
 
   if (
