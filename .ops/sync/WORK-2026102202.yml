@@ -1,0 +1,121 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102202
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102202
+  objective: WORK-2026102202 — Env-gated VIP checkout CTA on the public website
+  acceptance_criteria:
+    - A VIP checkout CTA for the verified $49.99/month plan
+      (https://whop.com/checkout/plan_pf6AQQgGbIRZg/) exists in code but renders
+      only when an explicit public env gate is on; the gate defaults to OFF and
+      unset/invalid values mean OFF.
+    - With the gate off, the site renders exactly as today (no checkout href,
+      "checkout unavailable" state preserved).
+    - External link handling (rel noopener, target) is correct; no other tier
+      gets a checkout link; Trial and VIP+ links remain unset.
+    - The site-config test that forbids checkout hrefs is updated to assert the
+      gated behavior in both states.
+    - No env value is set in any deployment; nothing is published or enabled.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026102202 — Env-gated VIP checkout CTA on the public website
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli
+
+
+      Source: PM verdict 2026-10-22 (Workstream C1: approved for T2
+      implementation behind an OFF-by-default gate; enabling or publishing
+      requires explicit approval).
+
+
+      ## File Scope
+
+
+      - apps/web/src/lib/site-config.ts
+
+      - apps/web/src/lib/site-config.test.ts
+
+      - apps/web/src/components/CTAButton.tsx
+
+      - apps/web/src/components/PlanCard.tsx
+
+      - apps/web/src/components/PricingTable.tsx
+
+      - apps/web/src/app/pricing/page.tsx
+
+      - .ops/work/WORK-2026102202.md
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102202.md
+    title: WORK-2026102202 — Env-gated VIP checkout CTA on the public website
+    description: >-
+      # WORK-2026102202 — Env-gated VIP checkout CTA on the public website
+
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli
+
+
+      Source: PM verdict 2026-10-22 (Workstream C1: approved for T2
+      implementation behind an OFF-by-default gate; enabling or publishing
+      requires explicit approval).
+
+
+      ## Acceptance Criteria
+
+
+      - A VIP checkout CTA for the verified $49.99/month plan
+      (https://whop.com/checkout/plan_pf6AQQgGbIRZg/) exists in code but renders
+      only when an explicit public env gate is on; the gate defaults to OFF and
+      unset/invalid values mean OFF.
+
+      - With the gate off, the site renders exactly as today (no checkout href,
+      "checkout unavailable" state preserved).
+
+      - External link handling (rel noopener, target) is correct; no other tier
+      gets a checkout link; Trial and VIP+ links remain unset.
+
+      - The site-config test that forbids checkout hrefs is updated to assert
+      the gated behavior in both states.
+
+      - No env value is set in any deployment; nothing is published or enabled.
+
+
+      ## File Scope
+
+
+      - apps/web/src/lib/site-config.ts
+
+      - apps/web/src/lib/site-config.test.ts
+
+      - apps/web/src/components/CTAButton.tsx
+
+      - apps/web/src/components/PlanCard.tsx
+
+      - apps/web/src/components/PricingTable.tsx
+
+      - apps/web/src/app/pricing/page.tsx
+
+      - .ops/work/WORK-2026102202.md
+    captured_at: 2026-10-22T09:35:58.375Z
+    description_sha256: c0834685f7874413a1ae99c9bc1b28489b4755f11dcd1cd7289f7ea9caea6753
+  contract_hash: aedc5060cc8ed3bb44755139f21a360575a90b238f0e7585556d636040f4d1d6
