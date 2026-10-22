@@ -1,0 +1,195 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102001
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102001
+  objective: >-
+    Original PR #1768 merged at `3afaa0fa3858ec9b7aa75b3f24c8db47ee20472f`.
+    Automatic closeout for WORK-2026101604 refuses it (`stale_proof`: P3/C4,
+    P6/R1/R2, C6/P9). Repair only the proof facts that are wrong:
+
+    `docs/06_status/proof/WORK-2026101604/diff-summary.md` — replace the pending
+    merge-SHA statement with the genuine merge SHA.
+
+    `docs/06_status/proof/WORK-2026101604/evidence.json` — remove the prohibited
+    top-level `merge_sha`; bind the genuine merge SHA at `sha_binding.merge_sha`
+    only; keep `verified_source_sha` and all original provenance.
+
+    `evidence.json` `runtime_proof` — replace the blocked/deferred placeholder
+    with queries, row counts, target identity, run ids and provenance harvested
+    from the protected staging CI artifact (`ci-db-proof-receipt/v2`) and job
+    log of `ci.yml` run 39192328761 (merge SHA) via the repository's own harvest
+    tooling. If the artifact does not contain the measurements, STOP and report
+    a quantified gap. Never invent counts and never mark the blocked local
+    `test:db` as executed.
+
+    `verification.md` — only if a gate requires a merge-SHA anchor there;
+    preserve all authored history, including the blocked local `test:db`
+    disposition and the superseded 16-file R-level reading.
+  acceptance_criteria:
+    - The proof files in scope carry the genuine merge SHA only in the fields
+      the schema-v2 evidence contract allows, with no top-level `merge_sha`.
+    - "`runtime_proof` carries queries, row counts, target identity, run ids and
+      provenance harvested from the protected staging CI receipt and job log;
+      any gap is reported, not filled."
+    - "`ops:truth-check` for the original lane passes on the repaired proof,
+      without any gate relaxed."
+    - No implementation, activation, deployment, migration, provider, delivery
+      or kill-switch change.
+  guardrails:
+    - No grading implementation or test edit. No grading activation, deployment,
+      migration, provider, delivery, kill-switch or containment change.
+    - No manifest force-close, no fabricated receipt, no hand-set counts, no
+      checkpoint edit, no bypass of any gate.
+    - Prefer generator output (`ops:proof-generate --merge-sha`,
+      `ops:proof-rebind`) over hand edits; hand-edit only where the tooling
+      documents it cannot (diff-summary.md).
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged on green CI after independent exact-HEAD review; then
+      `post-merge-lane-close.yml -f issue_id=WORK-2026101604` (no `pr` input)
+      closes the original lane through a passing `ops:truth-check`.
+  unmapped_sections:
+    - >-
+      WORK-2026102001 — Bind a merged grading lane's proof to its genuine merge
+      SHA and genuine staging runtime evidence
+
+      Tier: T2
+
+      Lane type: hygiene
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence). Authorized by PM disposition
+      on PR #1768, comment 6287242970. Claude-executed on purpose: this repair
+      has no Codex execution epoch, so the Codex wrapper's phase-progression and
+      implementation-corroboration controls (which exposed the PR #1769 failure)
+      do not apply and are not bypassed.
+
+
+      ## File Scope
+
+
+      - docs/06_status/proof/WORK-2026101604/diff-summary.md
+
+      - docs/06_status/proof/WORK-2026101604/evidence.json
+
+      - docs/06_status/proof/WORK-2026101604/verification.md
+
+      - (plus this work order and the lane's own metadata and proof)
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102001.md
+    title: WORK-2026102001 — Bind a merged grading lane's proof to its genuine merge
+      SHA and genuine staging runtime evidence
+    description: >-
+      # WORK-2026102001 — Bind a merged grading lane's proof to its genuine
+      merge SHA and genuine staging runtime evidence
+
+
+      Tier: T2
+
+      Lane type: hygiene
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence). Authorized by PM disposition
+      on PR #1768, comment 6287242970. Claude-executed on purpose: this repair
+      has no Codex execution epoch, so the Codex wrapper's phase-progression and
+      implementation-corroboration controls (which exposed the PR #1769 failure)
+      do not apply and are not bypassed.
+
+
+      ## Objective
+
+
+      Original PR #1768 merged at `3afaa0fa3858ec9b7aa75b3f24c8db47ee20472f`.
+      Automatic closeout for WORK-2026101604 refuses it (`stale_proof`: P3/C4,
+      P6/R1/R2, C6/P9). Repair only the proof facts that are wrong:
+
+
+      1. `docs/06_status/proof/WORK-2026101604/diff-summary.md` — replace the
+      pending merge-SHA statement with the genuine merge SHA.
+
+      2. `docs/06_status/proof/WORK-2026101604/evidence.json` — remove the
+      prohibited top-level `merge_sha`; bind the genuine merge SHA at
+      `sha_binding.merge_sha` only; keep `verified_source_sha` and all original
+      provenance.
+
+      3. `evidence.json` `runtime_proof` — replace the blocked/deferred
+      placeholder with queries, row counts, target identity, run ids and
+      provenance harvested from the protected staging CI artifact
+      (`ci-db-proof-receipt/v2`) and job log of `ci.yml` run 39192328761 (merge
+      SHA) via the repository's own harvest tooling. If the artifact does not
+      contain the measurements, STOP and report a quantified gap. Never invent
+      counts and never mark the blocked local `test:db` as executed.
+
+      4. `verification.md` — only if a gate requires a merge-SHA anchor there;
+      preserve all authored history, including the blocked local `test:db`
+      disposition and the superseded 16-file R-level reading.
+
+
+      ## Guardrails
+
+
+      - No grading implementation or test edit. No grading activation,
+      deployment, migration, provider, delivery, kill-switch or containment
+      change.
+
+      - No manifest force-close, no fabricated receipt, no hand-set counts, no
+      checkpoint edit, no bypass of any gate.
+
+      - Prefer generator output (`ops:proof-generate --merge-sha`,
+      `ops:proof-rebind`) over hand edits; hand-edit only where the tooling
+      documents it cannot (diff-summary.md).
+
+
+      ## File Scope
+
+
+      - docs/06_status/proof/WORK-2026101604/diff-summary.md
+
+      - docs/06_status/proof/WORK-2026101604/evidence.json
+
+      - docs/06_status/proof/WORK-2026101604/verification.md
+
+      - (plus this work order and the lane's own metadata and proof)
+
+
+      ## Acceptance Criteria
+
+
+      - The proof files in scope carry the genuine merge SHA only in the fields
+      the schema-v2 evidence contract allows, with no top-level `merge_sha`.
+
+      - `runtime_proof` carries queries, row counts, target identity, run ids
+      and provenance harvested from the protected staging CI receipt and job
+      log; any gap is reported, not filled.
+
+      - `ops:truth-check` for the original lane passes on the repaired proof,
+      without any gate relaxed.
+
+      - No implementation, activation, deployment, migration, provider, delivery
+      or kill-switch change.
+
+
+      ## Exit Criteria
+
+
+      - PR merged on green CI after independent exact-HEAD review; then
+      `post-merge-lane-close.yml -f issue_id=WORK-2026101604` (no `pr` input)
+      closes the original lane through a passing `ops:truth-check`.
+    captured_at: 2026-10-20T09:11:12.242Z
+    description_sha256: 29447600aef76390c4f273d7558fea5a25c0ba39a37f8661a64b16a7e3b8ad0d
+  contract_hash: 628a75b6c5211fd58ea903d8c24411d826f2646d03fae0c7d0c4085ee610c333
