@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026102001-order/.out/worktrees/claude__work-2026102001-grading-proof-repair",
   "branch": "claude/work-2026102001-grading-proof-repair",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "375bce4c7645ebc139d274ed762e0c62150692c8",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1770",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,7 +20,7 @@
     "docs/06_status/proof/WORK-2026102001/evidence.json",
     "docs/06_status/proof/WORK-2026102001/verification.md"
   ],
-  "status": "blocked",
+  "status": "merged",
   "started_at": "2026-10-20T09:11:23.036Z",
   "heartbeat_at": "2026-10-20T09:11:23.036Z",
   "closed_at": null,
@@ -34,6 +34,15 @@
       "merge_sha": null,
       "failures": [
         "heartbeat_at 49.5h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-10-22T10:57:10.261Z",
+      "verdict": "fail",
+      "merge_sha": "375bce4c7645ebc139d274ed762e0c62150692c8",
+      "failures": [
+        "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1770 merged while manifest status was \"blocked\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
       ],
       "runner": "ops:reconcile"
     }
