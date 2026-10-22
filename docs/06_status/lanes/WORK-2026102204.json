@@ -21,9 +21,9 @@
     "docs/06_status/proof/WORK-2026102204/verification.md",
     "docs/06_status/proof/WORK-2026102204/model-routing.json"
   ],
-  "status": "started",
+  "status": "cancelled",
   "started_at": "2026-10-22T10:15:54.393Z",
-  "heartbeat_at": "2026-10-22T10:15:54.393Z",
+  "heartbeat_at": "2026-10-22T14:20:55.232Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026102204-governed-view-revoke.json",
