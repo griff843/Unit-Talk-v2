@@ -527,6 +527,16 @@ export function classifyPrivilegeOnlyViewMigration(
   // Executable SQL (outside comments) must be printable ASCII.
   if (/[^\t\n\r\x20-\x7e]/.test(stripPlpgsqlComments(sql)))
     errors.push('executable SQL must be printable ASCII outside comments');
+  if (sql.length > 65536)
+    errors.push('migration exceeds the 64 KiB classifier limit');
+  if (
+    policy.roles.anon !== 'none' ||
+    policy.roles.authenticated !== 'none' ||
+    !['none', 'select'].includes(policy.roles.service_role)
+  )
+    errors.push(
+      'marker postures must be anon=none authenticated=none service_role=none|select',
+    );
   const statements = splitSqlStatements(sql);
   if (statements.length === 0) errors.push('marker has no executable SQL');
   // Order is part of the end state: the migration must be one transaction whose
@@ -541,6 +551,11 @@ export function classifyPrivilegeOnlyViewMigration(
       !/^COMMIT$/i.test(compactStatements[compactStatements.length - 1]!))
   )
     errors.push('migration must be a single BEGIN ... COMMIT transaction');
+  if (
+    compactStatements.filter((value) => /^BEGIN$/i.test(value)).length > 1 ||
+    compactStatements.filter((value) => /^COMMIT$/i.test(value)).length > 1
+  )
+    errors.push('exactly one BEGIN and one COMMIT are allowed');
   const doIndexes = compactStatements
     .map((value, position) => (/^DO\b/i.test(value) ? position : -1))
     .filter((position) => position >= 0);
@@ -561,6 +576,10 @@ export function classifyPrivilegeOnlyViewMigration(
       'i',
     ).exec(normalized);
     if (alter) {
+      if (!/SET \(security_invoker = true\)$/i.test(normalized))
+        errors.push(
+          `statement ${index + 1} must be ALTER VIEW ... SET (security_invoker = true)`,
+        );
       alterCount += 1;
       targets.add(alter[1]!.toLowerCase());
       continue;
@@ -716,6 +735,25 @@ function verifyPolicy(dsn: string, policy: PrivilegeOnlyViewPolicy): string[] {
         `${role} ${privilege} expected ${expected ? 'allowed' : 'denied'}`,
       );
   }
+  // No grantee other than the owner and the three declared roles (PUBLIC is
+  // grantee 0) may hold any privilege: has_table_privilege on the three roles
+  // alone cannot see a PUBLIC or third-role grant.
+  const extraGrantees = psql(dsn, [
+    '-c',
+    `
+    SELECT count(*) FROM pg_catalog.pg_class c,
+      LATERAL aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
+    WHERE c.oid = '${policy.view}'::regclass
+      AND a.grantee <> c.relowner
+      AND a.grantee NOT IN (
+        SELECT oid FROM pg_catalog.pg_roles
+        WHERE rolname IN (${ROLES.map((role) => `'${role}'`).join(',')}));
+  `,
+  ]);
+  if (!extraGrantees.ok || extraGrantees.stdout !== '0')
+    errors.push(
+      'view holds privileges for PUBLIC or a role outside the declared set',
+    );
   const options = psql(dsn, [
     '-c',
     `
@@ -779,7 +817,7 @@ export function runPrivilegeOnlyViewDrill(
   // meta-commands (a leading backslash can run a shell) and control characters.
   const downText = readFileSync(downPath, 'utf8');
   if (
-    /^[ \t]*\\/m.test(downText) ||
+    downText.includes('\\') ||
     [...downText].some((ch) => hasForbiddenControlCode(ch.charCodeAt(0)))
   )
     return [

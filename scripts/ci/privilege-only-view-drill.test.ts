@@ -313,6 +313,28 @@ for (const [name, sql] of [
   ],
   ['COMMIT removed', PR_1775_WITH_MARKER.replace(/COMMIT;\s*$/, '')],
   [
+    'second BEGIN/COMMIT pair splits the transaction',
+    PR_1775_WITH_MARKER.replace('COMMIT;', () => 'COMMIT;\nBEGIN;\nCOMMIT;'),
+  ],
+  [
+    'marker that declares anon access',
+    PR_1775_WITH_MARKER.replace('anon=none', 'anon=all'),
+  ],
+  [
+    'ALTER VIEW RESET as the only alter',
+    PR_1775_WITH_MARKER.replace(
+      'SET (security_invoker = true)',
+      'RESET (security_invoker)',
+    ),
+  ],
+  [
+    'oversized migration',
+    PR_1775_WITH_MARKER.replace(
+      'COMMIT;',
+      () => `-- ${'x'.repeat(70000)}\nCOMMIT;`,
+    ),
+  ],
+  [
     'unknown DO content',
     `${marker()}\nALTER VIEW public.test_privilege_view SET (security_invoker = true);\nDO $$ BEGIN PERFORM pg_sleep(1); END $$;`,
   ],
