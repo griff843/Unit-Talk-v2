@@ -879,11 +879,13 @@ export function evaluatePolicyRows(
   const errors: string[] = [];
   const seen = new Set<string>();
   for (const row of stdout.split('\n').filter(Boolean)) {
-    const [roleValue, privilegeValue, actualValue] = row.split('|');
+    const parts = row.split('|');
+    const [roleValue, privilegeValue, actualValue] = parts;
     const key = `${roleValue}:${privilegeValue}`;
     if (
       !(ROLES as readonly string[]).includes(roleValue ?? '') ||
       !(PRIVILEGES as readonly string[]).includes(privilegeValue ?? '') ||
+      parts.length !== 3 ||
       (actualValue !== 't' && actualValue !== 'f') ||
       seen.has(key)
     ) {
