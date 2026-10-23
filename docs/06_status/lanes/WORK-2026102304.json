@@ -8,7 +8,7 @@
   "branch": "claude/work-2026102304-evidence-bundle-repair",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1778",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/work/WORK-2026102304.md",
@@ -16,7 +16,7 @@
     "docs/06_status/proof/WORK-2026102301/verification.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-10-23T13:07:21.844Z",
   "heartbeat_at": "2026-10-23T13:07:21.844Z",
   "closed_at": null,
