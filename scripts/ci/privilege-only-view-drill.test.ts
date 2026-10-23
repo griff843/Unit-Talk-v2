@@ -601,6 +601,11 @@ test('policy rows: empty, short, duplicated and wrong-shaped psql output all fai
       policy,
     ).length > 0,
   );
+  assert.ok(
+    evaluatePolicyRows(rows.map((r) => `${r}|junk`).join('\n'), policy).length >
+      0,
+    'rows with an extra field must fail',
+  );
 });
 
 for (const [name, header] of [
