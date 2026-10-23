@@ -8,12 +8,12 @@
   "proof_profile": "static",
   "status": "review_candidate_pending_ci",
   "generated_at": "2026-10-22T21:47:33Z",
-  "source_sha": "76dc875a142b5589da21dbe317c967ec80497c28",
-  "reviewed_head_sha": "76dc875a142b5589da21dbe317c967ec80497c28",
+  "source_sha": "4c5a8e5f4da67a69c0a66976b6775387c9d45ec9",
+  "reviewed_head_sha": "4c5a8e5f4da67a69c0a66976b6775387c9d45ec9",
   "evidence_commit_sha": null,
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "76dc875a142b5589da21dbe317c967ec80497c28",
+    "verified_source_sha": "4c5a8e5f4da67a69c0a66976b6775387c9d45ec9",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -46,14 +46,14 @@
     {
       "gate": "independent-control-review",
       "verdict": "SKIP",
-      "detail": "Seven independent adversarial rounds ran; every true bypass found was fixed with a regression test that fails without the fix. The final fix commit (e4cd7ff5f) has not itself been re-reviewed. See verification.md"
+      "detail": "Seven independent adversarial rounds ran; every true bypass found was fixed with a regression test that fails without the fix. Rounds 8 and 9 reviewed the later fixes; only the last one-line fix after round 9 is not separately re-reviewed. See verification.md"
     }
   ],
   "static_proof": {
     "status": "pass",
     "command": "pnpm verify:static",
     "conclusion": "success",
-    "verified_source_sha": "76dc875a142b5589da21dbe317c967ec80497c28"
+    "verified_source_sha": "4c5a8e5f4da67a69c0a66976b6775387c9d45ec9"
   },
   "focused_proof": {
     "command": "pnpm exec tsx --test scripts/ci/migration-precondition-drill.test.ts scripts/ci/privilege-only-view-drill.test.ts scripts/ci/participant-catalog-seed-drill.test.ts",
