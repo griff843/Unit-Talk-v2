@@ -29,4 +29,4 @@ $ pnpm lint                   -> exit 0
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1777
