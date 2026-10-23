@@ -13,7 +13,9 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import {
+  classifyPrivilegeOnlyViewDownScript,
   classifyPrivilegeOnlyViewMigration,
+  evaluatePolicyRows,
   runPrivilegeOnlyViewDrill,
   splitSqlStatements,
 } from './privilege-only-view-drill.ts';
@@ -351,6 +353,285 @@ test('a migration without the anchored marker remains on the ordinary drill path
       kind: 'ordinary',
       errors: [],
     },
+  );
+});
+
+// Verbatim PR #1775 rollback script (read from its branch; not modified here).
+const PR_1775_DOWN = `-- UTV2-1980: restore the measured pre-change privilege posture.
+-- Run only in an authorized environment. Production execution is not
+-- authorized by this rollback script or by this lane.
+--
+-- Role-guarded like the up migration: role-specific statements run only when
+-- the role exists. Fail-closed check: every existing role among anon,
+-- authenticated, service_role must end holding ALL privileges, and the view
+-- must have no security_invoker option.
+
+BEGIN;
+
+ALTER VIEW public.v_governed_pick_performance
+  RESET (security_invoker);
+
+REVOKE ALL PRIVILEGES ON TABLE public.v_governed_pick_performance
+  FROM PUBLIC;
+
+DO $$
+DECLARE
+  role_name text;
+  priv text;
+BEGIN
+  FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = role_name) THEN
+      EXECUTE format(
+        'REVOKE ALL PRIVILEGES ON TABLE public.v_governed_pick_performance FROM %I',
+        role_name
+      );
+      EXECUTE format(
+        'GRANT ALL PRIVILEGES ON TABLE public.v_governed_pick_performance TO %I',
+        role_name
+      );
+    END IF;
+  END LOOP;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_class
+    WHERE oid = 'public.v_governed_pick_performance'::regclass
+      AND reloptions IS NOT NULL
+      AND EXISTS (SELECT 1 FROM unnest(reloptions) o WHERE o LIKE 'security_invoker%')
+  ) THEN
+    RAISE EXCEPTION 'v_governed_pick_performance still has security_invoker after rollback';
+  END IF;
+
+  FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = role_name) THEN
+      FOREACH priv IN ARRAY ARRAY[
+        'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'
+      ] LOOP
+        IF NOT has_table_privilege(role_name, 'public.v_governed_pick_performance', priv) THEN
+          RAISE EXCEPTION 'v_governed_pick_performance rollback end-state wrong: % lacks %',
+            role_name, priv;
+        END IF;
+      END LOOP;
+    END IF;
+  END LOOP;
+END
+$$;
+
+COMMIT;
+`;
+const DOWN_VIEW = 'public.test_privilege_view';
+const PR_1775_VIEW = 'public.v_governed_pick_performance';
+
+test('the PR #1775 rollback script and the fixture rollback classify as privilege-only', () => {
+  assert.deepEqual(
+    classifyPrivilegeOnlyViewDownScript(PR_1775_DOWN, PR_1775_VIEW),
+    [],
+  );
+  assert.deepEqual(
+    classifyPrivilegeOnlyViewDownScript(validDown, DOWN_VIEW),
+    [],
+  );
+});
+
+for (const [name, mutate, pattern] of [
+  [
+    'COPY TO PROGRAM',
+    (v: string) =>
+      v.replace('COMMIT;', "COPY (SELECT 1) TO PROGRAM 'id';\nCOMMIT;"),
+    /not a rollback/,
+  ],
+  [
+    'ALTER SYSTEM',
+    (v: string) =>
+      v.replace('COMMIT;', "ALTER SYSTEM SET work_mem = '1GB';\nCOMMIT;"),
+    /not a rollback/,
+  ],
+  [
+    'event trigger',
+    (v: string) =>
+      v.replace(
+        'COMMIT;',
+        'CREATE EVENT TRIGGER t ON ddl_command_end EXECUTE FUNCTION public.f();\nCOMMIT;',
+      ),
+    /not a rollback/,
+  ],
+  [
+    'function',
+    (v: string) =>
+      v.replace(
+        'COMMIT;',
+        "CREATE FUNCTION public.f() RETURNS int LANGUAGE sql AS 'SELECT 1';\nCOMMIT;",
+      ),
+    /not a rollback/,
+  ],
+  [
+    'extra statement',
+    (v: string) =>
+      v.replace(
+        'COMMIT;',
+        'INSERT INTO public.audit_log DEFAULT VALUES;\nCOMMIT;',
+      ),
+    /not a rollback/,
+  ],
+  [
+    'statement after COMMIT',
+    (v: string) => `${v}\nDROP TABLE public.picks;`,
+    /BEGIN \.\.\. COMMIT/,
+  ],
+  [
+    'second relation',
+    (v: string) =>
+      v.replace(
+        'COMMIT;',
+        'GRANT ALL PRIVILEGES ON TABLE public.picks TO anon;\nCOMMIT;',
+      ),
+    /not a rollback/,
+  ],
+  [
+    'GRANT to PUBLIC',
+    (v: string) =>
+      v.replace(
+        'COMMIT;',
+        `GRANT ALL PRIVILEGES ON TABLE ${DOWN_VIEW} TO PUBLIC;\nCOMMIT;`,
+      ),
+    /grants to PUBLIC/,
+  ],
+  [
+    'no transaction',
+    (v: string) => v.replace('BEGIN;', ''),
+    /BEGIN \.\.\. COMMIT/,
+  ],
+  [
+    'psql meta-command',
+    (v: string) => v.replace('BEGIN;', 'BEGIN;\n-- x\n\\! id'),
+    /backslash/,
+  ],
+] as const) {
+  test(`down script tampering is refused: ${name}`, () => {
+    const errors = classifyPrivilegeOnlyViewDownScript(
+      mutate(validDown),
+      DOWN_VIEW,
+    );
+    assert.ok(errors.length > 0, 'tampered down script must be refused');
+    assert.match(errors.join('; '), pattern);
+  });
+}
+
+for (const [name, mutate] of [
+  [
+    'extra EXECUTE',
+    (v: string) =>
+      v.replace(
+        'END IF;\n  END LOOP;\n\n  IF EXISTS (\n    SELECT 1 FROM pg_catalog.pg_class',
+        "END IF;\n  END LOOP;\n  EXECUTE 'DROP TABLE public.picks';\n\n  IF EXISTS (\n    SELECT 1 FROM pg_catalog.pg_class",
+      ),
+  ],
+  [
+    'neutralised RAISE',
+    (v: string) =>
+      v.replace(
+        "RAISE EXCEPTION 'v_governed_pick_performance still",
+        "RAISE NOTICE 'v_governed_pick_performance still",
+      ),
+  ],
+  [
+    'role literal changed',
+    (v: string) => v.replace("'service_role'] LOOP", "'postgres'] LOOP"),
+  ],
+  [
+    'concatenation',
+    (v: string) => v.replace("FROM %I',", "FROM %I' || '; DROP TABLE x',"),
+  ],
+] as const) {
+  test(`down DO block tampering is refused: ${name}`, () => {
+    const mutated = mutate(PR_1775_DOWN);
+    assert.notEqual(mutated, PR_1775_DOWN, 'mutation must change the fixture');
+    assert.ok(
+      classifyPrivilegeOnlyViewDownScript(mutated, PR_1775_VIEW).length > 0,
+    );
+  });
+}
+
+test('policy rows: empty, short, duplicated and wrong-shaped psql output all fail', () => {
+  const policy = {
+    view: 'public.v',
+    securityInvoker: true,
+    roles: { anon: 'none', authenticated: 'none', service_role: 'select' },
+  } as const;
+  const rows: string[] = [];
+  for (const role of ['anon', 'authenticated', 'service_role'])
+    for (const priv of [
+      'SELECT',
+      'INSERT',
+      'UPDATE',
+      'DELETE',
+      'TRUNCATE',
+      'REFERENCES',
+      'TRIGGER',
+    ])
+      rows.push(
+        `${role}|${priv}|${role === 'service_role' && priv === 'SELECT' ? 't' : 'f'}`,
+      );
+  assert.equal(rows.length, 21);
+  assert.deepEqual(evaluatePolicyRows(rows.join('\n'), policy), []);
+  assert.ok(
+    evaluatePolicyRows('', policy).length > 0,
+    'empty output must fail',
+  );
+  assert.ok(evaluatePolicyRows('\n\n', policy).length > 0);
+  assert.ok(
+    evaluatePolicyRows(rows.slice(0, 20).join('\n'), policy).length > 0,
+  );
+  assert.ok(
+    evaluatePolicyRows([...rows, rows[0]!].join('\n'), policy).length > 0,
+  );
+  assert.ok(
+    evaluatePolicyRows([...rows.slice(1), rows[1]!].join('\n'), policy).length >
+      0,
+    'a duplicate that keeps the count at 21 must still fail',
+  );
+  assert.ok(
+    evaluatePolicyRows(
+      rows.join('\n').replace('anon|SELECT|f', 'anon|SELECT|t'),
+      policy,
+    ).length > 0,
+  );
+  assert.ok(
+    evaluatePolicyRows(
+      rows.join('\n').replace('anon|SELECT|f', 'anon|SELECT|x'),
+      policy,
+    ).length > 0,
+  );
+});
+
+for (const [name, header] of [
+  [
+    'missing fields',
+    '-- PRIVILEGE-ONLY-VIEW: public.v security_invoker=true anon=none',
+  ],
+  ['no space after colon and dashes', '--PRIVILEGE-ONLY-VIEW:public.v'],
+  [
+    'trailing token',
+    '-- PRIVILEGE-ONLY-VIEW: public.test_privilege_view security_invoker=true anon=none authenticated=none service_role=select extra',
+  ],
+] as const) {
+  test(`malformed marker is invalid, not ordinary: ${name}`, () => {
+    const result = classifyPrivilegeOnlyViewMigration(`${header}\nSELECT 1;`);
+    assert.equal(result.kind, 'invalid');
+    assert.match(result.errors.join('; '), /malformed/);
+  });
+}
+
+test('a well-formed marker plus a malformed second marker line is invalid', () => {
+  const result = classifyPrivilegeOnlyViewMigration(
+    `${validUp()}\n-- PRIVILEGE-ONLY-VIEW: public.other`,
+  );
+  assert.equal(result.kind, 'invalid');
+});
+
+test('a migration without any marker line stays ordinary', () => {
+  assert.equal(
+    classifyPrivilegeOnlyViewMigration('-- just prose\nSELECT 1;').kind,
+    'ordinary',
   );
 });
 

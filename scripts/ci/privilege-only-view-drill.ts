@@ -18,6 +18,9 @@ const MARKER = new RegExp(
     'authenticated=(none|select|all)[ \\t]+service_role=(none|select|all)[ \\t]*$',
   'gim',
 );
+// Any comment line that begins with the marker token, well formed or not. A
+// present-but-malformed marker must be invalid, never silently ordinary.
+const LOOSE_MARKER = /^[ \t]*--[ \t]*PRIVILEGE-ONLY-VIEW/gim;
 const PRECONDITION_MARKER = /^[ \t]*--[ \t]*FAIL-CLOSED-PRECONDITION:/im;
 const EXEMPTION_MARKER = /^[ \t]*--[ \t]*NO-PRECONDITION-REQUIRED:/im;
 const PRIVILEGES = [
@@ -30,7 +33,6 @@ const PRIVILEGES = [
   'TRIGGER',
 ] as const;
 const ROLES = ['anon', 'authenticated', 'service_role'] as const;
-type Privilege = (typeof PRIVILEGES)[number];
 type Role = (typeof ROLES)[number];
 type Posture = 'none' | 'select' | 'all';
 
@@ -175,6 +177,13 @@ function parseMarker(sql: string): {
   errors: string[];
 } {
   const matches = [...sql.matchAll(MARKER)];
+  const loose = [...sql.matchAll(LOOSE_MARKER)];
+  if (loose.length > matches.length)
+    return {
+      errors: [
+        'PRIVILEGE-ONLY-VIEW marker is present but malformed (every marker line must match the exact grammar)',
+      ],
+    };
   if (matches.length === 0) return { errors: [] };
   if (matches.length !== 1)
     return { errors: ['exactly one PRIVILEGE-ONLY-VIEW marker is required'] };
@@ -499,6 +508,155 @@ function validateDoBlock(statement: string, target: string): string[] {
   return [...new Set(errors)];
 }
 
+/** The one rollback role-guard DO block admitted, parameterised by the view. */
+function canonicalDownDoBody(view: string): string {
+  const shortName = view.slice(view.indexOf('.') + 1);
+  return `
+DECLARE
+  role_name text;
+  priv text;
+BEGIN
+  FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = role_name) THEN
+      EXECUTE format(
+        'REVOKE ALL PRIVILEGES ON TABLE ${view} FROM %I',
+        role_name
+      );
+      EXECUTE format(
+        'GRANT ALL PRIVILEGES ON TABLE ${view} TO %I',
+        role_name
+      );
+    END IF;
+  END LOOP;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_class
+    WHERE oid = '${view}'::regclass
+      AND reloptions IS NOT NULL
+      AND EXISTS (SELECT 1 FROM unnest(reloptions) o WHERE o LIKE 'security_invoker%')
+  ) THEN
+    RAISE EXCEPTION '${shortName} still has security_invoker after rollback';
+  END IF;
+
+  FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = role_name) THEN
+      FOREACH priv IN ARRAY ARRAY[
+        'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'
+      ] LOOP
+        IF NOT has_table_privilege(role_name, '${view}', priv) THEN
+          RAISE EXCEPTION '${shortName} rollback end-state wrong: % lacks %',
+            role_name, priv;
+        END IF;
+      END LOOP;
+    END IF;
+  END LOOP;
+END
+`;
+}
+
+/**
+ * Classify a rollback script with the same discipline as the up migration: one
+ * BEGIN..COMMIT transaction whose every statement is an ALTER VIEW RESET, a
+ * GRANT/REVOKE on the declared view, or the exact admitted rollback DO block.
+ * The script is later executed by psql on a scratch superuser connection, so
+ * anything else (COPY .. PROGRAM, ALTER SYSTEM, triggers, functions) is refused.
+ */
+export function classifyPrivilegeOnlyViewDownScript(
+  sql: string,
+  view: string,
+): string[] {
+  const errors: string[] = [];
+  if (sql.includes('\\'))
+    errors.push('down script contains a backslash (psql meta-command risk)');
+  if ([...sql].some((ch) => hasForbiddenControlCode(ch.charCodeAt(0))))
+    errors.push('down script contains control characters (including CR)');
+  if (/[^\t\n\r\x20-\x7e]/.test(stripPlpgsqlComments(sql)))
+    errors.push('down script executable SQL must be printable ASCII');
+  if (Buffer.byteLength(sql, 'utf8') > 65536)
+    errors.push('down script exceeds the 64 KiB classifier limit');
+  const statements = splitSqlStatements(sql).map((value) =>
+    value.replace(/\s+/g, ' ').trim(),
+  );
+  if (statements.length === 0) return [...errors, 'down script has no SQL'];
+  if (
+    !/^BEGIN$/i.test(statements[0]!) ||
+    !/^COMMIT$/i.test(statements[statements.length - 1]!) ||
+    statements.filter((value) => /^BEGIN$/i.test(value)).length !== 1 ||
+    statements.filter((value) => /^COMMIT$/i.test(value)).length !== 1
+  )
+    errors.push('down script must be exactly one BEGIN ... COMMIT transaction');
+  const doIndexes = statements
+    .map((value, position) => (/^DO\b/i.test(value) ? position : -1))
+    .filter((position) => position >= 0);
+  if (
+    doIndexes.length > 1 ||
+    (doIndexes.length === 1 && doIndexes[0] !== statements.length - 2)
+  )
+    errors.push(
+      'down script DO block must be the single last step before COMMIT',
+    );
+  const grantees = `(?:PUBLIC|anon|authenticated|service_role)(?:\\s*,\\s*(?:PUBLIC|anon|authenticated|service_role))*`;
+  const escaped = view.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const alter = new RegExp(
+    `^ALTER VIEW ${escaped} RESET \\(security_invoker\\)$`,
+    'i',
+  );
+  const privilege = new RegExp(
+    `^(GRANT|REVOKE) (?:ALL(?: PRIVILEGES)?|(?:${PRIVILEGES.join('|')})(?:\\s*,\\s*(?:${PRIVILEGES.join('|')}))*) ON (?:TABLE )?${escaped} (TO|FROM) (${grantees})$`,
+    'i',
+  );
+  let privilegeCount = 0;
+  for (const [index, statement] of statements.entries()) {
+    if (/^(?:BEGIN|COMMIT)$/i.test(statement) || alter.test(statement))
+      continue;
+    const grant = privilege.exec(statement);
+    if (grant) {
+      const isGrant = grant[1]!.toUpperCase() === 'GRANT';
+      if (isGrant !== (grant[2]!.toUpperCase() === 'TO'))
+        errors.push(
+          `down statement ${index + 1} has mismatched GRANT/REVOKE direction`,
+        );
+      if (isGrant && /\bPUBLIC\b/i.test(grant[3]!))
+        errors.push(`down statement ${index + 1} grants to PUBLIC`);
+      privilegeCount += 1;
+      continue;
+    }
+    if (/^DO\b/i.test(statement)) {
+      const original = splitSqlStatements(sql)[index]!;
+      const match = /^DO\s+(\$[a-z_][a-z0-9_]*\$|\$\$)([\s\S]*)\1$/i.exec(
+        original.trim(),
+      );
+      if (!match || !original.trim().endsWith(match[1] ?? '')) {
+        errors.push('down DO block must use one closed dollar-quoted body');
+        continue;
+      }
+      const rawBody = match[2] ?? '';
+      if (/["\\$|]/.test(rawBody) || /\bU&/i.test(rawBody))
+        errors.push(
+          'down DO block must not contain quotes, backslashes, dollar signs, || or U&',
+        );
+      if (
+        normalizeDoBody(rawBody) !== normalizeDoBody(canonicalDownDoBody(view))
+      )
+        errors.push(
+          'down DO block does not match the single admitted rollback template',
+        );
+      privilegeCount += 1;
+      continue;
+    }
+    errors.push(
+      `down statement ${index + 1} is not a rollback of the declared view: ${statement.slice(0, 80)}`,
+    );
+  }
+  if (!statements.some((value) => alter.test(value)))
+    errors.push(
+      'down script does not RESET security_invoker on the declared view',
+    );
+  if (privilegeCount === 0)
+    errors.push('down script does not restore privileges');
+  return [...new Set(errors)];
+}
+
 /** Classify only migrations carrying the anchored policy marker; invalid markers fail closed. */
 function hasForbiddenControlCode(code: number): boolean {
   return (code < 0x20 && code !== 0x09 && code !== 0x0a) || code === 0x7f;
@@ -527,7 +685,7 @@ export function classifyPrivilegeOnlyViewMigration(
   // Executable SQL (outside comments) must be printable ASCII.
   if (/[^\t\n\r\x20-\x7e]/.test(stripPlpgsqlComments(sql)))
     errors.push('executable SQL must be printable ASCII outside comments');
-  if (sql.length > 65536)
+  if (Buffer.byteLength(sql, 'utf8') > 65536)
     errors.push('migration exceeds the 64 KiB classifier limit');
   if (
     policy.roles.anon !== 'none' ||
@@ -709,6 +867,47 @@ function snapshot(dsn: string, view: string): string {
   return result.stdout;
 }
 
+/**
+ * Evaluate the role/privilege matrix returned by psql. Exactly one row per
+ * role/privilege pair is required: empty, truncated or duplicated output must
+ * fail rather than pass with zero assertions.
+ */
+export function evaluatePolicyRows(
+  stdout: string,
+  policy: PrivilegeOnlyViewPolicy,
+): string[] {
+  const errors: string[] = [];
+  const seen = new Set<string>();
+  for (const row of stdout.split('\n').filter(Boolean)) {
+    const [roleValue, privilegeValue, actualValue] = row.split('|');
+    const key = `${roleValue}:${privilegeValue}`;
+    if (
+      !(ROLES as readonly string[]).includes(roleValue ?? '') ||
+      !(PRIVILEGES as readonly string[]).includes(privilegeValue ?? '') ||
+      (actualValue !== 't' && actualValue !== 'f') ||
+      seen.has(key)
+    ) {
+      errors.push(`unexpected privilege row: ${row}`);
+      continue;
+    }
+    seen.add(key);
+    const posture = policy.roles[roleValue as Role];
+    const expected =
+      posture === 'all' ||
+      (posture === 'select' && privilegeValue === 'SELECT');
+    if ((actualValue === 't') !== expected)
+      errors.push(
+        `${roleValue} ${privilegeValue} expected ${expected ? 'allowed' : 'denied'}`,
+      );
+  }
+  const expectedCount = ROLES.length * PRIVILEGES.length;
+  if (seen.size !== expectedCount)
+    errors.push(
+      `expected exactly ${expectedCount} distinct role/privilege rows, got ${seen.size}`,
+    );
+  return errors;
+}
+
 function verifyPolicy(dsn: string, policy: PrivilegeOnlyViewPolicy): string[] {
   const result = psql(dsn, [
     '-F',
@@ -722,19 +921,7 @@ function verifyPolicy(dsn: string, policy: PrivilegeOnlyViewPolicy): string[] {
   `,
   ]);
   if (!result.ok) return [`privilege query failed: ${result.stderr}`];
-  const errors: string[] = [];
-  for (const row of result.stdout.split('\n').filter(Boolean)) {
-    const [roleValue, privilegeValue, actualValue] = row.split('|');
-    const role = roleValue as Role;
-    const privilege = privilegeValue as Privilege;
-    const posture = policy.roles[role];
-    const expected =
-      posture === 'all' || (posture === 'select' && privilege === 'SELECT');
-    if ((actualValue === 't') !== expected)
-      errors.push(
-        `${role} ${privilege} expected ${expected ? 'allowed' : 'denied'}`,
-      );
-  }
+  const errors = evaluatePolicyRows(result.stdout, policy);
   // No grantee other than the owner and the three declared roles (PUBLIC is
   // grantee 0) may hold any privilege: has_table_privilege on the three roles
   // alone cannot see a PUBLIC or third-role grant.
@@ -813,19 +1000,19 @@ export function runPrivilegeOnlyViewDrill(
       { name: 'down script', status: 'fail', detail: `missing ${downPath}` },
     ];
 
-  // The down script is applied through psql on the runner: refuse psql
-  // meta-commands (a leading backslash can run a shell) and control characters.
-  const downText = readFileSync(downPath, 'utf8');
-  if (
-    downText.includes('\\') ||
-    [...downText].some((ch) => hasForbiddenControlCode(ch.charCodeAt(0)))
-  )
+  // The down script runs through psql on the scratch superuser connection:
+  // classify it with the same allowlist discipline as the up migration.
+  const downErrors = classifyPrivilegeOnlyViewDownScript(
+    readFileSync(downPath, 'utf8'),
+    policy.view,
+  );
+  if (downErrors.length > 0)
     return [
       ...cases,
       {
         name: 'down script',
         status: 'fail',
-        detail: 'down script contains psql meta-commands or control characters',
+        detail: `down script is not a privilege-only rollback: ${downErrors.join('; ')}`,
       },
     ];
 
