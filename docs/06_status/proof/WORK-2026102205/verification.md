@@ -57,7 +57,7 @@ service.
 Implementation anchor (last non-proof commit):
 
 ```text
-4c5a8e5f4da67a69c0a66976b6775387c9d45ec9
+9836c19ffee9f87a0a41320286214d5378e3496d
 fix(ci): policy rows with extra fields fail (ninth review finding)
 ```
 
@@ -141,4 +141,4 @@ is an executor review candidate, not approval or merge authority.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1776
-Execution SHA: 4c5a8e5f4da67a69c0a66976b6775387c9d45ec9
+Execution SHA: 9836c19ffee9f87a0a41320286214d5378e3496d
