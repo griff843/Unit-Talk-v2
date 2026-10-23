@@ -46,7 +46,7 @@ Focused combined suite (re-measured at the anchor):
 
 ```text
 pnpm exec tsx --test scripts/ci/migration-precondition-drill.test.ts scripts/ci/privilege-only-view-drill.test.ts scripts/ci/participant-catalog-seed-drill.test.ts
-tests 64; pass 47; fail 0; skipped 17
+tests 85; pass 68; fail 0; skipped 17
 ```
 
 The 17 local skips are the real-Postgres fixtures because this worktree has no
@@ -57,8 +57,8 @@ service.
 Implementation anchor (last non-proof commit):
 
 ```text
-76dc875a142b5589da21dbe317c967ec80497c28
-test(ci): wrong-security_invoker case is now refused statically as well as by the drill
+4c5a8e5f4da67a69c0a66976b6775387c9d45ec9
+fix(ci): policy rows with extra fields fail (ninth review finding)
 ```
 
 ## Control review log
@@ -80,8 +80,28 @@ was fixed and given a regression test that fails without the fix:
    postures such as `anon=all`, a PUBLIC or third-role ACL entry invisible to
    `has_table_privilege` on the three roles, ReDoS size cap, ALTER ... RESET.
 
-The final fix commit has not itself been re-reviewed. Local tests cannot exercise
-the Postgres-backed ACL query added in round 7; it runs for the first time in CI.
+Round 8: a second independent reviewer, shown only the round-7 fix and the
+wrong-security_invoker test change, found no way to classify a non-privilege-only
+migration as valid and pass the drill. It reported seven low or informational
+items. Four were fixed here, each with a test: the down script is now classified
+with an allowlist (`classifyPrivilegeOnlyViewDownScript`, including an exact
+rollback DO template and tampering tests for COPY PROGRAM, ALTER SYSTEM, event
+trigger, function and extra statements); the policy matrix requires exactly 21
+distinct valid rows (`evaluatePolicyRows`, empty output fails); a present but
+malformed PRIVILEGE-ONLY-VIEW marker is invalid, not ordinary; and the size cap
+counts bytes. Items 3, 5 and 7 are accepted with rationale (the drill or the
+server is the backstop).
+
+Round 9: a third independent reviewer, shown only the round-8 diff, found no
+down-script input accepted that does more than restore privileges on the declared
+view. It reported one low item (policy rows with extra `|` fields were tolerated),
+fixed with a test that fails without the fix, and two fail-safe notes (near-miss
+marker spellings still classify ordinary and take the stricter ordinary drill; a
+marker-looking line inside a dollar-quoted body is invalid). The final one-line
+fix after round 9 has not been separately re-reviewed.
+
+Local tests cannot exercise the Postgres-backed ACL query or the down-script
+drill path; they run for the first time in CI.
 
 Required writable DB command:
 
@@ -102,7 +122,7 @@ GitHub environment with `CI_SUPABASE_*` credentials.
 
 | Command                                                                                                                                                               | Result                                                                                                    |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `pnpm exec tsx --test scripts/ci/migration-precondition-drill.test.ts scripts/ci/privilege-only-view-drill.test.ts scripts/ci/participant-catalog-seed-drill.test.ts` | PASS: 47 pass, 0 fail, 17 real-Postgres tests skipped locally (64 total) and wired to workflow PostgreSQL |
+| `pnpm exec tsx --test scripts/ci/migration-precondition-drill.test.ts scripts/ci/privilege-only-view-drill.test.ts scripts/ci/participant-catalog-seed-drill.test.ts` | PASS: 68 pass, 0 fail, 17 real-Postgres tests skipped locally (85 total) and wired to workflow PostgreSQL |
 | `pnpm type-check`                                                                                                                                                     | PASS                                                                                                      |
 | `pnpm lint`                                                                                                                                                           | PASS                                                                                                      |
 | `pnpm verify:static`                                                                                                                                                  | PASS                                                                                                      |
@@ -121,4 +141,4 @@ is an executor review candidate, not approval or merge authority.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1776
-Execution SHA: 76dc875a142b5589da21dbe317c967ec80497c28
+Execution SHA: 4c5a8e5f4da67a69c0a66976b6775387c9d45ec9
