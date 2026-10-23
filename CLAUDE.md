@@ -127,12 +127,12 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | Tier | Verification | Proof | Merge Authority |
 |---|---|---|---|
 | T1 | type-check + test + test:db + runtime proof | Evidence bundle v1, SHA-tied | `t1-approved` label **and** `pm-verdict/v1` APPROVED comment from CODEOWNERS |
-| T2 | type-check + test + issue-specific | Diff summary + verification log | GitHub PR review approval **or** `pm-verdict/v1` APPROVED comment |
+| T2 | type-check + test + issue-specific | Diff summary + verification log | GitHub PR review approval, **or** `pm-verdict/v1` APPROVED comment, **or** `executor-result/v1` self-attestation comment from a CODEOWNERS member |
 | T3 | type-check + test | Green CI on merge SHA | Green CI + valid executor result — no PM verdict |
 
 **Static proof** alone is never sufficient for T1. **Runtime proof** must run against real Supabase, not in-memory repos. Details: `/verification` skill.
 
-**Merge Authority is defined once, mechanically, by `.github/workflows/merge-gate.yml`** (ratified 2026-05-18 under UTV2-979 for T2; this table must always match that workflow — if they diverge, the workflow wins and this table is stale). For T2, the orchestrator's own `gh pr review --approve` after diff review satisfies the "GitHub PR review approval" branch — no PM presence or PM_VERDICT comment is mechanically required, for any executor (Claude or Codex). PM approval is never satisfied by a chat message; only the `t1-approved` label, a GitHub PR review approval, or a `pm-verdict/v1` comment (schema: `docs/05_operations/schemas/pm-verdict-v1.md`) count as approval artifacts.
+**Merge Authority is defined once, mechanically, by `.github/workflows/merge-gate.yml`** (ratified 2026-05-18 under UTV2-979 for T2; this table must always match that workflow — if they diverge, the workflow wins and this table is stale). For T2, no PM presence or PM_VERDICT comment is mechanically required, for any executor (Claude or Codex). GitHub rejects `gh pr review --approve` when the reviewer is the PR's author, and Claude and Codex both open PRs as the same account, so the artifact that actually satisfies T2 in practice is the `EXECUTOR_RESULT: READY_FOR_REVIEW` / `schema: executor-result/v1` self-attestation comment (UTV2-1523; the T2 branch of `merge-gate.yml`). A GitHub PR review approval or a `pm-verdict/v1` comment also satisfies it. PM approval is never satisfied by a chat message; only the `t1-approved` label, a GitHub PR review approval, a `pm-verdict/v1` comment (schema: `docs/05_operations/schemas/pm-verdict-v1.md`) or, for T2 only, the `executor-result/v1` self-attestation count as approval artifacts.
 
 ---
 
