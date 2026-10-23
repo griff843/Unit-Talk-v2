@@ -1,0 +1,72 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1977",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "37f0e9df5cfcc8a9074990909a5162afde2df51c",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "focused_test": {
+      "command": "pnpm exec tsx --test 'scripts/ops/shared.test.ts'",
+      "status": "PASS",
+      "tests": 142,
+      "pass": 142,
+      "failures": 0
+    },
+    "full_ops_test": {
+      "command": "pnpm test:ops",
+      "status": "PASS",
+      "tests": 3693,
+      "pass": 3683,
+      "failures": 0,
+      "skipped": 10
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "note": "Completed lint, type-check, build, pnpm test, production-post-migration checks, Smart Form verification, and command/migration checks with exit 0."
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "changed_files": 8,
+      "rules_matched": [],
+      "note": "No additional R-level artifacts are required for this diff."
+    },
+    "canonical_verify": {
+      "command": "pnpm verify",
+      "status": "BLOCKED_DEFERRED",
+      "static_stage": "PASS",
+      "note": "The command completed verify:static, then ci:assert-staging refused host=127.0.0.1 because it could not prove the required staging project xskgrzbteyqdufktjrjx. The full gate is not claimed green."
+    },
+    "acceptance_matrix": {
+      "admitted": [
+        "apps/web/** only",
+        "website plus docs/03_product/brand/**",
+        "website plus issue-owned proof/lane/sync paths",
+        "one recognized app plus policy-authorized scripts/**"
+      ],
+      "rejected": [
+        "empty scope",
+        "supporting-only scope",
+        "multi-app scope",
+        "unknown supporting path",
+        "forbidden supporting path",
+        "malformed supporting path",
+        "missing or invalid delivery-ui policy"
+      ]
+    },
+    "before_failure": "The origin/main implementation returned null for the first non-app path; its regression expected command-center plus scripts/ops/shared.ts to fail despite scripts/** being independently authorized by delivery-ui.yml."
+  },
+  "runtime_proof": {
+    "claimed": false,
+    "reason": "Static T2 ops admission repair only; no runtime, database, production, deployment, or activation change. Writable DB proof is deferred to staging-ci by the execution packet."
+  }
+}
