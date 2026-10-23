@@ -1,0 +1,168 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026101103
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026101103
+  objective: "Documentation-only truth correction, PM-approved as the first narrow
+    governance lane. Three canonical documents claim controls that live evidence
+    does not support: `REQUIRED_CI_CHECKS.md` lists two required checks
+    (`verify`, `proof-regression`) while branch protection on `main` requires
+    four (`verify`, `Executor Result Validation`, `Merge Gate`, `P0 Protocol`);
+    `CONSTITUTION_IMPLEMENTATION_MATRIX.md` marks rows `IMPLEMENTED` that are
+    tested primitives with no production caller; `CERTIFICATION_GAP_REGISTER.md`
+    D-CONST-5 claims stat modules are wired into `computeStatProjection`, which
+    has no non-test caller."
+  acceptance_criteria:
+    - "`docs/05_operations/REQUIRED_CI_CHECKS.md` is **out of scope for this
+      lane** (split by coordinator decision: WORK-2026101102 / PR #1737 holds
+      its lease). It is corrected in a follow-up lane after #1737 merges."
+    - "`docs/00_constitution/CONSTITUTION_IMPLEMENTATION_MATRIX.md` defines an
+      explicit status vocabulary with a legend and re-statuses every row that
+      claimed `IMPLEMENTED`, each with file:line evidence from a fresh `git
+      grep` of production callers. Original claims are annotated, not deleted."
+    - "`docs/00_constitution/CERTIFICATION_GAP_REGISTER.md` D-CONST-5 is
+      annotated with the measured caller evidence; its history is kept."
+    - The matrix carries a "Verified on <date> against <main SHA>" note and the
+      reproducible commands used.
+    - Code-level follow-ups (the two proof scripts that cite writer authority as
+      evidence) are listed, not edited.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026101103 — correct stale control claims: required CI checks and
+      constitution implementation matrix
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      ## Invariants
+
+
+      Documentation only. No code, schema, workflow, branch-protection, runtime,
+      containment or merge-authority change. No control is wired, deleted or
+      weakened, and no new CI blocker is recommended. The tier is the mechanical
+      floor: `docs/00_constitution/` is a Tier C prefix.
+
+
+      ## File Scope
+
+
+      - docs/00_constitution/CONSTITUTION_IMPLEMENTATION_MATRIX.md
+
+      - docs/00_constitution/CERTIFICATION_GAP_REGISTER.md
+
+      - .ops/work/WORK-2026101103.md
+
+      - .ops/sync/WORK-2026101103.yml
+
+      - docs/06_status/lanes/WORK-2026101103.json
+
+      - docs/06_status/proof/WORK-2026101103/**
+
+
+      ## Proof
+
+
+      Diff of the two documents plus a verification log with the grep commands
+      and branch-protection read. Static proof; no runtime behavior changes.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026101103.md
+    title: "WORK-2026101103 — correct stale control claims: required CI checks and
+      constitution implementation matrix"
+    description: >-
+      # WORK-2026101103 — correct stale control claims: required CI checks and
+      constitution implementation matrix
+
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      ## Objective
+
+
+      Documentation-only truth correction, PM-approved as the first narrow
+      governance lane. Three canonical documents claim controls that live
+      evidence does not support: `REQUIRED_CI_CHECKS.md` lists two required
+      checks (`verify`, `proof-regression`) while branch protection on `main`
+      requires four (`verify`, `Executor Result Validation`, `Merge Gate`, `P0
+      Protocol`); `CONSTITUTION_IMPLEMENTATION_MATRIX.md` marks rows
+      `IMPLEMENTED` that are tested primitives with no production caller;
+      `CERTIFICATION_GAP_REGISTER.md` D-CONST-5 claims stat modules are wired
+      into `computeStatProjection`, which has no non-test caller.
+
+
+      ## Acceptance Criteria
+
+
+      - `docs/05_operations/REQUIRED_CI_CHECKS.md` is **out of scope for this
+      lane** (split by coordinator decision: WORK-2026101102 / PR #1737 holds
+      its lease). It is corrected in a follow-up lane after #1737 merges.
+
+      - `docs/00_constitution/CONSTITUTION_IMPLEMENTATION_MATRIX.md` defines an
+      explicit status vocabulary with a legend and re-statuses every row that
+      claimed `IMPLEMENTED`, each with file:line evidence from a fresh `git
+      grep` of production callers. Original claims are annotated, not deleted.
+
+      - `docs/00_constitution/CERTIFICATION_GAP_REGISTER.md` D-CONST-5 is
+      annotated with the measured caller evidence; its history is kept.
+
+      - The matrix carries a "Verified on <date> against <main SHA>" note and
+      the reproducible commands used.
+
+      - Code-level follow-ups (the two proof scripts that cite writer authority
+      as evidence) are listed, not edited.
+
+
+      ## Invariants
+
+
+      Documentation only. No code, schema, workflow, branch-protection, runtime,
+      containment or merge-authority change. No control is wired, deleted or
+      weakened, and no new CI blocker is recommended. The tier is the mechanical
+      floor: `docs/00_constitution/` is a Tier C prefix.
+
+
+      ## File Scope
+
+
+      - docs/00_constitution/CONSTITUTION_IMPLEMENTATION_MATRIX.md
+
+      - docs/00_constitution/CERTIFICATION_GAP_REGISTER.md
+
+      - .ops/work/WORK-2026101103.md
+
+      - .ops/sync/WORK-2026101103.yml
+
+      - docs/06_status/lanes/WORK-2026101103.json
+
+      - docs/06_status/proof/WORK-2026101103/**
+
+
+      ## Proof
+
+
+      Diff of the two documents plus a verification log with the grep commands
+      and branch-protection read. Static proof; no runtime behavior changes.
+    captured_at: 2026-10-11T16:07:15.764Z
+    description_sha256: f212e5612651b7480d836eae7c8096f2c7798decd1c8fad41cf756a8e13b23d0
+  contract_hash: 7591539cdfeeb08dc0f450b05dd2352b3acc82ea52dd51568bd906fcf18fad74
