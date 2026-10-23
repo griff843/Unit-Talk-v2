@@ -37,5 +37,7 @@ Manual operator settlement, Track Only delivery containment, CLV computation, pr
 
 ## SHA Binding
 
-Merge SHA: pending merge (`null` in `evidence.json`)
+MERGE_SHA: 3afaa0fa3858ec9b7aa75b3f24c8db47ee20472f
+
+The line above is the genuine merge commit of PR #1768, bound after merge. At authoring time (head `c218196c3`, pre-merge) this line read `Merge SHA: pending merge (`null` in `evidence.json`)`; that was correct then and is preserved here as history.
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1768
