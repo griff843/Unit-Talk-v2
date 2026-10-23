@@ -9,18 +9,21 @@ This file defines how Unit Talk V2 documentation is ranked, what is current auth
 | Owner        | Program Owner                    |
 | Status       | Ratified                         |
 | Ratified     | 2026-03-20                       |
-| Last Updated | 2026-05-18 docs convergence pass |
+| Last Updated | 2026-10-23 truth-order reconciliation (WORK-2026102301) |
 
 ## Truth Rules
 
 Docs are authority for contracts, policies, and historical proof. Docs are not automatically proof that the runtime is currently healthy.
 
-When current state is disputed, use this order:
+When current state is disputed, `docs/05_operations/EXECUTION_TRUTH_MODEL.md` §1 (canonical, T0) is the authority and wins over this file. Its order is:
 
-1. Live systems: Linear for issue state, GitHub for PR/check state, and runtime commands such as `pnpm runtime:health`, `pnpm pipeline:health`, and `pnpm readiness:report`.
-2. Repo execution truth: lane manifests in `docs/06_status/lanes/*.json`, filtered to active statuses only.
-3. Current status views: `docs/06_status/PROGRAM_STATUS.md` and `docs/06_status/SYSTEM_STATE.md`.
-4. Historical records: `ISSUE_QUEUE.md`, closed proof bundles, dated audits, archived phase evidence, and superseded schemas.
+1. GitHub `main`: shipped code, merge SHAs, CI on the merge.
+2. The proof bundle tied to the merge SHA.
+3. The lane manifest in `docs/06_status/lanes/*.json`, active statuses only.
+4. Linear issue state: workflow intent, ownership and tier label; never proof that code is merged.
+5. Chat, memory and agent claims: context only, never authoritative.
+
+Runtime commands such as `pnpm runtime:health`, `pnpm pipeline:health` and `pnpm readiness:report` establish current runtime state and override any status snapshot. `docs/06_status/CURRENT_STATE.md` is the current status view; `docs/06_status/PROGRAM_STATUS.md` is superseded (its first line says so, and `docs/mission/spec.md` agrees) and is audit history only, as are `ISSUE_QUEUE.md`, closed proof bundles, dated audits, archived phase evidence, and superseded schemas.
 
 If a status doc says something is green but a live command fails, the live command wins until the status doc is regenerated.
 

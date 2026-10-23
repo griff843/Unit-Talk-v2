@@ -2,25 +2,29 @@
 
 MERGE_SHA: pending merge
 
-> Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command
-> actually executed and its real result before review. `post-merge-lane-close.yml`
-> binds the merge SHA; never write one here by hand.
-
 Issue: WORK-2026102301
 Tier: T2
-result: not_run
+result: pass
 
 ## ASSERTIONS:
 
-- [ ] (state each behavior this lane proves, and the test that proves it)
+- [x] Only the three declared documents and the work order changed (`git diff --stat`).
+- [x] No executable governance surface changed; no script parses the edited text (the only consumer, `scripts/ops/remaining-infra-proofs.ts`, checks file existence).
+- [x] Claims cited by the edits were checked against the repo: `eca310c23` is "UTV2-1390 ... (#1135)"; `PROGRAM_STATUS.md` line 3 says SUPERSEDED; `proof-generate.ts` carries UTV2-1392; `merge-gate.yml` T2 branch accepts the executor-result comment.
 
 ## EVIDENCE:
 
-(paste measured output here, in fenced blocks)
+```
+$ git diff --check            -> clean
+$ pnpm lint                   -> exit 0
+```
 
 ## Verification
 
-(record every verification command run on the final code commit, with its real result)
+- `ops:preflight WORK-2026102301 --tier T2 --refresh`: VERDICT PASS (39 checks).
+- `git diff --check`: clean.
+- `pnpm lint`: exit 0.
+- Full `pnpm verify` runs in CI on this PR.
 
 ## Merge SHA Binding
 
