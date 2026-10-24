@@ -74,91 +74,120 @@ export interface Tier {
   state: string;
   cta: string | null;
   href: string | null;
+  checkoutCta: string | null;
+  checkoutHref: string | null;
 }
-export const TIERS: Tier[] = [
-  {
-    id: 'free',
-    name: 'Free',
-    price: 'Free',
-    billing: 'Community & settled history',
-    summary:
-      'Start with the record. Every settled official pick belongs in the Free membership.',
-    features: [
-      'All settled official picks, recaps and corrections',
-      'Capper records, units and ROI where supported',
-      'Public community access',
-      'Active paid picks and premium alerts are excluded',
-    ],
-    highlighted: false,
-    state: 'Public archive unavailable on this site',
-    cta: 'Read the results policy',
-    href: '/results',
-  },
-  {
-    id: 'trial',
-    name: 'Trial',
-    price: '$1',
-    billing: '/ 7 days',
-    summary:
-      'Full VIP access for seven consecutive days. Trial does not include VIP+.',
-    features: [
-      'Every official capper pick',
-      'The complete VIP experience while active',
-      'VIP Discord feed, community and education',
-    ],
-    highlighted: false,
-    state: 'Website checkout unavailable',
-    cta: 'Read Trial details',
-    href: '/faq#trial',
-  },
-  {
-    id: 'vip',
-    name: 'VIP',
-    price: '$49.99',
-    billing: '/ month',
-    summary:
-      'Every official capper pick. The complete official-pick membership across supported sports.',
-    features: [
-      'All official capper picks',
-      'Official-pick Discord alerts upon activation',
-      'Capper Corner and private community',
-      'Recaps, supported performance breakdowns, education and support',
-    ],
-    highlighted: true,
-    state: 'Website checkout unavailable',
-    cta: 'Understand VIP',
-    href: '/how-it-works',
-  },
-  {
-    id: 'vip-plus',
-    name: 'VIP+',
-    price: 'Price not published',
-    billing: 'Advanced intelligence',
-    summary:
-      'VIP plus advanced market intelligence, analytics, personalization and premium access.',
-    features: [
-      'Adds to VIP; does not complete an incomplete pick feed',
-      'Individual capabilities require proven activation',
-      'Current availability is not established here',
-    ],
-    highlighted: false,
-    state: 'Availability unconfirmed — not for sale here',
-    cta: 'Review capability status',
-    href: '/pricing#capabilities',
-  },
-  {
-    id: 'black-label',
-    name: 'Black Label',
-    price: 'Future tier',
-    billing: 'Not currently available',
-    summary: 'A future membership tier. Enrollment is closed.',
-    features: ['Not currently available', 'No price published'],
-    highlighted: false,
-    state: 'Future tier — not currently available',
-    cta: null,
-    href: null,
-  },
-];
+export function isVipCheckoutEnabled(value?: string): boolean {
+  return value === 'true';
+}
+
+const VIP_CHECKOUT_HREF = 'https://whop.com/checkout/plan_pf6AQQgGbIRZg/';
+
+export function createTiers(vipCheckoutGate?: string): Tier[] {
+  const vipCheckoutEnabled = isVipCheckoutEnabled(vipCheckoutGate);
+
+  return [
+    {
+      id: 'free',
+      name: 'Free',
+      price: 'Free',
+      billing: 'Community & settled history',
+      summary:
+        'Start with the record. Every settled official pick belongs in the Free membership.',
+      features: [
+        'All settled official picks, recaps and corrections',
+        'Capper records, units and ROI where supported',
+        'Public community access',
+        'Active paid picks and premium alerts are excluded',
+      ],
+      highlighted: false,
+      state: 'Public archive unavailable on this site',
+      cta: 'Read the results policy',
+      href: '/results',
+      checkoutCta: null,
+      checkoutHref: null,
+    },
+    {
+      id: 'trial',
+      name: 'Trial',
+      price: '$1',
+      billing: '/ 7 days',
+      summary:
+        'Full VIP access for seven consecutive days. Trial does not include VIP+.',
+      features: [
+        'Every official capper pick',
+        'The complete VIP experience while active',
+        'VIP Discord feed, community and education',
+      ],
+      highlighted: false,
+      state: 'Website checkout unavailable',
+      cta: 'Read Trial details',
+      href: '/faq#trial',
+      checkoutCta: null,
+      checkoutHref: null,
+    },
+    {
+      id: 'vip',
+      name: 'VIP',
+      price: '$49.99',
+      billing: '/ month',
+      summary:
+        'Every official capper pick. The complete official-pick membership across supported sports.',
+      features: [
+        'All official capper picks',
+        'Official-pick Discord alerts upon activation',
+        'Capper Corner and private community',
+        'Recaps, supported performance breakdowns, education and support',
+      ],
+      highlighted: true,
+      state: vipCheckoutEnabled
+        ? 'VIP checkout available'
+        : 'Website checkout unavailable',
+      cta: 'Understand VIP',
+      href: '/how-it-works',
+      checkoutCta: 'Join VIP',
+      checkoutHref: vipCheckoutEnabled ? VIP_CHECKOUT_HREF : null,
+    },
+    {
+      id: 'vip-plus',
+      name: 'VIP+',
+      price: 'Price not published',
+      billing: 'Advanced intelligence',
+      summary:
+        'VIP plus advanced market intelligence, analytics, personalization and premium access.',
+      features: [
+        'Adds to VIP; does not complete an incomplete pick feed',
+        'Individual capabilities require proven activation',
+        'Current availability is not established here',
+      ],
+      highlighted: false,
+      state: 'Availability unconfirmed — not for sale here',
+      cta: 'Review capability status',
+      href: '/pricing#capabilities',
+      checkoutCta: null,
+      checkoutHref: null,
+    },
+    {
+      id: 'black-label',
+      name: 'Black Label',
+      price: 'Future tier',
+      billing: 'Not currently available',
+      summary: 'A future membership tier. Enrollment is closed.',
+      features: ['Not currently available', 'No price published'],
+      highlighted: false,
+      state: 'Future tier — not currently available',
+      cta: null,
+      href: null,
+      checkoutCta: null,
+      checkoutHref: null,
+    },
+  ];
+}
+
+export const VIP_CHECKOUT_ENABLED = isVipCheckoutEnabled(
+  process.env.NEXT_PUBLIC_ENABLE_VIP_CHECKOUT,
+);
+export const TIERS = createTiers(process.env.NEXT_PUBLIC_ENABLE_VIP_CHECKOUT);
 export const VIP_PLUS_CAPABILITIES = [
   'Steam and line-movement alerts',
   'Injury intelligence',
