@@ -1,6 +1,6 @@
 # Diff summary: WORK-2026102205
 
-Tier: T1. Verified source anchor: `9836c19ffee9f87a0a41320286214d5378e3496d`.
+Tier: T1. Verified source anchor: `a3aef1fced00c349ffd78f2d5a0bb8f55c2c557d`.
 
 This lane adds a fail-closed alternate for migrations that only change one existing
 view's `security_invoker` option and table privileges. It does not modify PR #1775,
@@ -22,7 +22,7 @@ remain unchanged and pass in the focused combined run.
 
 ## SHA Binding
 
-Verified source SHA: `9836c19ffee9f87a0a41320286214d5378e3496d`
+Verified source SHA: `a3aef1fced00c349ffd78f2d5a0bb8f55c2c557d`
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1776

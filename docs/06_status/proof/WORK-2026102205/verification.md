@@ -113,7 +113,7 @@ service.
 Implementation anchor (last non-proof commit):
 
 ```text
-9836c19ffee9f87a0a41320286214d5378e3496d
+a3aef1fced00c349ffd78f2d5a0bb8f55c2c557d
 fix(ci): policy rows with extra fields fail (ninth review finding)
 ```
 
@@ -200,4 +200,4 @@ is an executor review candidate, not approval or merge authority.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1776
-Execution SHA: 9836c19ffee9f87a0a41320286214d5378e3496d
+Execution SHA: a3aef1fced00c349ffd78f2d5a0bb8f55c2c557d
