@@ -6,7 +6,7 @@ Issue: WORK-2026102205
 Tier: T1
 Result: static implementation verified; writable staging proof deferred to protected CI
 
-## ASSERTIONS
+## ASSERTIONS:
 
 - [x] The alternate path is selected only by one anchored
       `PRIVILEGE-ONLY-VIEW` declaration and only after the classifier passes.
@@ -26,9 +26,65 @@ Result: static implementation verified; writable staging proof deferred to prote
       rollback, unresolved target, and non-view target.
 - [x] Existing relation/routine precondition and participant-catalog seed drills
       remain unchanged and pass.
+- [x] The down script is classified by an allowlist before it is executed:
+      COPY TO PROGRAM, ALTER SYSTEM, event trigger, function, extra statements,
+      a second relation, GRANT to PUBLIC, missing transaction and psql
+      meta-commands are each refused (named tampering tests).
+- [x] The policy matrix requires exactly 21 distinct valid role/privilege rows;
+      empty, short, duplicated, malformed and extra-field psql output fails.
+- [x] A present but malformed `PRIVILEGE-ONLY-VIEW` marker (missing fields,
+      `--PRIVILEGE-ONLY-VIEW:public.v` spacing, trailing token) classifies as
+      `invalid`, not `ordinary`. Near-miss spellings (see EVIDENCE) remain
+      `ordinary`.
+- [x] In CI scratch Postgres at head 14a3aaf69 the privilege-only drill suite ran
+      63 of 63 tests with 0 skipped and 0 failed, including seven real-Postgres
+      negative/positive fixtures (run 39946567404).
+- [x] Nine adversarial review rounds ran; every true bypass found was fixed with
+      a regression test that fails without the fix, and the accepted low items
+      are recorded with rationale under Control review log.
 - [x] No production DDL, deployment, merge, kill-switch, or Discord action ran.
 
-## EVIDENCE
+## EVIDENCE:
+
+CI receipts measured at head `14a3aaf69fd9b24a1b35984ef53edb98692a14e7` (source
+identical to the anchor; later commits touch proof files only):
+
+```text
+run 39946567404 (migration-reversibility-gate), scratch postgres:16
+  participant-catalog seed drill:  # tests 14  # pass 14  # fail 0  # skipped 0
+  privilege-only-view drill suite: # tests 63  # pass 63  # fail 0  # skipped 0
+    ok 56 - real Postgres proves positive state, exact rollback, and reapply parity
+    ok 57 - real Postgres rejects an omitted anon revocation
+    ok 58 - real Postgres rejects anon SELECT left behind
+    ok 59 - real Postgres rejects wrong security_invoker
+    ok 60 - real Postgres rejects a down script that does not restore
+    ok 61 - real Postgres rejects an unresolved target
+    ok 62 - real Postgres rejects a non-view target
+run 39946567545 (ci.yml): verify pass; Writable DB proof (staging only) pass
+run 39946567404: Down-script presence, Fail-closed precondition drill,
+  Schema round-trip drill pass; run 39946567605: Live Schema Parity pass
+run 39946567286: T1 Proof Gate, Proof Auditor Gate, Runtime Verifier Gate pass
+```
+
+Malformed-marker classification, measured with the exported classifier at the
+anchor (`classifyPrivilegeOnlyViewMigration(header + "\nSELECT 1;")`):
+
+```text
+missing fields            invalid | marker is present but malformed
+--PRIVILEGE-ONLY-VIEW:..  invalid | marker is present but malformed
+trailing token            invalid | marker is present but malformed
+--- (triple dash)         ordinary
+PRIVILEGE_ONLY_VIEW       ordinary
+PRIVILEGE ONLY VIEW       ordinary
+/* block comment */      ordinary
+no marker line            ordinary
+```
+
+The detector is anchored to a line that begins with `--` followed by the exact
+token, so the three malformed forms that begin that way are invalid. Other
+spellings are not recognised as a marker at all: they classify `ordinary`, never
+reach the privilege-only path, and take the pre-existing path unchanged. This
+proof makes no claim about how that path treats such a file beyond that.
 
 Implementation anchor:
 
@@ -96,12 +152,15 @@ Round 9: a third independent reviewer, shown only the round-8 diff, found no
 down-script input accepted that does more than restore privileges on the declared
 view. It reported one low item (policy rows with extra `|` fields were tolerated),
 fixed with a test that fails without the fix, and two fail-safe notes (near-miss
-marker spellings still classify ordinary and take the stricter ordinary drill; a
-marker-looking line inside a dollar-quoted body is invalid). The final one-line
-fix after round 9 has not been separately re-reviewed.
+marker spellings still classify ordinary and never reach the privilege-only path; a
+marker-looking line inside a dollar-quoted body is invalid). Round 10: a fourth
+independent reviewer examined the one-line extra-field fix and found nothing
+further; it confirmed the added test fails without the fix (pass 55, fail 1) and
+passes with it (pass 56, fail 0).
 
 Local tests cannot exercise the Postgres-backed ACL query or the down-script
-drill path; they run for the first time in CI.
+drill path. They ran in CI scratch Postgres at head 14a3aaf69: 63 of 63, 0
+skipped (see EVIDENCE).
 
 Required writable DB command:
 
@@ -129,12 +188,12 @@ GitHub environment with `CI_SUPABASE_*` credentials.
 | `pnpm verify`                                                                                                                                                         | STATIC PASS, then BLOCKED/DEFERRED at the live-DB staging identity guard; no DB write attempted           |
 | `pnpm test:db`                                                                                                                                                        | BLOCKED/DEFERRED at staging identity guard; no DB write attempted                                         |
 | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`                                                                                            | PASS: 11 changed files, no R-level rules matched (re-run at the anchor)                                   |
-| Exact-head protected CI                                                                                                                                               | Read from the PR checks at the final head; not asserted here                                              |
+| Protected CI at head 14a3aaf69 (source-identical to the anchor)                                                                                                       | PASS: ci.yml run 39946567545, drills run 39946567404, 63/63 with 0 skipped (see EVIDENCE)                 |
 
 ## Remaining authority
 
-Independent control review, the PM T1 verdict, merge, lane finalization, and
-post-merge reconciliation remain pending for their authorized paths. This bundle
+The PM T1 verdict, merge, lane finalization, and post-merge reconciliation
+remain pending for their authorized paths. This bundle
 is an executor review candidate, not approval or merge authority.
 
 ## Merge SHA Binding
