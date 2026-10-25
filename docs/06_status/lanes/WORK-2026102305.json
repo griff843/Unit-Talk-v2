@@ -8,7 +8,7 @@
   "branch": "claude/work-2026102305-plan-readings",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1779",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/work/WORK-2026102305.md",
@@ -22,7 +22,7 @@
   ],
   "status": "started",
   "started_at": "2026-10-25T10:14:59.083Z",
-  "heartbeat_at": "2026-10-25T10:14:59.083Z",
+  "heartbeat_at": "2026-10-25T10:17:09.795Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026102305-plan-readings.json",
