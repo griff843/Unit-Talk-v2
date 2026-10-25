@@ -1,0 +1,25 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102305",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "dbb71d24df7fc79739dacfe7e8aeab637d72723f",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "scope": "documentation-only lane; no code path changed; local gates only",
+    "local_checks": [
+      "ops:preflight PASS (39 checks)",
+      "verify:quick passed on the lane worktree",
+      "line-preservation check: 198 original lines, 0 missing"
+    ],
+    "ci_run": null,
+    "note": "CI on the PR is the verification of record and had not run when this bundle was written."
+  }
+}
