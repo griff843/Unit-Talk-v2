@@ -1,6 +1,6 @@
 # PROOF: WORK-2026102501
 
-MERGE_SHA: 91604fffd742afcce8d654d02dd9fbc981a30175
+MERGE_SHA: ddce4739d77491d0921ac9a47b5557192eed5304
 
 Issue: WORK-2026102501
 Tier: T2
@@ -16,7 +16,7 @@ result: pass
 
 ## EVIDENCE:
 
-Code commit under test: `91604fffd742afcce8d654d02dd9fbc981a30175`. Files: `apps/smart-form/lib/form-utils.ts`, `apps/smart-form/test/form-utils.test.ts`, `apps/smart-form/e2e/phase-one.spec.ts`.
+Code commit under test: `ddce4739d77491d0921ac9a47b5557192eed5304`. Files: `apps/smart-form/lib/form-utils.ts`, `apps/smart-form/test/form-utils.test.ts`, `apps/smart-form/e2e/phase-one.spec.ts`.
 
 ```
 $ pnpm exec tsx --test apps/smart-form/test/form-utils.test.ts
@@ -62,7 +62,7 @@ $ git diff --stat origin/main...HEAD -- apps/
 
 ## Verification
 
-Commands run on code commit `91604fffd742afcce8d654d02dd9fbc981a30175`:
+Commands run on code commit `ddce4739d77491d0921ac9a47b5557192eed5304`:
 
 - `pnpm exec tsx --test apps/smart-form/test/form-utils.test.ts`: 37 pass, 0 fail.
 - `pnpm --filter @unit-talk/smart-form test`: 215 pass, 0 fail.
@@ -70,7 +70,7 @@ Commands run on code commit `91604fffd742afcce8d654d02dd9fbc981a30175`:
 - `ops:preflight WORK-2026102501 --refresh --tier T2`: VERDICT PASS (39 checks).
 - Full `pnpm verify` runs in CI on this PR; it cannot exit 0 locally.
 
-The branch was then merged with `origin/main` (merge commit `c132a9f67`, which changed only `docs/06_status/readiness/readiness-score.json`); the later commits change only `apps/smart-form` test and e2e files plus this proof.
+The branch was refreshed with `pnpm ops:merge-wrapper pr-update-branch` (merge commit `ddce4739d77491d0921ac9a47b5557192eed5304`, from main's plan and lane files); an earlier local merge `c132a9f67` ( which changed only `docs/06_status/readiness/readiness-score.json`); the later commits change only `apps/smart-form` test and e2e files plus this proof.
 
 Not done, with reason: the e2e gate is off by default and was run only for the files above against the isolated in-memory API (Supabase variables blank, no staging or production access). The full `phase-one.spec.ts` now passes (23 of 23). The earlier failures (9 on `origin/main`, 6 on this branch) were all stale wording: headings were deliberately renamed (`Pick Saved` to `Saved as Track Only`, `Track Only · Internal` to `Track Only requested`), so the assertions were updated in `phase-one.spec.ts` only; no product regression was found. Selection-time hiding of unmapped stat types in `BetForm.tsx` was not done: that file is outside the declared file scope.
 
