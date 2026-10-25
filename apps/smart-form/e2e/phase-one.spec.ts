@@ -56,6 +56,50 @@ async function canonicalParticipantId(
   return match as { participantId: string; displayName: string; teamId?: string | null };
 }
 
+/**
+ * Row-asserted identity for a persisted player prop: market, canonical player
+ * (participant id and name), stat, line, odds, units and capper attribution.
+ * Every value is read back from the persisted pick, not from the request.
+ */
+function assertPersistedPlayerProp(
+  pick: Record<string, unknown>,
+  expected: {
+    market: string;
+    statType: string;
+    line: number;
+    odds: number;
+    units: number;
+    sport: string;
+    teamId: string;
+    playerId: string;
+    playerName: string;
+  },
+) {
+  expect(pick['market']).toBe(expected.market);
+  expect(pick['line']).toBe(expected.line);
+  expect(pick['odds']).toBe(expected.odds);
+  expect(pick['stake_units']).toBe(expected.units);
+  expect(pick['capper_id'], 'capper attribution must persist on the row').toBe('griff843');
+  expect(pick['source']).toBe('smart-form');
+  expect(String(pick['selection'])).toContain(expected.playerName);
+  expect(pick['metadata']).toMatchObject({
+    capper: 'griff843',
+    submittedBy: 'griff843',
+    distributionMode: 'track-only',
+    sport: expected.sport,
+    marketType: 'player-prop',
+    statType: expected.statType,
+    eventId: null,
+    teamId: expected.teamId,
+    playerId: expected.playerId,
+    participantResolution: {
+      resolution: 'canonical',
+      sportId: expected.sport,
+      player: { participantId: expected.playerId, displayName: expected.playerName },
+    },
+  });
+}
+
 async function assertTrackOnlyHasNoOutbox(request: APIRequestContext, pickId: string) {
   const response = await request.get(`${apiBaseUrl}/api/qa/pick-status/${pickId}`);
   expect(response.status(), 'Track Only delivery-state lookup must return HTTP 200').toBe(200);
@@ -173,10 +217,10 @@ test('mobile NCAAF moneyline preserves canonical IDs and Track Only', async ({ p
   await page.getByRole('button', { name: /ML\s*Moneyline|Moneyline/i }).first().click();
   await page.getByRole('button', { name: /TCU Fanatics \+125/i }).click();
   await page.getByRole('button', { name: '8', exact: true }).click();
-  await expect(page.getByText('Track Only · Internal', { exact: true })).toBeVisible();
+  await expect(page.getByText('Track Only requested', { exact: true }).first()).toBeVisible();
   await page.screenshot({ path: '../../.out/smart-form-preview/regression/04-ncaaf-moneyline-mobile.png', fullPage: true });
   await page.getByRole('button', { name: 'Submit', exact: true }).click();
-  await expect(page.getByText('Pick Saved')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pick saved', exact: true })).toBeVisible();
   const metadata = submitted.value?.['metadata'] as Record<string, unknown>;
   expect(metadata['distributionMode']).toBe('track-only');
   expect(metadata['eventId']).toBe('event-ncaaf');
@@ -200,7 +244,7 @@ test('mobile NCAAF player prop submits canonical event, team, and player IDs', a
   await page.getByRole('button', { name: '8', exact: true }).click();
   await page.getByRole('button', { name: 'Submit', exact: true }).click();
 
-  await expect(page.getByText('Pick Saved')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pick saved', exact: true })).toBeVisible();
   const metadata = submitted.value?.['metadata'] as Record<string, unknown>;
   expect(metadata).toMatchObject({
     distributionMode: 'track-only',
@@ -403,7 +447,7 @@ test('structured fallback persists canonical side IDs with signed spread values 
   const submission = await submissionResponse.json() as {
     data: { pickId: string; lifecycleState: string; outboxEnqueued: boolean };
   };
-  await expect(page.getByText('Pick Saved')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Saved as Track Only', exact: true })).toBeVisible();
 
   expect(submission.data).toMatchObject({ lifecycleState: 'validated', outboxEnqueued: false });
   const persistedPick = await readPersistedPick(request, submission.data.pickId);
@@ -459,7 +503,7 @@ test('manual participant override persists honest unresolved provenance without 
   const submission = await submissionResponse.json() as {
     data: { pickId: string; lifecycleState: string; outboxEnqueued: boolean };
   };
-  await expect(page.getByText('Pick Saved')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Saved as Track Only', exact: true })).toBeVisible();
 
   expect(submission.data).toMatchObject({ lifecycleState: 'validated', outboxEnqueued: false });
   const persistedPick = await readPersistedPick(request, submission.data.pickId);
@@ -528,7 +572,7 @@ test('mobile manual coverage-gap submission persists signed negative odds and cr
   await expect(oddsInput, 'the control must retain the sign it was given').toHaveValue('-110');
 
   await page.getByRole('button', { name: '8', exact: true }).click();
-  await expect(page.getByText('Track Only \u00b7 Internal', { exact: true })).toBeVisible();
+  await expect(page.getByText('Track Only requested', { exact: true }).first()).toBeVisible();
   const submissionResponsePromise = page.waitForResponse((response) =>
     response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/submissions');
   // The phone viewport renders the mobile submit control, not the desktop one carrying
@@ -540,7 +584,7 @@ test('mobile manual coverage-gap submission persists signed negative odds and cr
   const submission = await submissionResponse.json() as {
     data: { pickId: string; lifecycleState: string; outboxEnqueued: boolean };
   };
-  await expect(page.getByText('Pick Saved')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Saved as Track Only', exact: true })).toBeVisible();
   expect(submission.data).toMatchObject({ lifecycleState: 'validated', outboxEnqueued: false });
 
   // The persisted half.
@@ -643,7 +687,7 @@ test('non-team sport without a slate remains reachable through explicit manual p
   await page.locator('input[name="odds"]').fill('-115');
   await page.getByRole('button', { name: '8', exact: true }).click();
   await page.locator('[data-testid="smart-form-submit-button"]:visible').first().click();
-  await expect(page.getByText('Pick Saved')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pick saved', exact: true })).toBeVisible();
 
   const metadata = submittedPayload?.['metadata'] as Record<string, unknown>;
   expect(metadata['participantResolution']).toMatchObject({
@@ -770,6 +814,7 @@ test('structured player prop persists its line, stat and canonical player with n
   await page.getByRole('option', { name: 'Over', exact: true }).click();
   await page.locator('input[name="line"]').fill('27.5');
   await page.locator('input[name="odds"]').fill('-115');
+  await page.getByRole('button', { name: '2u', exact: true }).first().click();
   await page.getByRole('button', { name: '8', exact: true }).click();
 
   const { pickId, persistedPick } = await submitAndReadPersistedPick(page, request);
@@ -788,6 +833,17 @@ test('structured player prop persists its line, stat and canonical player with n
       eventName: 'Celtics @ Knicks',
       player: { participantId: starter.participantId, displayName: 'Celtics Starter' },
     },
+  });
+  assertPersistedPlayerProp(persistedPick, {
+    market: 'points-all-game-ou',
+    statType: 'Points',
+    line: 27.5,
+    odds: -115,
+    units: 2,
+    sport: 'NBA',
+    teamId: celtics.participantId,
+    playerId: starter.participantId,
+    playerName: 'Celtics Starter',
   });
   await assertTrackOnlyHasNoOutbox(request, pickId);
 });
@@ -818,6 +874,7 @@ test('structured NHL Shots on Goal player prop persists a hockey market and no d
   await page.getByRole('option', { name: 'Over', exact: true }).click();
   await page.locator('input[name="line"]').fill('3.5');
   await page.locator('input[name="odds"]').fill('-120');
+  await page.getByRole('button', { name: '3u', exact: true }).first().click();
   await page.getByRole('button', { name: '7', exact: true }).click();
 
   const { pickId, persistedPick } = await submitAndReadPersistedPick(page, request);
@@ -826,12 +883,17 @@ test('structured NHL Shots on Goal player prop persists a hockey market and no d
   // The API translates the canonical key `player.shots` to the provider-native NHL market.
   expect(persistedPick['market'], 'an NHL Shots on Goal prop must persist the hockey shots market').toBe('shots-all-game-ou');
   const metadata = persistedPick['metadata'] as Record<string, unknown>;
-  expect(metadata).toMatchObject({
-    distributionMode: 'track-only',
+  expect(metadata).toMatchObject({ distributionMode: 'track-only', sport: 'NHL' });
+  assertPersistedPlayerProp(persistedPick, {
+    market: 'shots-all-game-ou',
+    statType: 'Shots on Goal',
+    line: 3.5,
+    odds: -120,
+    units: 3,
     sport: 'NHL',
-    eventId: null,
     teamId: bruins.participantId,
     playerId: starter.participantId,
+    playerName: 'Bruins Starter',
   });
   await assertTrackOnlyHasNoOutbox(request, pickId);
 });
@@ -964,7 +1026,7 @@ test('mobile NFL retry preserves signed spread and prevents duplicate persistenc
   releaseRetry();
   const result = await (await success).json() as { data: { pickId: string; lifecycleState: string; outboxEnqueued: boolean } };
   expect(result.data).toMatchObject({ lifecycleState: 'validated', outboxEnqueued: false });
-  await expect(page.getByText('Pick Saved')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Saved as Track Only', exact: true })).toBeVisible();
   await expect(page.getByText('Saving your pick', { exact: true })).not.toBeVisible();
   await expect(page.getByText('Submission failed', { exact: true })).not.toBeVisible();
   const pick = await readPersistedPick(request, result.data.pickId);
@@ -973,7 +1035,7 @@ test('mobile NFL retry preserves signed spread and prevents duplicate persistenc
   await assertTrackOnlyHasNoOutbox(request, result.data.pickId);
   await page.screenshot({ path: '../../.out/smart-form-preview/mobile-nfl-receipt.png', fullPage: true });
   await page.getByRole('button', { name: 'Submit Another Pick' }).click();
-  await expect(page.getByText('Track Only · Internal', { exact: true })).toBeVisible();
+  await expect(page.getByText('Track Only requested', { exact: true }).first()).toBeVisible();
   await enterSpread();
   await page.setViewportSize({ width: 1280, height: 900 });
   expect(await page.evaluate(() => ({ width: window.innerWidth, overflowing: Array.from(document.querySelectorAll("*" )).filter(el => el.getBoundingClientRect().right > window.innerWidth).slice(0, 12).map(el => ({ tag: el.tagName, cls: el.className, width: el.getBoundingClientRect().width })) })), "Viewport overflow").toMatchObject({ overflowing: [] });
@@ -983,7 +1045,7 @@ test('mobile NFL retry preserves signed spread and prevents duplicate persistenc
   const duplicate = await duplicateResponse;
   expect([200, 201]).toContain(duplicate.status());
   expect((await duplicate.json()).data.pickId).toBe(result.data.pickId);
-  await expect(page.getByText('Pick Saved')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Saved as Track Only', exact: true })).toBeVisible();
   expect(attempts).toBe(3);
   await assertTrackOnlyHasNoOutbox(request, result.data.pickId);
 });
@@ -1048,7 +1110,7 @@ test('manual NFL matchup offers only its two teams and preserves selected side i
   await page.locator('input[name="odds"]').fill('-110');
   await page.getByRole('button', { name: '8', exact: true }).click();
   await page.locator('[data-testid="smart-form-submit-button"]:visible').click();
-  await expect(page.getByText('Pick Saved', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pick saved', exact: true })).toBeVisible();
   expect(submitted).toHaveLength(1);
   expect(submitted[0]).toMatchObject({ submittedBy: 'griff843', source: 'smart-form', market: 'spread', selection: 'Bills +3.5', line: 3.5, odds: -110, metadata: {
     teamId: bills.participantId, distributionMode: 'track-only', selectedOffer: null,
@@ -1070,7 +1132,7 @@ test('anonymous QA cannot submit an unattributed pick', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await expect(page.locator('[data-testid="smart-form-submit-button"]:visible')).toBeDisabled();
   expect(attempts).toBe(0);
-  await expect(page.getByText('Pick Saved', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Pick saved', exact: true })).toHaveCount(0);
 });
 
 async function openFixtureNflSpread(page: Page) {

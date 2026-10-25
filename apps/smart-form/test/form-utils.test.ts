@@ -547,7 +547,7 @@ const CATALOG_STAT_TYPES: Record<string, string[]> = {
     'Goals Against', 'Save Percentage', 'Plus/Minus',
   ],
   MLB: [
-    'Strikeouts', 'Hits', 'Home Runs', 'RBI', 'Runs', 'Walks', 'Total Bases',
+    'Strikeouts', 'Hits', 'Home Runs', 'RBI', 'Walks', 'Total Bases',
     'Singles', 'Doubles', 'Triples', 'Earned Runs', 'Hits Allowed', 'Pitcher Outs',
   ],
   NFL: [
@@ -588,12 +588,17 @@ test('previously unmapped catalog stat types resolve to production market ids', 
   assert.equal(resolvePlayerPropMarketKey('NBA', 'Free Throws Made'), 'player_ftm_ou');
   assert.equal(resolvePlayerPropMarketKey('NBA', 'Minutes Played'), 'player_minutes_ou');
   assert.equal(resolvePlayerPropMarketKey('NBA', 'Plus Minus'), 'player_plus_minus_ou');
-  assert.equal(resolvePlayerPropMarketKey('MLB', 'Runs'), 'player.runs');
   assert.equal(resolvePlayerPropMarketKey('NFL', 'Sacks'), 'player_sacks_ou');
 });
 
 test('an unknown stat type is refused explicitly and never falls back to another sport', () => {
   assert.equal(resolvePlayerPropMarketKey('NHL', 'Hat Tricks'), null);
+  // No canonical market_types id exists for MLB Runs, so it is refused, not invented.
+  assert.equal(resolvePlayerPropMarketKey('MLB', 'Runs'), null);
+  // sport_market_type_availability lists FGM/FTM/Minutes/Plus-Minus for NBA and WNBA only.
+  assert.equal(resolvePlayerPropMarketKey('NCAAB', 'Field Goals Made'), null);
+  assert.equal(resolvePlayerPropMarketKey('WNBA', 'Field Goals Made'), 'player_fgm_ou');
+  assert.equal(resolvePlayerPropMarketKey('NCAAF', 'Sacks'), null);
   assert.equal(resolvePlayerPropMarketKey('NHL', 'Rebounds'), null);
   assert.equal(resolvePlayerPropMarketKey('NBA', 'Goals'), null);
   assert.equal(resolvePlayerPropMarketKey('NHL', ''), null);

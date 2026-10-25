@@ -482,8 +482,14 @@ const BASKETBALL_STAT_TYPE_MARKET_KEYS: Record<string, string> = {
   'points + rebounds': 'player.points_rebounds',
   'points + assists': 'player.points_assists',
   'rebounds + assists': 'player.rebounds_assists',
-  // Production market_types ids (player_fgm_ou, player_ftm_ou, player_minutes_ou,
-  // player_plus_minus_ou); stat_types names are "Plus Minus" / "Plus/Minus".
+};
+
+// Production market_types ids (player_fgm_ou, player_ftm_ou, player_minutes_ou,
+// player_plus_minus_ou). sport_market_type_availability lists them for NBA and
+// WNBA only, so NCAAB deliberately does not receive them. stat_types names are
+// "Plus Minus" (NBA) and "Plus/Minus" (NHL).
+const NBA_WNBA_BASKETBALL_STAT_TYPE_MARKET_KEYS: Record<string, string> = {
+  ...BASKETBALL_STAT_TYPE_MARKET_KEYS,
   'field goals made': 'player_fgm_ou',
   'free throws made': 'player_ftm_ou',
   'minutes played': 'player_minutes_ou',
@@ -491,7 +497,7 @@ const BASKETBALL_STAT_TYPE_MARKET_KEYS: Record<string, string> = {
   'plus/minus': 'player_plus_minus_ou',
 };
 
-const FOOTBALL_STAT_TYPE_MARKET_KEYS: Record<string, string> = {
+const COLLEGE_FOOTBALL_STAT_TYPE_MARKET_KEYS: Record<string, string> = {
   'passing yards': 'player.passing_yards',
   'passing touchdowns': 'player.passing_touchdowns',
   'passing attempts': 'player.passing_attempts',
@@ -501,22 +507,29 @@ const FOOTBALL_STAT_TYPE_MARKET_KEYS: Record<string, string> = {
   'receiving yards': 'player.receiving_yards',
   receptions: 'player.receptions',
   touchdowns: 'player.touchdowns',
-  tackles: 'player.tackles',
   interceptions: 'player.interceptions',
+};
+
+// Tackles and Sacks exist as stat_types for NFL only; player_sacks_ou is available
+// for NFL only.
+const NFL_STAT_TYPE_MARKET_KEYS: Record<string, string> = {
+  ...COLLEGE_FOOTBALL_STAT_TYPE_MARKET_KEYS,
+  tackles: 'player.tackles',
   sacks: 'player_sacks_ou',
 };
 
 const SPORT_STAT_TYPE_MARKET_KEYS: Record<string, Record<string, string>> = {
-  NBA: BASKETBALL_STAT_TYPE_MARKET_KEYS,
-  WNBA: BASKETBALL_STAT_TYPE_MARKET_KEYS,
+  NBA: NBA_WNBA_BASKETBALL_STAT_TYPE_MARKET_KEYS,
+  WNBA: NBA_WNBA_BASKETBALL_STAT_TYPE_MARKET_KEYS,
   NCAAB: BASKETBALL_STAT_TYPE_MARKET_KEYS,
-  NFL: FOOTBALL_STAT_TYPE_MARKET_KEYS,
-  NCAAF: FOOTBALL_STAT_TYPE_MARKET_KEYS,
+  NFL: NFL_STAT_TYPE_MARKET_KEYS,
+  NCAAF: COLLEGE_FOOTBALL_STAT_TYPE_MARKET_KEYS,
   MLB: {
     hits: 'player.hits',
     'home runs': 'player.home_runs',
     rbi: 'player.rbi',
-    runs: 'player.runs',
+    // MLB Runs is deliberately absent: production market_types has no canonical id
+    // for it, so it is refused explicitly rather than given an invented key.
     walks: 'player.walks',
     'total bases': 'player.total_bases',
     singles: 'player.singles',
