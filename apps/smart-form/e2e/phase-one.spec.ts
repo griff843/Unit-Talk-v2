@@ -743,7 +743,7 @@ async function submitAndReadPersistedPick(page: Page, request: APIRequestContext
   const submission = await submissionResponse.json() as {
     data: { pickId: string; lifecycleState: string; outboxEnqueued: boolean };
   };
-  await expect(page.getByText('Pick Saved')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Saved as Track Only' })).toBeVisible();
   expect(submission.data).toMatchObject({ lifecycleState: 'validated', outboxEnqueued: false });
   const persistedPick = await readPersistedPick(request, submission.data.pickId);
   return { pickId: submission.data.pickId, persistedPick };
@@ -788,6 +788,50 @@ test('structured player prop persists its line, stat and canonical player with n
       eventName: 'Celtics @ Knicks',
       player: { participantId: starter.participantId, displayName: 'Celtics Starter' },
     },
+  });
+  await assertTrackOnlyHasNoOutbox(request, pickId);
+});
+
+test('structured NHL Shots on Goal player prop persists a hockey market and no delivery', async ({ page, request }) => {
+  await assertIsolatedApiReady(request);
+  const bruins = await canonicalParticipantId(request, 'teams', 'NHL', 'Bruins');
+  await canonicalParticipantId(request, 'teams', 'NHL', 'Maple Leafs');
+  const starter = await canonicalParticipantId(request, 'players', 'NHL', 'Bruins Starter');
+  expect(starter.teamId, 'the seeded NHL player must resolve to exactly the team id searchTeams returns').toBe(bruins.participantId);
+
+  await page.goto('/submit');
+  await page.getByRole('button', { name: 'NHL', exact: true }).click();
+  await page.getByRole('button', { name: 'Manual entry' }).click();
+  await page.getByLabel('Away Team').fill('Bruins');
+  await page.getByRole('button', { name: /Bruins\s+team/i }).first().click();
+  await page.getByLabel('Home Team').fill('Maple Leafs');
+  await page.getByRole('button', { name: /Maple Leafs\s+team/i }).first().click();
+  await expect(page.getByText('Bruins @ Maple Leafs', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /PROP\s*Player Prop/i }).first().click();
+  await page.getByLabel('Team', { exact: true }).fill('Bruins');
+  await page.getByRole('button', { name: /Bruins\s+team/i }).last().click();
+  await page.getByLabel('Player', { exact: true }).fill('Bruins Starter');
+  await page.getByRole('button', { name: /^Bruins Starter/ }).click();
+  await page.getByRole('combobox', { name: 'Stat Type' }).click();
+  await page.getByRole('option', { name: 'Shots on Goal', exact: true }).click();
+  await page.getByLabel('Over / Under').click();
+  await page.getByRole('option', { name: 'Over', exact: true }).click();
+  await page.locator('input[name="line"]').fill('3.5');
+  await page.locator('input[name="odds"]').fill('-120');
+  await page.getByRole('button', { name: '7', exact: true }).click();
+
+  const { pickId, persistedPick } = await submitAndReadPersistedPick(page, request);
+  expect(persistedPick['line']).toBe(3.5);
+  expect(persistedPick['odds']).toBe(-120);
+  // The API translates the canonical key `player.shots` to the provider-native NHL market.
+  expect(persistedPick['market'], 'an NHL Shots on Goal prop must persist the hockey shots market').toBe('shots-all-game-ou');
+  const metadata = persistedPick['metadata'] as Record<string, unknown>;
+  expect(metadata).toMatchObject({
+    distributionMode: 'track-only',
+    sport: 'NHL',
+    eventId: null,
+    teamId: bruins.participantId,
+    playerId: starter.participantId,
   });
   await assertTrackOnlyHasNoOutbox(request, pickId);
 });
