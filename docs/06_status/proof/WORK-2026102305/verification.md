@@ -14,8 +14,15 @@ result: pass
 
 ## EVIDENCE:
 
-Byte/line check run on the lane worktree (script: set comparison of stripped non-empty lines, before vs after): `original lines 198 missing 0`.
-Token measurement is NOT part of this proof's pass criteria. For context only, headless `claude -p` totals on a scratch copy of the whole change set (n=3, noisy): current 59.7k / 61.6k / 61.6k vs proposed 58.3k / 58.3k / 56.3k; byte-based estimate for plan.md alone is about 1.6k tokens (bytes/4, an estimate, not a measurement).
+Line-preservation check on the lane worktree (set comparison of stripped non-empty lines, original plan.md vs plan.md + plan-readings.md):
+
+```
+original lines 198 missing 0
+15181 docs/mission/plan.md
+ 7836 docs/mission/plan-readings.md
+```
+
+Original plan.md was 21,487 bytes. Token measurement is NOT part of this proof's pass criteria. For context only, headless `claude -p` totals on a scratch copy of a larger change set (n=3, noisy): current 59.7k / 61.6k / 61.6k vs proposed 58.3k / 58.3k / 56.3k; the byte-based estimate for plan.md alone is about 1.6k tokens (bytes/4, an estimate, not a measurement).
 
 ## Verification
 
