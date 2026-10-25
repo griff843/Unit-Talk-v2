@@ -1,6 +1,6 @@
 # PROOF: WORK-2026102306
 
-MERGE_SHA: pending merge
+MERGE_SHA: eec005c9d07ae9da2f122dc8315e3002eaf90abc
 
 Issue: WORK-2026102306
 Tier: T2
@@ -33,6 +33,6 @@ CI facts the added lines cite, read from GitHub: run 40188363835 (`verify` job 1
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: eec005c9d07ae9da2f122dc8315e3002eaf90abc
 PR: pending
 Execution SHA: a13133f11b90c9a214c2718661d813bd2f75342e
