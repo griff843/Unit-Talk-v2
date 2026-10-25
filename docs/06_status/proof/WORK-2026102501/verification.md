@@ -1,6 +1,6 @@
 # PROOF: WORK-2026102501
 
-MERGE_SHA: 52010bf0c36b263d9374bc87dbf3085071b15abd
+MERGE_SHA: c132a9f6796042646076c4b09b95bb9c94323a99
 
 Issue: WORK-2026102501
 Tier: T2
@@ -52,6 +52,8 @@ Commands run on code commit `52010bf0c36b263d9374bc87dbf3085071b15abd`:
 - `pnpm --filter @unit-talk/smart-form type-check`, `pnpm type-check`, `pnpm lint`: each exited 0.
 - `ops:preflight WORK-2026102501 --refresh --tier T2`: VERDICT PASS (39 checks).
 - Full `pnpm verify` runs in CI on this PR; it cannot exit 0 locally.
+
+The branch was then merged with `origin/main` (merge commit `c132a9f6796042646076c4b09b95bb9c94323a99`, which changed only `docs/06_status/readiness/readiness-score.json`); no source file changed after the tests above ran.
 
 Not done, with reason: the e2e gate is off by default and was run only for the files above against the isolated in-memory API (Supabase variables blank, no staging or production access). The full `phase-one.spec.ts` run on this branch has 6 failures in other cases that assert the stale text `Pick Saved` at their own call sites (the UI heading is now `Saved as Track Only`); the same file on `origin/main` has 9 failures, 3 of them the shared helper this lane corrected. Those 6 sites are outside this lane's reviewed intent and were left unchanged. Selection-time hiding of unmapped stat types in `BetForm.tsx` was not done: that file is outside the declared file scope.
 
