@@ -10,5 +10,5 @@ Documentation only. No workflow, hook, script, gate, tier rule, containment, kil
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: d7895651328b8c6051e6048d14df484c14e7aa26
 PR: pending

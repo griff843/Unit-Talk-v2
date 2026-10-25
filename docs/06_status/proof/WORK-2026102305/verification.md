@@ -1,6 +1,6 @@
 # PROOF: WORK-2026102305
 
-MERGE_SHA: pending merge
+MERGE_SHA: d7895651328b8c6051e6048d14df484c14e7aa26
 
 Issue: WORK-2026102305
 Tier: T2
@@ -38,6 +38,6 @@ CI evidence at PR head `dbd1f0fcaab16a8113b927668bb3cfea8a7baf44` (the head that
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: d7895651328b8c6051e6048d14df484c14e7aa26
 PR: pending
 Execution SHA: dbb71d24df7fc79739dacfe7e8aeab637d72723f
