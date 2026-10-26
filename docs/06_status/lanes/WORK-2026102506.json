@@ -2,7 +2,7 @@
   "schema_version": 2,
   "issue_id": "WORK-2026102506",
   "lane_type": "delivery-ui",
-  "executor": "codex-cli",
+  "executor": "claude",
   "tier": "T2",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102506-smart-form-ui",
   "branch": "codex/work-2026102506-smart-form-ui",
@@ -21,30 +21,23 @@
   "expected_proof_paths": [
     "docs/06_status/proof/WORK-2026102506/diff-summary.md",
     "docs/06_status/proof/WORK-2026102506/evidence.json",
-    "docs/06_status/proof/WORK-2026102506/verification.md",
-    "docs/06_status/proof/WORK-2026102506/model-routing.json"
+    "docs/06_status/proof/WORK-2026102506/verification.md"
   ],
   "status": "started",
-  "started_at": "2026-10-26T18:13:34.037Z",
-  "heartbeat_at": "2026-10-26T18:13:34.037Z",
+  "started_at": "2026-10-26T23:51:15.837Z",
+  "heartbeat_at": "2026-10-26T23:51:15.837Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026102506-smart-form-ui.json",
-  "created_by": "codex-cli",
+  "created_by": "claude",
   "truth_check_history": [],
   "reopen_history": [],
-  "model_routing": {
-    "profile": "codex-sol-medium",
-    "model": "gpt-5.6-sol",
-    "reasoning_effort": "medium",
-    "selected_by": "three-brain",
-    "policy_version": "2.0.0"
-  },
   "execution_location": {
     "mode": "worktree",
     "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102506-smart-form-ui",
     "package_install": "verified",
     "setup_command": null,
     "main_checkout_control_only": true
-  }
+  },
+  "notes": "existing-branch readmission; previous_lane_type=delivery-ui; new_lane_type=delivery-ui; preserved_head=7a28742b58014e429a29d017e80420aeb4ad86bf; open_pr=1784"
 }
