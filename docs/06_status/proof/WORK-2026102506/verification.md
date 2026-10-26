@@ -25,7 +25,7 @@ tsx --test e2e/ui-polish.browser.ts (local next dev, intercepted API) -> tests 5
 
 Baseline comparison (full `playwright test` run, fixture mode, same environment, origin/main `eed54bab5` versus PR head `fbe284a8d`, which has the same code as this lane): 17 failures of 51 on both trees, identical tests and assertions. They are stale assertions (`Pick Saved`, `Track Only · Internal`) in phase-one, offline-offer-slip and real-reference specs, plus three auth-gate tests that the QA auth bypass defeats. No failure is new.
 
-Browser evidence: `docs/06_status/proof/WORK-2026102506/browser-evidence/` (flat files, no nested directory, so the proof auditor sees no markdown-less proof directory; desktop, mobile, player-prop at 320/390/1440, receipts, catalog error). It is a local read-only preview, not evidence of real authentication or production submission.
+Browser evidence: `docs/06_status/proof/WORK-2026102506/ (the png and json files beside this document)` (flat files, no nested directory, so the proof auditor sees no markdown-less proof directory; desktop, mobile, player-prop at 320/390/1440, receipts, catalog error). It is a local read-only preview, not evidence of real authentication or production submission.
 
 ## Verification
 

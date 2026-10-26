@@ -10,7 +10,7 @@ Smart Form visual polish and supplied UT logo (presentation only). Tier T2, deli
 | apps/smart-form/app/submit/components/BrandLogo.tsx | UT emblem matched to the supplied reference |
 | apps/smart-form/e2e/ui-polish.browser.ts | New browser regression (5 tests, intercepted API responses, local server only) |
 | apps/smart-form/package.json | Adds the `test:ui` script that runs it |
-| docs/06_status/proof/WORK-2026102506/browser-evidence/ | Codex's local browser screenshots and QA result, relocated from apps/qa-agent so the lane scope names one app |
+| docs/06_status/proof/WORK-2026102506/ (the png and json files beside this document) | Codex's local browser screenshots and QA result, relocated from apps/qa-agent so the lane scope names one app |
 
 Not touched: `apps/smart-form/lib/form-utils.ts` and the other files owned by the player-prop lane, authentication, API, database, delivery and containment.
 
