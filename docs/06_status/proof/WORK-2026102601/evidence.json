@@ -1,0 +1,26 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102601",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "e903b27d5f51056aefbd0a0535238fe457c0a63d",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "scope": "permission rules in .claude/settings.json plus static regression tests; behaviour exercised in disposable clones",
+    "local_checks": [
+      "ops:preflight PASS (39 checks)",
+      "direct-main-push-guard.test.ts 18 pass, 0 fail; 4 of 4 rule-removal mutations fail it",
+      "harness matrix 92 runs: 0 of 64 dangerous-command runs executed; 24 of 24 governed commands executed",
+      "eslint clean; type-check exit 0"
+    ],
+    "ci_run": null,
+    "note": "CI on the PR is the verification of record and had not run when this bundle was written."
+  }
+}
