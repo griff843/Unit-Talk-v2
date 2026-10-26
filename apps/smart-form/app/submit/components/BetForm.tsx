@@ -760,13 +760,14 @@ function SportsbookPillField({
       control={form.control}
       name="sportsbook"
       render={({ field }) => (
-        <FormItem data-testid="smart-form-book-select">
+        <FormItem className="sportsbook-field" data-testid="smart-form-book-select">
           <FormLabel>Sportsbook</FormLabel>
           <div className="flex flex-wrap gap-1.5">
             {primaryBooks.map((sb) => (
               <button
                 key={sb.id}
                 type="button"
+                aria-pressed={field.value === sb.id}
                 onClick={() => {
                   field.onChange(sb.id);
                   setShowOther(false);
@@ -2196,7 +2197,7 @@ export function BetForm({
 
   if (successResult && submittedValues) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-6">
+      <main className="receipt-shell min-h-screen flex items-center justify-center p-6">
         <SuccessReceipt
           result={successResult}
           submittedValues={submittedValues}
@@ -2247,17 +2248,28 @@ export function BetForm({
 
   if (catalogError) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="text-destructive text-sm">{catalogError}</div>
+      <main className="workspace-state">
+        <BrandLogo />
+        <div className="workspace-state-card" role="alert">
+          <h1>We couldn’t load your workspace.</h1>
+          <p>{catalogError}</p>
+          <p>Check your connection and try again.</p>
+          <Button type="button" onClick={() => window.location.reload()}>Try again</Button>
+        </div>
       </main>
     );
   }
 
   if (!catalog) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6" role="status" aria-live="polite">
-        <div className="text-muted-foreground text-sm">Loading...</div>
-      </div>
+      <main className="workspace-state" role="status" aria-live="polite">
+        <BrandLogo />
+        <div className="workspace-state-card">
+          <h1>Loading your workspace…</h1>
+          <p>Getting your sports, markets, and books ready.</p>
+          <div className="loading-bars" aria-hidden="true"><span /><span /><span /></div>
+        </div>
+      </main>
     );
   }
 
@@ -2291,7 +2303,7 @@ export function BetForm({
           </div>
         </div>
 
-        <div className="inline-flex rounded-full border border-border bg-background p-1">
+        <div className="entry-mode inline-flex rounded-full border border-border bg-background p-1">
           <button
             type="button"
             className={cn(
@@ -3948,26 +3960,27 @@ export function BetForm({
   }
 
   return (
-    <main className="smart-form-shell min-h-screen px-4 pt-5 pb-36 sm:px-6 sm:pt-8 lg:px-8 lg:pb-12">
-      <header className="smart-form-brand mx-auto mb-8 flex max-w-7xl items-center justify-between gap-4 pb-4">
+    <main id="main-content" className="smart-form-shell min-h-screen px-4 pb-36 sm:px-6 lg:px-8 lg:pb-12">
+      <header className="smart-form-brand mx-auto flex max-w-7xl items-center justify-between gap-4">
         <BrandLogo />
-        <span className="track-only-pill rounded-full px-3 py-1.5 text-xs font-semibold">{watchedValues.trackOnly ? 'Track Only requested' : 'Delivery eligible requested'}</span>
+        <div className="workspace-status"><span className="workspace-edition">SMART FORM <span aria-hidden="true">/</span> PICK INTAKE</span><span className="track-only-pill rounded-full px-3 py-1.5 text-xs font-semibold"><span className="status-dot" aria-hidden="true" />{watchedValues.trackOnly ? 'Track Only requested' : 'Delivery eligible requested'}</span></div>
       </header>
       {missingQaIdentity && (
-        <div role="note" data-testid="missing-qa-identity" className="mx-auto mb-6 max-w-7xl rounded-xl border border-amber-400/40 bg-amber-400/10 p-4 text-sm">
-          <p className="font-semibold">Local QA — no test capper selected</p>
+        <div role="note" data-testid="missing-qa-identity" className="qa-preview-note mx-auto max-w-7xl rounded-xl border border-border px-4 py-3 text-sm">
+          <p className="font-semibold">Preview workspace</p>
           <p className="mt-1 text-muted-foreground">You can explore the form. Saving is disabled until an explicit test identity is available. This preview does not verify real sign-in.</p>
         </div>
       )}
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 lg:flex-row lg:items-start">
-        <div className="w-full space-y-6 lg:max-w-3xl">
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              CAPPER WORKSPACE
-            </p>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-              Build your pick
-            </h1>
+      <div className="workspace-layout mx-auto flex w-full max-w-7xl flex-col gap-8 lg:flex-row">
+        <div className="entry-column w-full space-y-6">
+          <div className="workspace-intro">
+            <p className="eyebrow"><span aria-hidden="true" /> EVERY DETAIL. EVERY EDGE.</p>
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">Build your pick<span className="title-period">.</span></h1>
+            <p className="intro-description">Your read on the game. A clear record of the call.</p>
+            <nav className="workflow-nav" aria-label="Pick entry sections">
+              <a href="#pick-setup"><span>01</span> Setup</a>
+              {selectedSport && <>{shouldRenderPickDetailsSection && <a href="#pick-selection"><span>02</span> Selection</a>}<a href="#pick-review"><span>03</span> Review</a></>}
+            </nav>
           </div>
 
           <Form {...form}>
@@ -3975,12 +3988,12 @@ export function BetForm({
               className="space-y-6"
               onSubmit={form.handleSubmit(onSubmit)}
             >
-              <section className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <section id="pick-setup" className="setup-section space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <div className="section-heading flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <h2 className="text-lg font-semibold text-foreground">1. Sport and date</h2>
+                    <h2 className="text-lg font-semibold text-foreground"><span className="step-number">01</span> Set the stage</h2><p className="section-description">Choose your sport, date, and book.</p>
                   </div>
-                  <div className="inline-flex rounded-full border border-border bg-background p-1">
+                  <div className="entry-mode inline-flex rounded-full border border-border bg-background p-1">
                     <button
                       type="button"
                       className={cn(
@@ -4010,15 +4023,15 @@ export function BetForm({
                   </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="setup-fields grid">
                   <FormField
                     control={form.control}
                     name="sport"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="sport-field">
                         <FormLabel>Sport</FormLabel>
                         <FormControl>
-                          <div data-testid="smart-form-sport-select" className="grid grid-cols-3 gap-2">
+                          <div data-testid="smart-form-sport-select" className="sport-grid grid grid-cols-3 gap-2">
                             {catalog.sports.map((sport: SportDefinition) => {
                               const isSelected = field.value === sport.id;
                               return (
@@ -4031,6 +4044,7 @@ export function BetForm({
                                       ? 'border-primary bg-primary text-primary-foreground shadow-sm'
                                       : 'border-border bg-background text-foreground hover:border-foreground/30 hover:bg-muted',
                                   )}
+                                  aria-pressed={isSelected}
                                   onClick={() => field.onChange(sport.id)}
                                 >
                                   {sport.name}
@@ -4065,11 +4079,11 @@ export function BetForm({
               {renderLiveOfferSection()}
 
               {selectedSport && shouldRenderPickDetailsSection ? (
-                <section ref={marketSectionRef} className="space-y-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <section id="pick-selection" ref={marketSectionRef} className="selection-section space-y-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <h2 className="text-lg font-semibold text-foreground">
-                      {selectedMatchup ? '2. Market and selection' : isTeamSport ? '2. Matchup and selection' : '2. Event and selection'}
+                      <span className="step-number">02</span>{selectedMatchup ? 'Market and selection' : isTeamSport ? 'Matchup and selection' : 'Event and selection'}
                     </h2>
                     <span className="text-xs text-muted-foreground">
                       {shouldShowManualFallback ? 'Manual entry' : 'Selected offer'}
@@ -4242,8 +4256,8 @@ export function BetForm({
                 </section>
               ) : null}
 
-              {selectedSport && <section className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
-                <h2 className="text-lg font-semibold text-foreground">3. Odds and review</h2>
+              {selectedSport && <section id="pick-review" className="review-section space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <h2 className="text-lg font-semibold text-foreground"><span className="step-number">03</span> Price your conviction</h2><p className="section-description">Set your odds, stake, and confidence in the pick.</p>
                 <div className="grid gap-4 md:grid-cols-2">
                   <FormField
                     control={form.control}
@@ -4283,6 +4297,7 @@ export function BetForm({
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
+                              aria-label="Decrease units"
                               onClick={() => field.onChange(clampUnits(((field.value as number | undefined) ?? 1) - UNITS_STEP))}
                               className="rounded-md border border-border px-3 py-1 text-sm font-bold leading-none hover:bg-muted"
                             >
@@ -4293,6 +4308,7 @@ export function BetForm({
                             </span>
                             <button
                               type="button"
+                              aria-label="Increase units"
                               onClick={() => field.onChange(clampUnits(((field.value as number | undefined) ?? 1) + UNITS_STEP))}
                               className="rounded-md border border-border px-3 py-1 text-sm font-bold leading-none hover:bg-muted"
                             >
@@ -4360,7 +4376,7 @@ export function BetForm({
                             Delivery choice
                           </legend>
                           <p className="text-xs leading-relaxed text-muted-foreground">
-                            Track Only is the default. Request official pick delivery only when you deliberately choose it.
+                            Keep this pick in your record, or request delivery to members.
                           </p>
                           <div className="grid gap-3 sm:grid-cols-2">
                             <label className={cn(
@@ -4397,7 +4413,7 @@ export function BetForm({
                               />
                               <span>
                                 <span className="block text-sm font-semibold text-foreground">Request Official Pick Delivery</span>
-                                <span className="block text-xs text-muted-foreground">Delivery eligible requested; the server decides the receipt.</span>
+                                <span className="block text-xs text-muted-foreground">Subject to your permissions. Check the receipt for the delivery outcome.</span>
                               </span>
                             </label>
                           </div>
@@ -4438,7 +4454,7 @@ export function BetForm({
                     Add leg to slip
                   </Button>
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    Build a multi-leg slip to review it. Ticket submission arrives with the parlay ticket API.
+                    Review multiple legs together. Multi-leg submission is not available yet.
                   </p>
                 </div>
               </section>}
@@ -4446,7 +4462,7 @@ export function BetForm({
           </Form>
         </div>
 
-        <div className="w-full lg:max-w-sm">
+        <aside className="slip-column w-full lg:max-w-sm" aria-label="Pick review">
           <BetSlipPanel
             submissionBlocked={missingQaIdentity}
             values={watchedValues}
@@ -4459,9 +4475,10 @@ export function BetForm({
             legRefusals={legRefusals}
             multiLegRefusal={multiLegRefusal}
           />
-        </div>
+        </aside>
       </div>
 
+      <footer className="workspace-footer mx-auto max-w-7xl"><span>UNIT TALK</span><span>Every pick has a point of view.</span></footer>
       <div className="h-20 lg:hidden" />
       <Separator className="sr-only" />
     </main>

@@ -4,37 +4,37 @@
 
 /*
  * Unit Talk Smart Form — Charcoal and Gold Design System
- * Aesthetic: Luxury/refined sportsbook. Bloomberg meets DraftKings dark.
+ * Aesthetic: restrained sports-trading workspace with warm gold accents.
  * Typography: Barlow (body) + Barlow Condensed (labels) + DM Mono (data/odds)
  */
 
 :root {
   /* Unit Talk near-black base */
-  --background: 225 9% 9%;
-  --foreground: 50 23% 95%;
+  --background: 220 15% 6%;
+  --foreground: 45 15% 94%;
 
   /* Cards — lifted charcoal */
-  --card: 225 7% 12%;
-  --card-foreground: 50 23% 95%;
+  --card: 220 12% 9%;
+  --card-foreground: 45 15% 94%;
 
   /* Popovers match cards */
-  --popover: 225 7% 12%;
-  --popover-foreground: 50 23% 95%;
+  --popover: 220 12% 11%;
+  --popover-foreground: 45 15% 94%;
 
   /* Primary — warm gold for active states and actions */
-  --primary: 43 53% 54%;
-  --primary-foreground: 225 9% 9%;
+  --primary: 41 48% 65%;
+  --primary-foreground: 220 18% 7%;
 
   /* Secondary — muted charcoal for secondary actions */
-  --secondary: 225 6% 18%;
+  --secondary: 220 10% 15%;
   --secondary-foreground: 50 23% 95%;
 
   /* Muted — subdued elements, placeholders */
-  --muted: 225 6% 15%;
-  --muted-foreground: 40 7% 68%;
+  --muted: 220 10% 13%;
+  --muted-foreground: 220 6% 65%;
 
   /* Accent — same as secondary, used for hover states */
-  --accent: 225 6% 18%;
+  --accent: 220 10% 15%;
   --accent-foreground: 50 23% 95%;
 
   /* Destructive — red for errors, invalid fields */
@@ -50,9 +50,9 @@
   --warning-foreground: 225 9% 9%;
 
   /* Structural */
-  --border: 225 5% 24%;
-  --input: 225 6% 14%;
-  --ring: 43 53% 54%;
+  --border: 220 9% 21%;
+  --input: 220 12% 7%;
+  --ring: 41 48% 65%;
   --radius: 0.5rem;
 }
 
@@ -71,9 +71,7 @@
 
   /* Tabular numbers everywhere for data alignment */
   .font-mono,
-  [class*="odds"],
-  [class*="units"],
-  [class*="line"] {
+  .data-value {
     font-family: var(--font-dm-mono), ui-monospace, monospace;
     font-variant-numeric: tabular-nums;
   }
@@ -107,7 +105,7 @@
 
   /* Market type card — interactive selection card */
   .market-card {
-    @apply slip-card cursor-pointer transition-all duration-150 ease-in-out;
+    @apply slip-card cursor-pointer transition-colors duration-150 ease-in-out;
     @apply hover:border-primary/40 hover:bg-primary/5;
   }
 
@@ -146,23 +144,165 @@
   :focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 3px; }
 }
 
-@layer components {
-  .smart-form-shell { background: radial-gradient(ellipse at 10% 0%, hsl(var(--primary) / .055), transparent 42%), hsl(var(--background)); }
-  .smart-form-shell section { box-shadow: 0 8px 30px rgb(0 0 0 / .08); }
-  .smart-form-shell h1, .smart-form-shell h2 { font-family: var(--font-barlow-condensed), sans-serif; }
-  .smart-form-brand { border-bottom: 1px solid hsl(var(--border)); }
-  .track-only-pill { border: 1px solid hsl(var(--primary) / .4); background: hsl(var(--primary) / .08); color: hsl(var(--primary)); }
-  .mobile-slip-bar { padding-bottom: max(.75rem, env(safe-area-inset-bottom)); }
-}
+/* WORK-2026102506: approved Smart Form workspace presentation. */
 
-@media (max-width: 639px) {
-  .smart-form-shell input, .smart-form-shell textarea, .smart-form-shell [role="combobox"] { font-size: 16px; min-height: 44px; }
-  .smart-form-shell button { min-height: 44px; }
-  .smart-form-shell section { padding: 1rem; border-radius: .875rem; }
+html { scroll-behavior: smooth; scroll-padding-top: 24px; }
+.smart-form-shell {
+  background: radial-gradient(ellipse at 0 0, hsl(41 48% 65% / .035), transparent 42%), hsl(var(--background));
+  padding-top: 0;
+  font-size: 15px;
+  line-height: 1.5;
 }
+.smart-form-shell .max-w-7xl { max-width: 1280px; }
+.smart-form-shell .sr-only { width: 1px; height: 1px; }
+.smart-form-brand { min-height: 106px; margin-bottom: 24px; padding-block: 24px; }
+.brand-lockup { display: flex; flex-shrink: 0; align-items: center; gap: 18px; color: hsl(var(--foreground)); }
+.brand-lockup svg { width: 53px; height: 38px; }
+.brand-wordmark { display: block; font-size: 19px; font-weight: 600; letter-spacing: .19em; line-height: 1.3; white-space: nowrap; }
+.brand-wordmark > span { display: block; margin-top: 5px; font-size: 8px; font-weight: 500; letter-spacing: .2em; color: hsl(var(--muted-foreground)); }
+.workspace-status { display: flex; align-items: center; gap: 28px; }
+.workspace-edition { color: hsl(var(--muted-foreground)); font-size: 10px; letter-spacing: .16em; }
+.workspace-edition > span { margin-inline: 8px; color: hsl(var(--border)); }
+.track-only-pill { display: flex; align-items: center; gap: 8px; border-color: hsl(var(--border)); background: hsl(var(--foreground) / .025); color: hsl(var(--muted-foreground)); }
+.status-dot { width: 5px; height: 5px; flex-shrink: 0; border-radius: 50%; background: hsl(var(--primary)); }
+.qa-preview-note { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 12px; margin-bottom: 36px; border-style: dashed; background: transparent; color: hsl(var(--muted-foreground)); font-size: 12px; }
+.qa-preview-note > p { margin: 0; }
+.qa-preview-note > p:first-child { font-weight: 500; color: hsl(var(--primary)); }
+.workspace-layout { gap: 48px; }
+.entry-column { min-width: 0; flex: 1; }
+.workspace-intro { padding-bottom: 10px; }
+.eyebrow { display: flex; align-items: center; gap: 10px; color: hsl(var(--primary)); font-size: 10px; font-weight: 600; letter-spacing: .2em; }
+.eyebrow > span { width: 20px; height: 1px; background: currentColor; }
+.smart-form-shell .workspace-intro h1 { margin-top: 13px; font-size: clamp(40px, 4.5vw, 60px); font-weight: 500; letter-spacing: -.025em; line-height: 1.08; text-wrap: balance; }
+.title-period, .slip-heading h2 > span { color: hsl(var(--primary)); }
+.intro-description { margin-top: 12px; color: hsl(var(--muted-foreground)); font-size: 15px; }
+.workflow-nav { display: flex; gap: 26px; margin-top: 26px; border-bottom: 1px solid hsl(var(--border)); padding-bottom: 18px; }
+.workflow-nav a { display: flex; gap: 9px; align-items: center; font-size: 12px; color: hsl(var(--foreground)); transition: color .15s; }
+.workflow-nav a:hover { color: hsl(var(--primary)); }
+.workflow-nav a > span { font-family: var(--font-dm-mono), monospace; font-size: 10px; color: hsl(var(--primary)); }
+.smart-form-shell section { box-shadow: none; scroll-margin-top: 24px; }
+.smart-form-shell form > section { padding: 26px; border-radius: 12px; background: hsl(var(--card)); border-color: hsl(var(--border) / .8); }
+.smart-form-shell section h2 { display: flex; align-items: center; gap: 12px; font-family: var(--font-barlow), sans-serif; font-size: 17px; font-weight: 500; letter-spacing: -.015em; }
+.step-number { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid hsl(var(--border)); border-radius: 7px; font-family: var(--font-dm-mono), monospace; font-size: 10px; color: hsl(var(--primary)); }
+.section-description { margin-top: 5px; color: hsl(var(--muted-foreground)); font-size: 12px; }
+.section-heading { padding-bottom: 18px; border-bottom: 1px solid hsl(var(--border) / .7); }
+.entry-mode { align-self: flex-start; border-radius: 8px; padding: 3px; }
+.entry-mode button { border-radius: 5px; padding: 8px 12px; font-family: var(--font-barlow), sans-serif; font-size: 12px; }
+.entry-mode button[aria-pressed="true"] { background: hsl(var(--secondary)); color: hsl(var(--foreground)); box-shadow: 0 1px 4px rgb(0 0 0 / .2); }
+.smart-form-shell label { font-size: 12px; font-weight: 500; color: hsl(var(--muted-foreground)); }
+.setup-fields { grid-template-columns: minmax(135px, .8fr) minmax(0, 2fr); gap: 24px 28px; }
+.sport-field { grid-column: 1 / -1; }
+.sport-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.sport-grid button { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 8px; border-radius: 7px; font-family: var(--font-barlow), sans-serif; font-size: 13px; background: hsl(var(--background) / .5); }
+.sport-grid button[aria-pressed="true"] { border-color: hsl(var(--primary)); background: hsl(var(--primary) / .1); box-shadow: inset 0 0 0 1px hsl(var(--primary) / .25); color: hsl(var(--primary)); }
+.sportsbook-field button { min-height: 36px; padding: 7px 11px; border-radius: 6px; font-size: 12px; font-weight: 500; }
+.smart-form-shell input:not([type="radio"]):not([type="checkbox"]), .smart-form-shell textarea, .smart-form-shell [role="combobox"] { min-height: 44px; border-color: hsl(var(--border)); border-radius: 7px; background: hsl(var(--background) / .6); padding-inline: 12px; box-shadow: none; font-size: 14px; }
+.smart-form-shell input::placeholder, .smart-form-shell textarea::placeholder { color: hsl(var(--muted-foreground) / .7); }
+.selection-section .section-label { margin-top: 20px; font-family: var(--font-barlow), sans-serif; font-size: 10px; }
+.selection-section button.min-h-\[72px\] { min-height: 76px; border-radius: 8px; }
+.selection-section button.min-h-\[72px\] > span:last-child { font-family: var(--font-barlow), sans-serif; font-size: 13px; }
+.selection-section button.min-h-\[72px\] > span:first-child { font-size: 10px; opacity: .65; }
+.review-section button { min-height: 36px; }
+.review-section fieldset { padding: 18px; border-radius: 9px; }
+.review-section fieldset label { min-height: 88px; }
+.review-section fieldset label span.block:first-child { color: hsl(var(--foreground)); }
+.review-section input[type="radio"] { accent-color: hsl(var(--primary)); }
+.review-section > .grid { gap: 24px; }
+.slip-column { padding-top: 0; }
+.bet-slip-panel { position: relative; border: 1px solid hsl(var(--border)); border-top: 2px solid hsl(var(--primary)); border-radius: 12px; padding: 26px; background: linear-gradient(160deg, hsl(220 11% 12%), hsl(220 13% 9%)); box-shadow: 0 16px 50px rgb(0 0 0 / .16); }
+.slip-eyebrow { display: flex; align-items: center; justify-content: space-between; font-size: 10px; font-weight: 500; letter-spacing: .14em; color: hsl(var(--muted-foreground)); }
+.slip-eyebrow > span:last-child { font-size: 20px; color: hsl(var(--primary)); }
+.smart-form-shell .slip-heading h2 { display: block; margin-top: 16px; font-family: var(--font-barlow-condensed), sans-serif; font-size: 36px; font-weight: 500; letter-spacing: -.025em; }
+.slip-subtitle { margin-top: 3px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+.slip-heading { padding-bottom: 16px; border-bottom: 1px solid hsl(var(--border)); }
+.bet-slip-panel [data-testid="incomplete-slip"] { padding: 22px 16px; border-radius: 8px; border-style: solid; background: hsl(var(--background) / .45); }
+.bet-slip-panel [data-testid="incomplete-slip"] p:first-child { font-size: 14px; font-weight: 500; }
+.bet-slip-panel .track-only-pill { display: block; padding: 13px 0; border: 0; border-top: 1px dashed hsl(var(--border)); border-radius: 0; background: transparent; font-size: 11px; line-height: 1.7; }
+.bet-slip-panel button[type="submit"] { height: 48px; padding-inline: 18px; border-radius: 7px; font-family: var(--font-barlow), sans-serif; font-size: 14px; font-weight: 600; }
+.submit-label { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.submit-label > span { font-size: 20px; font-weight: 400; }
+.mobile-slip-bar { box-shadow: 0 -8px 24px rgb(0 0 0 / .15); background: hsl(var(--background) / .96); }
+.workspace-footer { display: flex; justify-content: space-between; gap: 16px; margin-top: 48px; padding-top: 22px; border-top: 1px solid hsl(var(--border)); color: hsl(var(--muted-foreground)); font-size: 11px; }
+.workspace-footer > span:first-child { letter-spacing: .18em; font-weight: 600; }
+@media (min-width: 1024px) {
+  .workspace-layout { align-items: stretch; }
+  .entry-column { max-width: none; }
+  .slip-column { width: 340px; max-width: 340px; flex-shrink: 0; padding-top: 186px; }
+  .slip-column > div { position: sticky; top: 24px; }
+}
+@media (max-width: 1023px) {
+  .workspace-layout { gap: 28px; }
+  .slip-column { max-width: none; }
+  .workspace-edition { display: none; }
+  .smart-form-brand { min-height: 92px; }
+}
+@media (max-width: 639px) {
+  .smart-form-brand { min-height: 88px; padding-block: 22px; margin-bottom: 18px; }
+  .brand-lockup { gap: 12px; }
+  .brand-lockup svg { width: 44px; height: 32px; }
+  .brand-wordmark { font-size: 16px; }
+  .brand-wordmark > span { font-size: 7px; letter-spacing: .15em; }
+  .workspace-status > .track-only-pill { padding: 7px 9px; font-size: 10px; }
+  .qa-preview-note { margin-bottom: 28px; font-size: 11px; }
+  .workspace-intro { padding-bottom: 0; }
+  .smart-form-shell .workspace-intro h1 { font-size: 44px; }
+  .intro-description { font-size: 14px; }
+  .smart-form-shell form > section { padding: 20px; border-radius: 10px; }
+  .section-heading { gap: 16px; }
+  .setup-fields { grid-template-columns: 1fr; gap: 20px; }
+  .sport-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+  .sport-grid button { font-size: 12px; min-height: 44px; padding-inline: 3px; }
+  .sportsbook-field button { min-height: 40px; padding: 8px 12px; }
+  .smart-form-shell input:not([type="radio"]):not([type="checkbox"]), .smart-form-shell textarea, .smart-form-shell [role="combobox"] { font-size: 16px; }
+  .smart-form-shell button { min-height: 44px; }
+  .bet-slip-panel { padding: 22px; }
+  .workspace-footer { margin-top: 28px; font-size: 10px; }
+  .workspace-footer > span:last-child { text-align: right; }
+}
+@media (max-width: 380px) {
+  .brand-wordmark { font-size: 14px; letter-spacing: .13em; }
+  .brand-wordmark > span { font-size: 6px; }
+  .sport-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .smart-form-shell form > section { padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+/* Compact introduction and selection-first review. */
+.smart-form-shell .workspace-intro h1 { font-size: clamp(40px, 4.2vw, 54px); }
+.workspace-intro { padding-bottom: 0; }
+.intro-description { margin-top: 9px; }
+.workflow-nav { margin-top: 22px; }
+.bet-slip-panel [data-slip-label="Pick"] { display: block; border-bottom: 1px solid hsl(var(--border)); padding: 10px 0 18px; }
+.bet-slip-panel [data-slip-label="Pick"] > span:first-child { font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: hsl(var(--primary)); }
+.bet-slip-panel [data-slip-label="Pick"] > span:last-child { display: block; margin-top: 8px; font-family: var(--font-barlow-condensed), sans-serif; font-size: 30px; font-weight: 500; line-height: 1.2; text-align: left; overflow-wrap: anywhere; }
+.bet-slip-panel [data-slip-label="Odds"] > span:last-child { font-family: var(--font-dm-mono), monospace; color: hsl(var(--primary)); }
+.smart-form-shell [aria-invalid="true"] { border-color: hsl(var(--destructive)); }
+.smart-form-shell [id$="-form-item-message"] { line-height: 1.5; font-size: 12px; }
+.workspace-state { min-height: 100svh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 20px; gap: 28px; background: hsl(var(--background)); }
+.workspace-state-card { width: 100%; max-width: 420px; border: 1px solid hsl(var(--border)); border-top: 2px solid hsl(var(--primary)); border-radius: 12px; padding: 28px; background: hsl(var(--card)); }
+.workspace-state-card h1 { font-family: var(--font-barlow-condensed), sans-serif; font-size: 30px; font-weight: 500; }
+.workspace-state-card p { margin-top: 12px; font-size: 14px; line-height: 1.6; color: hsl(var(--muted-foreground)); overflow-wrap: anywhere; }
+.workspace-state-card button { min-height: 44px; margin-top: 22px; }
+.loading-bars { display: grid; gap: 12px; margin-top: 22px; }
+.loading-bars span { display: block; height: 42px; border-radius: 6px; background: hsl(var(--muted)); }
+.loading-bars span:last-child { width: 65%; }
+.receipt-shell { background: hsl(var(--background)); padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+.receipt-shell .bet-slip-panel { max-width: 480px; }
+.receipt-shell button { min-height: 44px; }
+.mobile-slip-bar { padding-bottom: max(.75rem, env(safe-area-inset-bottom)); }
+@media (min-width: 1024px) { .slip-column { padding-top: 174px; } }
+@media (max-width: 639px) {
+  .smart-form-brand { min-height: 78px; padding-block: 18px; }
+  .smart-form-shell .workspace-intro h1 { font-size: 42px; }
+  .entry-mode { width: 100%; }
+  .entry-mode button { flex: 1; min-height: 44px; }
+  .review-section > .grid { grid-template-columns: minmax(0, 1fr); }
+  .review-section .md\:col-span-2 { grid-column: auto; }
+  .sportsbook-field button, .review-section button { min-height: 44px; }
+  .smart-form-shell label { font-size: 12px; }
+  .mobile-slip-bar button { min-height: 46px; padding-inline: 18px; }
+}
+@media (max-width: 380px) { .workspace-status > .track-only-pill { font-size: 9px; padding-inline: 7px; } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
-.smart-form-shell > div > div { min-width: 0; }
-
-.smart-form-shell .sr-only { width: 1px; height: 1px; }
