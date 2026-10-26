@@ -215,6 +215,14 @@ test('classifyMainCommit: an unknown/null author login with no PR is unauthorize
 // and server-side branch protection. This pins what the rules must keep stopping and what
 // governed workflows must keep running. Harness behaviour (deny in default and
 // bypassPermissions mode) is recorded in the lane proof, not re-run here.
+//
+// `permissions.ask` is an interactive confirmation prompt ONLY. It is not Griff's authorization
+// and does not replace the governed production migration/change approval or any other reserved
+// action (docs/mission/intent.md, DB_MIGRATION_WORKFLOW.md, SUPABASE_BRANCH_COST_POLICY.md):
+// those operator-approval requirements remain binding and are verified independently of this file.
+//
+// `mcp__claude_ai_Supabase__execute_sql` is write-capable and is NOT restricted by these rules.
+// Closing that gap needs connector scoping (R2), not this change.
 type Permissions = { deny?: string[]; ask?: string[] };
 
 const settings = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), '.claude/settings.json'), 'utf8')) as {
@@ -277,11 +285,11 @@ const MUST_DENY_TOOLS = [
   'mcp__claude_ai_Supabase__restore_project',
 ];
 const MUST_ASK_TOOLS = ['mcp__claude_ai_Supabase__apply_migration', 'mcp__claude_ai_Supabase__delete_branch'];
-const MUST_STAY_AVAILABLE = [
-  'mcp__claude_ai_Supabase__execute_sql',
+const MUST_STAY_AVAILABLE_READ_TOOLS = [
   'mcp__claude_ai_Supabase__list_tables',
   'mcp__claude_ai_Supabase__query_logs',
 ];
+const WRITE_CAPABLE_TOOL_NOT_RESTRICTED = 'mcp__claude_ai_Supabase__execute_sql';
 
 test('claude settings permissions: dangerous direct and wrapped commands are denied', () => {
   for (const command of MUST_DENY) {
@@ -289,7 +297,8 @@ test('claude settings permissions: dangerous direct and wrapped commands are den
   }
 });
 
-test('claude settings permissions: operator-authorized commands require a prompt, not a silent run', () => {
+// Interactive confirmation only: the prompt is not an authorization record and grants nothing.
+test('claude settings permissions: operator-approval commands prompt interactively instead of being hard-denied', () => {
   for (const command of MUST_ASK) {
     assert.ok(matches(ask, command), `not ask-gated: ${command}`);
     assert.ok(!matches(deny, command), `hard-denied, would block the operator-authorized flow: ${command}`);
@@ -303,12 +312,20 @@ test('claude settings permissions: governed engineering workflows are not blocke
   }
 });
 
-test('claude settings permissions: Supabase MCP write tools are denied or ask-gated, read tools stay available', () => {
+test('claude settings permissions: listed Supabase MCP write tools are denied or prompt; read-only tools stay available', () => {
   for (const tool of MUST_DENY_TOOLS) assert.ok(deny.includes(tool), `not denied: ${tool}`);
   for (const tool of MUST_ASK_TOOLS) assert.ok(ask.includes(tool), `not ask-gated: ${tool}`);
-  for (const tool of MUST_STAY_AVAILABLE) {
+  for (const tool of MUST_STAY_AVAILABLE_READ_TOOLS) {
     assert.ok(!deny.includes(tool) && !ask.includes(tool), `read tool restricted: ${tool}`);
   }
+});
+
+// Documents a known limitation; asserts no read-only isolation. execute_sql can write (DML/DDL).
+test('claude settings permissions: execute_sql is write-capable and is not restricted by these rules (limitation, needs R2)', () => {
+  assert.ok(
+    !deny.includes(WRITE_CAPABLE_TOOL_NOT_RESTRICTED) && !ask.includes(WRITE_CAPABLE_TOOL_NOT_RESTRICTED),
+    'execute_sql is now restricted: update this test and the limitation text deliberately',
+  );
 });
 
 test('claude settings permissions: existing hooks are untouched by the permissions block', () => {
