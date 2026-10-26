@@ -31,9 +31,10 @@ Browser evidence: `docs/06_status/proof/WORK-2026102506/ (the png and json files
 
 Commands executed locally: `pnpm lint`, `pnpm type-check`, `pnpm --filter @unit-talk/smart-form test`, and `tsx --test e2e/ui-polish.browser.ts`, with the results above. `pnpm verify` was not run locally because its staging proof step cannot pass on a workstation; CI's `verify` job is the authority and its result is recorded on the PR.
 
-Model-routing sidecar: Codex implemented this lane in its own desktop session, not through `scripts/ops/codex-exec.ts`, so no `model-routing.json` exists and none was fabricated. `ops:proof-generate` therefore refuses with `missing_required_sidecar`.
+Provenance: Codex wrote the implementation (commit `89a2885bc`, cherry-picked from its draft work, authorship preserved) in its own desktop session, not through `scripts/ops/codex-exec.ts`. No `model-routing.json` exists for that session and none was fabricated. Under PM direction the lane was readmitted with `--executor claude`: Claude administers the lane, ran the baseline comparison and verification, and recorded this proof. The manifest therefore declares `claude` and does not require a model-routing sidecar. The work-order contract (landed on `main` in the governance change for WORK-2026102602) states the same.
 
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: pending
+Execution SHA: aadec694df03e85e60d5341a4c5f9a7e5feabcd3

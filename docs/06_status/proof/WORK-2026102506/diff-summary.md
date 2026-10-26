@@ -1,6 +1,6 @@
 # Diff summary: WORK-2026102506
 
-Smart Form visual polish and supplied UT logo (presentation only). Tier T2, delivery-ui, executor codex-cli.
+Smart Form visual polish and supplied UT logo (presentation only). Tier T2, delivery-ui, lane executor claude; implementation authored by Codex (see verification.md, Provenance).
 
 | File | Change |
 |---|---|

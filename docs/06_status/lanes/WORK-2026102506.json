@@ -8,7 +8,7 @@
   "branch": "codex/work-2026102506-smart-form-ui",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1784",
   "files_changed": [],
   "file_scope_lock": [
     "apps/smart-form/app/globals.css",
@@ -23,7 +23,7 @@
     "docs/06_status/proof/WORK-2026102506/evidence.json",
     "docs/06_status/proof/WORK-2026102506/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-10-26T23:51:15.837Z",
   "heartbeat_at": "2026-10-26T23:51:15.837Z",
   "closed_at": null,
