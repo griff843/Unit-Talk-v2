@@ -7,7 +7,7 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "e903b27d5f51056aefbd0a0535238fe457c0a63d",
+    "verified_source_sha": "e2cabb6eae5fc65816329bc4340ef23a3b6f87e4",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -16,7 +16,7 @@
     "scope": "permission rules in .claude/settings.json plus static regression tests; behaviour exercised in disposable clones",
     "local_checks": [
       "ops:preflight PASS (39 checks)",
-      "direct-main-push-guard.test.ts 18 pass, 0 fail; 4 of 4 rule-removal mutations fail it",
+      "direct-main-push-guard.test.ts 19 pass, 0 fail; 4 of 4 rule-removal mutations fail it",
       "harness matrix 92 runs: 0 of 64 dangerous-command runs executed; 24 of 24 governed commands executed",
       "eslint clean; type-check exit 0"
     ],
