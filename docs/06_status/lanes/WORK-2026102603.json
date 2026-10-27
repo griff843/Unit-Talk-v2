@@ -18,14 +18,22 @@
     "docs/06_status/lanes/WORK-2026102602.json"
   ],
   "expected_proof_paths": [],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-10-27T04:27:58.189Z",
-  "heartbeat_at": "2026-10-27T05:02:27.968Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-27T05:25:19.895Z",
+  "closed_at": "2026-10-27T05:25:19.895Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026102603-recover-merged-lanes.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-27T05:25:17.233Z",
+      "verdict": "pass",
+      "merge_sha": "4a901fde8e3de5f5d086a25c7c545d575e7fc35a",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
