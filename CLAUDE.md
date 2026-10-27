@@ -14,22 +14,25 @@ Unit Talk V2 is a contract-first, fail-closed sports-betting pick pipeline. Clau
 
 ## Mission — mandatory context
 
-Before planning, executing, reviewing, delegating, or resuming work, read:
+Mission card (compact; the full files are read on demand, not imported). Unit Talk is recovering to a finished, trustworthy, revenue-generating product. Current goal (Griff, 2026-10-13): quantity, diversity, truthful completion and reconciliation of real **Track Only** pick lifecycles with zero member delivery; no calendar pilot. SGO purchase/activation is a separate Griff gate.
 
-@docs/mission/intent.md
-@docs/mission/spec.md
-@docs/mission/plan.md
+**Reserved for Griff (never decide or act on these yourself; surface with prepared evidence and one recommendation):**
+1. Production DDL and production data deletion
+2. Member-delivery activation
+3. Paid provider / subscription commitments
+4. Secrets
+5. Pricing and tier authority
+6. Changes to production containment while containment is mandated
+7. Changes to merge authority itself — the merge gate, its policy inputs, CODEOWNERS, branch protection
+8. Dispatching a production deployment (`deploy.yml` is `workflow_dispatch`-only and nothing promotes on its own)
+
+**Standing holds (until Griff changes them):** all four delivery targets (`official-picks`, `best-bets`, `trader-insights`, `exclusive-insights`) stay kill-switched; Track Only never creates delivery; do not requeue or alter pick `706b136b`; no provider unparking, containment change, member delivery, clearing of stranded canary `processing` rows, or re-enabling cron job 5; no direct-`main` bypass (all work lands by PR on green CI); changes to the operating model (lanes, tiers, merge authority) are PM architecture decisions, proposed in a PR, never adopted unilaterally.
+
+**Stop conditions:** the mission runs continuously. Return to Griff only at a reserved decision with nothing else safe executable, a hard safety boundary, or mission completion. These are NOT stop conditions: waiting on CI, review or a PR; finishing a lane or PR; having something to report; Griff asking a question, issuing a correction or giving steering (answer it, fold it in, continue). A reserved gate blocks only the work that depends on it.
+
+**Before planning, executing, reviewing, delegating or resuming work, Read `docs/mission/intent.md` and `docs/mission/plan.md` (and `docs/mission/spec.md` for contract questions).** `intent.md` is Griff-owned; `plan.md` is Claude-owned and live evidence overrides it. Dated readings (current truth, production position, evidence batch) live in `docs/mission/plan-readings.md`; re-measure before relying on any figure. If the card and those files disagree, the files win.
+
 @docs/05_operations/STANDING_GUARDRAILS.md
-
-These define the current mission.
-
-- `intent.md` is Griff-owned. Do not change its intent without Griff ratification.
-- `spec.md` defines the required outcome and points to canonical contracts.
-- `plan.md` is Claude-owned. Reconcile it against live GitHub/runtime truth and update it as reality changes.
-- Live evidence establishes current state.
-- Relevant canonical contracts remain authoritative for their governed domains.
-
-Claude owns orchestration from this context. Do not require Griff to restate the mission in chat.
 
 ---
 
