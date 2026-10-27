@@ -17,7 +17,7 @@ The implementation is Codex-authored and carried unchanged from draft PR #1791 (
 - [x] A failed fetch, missing endpoint or broken image yields an initials fallback and never affects form validity or payload (`lib/participant-media.ts` catch path, `ArtworkImage` onError; `test/participant-media.test.ts`).
 - [x] Stale artwork from a previous selection is never shown: render-time identity comparison and an aborted fetch on change (`ParticipantArtwork.tsx`).
 - [x] Stat and sport input examples are covered by `test/input-examples.test.ts`.
-- [x] No submission payload, auth, source, provenance or Track Only change: the diff is confined to presentation components, the media client, examples and tests (`lane:check delivery-ui` PASS, 15 files).
+- [x] No change to payload construction, auth, source, provenance or Track Only (`lane:check delivery-ui` PASS, 15 files). Selection is stricter, though. Player suggestions are scoped to the selected team's participant id, and a stale suggestion or selection for a previous scope is ignored (`BetForm.tsx`). Since UTV2-1856 the player-search `teamId` is a participants id, and production `teams` has 0 rows, so the scoping matches the API's own server-side `teamId` filter. Covered by the existing Smart Form suite (224/224).
 
 ## EVIDENCE:
 
