@@ -21,9 +21,9 @@
     "docs/06_status/proof/UTV2-1980/verification.md",
     "docs/06_status/proof/UTV2-1980/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "parked",
   "started_at": "2026-10-22T14:21:57.220Z",
-  "heartbeat_at": "2026-10-22T14:22:44.293Z",
+  "heartbeat_at": "2026-10-27T16:42:27.551Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1980-governed-view-revoke.json",
