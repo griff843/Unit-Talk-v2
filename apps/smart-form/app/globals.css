@@ -2,6 +2,29 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Canonical participant media is decorative context, never submission truth. */
+.participant-artwork { margin-inline: -26px; border-block: 1px solid hsl(var(--border)); }
+.participant-artwork-stage { height: 178px; position: relative; overflow: hidden; isolation: isolate; background: radial-gradient(ellipse at 50% 100%, #20312c, #11171a 76%); }
+.participant-artwork-stage::after { content: ''; position: absolute; inset: auto 0 0; height: 36px; background: linear-gradient(transparent, #14181b); pointer-events: none; }
+.participant-artwork-watermark { position: absolute; inset: 0; text-align: center; font-family: var(--font-barlow-condensed), sans-serif; font-size: 145px; font-weight: 700; color: #fff; opacity: .035; line-height: 1.1; user-select: none; }
+.participant-headshot { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 244px; height: 178px; object-fit: contain; }
+.participant-team-crest, .participant-team-monogram { position: absolute; top: 16px; right: 18px; width: 40px; height: 40px; object-fit: contain; }
+.participant-team-monogram { display: grid; place-items: center; border: 1px solid #68766f; border-radius: 50%; font-family: var(--font-dm-mono), monospace; font-size: 11px; color: #ced6d1; }
+.participant-primary-logo { position: absolute; inset: 22px 0; margin-inline: auto; width: 134px; height: 134px; object-fit: contain; }
+.participant-initials { position: absolute; inset: 0; display: grid; place-items: center; color: #c4cfc8; font-family: var(--font-barlow-condensed), sans-serif; font-size: 64px; font-weight: 500; }
+.participant-artwork-caption { padding: 18px 26px; }
+.participant-artwork-caption p { color: hsl(var(--primary)); font-family: var(--font-dm-mono), monospace; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; line-height: 1.7; overflow-wrap: anywhere; }
+.participant-artwork-caption h3 { margin-top: 6px; font-family: var(--font-barlow-condensed), sans-serif; font-size: 29px; line-height: 1.15; font-weight: 600; overflow-wrap: anywhere; }
+.participant-matchup-logos { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 20px; padding: 25px; }
+.participant-matchup-logo, .participant-matchup-initials { width: 95px; height: 95px; flex: 0 1 95px; min-width: 0; object-fit: contain; }
+.participant-matchup-initials { display: grid; place-items: center; font-family: var(--font-barlow-condensed), sans-serif; font-size: 40px; color: #c4cfc8; }
+.participant-matchup-at { color: #aab4ad; font-size: 16px; }
+.readonly-matchup { field-sizing: content; min-height: 4.5rem; overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .participant-artwork { margin-inline: -22px; }
+  .participant-artwork-caption { padding-inline: 22px; }
+}
+
 /*
  * Unit Talk Smart Form — Charcoal and Gold Design System
  * Aesthetic: restrained sports-trading workspace with warm gold accents.

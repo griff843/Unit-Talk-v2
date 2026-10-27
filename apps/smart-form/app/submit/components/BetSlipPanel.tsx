@@ -8,8 +8,10 @@ import { betFormSchema, type BetFormValues } from '@/lib/form-schema';
 import { calcPayout, buildSelectionString } from '@/lib/form-utils';
 import { getMarketTypeLabel, type MarketTypeId } from '@/lib/market-types';
 import type { LegSummary } from '@/lib/bet-slip';
+import { ParticipantArtwork, type ParticipantArtworkProps } from './ParticipantArtwork';
 
 interface BetSlipPanelProps {
+  artwork?: ParticipantArtworkProps;
   submissionBlocked?: boolean;
   values: Partial<BetFormValues>;
   isSubmitting: boolean;
@@ -154,6 +156,7 @@ function SlipLegList({
 }
 
 export function BetSlipPanel({
+  artwork,
   values,
   isSubmitting,
   onSubmit,
@@ -199,6 +202,8 @@ export function BetSlipPanel({
               <p className="text-sm font-semibold text-foreground">{values.capper}</p>
             )}
           </div>
+
+          {hasMinimum && legs.length === 0 && artwork && <ParticipantArtwork {...artwork} />}
 
           {legs.length > 0 && (
             <>
