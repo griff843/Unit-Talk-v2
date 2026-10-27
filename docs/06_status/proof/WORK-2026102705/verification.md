@@ -1,6 +1,6 @@
 # PROOF: WORK-2026102705
 
-MERGE_SHA: pending merge
+MERGE_SHA: e095bb926a79c8b2babf36e973555bc9dca8ae1b
 
 Issue: WORK-2026102705
 Tier: T2
@@ -47,6 +47,6 @@ Production data check (read-only, 2026-10-27): every participant row with artwor
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: e095bb926a79c8b2babf36e973555bc9dca8ae1b
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1793
 Execution SHA: 9a8e2558458f21dd712674741963954a91dfd0d5

@@ -14,5 +14,5 @@
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: e095bb926a79c8b2babf36e973555bc9dca8ae1b
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1793
