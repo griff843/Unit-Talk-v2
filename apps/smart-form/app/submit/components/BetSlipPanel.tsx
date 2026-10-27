@@ -41,7 +41,7 @@ interface BetSlipPanelProps {
 function LineItem({ label, value }: { label: string; value?: string | number | null }) {
   if (value == null || value === '') return null;
   return (
-    <div className="flex items-start justify-between gap-2 text-sm">
+    <div data-slip-label={label} className="flex items-start justify-between gap-2 text-sm">
       <span className="text-muted-foreground shrink-0">{label}</span>
       <span className="text-foreground text-right font-medium break-words min-w-0">{value}</span>
     </div>
@@ -191,10 +191,10 @@ export function BetSlipPanel({
       <div className="flex flex-col lg:sticky lg:top-6 h-fit">
         <div className="bet-slip-panel rounded-2xl p-5 space-y-4">
           {/* Header */}
-          <div>
-            <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-1">
-              Your bet slip
-            </p>
+          <div className="slip-heading">
+            <div className="slip-eyebrow"><span>YOUR BET SLIP</span><span aria-hidden="true">↗</span></div>
+            <h2>The final read<span>.</span></h2>
+            <p className="slip-subtitle">A second look before you lock it in.</p>
             {values.capper && (
               <p className="text-sm font-semibold text-foreground">{values.capper}</p>
             )}
@@ -263,16 +263,16 @@ export function BetSlipPanel({
 
           {remaining.length > 0 && (
             <div className="rounded-xl border border-dashed border-border p-4" data-testid="incomplete-slip">
-              <p className="text-sm font-semibold text-foreground">{hasMinimum ? 'Still to complete' : 'Start your pick'}</p>
+              <p className="text-sm font-semibold text-foreground">{hasMinimum ? 'A few details to go' : 'Your edge starts here'}</p>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                {values.sport ? `Add or check: ${remaining.join(', ')}.` : 'Choose a sport to see its markets.'}
+                {values.sport ? `Add or check: ${remaining.join(', ')}.` : 'Choose a sport and build your selection. Your pick will take shape here.'}
               </p>
             </div>
           )}
 
           {/* UTV2-1925: this is pre-submission, so it describes the REQUEST. The
               outcome is the server's to determine and is stated on the receipt. */}
-          <p className="track-only-pill rounded-lg px-3 py-2.5 text-xs leading-relaxed">{values.trackOnly ? 'Track Only — this pick is tracked and will never be delivered to members.' : 'Requesting delivery — the server delivers only if you are authorized, and otherwise refuses. The receipt reports its decision.'}</p>
+          <p className="track-only-pill rounded-lg px-3 py-2.5 text-xs leading-relaxed">{values.trackOnly ? 'Track Only — this pick will be saved to your record and never delivered to members.' : 'Delivery requested. Permission is checked when you submit; your receipt confirms the outcome.'}</p>
 
           <Button
             data-testid="smart-form-submit-button"
@@ -284,10 +284,10 @@ export function BetSlipPanel({
             {isSubmitting ? (
               <>
                 <Spinner className="mr-2 h-4 w-4" />
-                Submitting...
+                Submitting…
               </>
             ) : (
-              'Submit Pick'
+              <span className="submit-label">Submit Pick <span aria-hidden="true">↗</span></span>
             )}
           </Button>
         </div>
@@ -302,7 +302,7 @@ export function BetSlipPanel({
       >
         <div className="flex items-center justify-between gap-4 max-w-lg mx-auto">
           <div className="min-w-0">
-            <p className="mb-1 text-[10px] uppercase tracking-widest text-primary">{values.trackOnly ? 'Track Only requested' : 'Delivery eligible requested'}</p>
+            <p className="mb-1 text-[10px] uppercase tracking-widest text-primary">{values.trackOnly ? 'Track Only' : 'Delivery requested'}</p>
             {legs.length > 0 && (
               <p className="text-xs font-medium text-foreground truncate">
                 {legs.length === 1 ? '1 leg on slip' : `${legs.length} legs on slip`}
