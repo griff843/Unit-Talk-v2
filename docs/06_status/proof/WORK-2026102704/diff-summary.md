@@ -12,3 +12,8 @@ Adds the read-only `GET /api/reference-data/participants/:id/media` endpoint.
 | `apps/api/src/participant-media.http.test.ts` | Covers the public HTTP route. |
 
 No writes, enrichment, external fetches, auth changes, schema changes, or worker/domain changes.
+
+## SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1794
