@@ -10,5 +10,5 @@ Defense in depth only. No hook, CI, branch-protection, merge-requirement, creden
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: ebfbc0a74db2dcb98f231a67a52854c79caab7a7
 PR: pending

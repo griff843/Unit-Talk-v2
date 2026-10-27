@@ -20,14 +20,22 @@
     "docs/06_status/proof/WORK-2026102601/evidence.json",
     "docs/06_status/proof/WORK-2026102601/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-10-26T19:41:39.483Z",
-  "heartbeat_at": "2026-10-27T04:28:17.016Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-27T05:24:12.444Z",
+  "closed_at": "2026-10-27T05:24:12.444Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026102601-r3-permission-deny.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-27T05:24:10.120Z",
+      "verdict": "pass",
+      "merge_sha": "ebfbc0a74db2dcb98f231a67a52854c79caab7a7",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
