@@ -1,6 +1,6 @@
 # PROOF: WORK-2026102501
 
-MERGE_SHA: ddce4739d77491d0921ac9a47b5557192eed5304
+MERGE_SHA: pending merge
 
 Issue: WORK-2026102501
 Tier: T2
@@ -74,7 +74,12 @@ The branch was refreshed with `pnpm ops:merge-wrapper pr-update-branch` (merge c
 
 Not done, with reason: the e2e gate is off by default and was run only for the files above against the isolated in-memory API (Supabase variables blank, no staging or production access). The full `phase-one.spec.ts` now passes (23 of 23). The earlier failures (9 on `origin/main`, 6 on this branch) were all stale wording: headings were deliberately renamed (`Pick Saved` to `Saved as Track Only`, `Track Only · Internal` to `Track Only requested`), so the assertions were updated in `phase-one.spec.ts` only; no product regression was found. Selection-time hiding of unmapped stat types in `BetForm.tsx` was not done: that file is outside the declared file scope.
 
+## Provenance
+
+This lane was admitted declaring `codex-cli` (profile `codex-sol-high`), but the implementation and verification were performed by Claude, not by `scripts/ops/codex-exec.ts`. The declaration was wrong. Under PM direction the lane was readmitted with `--executor claude`, so the manifest now declares `claude` and requires no `model-routing.json`. No sidecar was fabricated and no Codex run is claimed. The work-order contract, landed on `main` through the governance change for WORK-2026102602, records the same correction.
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: pending
+Execution SHA: 1a8d841fc0e7fa13ef59eeec8f56317bb76b9061
