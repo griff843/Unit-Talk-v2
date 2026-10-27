@@ -51,6 +51,7 @@ Alignment: `pnpm exec tsx scripts/ops/system-alignment-check.ts --json` summary 
 - `pnpm type-check` on `ebb195866`: exit 0.
 - `pnpm test` on `ebb195866`: exit 0; summed node:test totals across all files: `# tests 7651`, `# pass 7638`, `# fail 0`, `# skipped 13`.
 - `9b27c24e5` differs from `ebb195866` only in `CLAUDE.md` prose, which no test reads, so the suite was not rerun on it. Full `pnpm verify` was not run locally; CI `verify` on the PR is the verification of record.
+- CI of record for PR #1789 at head `1cfa63eea13e1e16f8b2227b204b86887c4ba92a`: the `verify` job (run 40508756309) passed, and the R-Level Compliance Check (run 40508756273) ran `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` and passed.
 - Runtime: this lane has no runtime surface (instruction text only); no database, service or deployment was touched.
 
 Not changed: `intent.md`, `spec.md`, `plan.md`, hooks, settings, CI, merge requirements. Follow-up recorded, not done here: the post-compact hook (`.claude/**`, CODEOWNERS-owned, outside this lane's scope) could also point sessions at the mission files.
