@@ -1,6 +1,6 @@
 # PROOF: WORK-2026102305
 
-MERGE_SHA: pending merge
+MERGE_SHA: d7895651328b8c6051e6048d14df484c14e7aa26
 
 Issue: WORK-2026102305
 Tier: T2
@@ -30,8 +30,14 @@ Original plan.md was 21,487 bytes. Token measurement is NOT part of this proof's
 - `pnpm verify:quick` on the lane worktree after the implementation commit: completed, type-check last, no errors.
 - Full `pnpm verify`/CI: not run locally; CI on the PR is the verification of record.
 
+CI evidence at PR head `dbd1f0fcaab16a8113b927668bb3cfea8a7baf44` (the head that merged; added post-merge by WORK-2026102306, no local run claimed):
+
+- `pnpm type-check` and `pnpm test`: executed inside `pnpm verify:static` by the `verify` job (CI run 40188363835, job 121155494476, conclusion success). `verify:static` runs `pnpm lint`, `pnpm type-check`, `pnpm build` and `pnpm test` in sequence.
+- `pnpm verify`: not run under that name. The required `verify` context ran `pnpm verify:static`; the staging proof ran in the same run as job `Writable DB proof (staging only)` (conclusion success).
+- `scripts/ci/r-level-check.ts`: executed by the `R-Level Compliance Check` workflow (run 40188363931, conclusion success).
+
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: d7895651328b8c6051e6048d14df484c14e7aa26
 PR: pending
 Execution SHA: dbb71d24df7fc79739dacfe7e8aeab637d72723f
