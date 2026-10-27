@@ -2,9 +2,9 @@
   "schema_version": 2,
   "issue_id": "WORK-2026102501",
   "lane_type": "delivery-ui",
-  "executor": "codex-cli",
+  "executor": "claude",
   "tier": "T2",
-  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/launch-2026102501/.out/worktrees/codex__work-2026102501-player-prop-market-keys",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102501-player-prop-market-keys",
   "branch": "codex/work-2026102501-player-prop-market-keys",
   "base_branch": "main",
   "commit_sha": null,
@@ -18,30 +18,23 @@
   "expected_proof_paths": [
     "docs/06_status/proof/WORK-2026102501/diff-summary.md",
     "docs/06_status/proof/WORK-2026102501/evidence.json",
-    "docs/06_status/proof/WORK-2026102501/verification.md",
-    "docs/06_status/proof/WORK-2026102501/model-routing.json"
+    "docs/06_status/proof/WORK-2026102501/verification.md"
   ],
   "status": "started",
-  "started_at": "2026-10-25T10:52:48.580Z",
-  "heartbeat_at": "2026-10-25T10:52:48.580Z",
+  "started_at": "2026-10-27T00:20:11.658Z",
+  "heartbeat_at": "2026-10-27T00:20:11.658Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026102501-player-prop-market-keys.json",
-  "created_by": "codex-cli",
+  "created_by": "claude",
   "truth_check_history": [],
   "reopen_history": [],
-  "model_routing": {
-    "profile": "codex-sol-high",
-    "model": "gpt-5.6-sol",
-    "reasoning_effort": "high",
-    "selected_by": "three-brain",
-    "policy_version": "2.0.0"
-  },
   "execution_location": {
     "mode": "worktree",
-    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/launch-2026102501/.out/worktrees/codex__work-2026102501-player-prop-market-keys",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102501-player-prop-market-keys",
     "package_install": "verified",
     "setup_command": null,
     "main_checkout_control_only": true
-  }
+  },
+  "notes": "existing-branch readmission; previous_lane_type=delivery-ui; new_lane_type=delivery-ui; preserved_head=a1d19f491a709622f672103315ff30c2540e005a; open_pr=1780"
 }
