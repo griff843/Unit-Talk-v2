@@ -1,0 +1,153 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102703
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102703
+  objective: >-
+    Production Command Center is configured with only a bearer token and no
+    `COMMAND_CENTER_OPERATOR_IDENTITY`, so every authenticated action is
+    attributed to the default actor `command-center`, and a browser has no
+    credential it can present. Settlement attribution comes from the
+    middleware-issued actor (`settle.ts` sends `settledBy: operatorActor`), so
+    fixing the actor fixes attribution.
+
+    When HTTP Basic credentials authenticate a request and no explicit
+    `COMMAND_CENTER_OPERATOR_IDENTITY` is configured, the actor is the
+    authenticated username, but only when it is already a canonical id
+    (`^[a-z0-9][a-z0-9_-]*$`). A username that is not canonical keeps the
+    existing configured/default identity; it is never rewritten.
+
+    Bearer-token authentication is unchanged: it keeps the configured or default
+    identity, so the machine token is not attributed to a human operator.
+
+    Browser sessions minted from Basic credentials verify against the identity
+    those credentials produce, so a session cannot claim any other actor.
+  acceptance_criteria:
+    - Basic auth with username `griff843` and no explicit identity yields actor
+      `griff843`; bearer auth on the same configuration yields `command-center`.
+    - An explicit `COMMAND_CENTER_OPERATOR_IDENTITY` still wins for Basic auth
+      (existing behaviour and tests unchanged).
+    - A non-canonical Basic username never becomes the actor.
+    - A session minted from Basic credentials authenticates as that actor; a
+      forged or remapped actor is refused.
+    - Wrong credentials and missing credentials are still refused.
+  guardrails:
+    - Command Center stays internal-only (127.0.0.1 port, SSH tunnel). No Caddy
+      route, no public hostname, no deploy workflow change.
+    - No credential value in code, tests, logs or chat. Griff sets
+      `COMMAND_CENTER_AUTH_USERNAME` and `COMMAND_CENTER_AUTH_PASSWORD` himself.
+    - No API, settlement-logic or schema change.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged through `ops:merge-wrapper pr-merge` on green required checks;
+      deployment is a separate owner-authorized step.
+  unmapped_sections:
+    - >-
+      WORK-2026102703 — Command Center settlement is attributed to the signed-in
+      operator
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). PM
+      direction 2026-10-27: give Griff a working, private Command Center
+      settlement experience under his own authenticated operator identity.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102703.md
+    title: WORK-2026102703 — Command Center settlement is attributed to the
+      signed-in operator
+    description: >-
+      # WORK-2026102703 — Command Center settlement is attributed to the
+      signed-in operator
+
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). PM
+      direction 2026-10-27: give Griff a working, private Command Center
+      settlement experience under his own authenticated operator identity.
+
+
+      ## Objective
+
+
+      Production Command Center is configured with only a bearer token and no
+      `COMMAND_CENTER_OPERATOR_IDENTITY`, so every authenticated action is
+      attributed to the default actor `command-center`, and a browser has no
+      credential it can present. Settlement attribution comes from the
+      middleware-issued actor (`settle.ts` sends `settledBy: operatorActor`), so
+      fixing the actor fixes attribution.
+
+
+      1. When HTTP Basic credentials authenticate a request and no explicit
+      `COMMAND_CENTER_OPERATOR_IDENTITY` is configured, the actor is the
+      authenticated username, but only when it is already a canonical id
+      (`^[a-z0-9][a-z0-9_-]*$`). A username that is not canonical keeps the
+      existing configured/default identity; it is never rewritten.
+
+      2. Bearer-token authentication is unchanged: it keeps the configured or
+      default identity, so the machine token is not attributed to a human
+      operator.
+
+      3. Browser sessions minted from Basic credentials verify against the
+      identity those credentials produce, so a session cannot claim any other
+      actor.
+
+
+      ## Acceptance Criteria
+
+
+      - Basic auth with username `griff843` and no explicit identity yields
+      actor `griff843`; bearer auth on the same configuration yields
+      `command-center`.
+
+      - An explicit `COMMAND_CENTER_OPERATOR_IDENTITY` still wins for Basic auth
+      (existing behaviour and tests unchanged).
+
+      - A non-canonical Basic username never becomes the actor.
+
+      - A session minted from Basic credentials authenticates as that actor; a
+      forged or remapped actor is refused.
+
+      - Wrong credentials and missing credentials are still refused.
+
+
+      ## Guardrails
+
+
+      - Command Center stays internal-only (127.0.0.1 port, SSH tunnel). No
+      Caddy route, no public hostname, no deploy workflow change.
+
+      - No credential value in code, tests, logs or chat. Griff sets
+      `COMMAND_CENTER_AUTH_USERNAME` and `COMMAND_CENTER_AUTH_PASSWORD` himself.
+
+      - No API, settlement-logic or schema change.
+
+
+      ## Exit Criteria
+
+
+      - PR merged through `ops:merge-wrapper pr-merge` on green required checks;
+      deployment is a separate owner-authorized step.
+    captured_at: 2026-10-27T14:14:12.598Z
+    description_sha256: df534340aac4dfdc4f39f719b16d67cbb96a85457308937ccb8a773435108b63
+  contract_hash: b36d6202ac9da821ef0a082a100862647124dc34d4988d3f71e233588a3879a8

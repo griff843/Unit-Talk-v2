@@ -18,6 +18,8 @@ export interface CommandCenterAccessConfig {
   basicUsername?: string | undefined;
   basicPassword?: string | undefined;
   operatorIdentity: string;
+  /** The actor a successful Basic login authenticates as (see resolveBasicActor). */
+  basicActor: string;
 }
 
 export interface CommandCenterAuthContext {
@@ -157,7 +159,27 @@ export function resolveCommandCenterAccessConfig(
     ...(basicUsername ? { basicUsername } : {}),
     ...(basicPassword ? { basicPassword } : {}),
     operatorIdentity: resolveOperatorIdentity(env as NodeJS.ProcessEnv),
+    basicActor: resolveBasicActor(env, basicUsername),
   };
+}
+
+const CANONICAL_OPERATOR_ID = /^[a-z0-9][a-z0-9_-]*$/;
+
+/**
+ * WORK-2026102703: settlement attribution is the middleware actor, so a Basic
+ * login must authenticate as the operator who holds the credential. An explicit
+ * COMMAND_CENTER_OPERATOR_IDENTITY still wins. Otherwise the authenticated
+ * username is the actor, but only when it is already a canonical id: it is
+ * matched, never repaired, and a non-canonical username keeps the configured or
+ * default identity. Bearer auth is deliberately untouched, so the machine token
+ * is never attributed to a human operator.
+ */
+function resolveBasicActor(env: EnvReader, basicUsername: string | undefined): string {
+  const explicit =
+    readEnv(env, 'COMMAND_CENTER_OPERATOR_IDENTITY') || readEnv(env, 'OPERATOR_IDENTITY');
+  if (explicit) return explicit;
+  if (basicUsername && CANONICAL_OPERATOR_ID.test(basicUsername)) return basicUsername;
+  return resolveOperatorIdentity(env as NodeJS.ProcessEnv);
 }
 
 export function assertCommandCenterAuthConfig(
@@ -258,7 +280,7 @@ export function authenticateCommandCenterRequest(input: {
       ok: true,
       auth: {
         role: 'operator',
-        actor: config.operatorIdentity,
+        actor: config.basicActor,
         method: 'basic',
       },
     };
