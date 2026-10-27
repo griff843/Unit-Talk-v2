@@ -29,6 +29,8 @@ Browser evidence: `docs/06_status/proof/WORK-2026102506/ (the png and json files
 
 ## Verification
 
+CI of record for PR #1784: the `verify` job runs `pnpm verify:static`, which includes `pnpm type-check` and `pnpm test`, and passed at the PR head; the R-Level Compliance Check runs `pnpm exec tsx scripts/ci/r-level-check.ts` and passed at the PR head.
+
 Commands executed locally: `pnpm lint`, `pnpm type-check`, `pnpm --filter @unit-talk/smart-form test`, and `tsx --test e2e/ui-polish.browser.ts`, with the results above. `pnpm verify` was not run locally because its staging proof step cannot pass on a workstation; CI's `verify` job is the authority and its result is recorded on the PR.
 
 Provenance: Codex wrote the implementation (commit `89a2885bc`, cherry-picked from its draft work, authorship preserved) in its own desktop session, not through `scripts/ops/codex-exec.ts`. No `model-routing.json` exists for that session and none was fabricated. Under PM direction the lane was readmitted with `--executor claude`: Claude administers the lane, ran the baseline comparison and verification, and recorded this proof. The manifest therefore declares `claude` and does not require a model-routing sidecar. The work-order contract (landed on `main` in the governance change for WORK-2026102602) states the same.

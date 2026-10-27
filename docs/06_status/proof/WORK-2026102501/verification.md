@@ -62,6 +62,8 @@ $ git diff --stat origin/main...HEAD -- apps/
 
 ## Verification
 
+CI of record for PR #1780: the `verify` job runs `pnpm verify:static`, which includes `pnpm type-check` and `pnpm test`, and passed at the PR head; the R-Level Compliance Check runs `pnpm exec tsx scripts/ci/r-level-check.ts` and passed at the PR head.
+
 Commands run on code commit `91604fffd742afcce8d654d02dd9fbc981a30175`:
 
 - `pnpm exec tsx --test apps/smart-form/test/form-utils.test.ts`: 37 pass, 0 fail.

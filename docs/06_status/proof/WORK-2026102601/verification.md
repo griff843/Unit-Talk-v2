@@ -41,6 +41,8 @@ Limits, stated plainly: the rules match command text. A bare `git push` while ch
 
 ## Verification
 
+CI of record for PR #1785: the `verify` job runs `pnpm verify:static`, which includes `pnpm type-check` and `pnpm test`, and passed at the PR head; the R-Level Compliance Check runs `pnpm exec tsx scripts/ci/r-level-check.ts` and passed at the PR head.
+
 Re-verified after independent PM review (comment 6427208592, CHANGES REQUIRED): the review changes touch only test wording/assertions and this proof; `permissions` rules in `.claude/settings.json` are byte-identical, so the 92-run harness matrix was not repeated.
 
 - `pnpm ops:preflight WORK-2026102601 --tier T2 ... --refresh`: VERDICT PASS (39 checks).
