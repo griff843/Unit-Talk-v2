@@ -12,5 +12,5 @@ Not touched: any script, workflow, gate, hook, CLAUDE.md, migration, containment
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 1d5c8b1e8057e0f183c98efdbffdc9d13879c016
 PR: pending

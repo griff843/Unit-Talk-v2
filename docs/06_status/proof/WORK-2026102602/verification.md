@@ -1,6 +1,6 @@
 # PROOF: WORK-2026102602
 
-MERGE_SHA: pending merge
+MERGE_SHA: 1d5c8b1e8057e0f183c98efdbffdc9d13879c016
 
 Issue: WORK-2026102602
 Tier: T2
@@ -49,6 +49,6 @@ Commands executed locally by preflight: `pnpm verify:quick`, `pnpm type-check`, 
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 1d5c8b1e8057e0f183c98efdbffdc9d13879c016
 PR: pending
 Execution SHA: 5756fd9543fb4fee9d39f26525982293fb68455d
