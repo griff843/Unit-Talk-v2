@@ -33,7 +33,7 @@ $ pnpm lane:check --lane delivery-ui --base origin/main --head HEAD
 lane:check PASS lane=delivery-ui files=15
 ```
 
-Browser evidence: Codex's fixture run (experience-qa/v1, status PASS) at 1440, 390 and 320px, with no horizontal overflow and no submission attempted. It is carried unchanged in `browser-evidence/`, originally `apps/qa-agent/artifacts/work-2026102703/`, and was recorded on Codex head f03d9be42, whose `apps/smart-form` content is identical to this lane's.
+Browser evidence: Codex's fixture run (experience-qa/v1, status PASS) at 1440, 390 and 320px, with no horizontal overflow and no submission attempted. It is carried unchanged in `browser-evidence-*` files, originally `apps/qa-agent/artifacts/work-2026102703/`, and was recorded on Codex head f03d9be42, whose `apps/smart-form` content is identical to this lane's.
 
 Production data check (read-only, 2026-10-27): every participant row with artwork uses an allow-listed host. NHL 318/318 players with headshots and 32/32 teams with logos; MLB 951/951 and 30/30; NBA 228/254 and 29/30; NFL 32/32 team logos; WNBA 0/15 team logos, which fall back to initials.
 
