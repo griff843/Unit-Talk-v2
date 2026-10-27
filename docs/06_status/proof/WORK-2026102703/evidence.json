@@ -1,0 +1,28 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102703",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "4e4816147479dd43f5909925b6f9bd570e1c652d",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "scope": "Command Center operator attribution: Basic login actor and session actor verification (apps/command-center/src/lib)",
+    "local_checks": [
+      "ops:preflight PASS",
+      "pnpm type-check exit 0",
+      "apps/command-center pnpm test: 694 tests, 694 pass, 0 fail",
+      "eslint clean on the 4 changed files",
+      "mutation drill: reverting the basic actor or the session actor check turns the new tests red; restored",
+      "scripts/ci/r-level-check.ts Verdict PASS (operator-ui)"
+    ],
+    "ci_run": null,
+    "note": "CI on the PR is the verification of record. Runtime settlement attribution is verified after an owner-authorized deploy on genuine records and is not claimed here."
+  }
+}

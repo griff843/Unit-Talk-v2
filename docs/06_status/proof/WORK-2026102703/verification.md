@@ -5,7 +5,7 @@ MERGE_SHA: pending merge
 Issue: WORK-2026102703
 Tier: T2
 Branch: claude/work-2026102703-cc-operator-identity
-Head SHA (last code commit): 1a3f8e5084ec15f1719b4233c4cf2f147d72a766
+Head SHA (last non-proof commit): 4e4816147479dd43f5909925b6f9bd570e1c652d (code at 1a3f8e5084ec15f1719b4233c4cf2f147d72a766; 4e481614 only drops the preflight work order from the diff)
 result: pass
 
 ## ASSERTIONS:
@@ -46,4 +46,4 @@ Runtime verification: this change takes effect only after the owner sets `COMMAN
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1792
-Execution SHA: 1a3f8e5084ec15f1719b4233c4cf2f147d72a766
+Execution SHA: 4e4816147479dd43f5909925b6f9bd570e1c652d
