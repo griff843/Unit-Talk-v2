@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026102603-recover-merged-lanes",
   "branch": "claude/work-2026102603-recover-merged-lanes",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "4a901fde8e3de5f5d086a25c7c545d575e7fc35a",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1787",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/work/WORK-2026102603.md",
@@ -18,9 +18,9 @@
     "docs/06_status/lanes/WORK-2026102602.json"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-10-27T04:27:58.189Z",
-  "heartbeat_at": "2026-10-27T04:27:58.189Z",
+  "heartbeat_at": "2026-10-27T05:02:27.968Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026102603-recover-merged-lanes.json",

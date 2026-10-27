@@ -1,0 +1,140 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102604
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102604
+  objective: >-
+    Bind WORK-2026102603 to its merged PR: `pnpm ops:lane-manifest record-merge
+    WORK-2026102603 --pr https://github.com/griff843/Unit-Talk-v2/pull/1787`.
+    The repair PR did not set `pr_url` on its own manifest, so
+    `post-merge-lane-close` cannot resolve its merge SHA.
+
+    Correct the verification logs of WORK-2026102601 (#1785), WORK-2026102501
+    (#1780) and WORK-2026102506 (#1784). Closeout gates P12 and P14 require the
+    log to name `pnpm type-check`, `pnpm test` and
+    `scripts/ci/r-level-check.ts`. Each log gets one added sentence recording
+    what CI actually ran and the result: the `verify` job runs `pnpm
+    verify:static`, which includes `pnpm type-check` and `pnpm test`, and passed
+    at each PR head; the R-Level Compliance Check runs `pnpm exec tsx
+    scripts/ci/r-level-check.ts` and passed at each PR head.
+
+    This lane's own manifest carries its `pr_url` in the PR itself, so closeout
+    resolves automatically after merge.
+  acceptance_criteria:
+    - No proof assertion, evidence or result is changed or removed; each log
+      gains only the CI sentence above, which is checked against the recorded CI
+      results before it is written.
+    - The affected lanes then pass `ops:truth-check` through
+      `post-merge-lane-close.yml`, or the exact remaining blocker is named.
+  guardrails:
+    - No bypass of direct-main, review, CI, proof or merge controls. No lane
+      identity or evidence field is edited.
+    - One more `--force-unsafe-substrate` on lane-start is used only because the
+      repair lane's own unbound manifest trips the merged-PR guard; it ends when
+      this lane closes.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged through `ops:merge-wrapper pr-merge`; closeouts dispatched one
+      at a time; lane admission verified clean.
+  unmapped_sections:
+    - >-
+      WORK-2026102604 — Finish the merged-lane recovery: bind the repair lane
+      and correct three verification logs
+
+      Tier: T3
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. Completes the PM-directed
+      recovery begun in WORK-2026102603 (#1787); that lane merged but could not
+      close itself, and three of the recovered lanes are blocked by
+      proof-content gates.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102604.md
+    title: "WORK-2026102604 — Finish the merged-lane recovery: bind the repair lane
+      and correct three verification logs"
+    description: >-
+      # WORK-2026102604 — Finish the merged-lane recovery: bind the repair lane
+      and correct three verification logs
+
+
+      Tier: T3
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. Completes the PM-directed
+      recovery begun in WORK-2026102603 (#1787); that lane merged but could not
+      close itself, and three of the recovered lanes are blocked by
+      proof-content gates.
+
+
+      ## Objective
+
+
+      1. Bind WORK-2026102603 to its merged PR: `pnpm ops:lane-manifest
+      record-merge WORK-2026102603 --pr
+      https://github.com/griff843/Unit-Talk-v2/pull/1787`. The repair PR did not
+      set `pr_url` on its own manifest, so `post-merge-lane-close` cannot
+      resolve its merge SHA.
+
+      2. Correct the verification logs of WORK-2026102601 (#1785),
+      WORK-2026102501 (#1780) and WORK-2026102506 (#1784). Closeout gates P12
+      and P14 require the log to name `pnpm type-check`, `pnpm test` and
+      `scripts/ci/r-level-check.ts`. Each log gets one added sentence recording
+      what CI actually ran and the result: the `verify` job runs `pnpm
+      verify:static`, which includes `pnpm type-check` and `pnpm test`, and
+      passed at each PR head; the R-Level Compliance Check runs `pnpm exec tsx
+      scripts/ci/r-level-check.ts` and passed at each PR head.
+
+      3. This lane's own manifest carries its `pr_url` in the PR itself, so
+      closeout resolves automatically after merge.
+
+
+      ## Acceptance Criteria
+
+
+      - No proof assertion, evidence or result is changed or removed; each log
+      gains only the CI sentence above, which is checked against the recorded CI
+      results before it is written.
+
+      - The affected lanes then pass `ops:truth-check` through
+      `post-merge-lane-close.yml`, or the exact remaining blocker is named.
+
+
+      ## Guardrails
+
+
+      - No bypass of direct-main, review, CI, proof or merge controls. No lane
+      identity or evidence field is edited.
+
+      - One more `--force-unsafe-substrate` on lane-start is used only because
+      the repair lane's own unbound manifest trips the merged-PR guard; it ends
+      when this lane closes.
+
+
+      ## Exit Criteria
+
+
+      - PR merged through `ops:merge-wrapper pr-merge`; closeouts dispatched one
+      at a time; lane admission verified clean.
+    captured_at: 2026-10-27T05:02:06.757Z
+    description_sha256: b3b59980d25705f2c3207b020180158dcae5114b517bbccf400a5109a7b3c493
+  contract_hash: 5ef74095dcd0e3e65c0f296d9624541178d7c8a7a94124c7d05bd674e5b3627c
