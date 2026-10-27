@@ -1,0 +1,29 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102701",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "9b27c24e5266d937daabedb719d15576ecb36535",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "scope": "instruction text in CLAUDE.md (mission card); no runtime surface",
+    "local_checks": [
+      "ops:preflight PASS (39 checks)",
+      "pnpm type-check exit 0",
+      "pnpm test exit 0: 7651 tests, 7638 pass, 0 fail, 13 skipped",
+      "reserved-decision presence check 7/7 verbatim plus item 8",
+      "system-alignment-check fail 0 warn 0",
+      "startup context 48133 -> 30475 tokens (3 runs each)",
+      "independent review APPROVE on 9b27c24e5"
+    ],
+    "ci_run": null,
+    "note": "CI on the PR is the verification of record and had not run when this bundle was written."
+  }
+}
