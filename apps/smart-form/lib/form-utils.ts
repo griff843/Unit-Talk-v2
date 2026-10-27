@@ -408,17 +408,19 @@ function resolveSubmissionMarketKey(
     return 'team_total_ou';
   }
 
-  const statType = (values.statType ?? '').trim().toLowerCase();
-  const statDrivenMarketKey = STAT_TYPE_TO_SUBMISSION_MARKET_KEY[statType];
+  const statDrivenMarketKey = resolvePlayerPropMarketKey(values.sport, values.statType);
   if (statDrivenMarketKey) {
     return statDrivenMarketKey;
   }
 
   throw new Error(
-    `Cannot resolve canonical market key: sport=${values.sport}, marketType=${values.marketType}, statType=${values.statType ?? 'none'}. Add this combination to STAT_TYPE_TO_SUBMISSION_MARKET_KEY.`,
+    `Cannot resolve canonical market key: sport=${values.sport}, marketType=${values.marketType}, statType=${values.statType ?? 'none'}. Add this combination to SPORT_STAT_TYPE_MARKET_KEYS.`,
   );
 }
 
+// Legacy flat map, keyed by stat name only. It is consulted ONLY for sports that
+// have no entry in SPORT_STAT_TYPE_MARKET_KEYS, so a stat name shared across
+// sports (Points, Assists) can never leak one sport's market onto another.
 const STAT_TYPE_TO_SUBMISSION_MARKET_KEY: Record<string, string> = {
   // NBA / basketball
   points: 'player.points',
@@ -467,6 +469,117 @@ const STAT_TYPE_TO_SUBMISSION_MARKET_KEY: Record<string, string> = {
   tackles: 'player.tackles',
   interceptions: 'player.interceptions',
 };
+
+const BASKETBALL_STAT_TYPE_MARKET_KEYS: Record<string, string> = {
+  points: 'player.points',
+  rebounds: 'player.rebounds',
+  assists: 'player.assists',
+  threes: 'player.threes',
+  steals: 'player.steals',
+  blocks: 'player.blocks',
+  turnovers: 'player.turnovers',
+  'points + rebounds + assists': 'player.pra',
+  'points + rebounds': 'player.points_rebounds',
+  'points + assists': 'player.points_assists',
+  'rebounds + assists': 'player.rebounds_assists',
+};
+
+// Production market_types ids (player_fgm_ou, player_ftm_ou, player_minutes_ou,
+// player_plus_minus_ou). sport_market_type_availability lists them for NBA and
+// WNBA only, so NCAAB deliberately does not receive them. stat_types names are
+// "Plus Minus" (NBA) and "Plus/Minus" (NHL).
+const NBA_WNBA_BASKETBALL_STAT_TYPE_MARKET_KEYS: Record<string, string> = {
+  ...BASKETBALL_STAT_TYPE_MARKET_KEYS,
+  'field goals made': 'player_fgm_ou',
+  'free throws made': 'player_ftm_ou',
+  'minutes played': 'player_minutes_ou',
+  'plus minus': 'player_plus_minus_ou',
+  'plus/minus': 'player_plus_minus_ou',
+};
+
+const COLLEGE_FOOTBALL_STAT_TYPE_MARKET_KEYS: Record<string, string> = {
+  'passing yards': 'player.passing_yards',
+  'passing touchdowns': 'player.passing_touchdowns',
+  'passing attempts': 'player.passing_attempts',
+  'rushing yards': 'player.rushing_yards',
+  'rushing attempts': 'player.rushing_attempts',
+  'rush + rec yards': 'player.rush_rec_yards',
+  'receiving yards': 'player.receiving_yards',
+  receptions: 'player.receptions',
+  touchdowns: 'player.touchdowns',
+  interceptions: 'player.interceptions',
+};
+
+// Tackles and Sacks exist as stat_types for NFL only; player_sacks_ou is available
+// for NFL only.
+const NFL_STAT_TYPE_MARKET_KEYS: Record<string, string> = {
+  ...COLLEGE_FOOTBALL_STAT_TYPE_MARKET_KEYS,
+  tackles: 'player.tackles',
+  sacks: 'player_sacks_ou',
+};
+
+const SPORT_STAT_TYPE_MARKET_KEYS: Record<string, Record<string, string>> = {
+  NBA: NBA_WNBA_BASKETBALL_STAT_TYPE_MARKET_KEYS,
+  WNBA: NBA_WNBA_BASKETBALL_STAT_TYPE_MARKET_KEYS,
+  NCAAB: BASKETBALL_STAT_TYPE_MARKET_KEYS,
+  NFL: NFL_STAT_TYPE_MARKET_KEYS,
+  NCAAF: COLLEGE_FOOTBALL_STAT_TYPE_MARKET_KEYS,
+  MLB: {
+    hits: 'player.hits',
+    'home runs': 'player.home_runs',
+    rbi: 'player.rbi',
+    // MLB Runs is deliberately absent: production market_types has no canonical id
+    // for it, so it is refused explicitly rather than given an invented key.
+    walks: 'player.walks',
+    'total bases': 'player.total_bases',
+    singles: 'player.singles',
+    doubles: 'player.doubles',
+    triples: 'player.triples',
+    'hits + runs + rbis': 'player.hits_runs_rbis',
+    'earned runs': 'player.earned_runs',
+    'hits allowed': 'player.hits_allowed',
+    'pitcher outs': 'player.pitcher_outs',
+    'pitching strikeouts': 'player.pitching_strikeouts',
+    'pitching innings pitched': 'player.pitching_innings_pitched',
+    strikeouts: 'player.strikeouts',
+  },
+  NHL: {
+    goals: 'player.goals',
+    // Hockey points are goals + assists: production id player_hockey_points_ou,
+    // never the basketball player.points key.
+    points: 'player_hockey_points_ou',
+    // Production shares player_assists_ou across NHL and NBA (NHL availability row).
+    assists: 'player.assists',
+    'shots on goal': 'player.shots',
+    'blocked shots': 'player.blocked_shots',
+    saves: 'player.saves',
+    'penalty minutes': 'player.pim',
+    'goals against': 'player_goals_against_ou',
+    'save percentage': 'player_save_pct_ou',
+    'plus/minus': 'player_plus_minus_ou',
+    'plus minus': 'player_plus_minus_ou',
+  },
+};
+
+/**
+ * Sport-aware stat type -> canonical market key. Returns null when the stat
+ * type is not mapped, so callers refuse explicitly; it never substitutes a
+ * market from another sport. Sports with no sport table keep the legacy flat map.
+ */
+export function resolvePlayerPropMarketKey(
+  sport: string | null | undefined,
+  statType: string | null | undefined,
+): string | null {
+  const stat = (statType ?? '').trim().toLowerCase();
+  if (!stat) {
+    return null;
+  }
+  const sportTable = SPORT_STAT_TYPE_MARKET_KEYS[(sport ?? '').trim().toUpperCase()];
+  if (sportTable) {
+    return sportTable[stat] ?? null;
+  }
+  return STAT_TYPE_TO_SUBMISSION_MARKET_KEY[stat] ?? null;
+}
 
 // UTV2-1786 SUBMISSION_GUARD_START
 //
