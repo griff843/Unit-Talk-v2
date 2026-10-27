@@ -58,5 +58,5 @@ Not changed: `intent.md`, `spec.md`, `plan.md`, hooks, settings, CI, merge requi
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1789
 Execution SHA: 9b27c24e5266d937daabedb719d15576ecb36535
