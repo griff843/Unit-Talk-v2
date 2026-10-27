@@ -1,0 +1,147 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102601
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102601
+  objective: >-
+    Add `permissions.deny` and `permissions.ask` to the tracked
+    `.claude/settings.json`. The rules encode policy that already exists
+    (`DB_MIGRATION_WORKFLOW.md`, `SUPABASE_BRANCH_COST_POLICY.md`,
+    `DIRECT_MAIN_BYPASS_POLICY.md`, `DELIVERY_KILL_SWITCH.md`): no push to
+    `main`, no force push, no `gh pr merge --admin`, no remote Supabase
+    DDL/secret/deploy commands without operator instruction, no kill-switch or
+    retry-delivery calls, and no Supabase MCP branch/project/secret/deploy
+    writes. Commands the operator may authorize (`supabase db push`, MCP
+    `apply_migration`, `delete_branch`) prompt instead of being hard-denied.
+
+    These rules match command text. They are defense in depth, never the primary
+    authorization boundary: scoped credentials (R1/R2) and server-side branch
+    protection are.
+  acceptance_criteria:
+    - "`.claude/settings.json` gains a `permissions` block; the existing `hooks`
+      block is byte-for-byte unchanged."
+    - Regression tests appended to the existing
+      `scripts/ci/direct-main-push-guard.test.ts` (already run by `test:ops`; no
+      `package.json` change, which is a singleton path) fails when any named
+      rule is removed, and asserts governed commands (feature-branch push, `gh
+      pr merge --squash --auto`, `gh pr view`, local `supabase db reset`,
+      `supabase migration list --linked`, health `curl`, branch names starting
+      `main-`) are neither denied nor prompted.
+    - Harness evidence from disposable clones with stub CLIs and a local bare
+      remote, in default and bypassPermissions mode, is recorded in the proof.
+    - No change to hooks, CI, merge requirements, branch protection, CLAUDE.md,
+      credentials, or any other file.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026102601 — Defense-in-depth permission rules for dangerous commands
+      (R3)
+
+      Tier: T2
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: PM directive to the operating-model terminal (2026-10-26): R3
+      authorized as a narrowly scoped permission-deny PR. R1 (non-admin executor
+      identity) and R2 (Supabase credential isolation) are a separate
+      access-hardening plan; no credential or branch-protection change is part
+      of this lane.
+
+
+      ## File Scope
+
+
+      - .claude/settings.json
+
+      - scripts/ci/direct-main-push-guard.test.ts
+
+      - .ops/work/WORK-2026102601.md
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102601.md
+    title: WORK-2026102601 — Defense-in-depth permission rules for dangerous
+      commands (R3)
+    description: >-
+      # WORK-2026102601 — Defense-in-depth permission rules for dangerous
+      commands (R3)
+
+
+      Tier: T2
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: PM directive to the operating-model terminal (2026-10-26): R3
+      authorized as a narrowly scoped permission-deny PR. R1 (non-admin executor
+      identity) and R2 (Supabase credential isolation) are a separate
+      access-hardening plan; no credential or branch-protection change is part
+      of this lane.
+
+
+      ## Objective
+
+
+      Add `permissions.deny` and `permissions.ask` to the tracked
+      `.claude/settings.json`. The rules encode policy that already exists
+      (`DB_MIGRATION_WORKFLOW.md`, `SUPABASE_BRANCH_COST_POLICY.md`,
+      `DIRECT_MAIN_BYPASS_POLICY.md`, `DELIVERY_KILL_SWITCH.md`): no push to
+      `main`, no force push, no `gh pr merge --admin`, no remote Supabase
+      DDL/secret/deploy commands without operator instruction, no kill-switch or
+      retry-delivery calls, and no Supabase MCP branch/project/secret/deploy
+      writes. Commands the operator may authorize (`supabase db push`, MCP
+      `apply_migration`, `delete_branch`) prompt instead of being hard-denied.
+
+
+      These rules match command text. They are defense in depth, never the
+      primary authorization boundary: scoped credentials (R1/R2) and server-side
+      branch protection are.
+
+
+      ## Acceptance Criteria
+
+
+      - `.claude/settings.json` gains a `permissions` block; the existing
+      `hooks` block is byte-for-byte unchanged.
+
+      - Regression tests appended to the existing
+      `scripts/ci/direct-main-push-guard.test.ts` (already run by `test:ops`; no
+      `package.json` change, which is a singleton path) fails when any named
+      rule is removed, and asserts governed commands (feature-branch push, `gh
+      pr merge --squash --auto`, `gh pr view`, local `supabase db reset`,
+      `supabase migration list --linked`, health `curl`, branch names starting
+      `main-`) are neither denied nor prompted.
+
+      - Harness evidence from disposable clones with stub CLIs and a local bare
+      remote, in default and bypassPermissions mode, is recorded in the proof.
+
+      - No change to hooks, CI, merge requirements, branch protection,
+      CLAUDE.md, credentials, or any other file.
+
+
+      ## File Scope
+
+
+      - .claude/settings.json
+
+      - scripts/ci/direct-main-push-guard.test.ts
+
+      - .ops/work/WORK-2026102601.md
+    captured_at: 2026-10-26T19:41:31.229Z
+    description_sha256: aa79ff84981df48e1e6f6dd6e2a91bd2e913b5aba2b4ee3d23c7c12411b6db27
+  contract_hash: 80ae4a50ea55f63aae65622402d02f264e372b5b73eb0f48912c7c81a5129883

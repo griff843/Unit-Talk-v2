@@ -9,6 +9,7 @@ import {
   getMarketTypesForSport,
   inferStatTypeFromMarketTypeId,
   mapOfferToFormMarketType,
+  resolvePlayerPropMarketKey,
   resolveSportsbookId,
 } from '../lib/form-utils.ts';
 import type { BetFormValues } from '../lib/form-schema.ts';
@@ -531,6 +532,84 @@ test('buildSubmissionPayload resolves NHL stat types to canonical player prop ma
     buildBaseValues({ sport: 'NHL', statType: 'penalty minutes', playerName: 'Connor McDavid' }),
   );
   assert.equal(pimPayload.market, 'player.pim');
+});
+
+// Every stat_types row seeded for the sports the form offers (reference-data
+// foundation plus the 391/392/393 taxonomy migrations). Each must resolve.
+const CATALOG_STAT_TYPES: Record<string, string[]> = {
+  NBA: [
+    'Points', 'Rebounds', 'Assists', 'Threes', 'Steals', 'Blocks', 'Turnovers',
+    'Points + Assists', 'Field Goals Made', 'Free Throws Made', 'Minutes Played',
+    'Plus Minus', 'Plus/Minus',
+  ],
+  NHL: [
+    'Shots on Goal', 'Saves', 'Goals', 'Assists', 'Points', 'Blocked Shots',
+    'Goals Against', 'Save Percentage', 'Plus/Minus',
+  ],
+  MLB: [
+    'Strikeouts', 'Hits', 'Home Runs', 'RBI', 'Walks', 'Total Bases',
+    'Singles', 'Doubles', 'Triples', 'Earned Runs', 'Hits Allowed', 'Pitcher Outs',
+  ],
+  NFL: [
+    'Passing Yards', 'Rushing Yards', 'Receiving Yards', 'Touchdowns', 'Receptions',
+    'Interceptions', 'Rushing Attempts', 'Passing Attempts', 'Passing Touchdowns',
+    'Rush + Rec Yards', 'Tackles', 'Sacks',
+  ],
+};
+
+test('every catalog stat type for NHL, NBA, MLB and NFL resolves a market key without throwing', () => {
+  for (const [sport, statTypes] of Object.entries(CATALOG_STAT_TYPES)) {
+    for (const statType of statTypes) {
+      const payload = buildSubmissionPayload(
+        buildBaseValues({ sport, statType, playerName: 'Test Player' }),
+      );
+      assert.ok(payload.market, `${sport} ${statType} must resolve a market`);
+      assert.equal(payload.market, resolvePlayerPropMarketKey(sport, statType));
+    }
+  }
+});
+
+test('player prop market keys are sport-aware: NHL Points is hockey, NBA Points is basketball', () => {
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Points'), 'player_hockey_points_ou');
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Points'), 'player.points');
+  assert.notEqual(
+    buildSubmissionPayload(buildBaseValues({ sport: 'NHL', statType: 'Points' })).market,
+    buildSubmissionPayload(buildBaseValues({ sport: 'NBA', statType: 'Points' })).market,
+  );
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Assists'), 'player.assists');
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Assists'), 'player.assists');
+});
+
+test('previously unmapped catalog stat types resolve to production market ids', () => {
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Goals Against'), 'player_goals_against_ou');
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Save Percentage'), 'player_save_pct_ou');
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Plus/Minus'), 'player_plus_minus_ou');
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Field Goals Made'), 'player_fgm_ou');
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Free Throws Made'), 'player_ftm_ou');
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Minutes Played'), 'player_minutes_ou');
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Plus Minus'), 'player_plus_minus_ou');
+  assert.equal(resolvePlayerPropMarketKey('NFL', 'Sacks'), 'player_sacks_ou');
+});
+
+test('an unknown stat type is refused explicitly and never falls back to another sport', () => {
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Hat Tricks'), null);
+  // No canonical market_types id exists for MLB Runs, so it is refused, not invented.
+  assert.equal(resolvePlayerPropMarketKey('MLB', 'Runs'), null);
+  // sport_market_type_availability lists FGM/FTM/Minutes/Plus-Minus for NBA and WNBA only.
+  assert.equal(resolvePlayerPropMarketKey('NCAAB', 'Field Goals Made'), null);
+  assert.equal(resolvePlayerPropMarketKey('WNBA', 'Field Goals Made'), 'player_fgm_ou');
+  assert.equal(resolvePlayerPropMarketKey('NCAAF', 'Sacks'), null);
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Rebounds'), null);
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Goals'), null);
+  assert.equal(resolvePlayerPropMarketKey('NHL', ''), null);
+  assert.throws(
+    () => buildSubmissionPayload(buildBaseValues({ sport: 'NHL', statType: 'Hat Tricks' })),
+    /Cannot resolve canonical market key/,
+  );
+  assert.throws(
+    () => buildSubmissionPayload(buildBaseValues({ sport: 'NHL', statType: 'Rebounds' })),
+    /Cannot resolve canonical market key/,
+  );
 });
 
 test('buildSubmissionPayload resolves MLB batting strikeouts to player.strikeouts', () => {
