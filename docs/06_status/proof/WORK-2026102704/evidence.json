@@ -4,7 +4,7 @@
   "tier": "T2",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
-  "status": "pre_merge",
+  "status": "merged",
   "focused_tests": {
     "command": "pnpm exec tsx --test apps/api/src/handlers/participant-media.test.ts apps/api/src/participant-media.http.test.ts",
     "tests": 5,
@@ -31,9 +31,11 @@
   },
   "merge_sha": null,
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "1bb041a1f839c6fc7a76f234b74a5074958834d7",
     "verified_source_sha": "bd87cf595d3bf2981d05073cc6195842b36d36e0",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-27T17:20:16.391Z"
   }
 }

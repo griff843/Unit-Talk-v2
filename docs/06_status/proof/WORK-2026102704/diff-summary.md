@@ -15,5 +15,5 @@ No writes, enrichment, external fetches, auth changes, schema changes, or worker
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 1bb041a1f839c6fc7a76f234b74a5074958834d7
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1794
