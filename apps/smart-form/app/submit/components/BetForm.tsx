@@ -73,6 +73,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+import { lineInputExample, matchupInputExample } from '@/lib/input-examples';
 import { createSessionSubmissionGuard } from '@/lib/submission-guard';
 import { isQaAuthBypassEnabled } from '@/lib/auth-config';
 import { deriveMatchupTeamChoices, isMissingQaIdentity, type MatchupTeamChoice } from '@/lib/team-choice';
@@ -95,6 +96,7 @@ import type {
   SmartFormParticipantResolution,
 } from '@unit-talk/contracts';
 import { BetSlipPanel } from './BetSlipPanel';
+import { mediaTeamParticipantId } from '@/lib/participant-media';
 import { MarketTypeGrid } from './MarketTypeGrid';
 import { SuccessReceipt } from './SuccessReceipt';
 
@@ -415,9 +417,20 @@ function ParticipantAutocompleteField({
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<ParticipantSuggestion[]>([]);
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  const blurTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (blurTimeoutRef.current !== null) window.clearTimeout(blurTimeoutRef.current);
+  }, []);
 
   useEffect(() => {
     const query = value.trim();
+    // Results belong to one exact query, sport, event and team scope.
+    setSuggestions([]);
+    setHasSearched(false);
+    setSearchError(null);
+    setIsLoading(false);
     if (!sport || query.length < PARTICIPANT_QUERY_MIN) {
       setSuggestions([]);
       setHasSearched(false);
@@ -457,18 +470,22 @@ function ParticipantAutocompleteField({
           throw new Error(message);
         }
 
+        if (controller.signal.aborted) return;
         const normalizedSuggestions = normalizeParticipantSearchResults(
           isRecord(json) ? json : { data: [] },
           searchType,
         );
-        const nextSuggestions = allowedParticipantIds
-          ? normalizedSuggestions.filter((suggestion) => allowedParticipantIds.has(suggestion.participantId))
+        const scopedSuggestions = searchType === 'player' && teamId
+          ? normalizedSuggestions.filter((suggestion) => suggestion.teamId === teamId)
           : normalizedSuggestions;
+        const nextSuggestions = allowedParticipantIds
+          ? scopedSuggestions.filter((suggestion) => allowedParticipantIds.has(suggestion.participantId))
+          : scopedSuggestions;
         setSuggestions(nextSuggestions);
         setHasSearched(true);
         onResolutionStateChange?.(nextSuggestions.length > 0 ? 'results' : 'not-found');
       } catch (error) {
-        if ((error as Error).name === 'AbortError') {
+        if (controller.signal.aborted || (error as Error).name === 'AbortError') {
           return;
         }
 
@@ -477,7 +494,7 @@ function ParticipantAutocompleteField({
         setSearchError(error instanceof Error ? error.message : 'Participant search unavailable');
         onResolutionStateChange?.('error');
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       }
     }, 250);
 
@@ -485,7 +502,7 @@ function ParticipantAutocompleteField({
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [allowedParticipantIds, eventId, name, onResolutionStateChange, searchType, sport, teamId, value]);
+  }, [allowedParticipantIds, eventId, name, onResolutionStateChange, searchType, sport, teamId, value, retryAttempt]);
 
   const shouldShowMenu =
     isFocused &&
@@ -512,13 +529,20 @@ function ParticipantAutocompleteField({
                                 : placeholder
                           }
                           value={field.value ?? ''}
-              onFocus={() => setIsFocused(true)}
+              onFocus={() => {
+                if (blurTimeoutRef.current !== null) window.clearTimeout(blurTimeoutRef.current);
+                blurTimeoutRef.current = null;
+                setIsFocused(true);
+              }}
               onBlur={() => {
-                window.setTimeout(() => setIsFocused(false), 120);
+                if (blurTimeoutRef.current !== null) window.clearTimeout(blurTimeoutRef.current);
+                blurTimeoutRef.current = window.setTimeout(() => setIsFocused(false), 120);
               }}
               onChange={(event) => {
                 onManualChange(event.target.value);
                 field.onChange(event.target.value);
+                setSuggestions([]);
+                setHasSearched(false);
                 setSearchError(null);
                 onResolutionStateChange?.('idle');
               }}
@@ -530,13 +554,23 @@ function ParticipantAutocompleteField({
             </p>
           ) : null}
           {shouldShowMenu ? (
-            <div className="absolute inset-x-0 top-full z-20 mt-2 rounded-md border border-border bg-background shadow-lg">
+            <div className="absolute inset-x-0 top-full z-20 mt-2 rounded-md border border-border bg-background shadow-lg"
+              onFocusCapture={() => {
+                if (blurTimeoutRef.current !== null) window.clearTimeout(blurTimeoutRef.current);
+                setIsFocused(true);
+              }}
+              onBlurCapture={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                  blurTimeoutRef.current = window.setTimeout(() => setIsFocused(false), 120);
+                }
+              }}>
               {isLoading ? (
                 <div className="px-3 py-2 text-sm text-muted-foreground">Searching participants...</div>
               ) : null}
               {!isLoading && searchError ? (
                 <div role="alert" className="px-3 py-2 text-sm text-destructive">
-                  Search failed: {searchError}. Try again.
+                  <p>Search failed: {searchError}.</p>
+                  <button type="button" className="mt-1 min-h-11 underline underline-offset-4" onMouseDown={(event) => event.preventDefault()} onClick={() => setRetryAttempt((attempt) => attempt + 1)}>Try again</button>
                 </div>
               ) : null}
               {!isLoading && !searchError && hasSearched && suggestions.length === 0 ? (
@@ -549,10 +583,11 @@ function ParticipantAutocompleteField({
                   {suggestions.map((suggestion) => (
                     <button
                       key={`${suggestion.participantType}:${suggestion.participantId}`}
-                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
+                      className="flex min-h-11 w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-muted focus-visible:bg-muted"
                       type="button"
-                      onMouseDown={(event) => {
-                        event.preventDefault();
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        if (searchType === 'player' && teamId && suggestion.teamId !== teamId) return;
                         form.setValue(name, suggestion.displayName, {
                           shouldDirty: true,
                           shouldTouch: true,
@@ -902,6 +937,11 @@ export function BetForm({
   });
 
   const watchedValues = form.watch();
+  const selectionScopeRef = useRef('');
+  selectionScopeRef.current = JSON.stringify([watchedValues.sport, watchedValues.gameDate, watchedValues.marketType, selectedMatchupId, selectedTeamId]);
+  const selectionRequestRef = useRef(0);
+  const selectedMatchupRef = useRef(selectedMatchupId);
+  selectedMatchupRef.current = selectedMatchupId;
 
   const legSummaries = useMemo(() => summarizeSlip(slipLegs), [slipLegs]);
   // Why a multi-leg slip cannot be submitted today, or null when it can. Held
@@ -1636,9 +1676,7 @@ export function BetForm({
         return false;
       }
 
-      if (participantId && result.participantId === participantId) {
-        return true;
-      }
+      if (participantId) return result.participantId === participantId;
 
       return normalizeParticipantKey(result.displayName) === normalizeParticipantKey(displayName);
     });
@@ -1652,6 +1690,9 @@ export function BetForm({
   }
 
   async function handlePlayerSuggestionSelection(suggestion: ParticipantSuggestion) {
+    if (selectedTeamId && suggestion.teamId !== mediaTeamParticipantId(selectedTeamId, selectedMatchup?.teams ?? [])) return;
+    const request = ++selectionRequestRef.current;
+    const scope = selectionScopeRef.current;
     setSelectedPlayerId(suggestion.participantId);
     setSelectedOfferParticipantId(suggestion.participantId);
 
@@ -1659,9 +1700,11 @@ export function BetForm({
       suggestion.displayName,
       'player',
       suggestion.participantId,
-    );
+    ).catch(() => null);
 
-    if (!browseResult) {
+    if (request !== selectionRequestRef.current || scope !== selectionScopeRef.current || form.getValues('playerName') !== suggestion.displayName) return;
+    if (!browseResult || (suggestion.teamId &&
+      mediaTeamParticipantId(browseResult.teamId, browseResult.matchup.teams) !== suggestion.teamId)) {
       return;
     }
 
@@ -1684,6 +1727,11 @@ export function BetForm({
   }
 
   async function handleTeamSuggestionSelection(suggestion: ParticipantSuggestion) {
+    const request = ++selectionRequestRef.current;
+    const selectionSport = selectedSport;
+    const selectionDate = watchedValues.gameDate;
+    const selectionMarket = selectedMarketType;
+    const selectionEvent = selectedMatchupId;
     if (selectedTeamId !== suggestion.participantId) {
       setSelectedPlayerId(null);
       setSelectedOfferParticipantId(null);
@@ -1710,8 +1758,17 @@ export function BetForm({
       suggestion.displayName,
       'team',
       suggestion.participantId,
-    );
+    ).catch(() => null);
 
+    const currentValues = form.getValues();
+    if (
+      request !== selectionRequestRef.current ||
+      currentValues.sport !== selectionSport ||
+      currentValues.gameDate !== selectionDate ||
+      currentValues.marketType !== selectionMarket ||
+      selectedMatchupRef.current !== selectionEvent ||
+      currentValues.team !== suggestion.displayName
+    ) return;
     if (!browseResult) {
       return;
     }
@@ -2551,6 +2608,7 @@ export function BetForm({
                         placeholder="Type a player name"
                         searchType="player"
                         eventId={selectedMatchupId}
+                        teamId={mediaTeamParticipantId(selectedTeamId, selectedMatchup?.teams ?? [])}
                         sport={selectedSport}
                         allowedParticipantIds={allowedPlayerIds}
                         onSuggestionSelected={handlePlayerSuggestionSelection}
@@ -3021,7 +3079,7 @@ export function BetForm({
                                 <FormControl>
                                   <SignedNumberInput
                                     step="0.5"
-                                    placeholder="e.g. 24.5"
+                                    placeholder={lineInputExample(selectedSport, 'player-prop', watchedValues.statType)}
                                     name={field.name}
                                     ref={field.ref}
                                     onBlur={field.onBlur}
@@ -3145,6 +3203,7 @@ export function BetForm({
             </div>
           ) : (
             <>
+              {manualMatchupTeamChoices.length === 2 ? matchupTeamField('Team') : (
               <ParticipantAutocompleteField
                 form={form}
                 name="team"
@@ -3169,6 +3228,7 @@ export function BetForm({
                 }}
                 disabledOverride={identityMode === 'structured-fallback' && structuredSideIds.size < 2}
               />
+              )}
               <ParticipantAutocompleteField
                 form={form}
                 name="playerName"
@@ -3176,7 +3236,7 @@ export function BetForm({
                 placeholder="Type a player name"
                 searchType="player"
                 eventId={selectedMatchupId}
-                teamId={selectedTeamId}
+                teamId={mediaTeamParticipantId(selectedTeamId, selectedMatchup?.teams ?? [])}
                 sport={selectedSport}
                 datasetAvailable={referenceAvailability?.playersAvailable ?? null}
                 allowedParticipantIds={allowedPlayerIds}
@@ -3186,7 +3246,7 @@ export function BetForm({
               />
             </>
           )}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <FormField
               control={form.control}
               name="eventName"
@@ -3194,11 +3254,11 @@ export function BetForm({
                 <FormItem>
                   <FormLabel>Matchup</FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="e.g. Knicks vs Heat"
-                      readOnly={Boolean(selectedMatchup) || identityMode === 'structured-fallback'}
-                      {...field}
-                    />
+                    {selectedMatchup || identityMode === 'structured-fallback' ? (
+                      <textarea {...field} readOnly rows={4} data-testid="readable-matchup" className="readonly-matchup flex w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm leading-relaxed text-foreground" />
+                    ) : (
+                      <Input placeholder={matchupInputExample(selectedSport)} {...field} />
+                    )}
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -3264,7 +3324,7 @@ export function BetForm({
                   <FormControl>
                     <SignedNumberInput
                       step="0.5"
-                      placeholder="e.g. 24.5"
+                      placeholder={lineInputExample(selectedSport, 'player-prop', watchedValues.statType)}
                       name={field.name}
                       ref={field.ref}
                       onBlur={field.onBlur}
@@ -3643,7 +3703,7 @@ export function BetForm({
                         <FormControl>
                           <SignedNumberInput
                             step="0.5"
-                            placeholder="e.g. 220.5"
+                            placeholder={lineInputExample(selectedSport, 'total')}
                             name={field.name}
                             ref={field.ref}
                             onBlur={field.onBlur}
@@ -3708,7 +3768,7 @@ export function BetForm({
                       <FormControl>
                         <SignedNumberInput
                           step="0.5"
-                          placeholder="e.g. 220.5"
+                          placeholder={lineInputExample(selectedSport, 'total')}
                           name={field.name}
                           ref={field.ref}
                           onBlur={field.onBlur}
@@ -3857,7 +3917,7 @@ export function BetForm({
                         <FormControl>
                           <SignedNumberInput
                             step="0.5"
-                            placeholder="e.g. 112.5"
+                            placeholder={lineInputExample(selectedSport, 'team-total')}
                             name={field.name}
                             ref={field.ref}
                             onBlur={field.onBlur}
@@ -3938,7 +3998,7 @@ export function BetForm({
                     <FormControl>
                       <SignedNumberInput
                         step="0.5"
-                        placeholder="e.g. 112.5"
+                        placeholder={lineInputExample(selectedSport, 'team-total')}
                         name={field.name}
                         ref={field.ref}
                         onBlur={field.onBlur}
@@ -4464,6 +4524,23 @@ export function BetForm({
 
         <aside className="slip-column w-full lg:max-w-sm" aria-label="Pick review">
           <BetSlipPanel
+            artwork={identityMode === 'manual' ? undefined : {
+              sport: selectedSport,
+              playerParticipantId: selectedMarketType === 'player-prop'
+                ? eventBrowse?.participants.find(participant => participant.participantType === 'player' &&
+                  (participant.participantId === selectedPlayerId || participant.canonicalId === selectedPlayerId))?.participantId ?? selectedPlayerId
+                : null,
+              teamParticipantId: selectedTeamId
+                ? mediaTeamParticipantId(selectedTeamId, matchupTeams)
+                : selectedMarketType !== 'player-prop' ? matchupTeams[0]?.participantId ?? awayParticipantId : null,
+              secondaryTeamParticipantId: !selectedTeamId && selectedMarketType !== 'player-prop'
+                ? matchupTeams[1]?.participantId ?? homeParticipantId : null,
+              playerName: watchedValues.playerName,
+              teamName: selectedTeamId
+                ? matchupTeams.find(team => team.participantId === selectedTeamId || team.teamId === selectedTeamId)?.displayName ?? watchedValues.team
+                : matchupTeams[0]?.displayName ?? watchedValues.awayParticipantName,
+              secondaryTeamName: matchupTeams[1]?.displayName ?? watchedValues.homeParticipantName,
+            }}
             submissionBlocked={missingQaIdentity}
             values={watchedValues}
             isSubmitting={isSubmitting}
