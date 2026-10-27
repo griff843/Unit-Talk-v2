@@ -48,5 +48,5 @@ Production data check (read-only, 2026-10-27): every participant row with artwor
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1793
 Execution SHA: 9a8e2558458f21dd712674741963954a91dfd0d5
