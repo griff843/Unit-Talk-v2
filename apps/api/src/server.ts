@@ -92,6 +92,7 @@ import {
   handleMemberPerformance,
 } from './routes/member-performance.js';
 import { handleTracePickRoute } from './routes/picks.js';
+import { handleParticipantMediaRoute } from './routes/participant-media.js';
 import {
   handleModelHealthAlerts,
   handleModelHealthDecision,
@@ -447,6 +448,13 @@ export async function routeRequest(
       Math.floor(process.uptime()),
     );
     return writeJson(response, 200, runtime.metricsCollector.snapshot());
+  }
+
+  const participantMediaMatch = method === 'GET'
+    ? /^\/api\/reference-data\/participants\/([^/]+)\/media$/.exec(url.pathname)
+    : null;
+  if (participantMediaMatch?.[1]) {
+    return handleParticipantMediaRoute(response, runtime, participantMediaMatch[1]);
   }
 
   if (method === 'GET' && url.pathname === '/api/reference-data/catalog') {

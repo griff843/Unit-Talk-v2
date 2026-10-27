@@ -1,28 +1,29 @@
-# PROOF: WORK-2026102704
+# Verification: WORK-2026102704
 
-MERGE_SHA: pending merge
+## Focused tests
 
-> Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command
-> actually executed and its real result before review. `post-merge-lane-close.yml`
-> binds the merge SHA; never write one here by hand.
+`pnpm exec tsx --test apps/api/src/handlers/participant-media.test.ts apps/api/src/participant-media.http.test.ts`
 
-Issue: WORK-2026102704
-Tier: T2
-result: not_run
+PASS — 5 tests, 5 passed, 0 failed.
 
-## ASSERTIONS:
+## Type check
 
-- [ ] (state each behavior this lane proves, and the test that proves it)
+`pnpm --filter @unit-talk/api type-check`
 
-## EVIDENCE:
+PASS.
 
-(paste measured output here, in fenced blocks)
+## Writable live DB
 
-## Verification
+Blocked/deferred as required by the work order: target identity could not be resolved from its URL (`host=unparseable`). Writable DB verification requires `xskgrzbteyqdufktjrjx` through the `staging-ci` GitHub environment with `CI_SUPABASE_*` credentials. This endpoint is read-only and no local DB mutation was performed.
 
-(record every verification command run on the final code commit, with its real result)
+## Static verification
 
-## Merge SHA Binding
+`pnpm verify:static`
 
-Merge SHA: pending merge
-PR: pending
+PASS — completed repository static checks, build, aggregate tests, production post-migration checks, Smart Form verification (224 passed; browser E2E not enabled), and command checks. The existing automation-coverage warning is baseline-only.
+
+## R-level
+
+`npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`
+
+PASS — 4 implementation files in the measured diff; no R-level rules matched.

@@ -1,0 +1,14 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102704",
+  "tier": "T2",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "review_candidate",
+  "focused_tests": { "command": "pnpm exec tsx --test apps/api/src/handlers/participant-media.test.ts apps/api/src/participant-media.http.test.ts", "tests": 5, "passed": 5, "failed": 0 },
+  "type_check": { "command": "pnpm --filter @unit-talk/api type-check", "status": "PASS" },
+  "writable_live_db": { "status": "BLOCKED_DEFERRED", "reason": "Target identity could not be resolved from URL (host=unparseable); staging-ci with xskgrzbteyqdufktjrjx is required." },
+  "verify_static": { "command": "pnpm verify:static", "status": "PASS" },
+  "r_level": { "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD", "status": "PASS", "changed_files": 4, "rules_matched": [] },
+  "merge_sha": null
+}
