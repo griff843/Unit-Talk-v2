@@ -1,6 +1,6 @@
 # PROOF: WORK-2026102701
 
-MERGE_SHA: pending merge
+MERGE_SHA: 41f3bbf257580c142428c1e277718652852ed878
 
 Issue: WORK-2026102701
 Tier: T2
@@ -58,6 +58,6 @@ Not changed: `intent.md`, `spec.md`, `plan.md`, hooks, settings, CI, merge requi
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 41f3bbf257580c142428c1e277718652852ed878
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1789
 Execution SHA: 9b27c24e5266d937daabedb719d15576ecb36535

@@ -19,10 +19,10 @@
     "docs/06_status/proof/WORK-2026102701/evidence.json",
     "docs/06_status/proof/WORK-2026102701/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-10-27T12:55:55.967Z",
-  "heartbeat_at": "2026-10-27T12:55:55.967Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-27T14:16:12.747Z",
+  "closed_at": "2026-10-27T14:16:12.747Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026102701-compact-mission-card.json",
   "created_by": "claude",
@@ -35,6 +35,13 @@
         "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1789 merged while manifest status was \"in_review\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
       ],
       "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-10-27T14:16:10.544Z",
+      "verdict": "pass",
+      "merge_sha": "41f3bbf257580c142428c1e277718652852ed878",
+      "failures": [],
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": [],
