@@ -1,9 +1,15 @@
-# WORK-2026102804 diff summary
+# Diff summary: WORK-2026102804
 
-Implemented final-score settlement checks in Command Center.
+| File | Change |
+|---|---|
+| apps/command-center/src/lib/settlement-score-check.ts | Pure final-score resolver (moneyline, spread, game total, team total); fails closed otherwise |
+| apps/command-center/src/lib/settlement-score-check.test.ts | Both sides, pushes, home/away team totals, production pick shapes, unsupported markets, mismatch and override |
+| apps/command-center/src/components/SettlementForm.tsx | Pick context, score entry, mismatch block with override reason, score in attestation |
+| apps/command-center/src/app/picks/[id]/page.tsx | Passes pick context into SettlementForm |
 
-- Added a pure, fail-closed resolver for moneyline, spread, game totals, and team totals.
-- Added focused tests for both sides, pushes, team identity resolution, unsupported markets, and mismatch overrides.
-- Passed optional pick context from the pick detail page into `SettlementForm`.
-- Added score entry, mismatch blocking, explicit override notes, and final-score attestation text.
-- No API, schema, authentication, lifecycle, delivery, or containment changes.
+- No API, schema, settle contract, authentication, attribution, correction, delivery or containment change.
+
+## SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1799

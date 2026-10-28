@@ -1,38 +1,42 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "issue_id": "WORK-2026102804",
   "tier": "T2",
-  "title": "Final-score check when settling a game-line pick in Command Center",
-  "status": "draft_review_candidate",
-  "static_proof": {
-    "focused_tests": {
-      "command": "pnpm exec tsx --test apps/command-center/src/lib/settlement-score-check.test.ts",
-      "status": "PASS",
-      "tests": 6,
-      "pass": 6,
-      "fail": 0
-    },
-    "type_check": { "command": "pnpm type-check", "status": "PASS" },
-    "verify_static": { "command": "pnpm verify:static", "status": "PASS" },
-    "diff_check": { "command": "git diff --check", "status": "PASS" },
-    "r_level": {
-      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
-      "status": "PASS",
-      "rules_matched": "none"
-    }
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "ready_for_review",
+  "focused_tests": {
+    "command": "pnpm exec tsx --test apps/command-center/src/lib/settlement-score-check.test.ts",
+    "tests": 9,
+    "passed": 9,
+    "failed": 0
   },
-  "runtime_proof": {
-    "status": "BLOCKED_DEFERRED",
-    "note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials."
+  "suite_tests": {
+    "command": "pnpm test:command-center",
+    "tests": 710,
+    "passed": 710,
+    "failed": 0
   },
-  "scope": {
-    "application_files": [
-      "apps/command-center/src/app/picks/[id]/page.tsx",
-      "apps/command-center/src/components/SettlementForm.tsx",
-      "apps/command-center/src/lib/settlement-score-check.test.ts",
-      "apps/command-center/src/lib/settlement-score-check.ts"
-    ],
-    "guardrails": "No API or schema change; no settle.ts, authentication, attribution, corrections, delivery, or containment changes."
+  "type_check": {
+    "command": "pnpm --filter @unit-talk/command-center type-check",
+    "status": "PASS"
   },
-  "verdict": "PASS_STATIC_DEFERRED_LIVE_DB"
+  "writable_live_db": {
+    "status": "NOT_APPLICABLE",
+    "reason": "Client-side form logic; protected staging-ci proof runs in CI verify."
+  },
+  "r_level": {
+    "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "status": "PASS",
+    "rules_matched": [
+      "operator-ui"
+    ]
+  },
+  "merge_sha": null,
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "0775eab7cf910f73aaa9267a57aaf2e805536639",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  }
 }
