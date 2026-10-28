@@ -32,6 +32,7 @@ import {
 import {
   buildManualEnteredParticipants,
   buildSubmissionPayload,
+  easternDateIso,
   evaluateSubmissionGuards,
   getMarketTypesForSport,
   getStatTypesForSport,
@@ -102,7 +103,6 @@ import { SuccessReceipt } from './SuccessReceipt';
 
 export { buildParticipantSearchUrl, normalizeParticipantSearchResults };
 
-const TODAY = new Date().toISOString().slice(0, 10);
 const PARTICIPANT_QUERY_MIN = 2;
 const BROWSE_SEARCH_MIN = 2;
 const OFFER_STALE_MINUTES = 30;
@@ -159,8 +159,12 @@ function formatMatchup(matchup: MatchupBrowseResult) {
 }
 
 function getRelativeDayPrefix(dateStr: string): string {
-  const today = new Date().toISOString().slice(0, 10);
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const now = new Date();
+  const today = easternDateIso(now);
+  const todayParts = today.split('-').map((value) => Number.parseInt(value, 10));
+  const tomorrow = easternDateIso(
+    new Date(Date.UTC((todayParts[0] ?? 0), (todayParts[1] ?? 1) - 1, (todayParts[2] ?? 1) + 1, 12)),
+  );
   if (dateStr === today) return 'Today · ';
   if (dateStr === tomorrow) return 'Tomorrow · ';
   return '';
@@ -182,7 +186,7 @@ function formatTimestampLabel(isoString: string) {
   if (Number.isNaN(timestamp.getTime())) {
     return 'Unknown time';
   }
-  const dateStr = timestamp.toISOString().slice(0, 10);
+  const dateStr = easternDateIso(timestamp);
   const prefix = getRelativeDayPrefix(dateStr);
   return `${prefix}${timestamp.toLocaleTimeString([], {
     hour: 'numeric',
@@ -931,7 +935,7 @@ export function BetForm({
       units: 1.0,
       odds: undefined,
       line: undefined,
-      gameDate: TODAY,
+      gameDate: easternDateIso(new Date()),
       trackOnly: true,
     },
   });
@@ -2289,7 +2293,7 @@ export function BetForm({
               team: '',
               sportsbook: savedBook ?? DEFAULT_OPERATOR_SPORTSBOOK_ID,
               capperConviction: undefined,
-              gameDate: TODAY,
+              gameDate: easternDateIso(new Date()),
               units: 1.0,
               odds: undefined,
               line: undefined,
@@ -4125,7 +4129,7 @@ export function BetForm({
                       <FormItem>
                         <FormLabel>Date</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} value={field.value ?? TODAY} />
+                          <Input type="date" {...field} value={field.value ?? easternDateIso(new Date())} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

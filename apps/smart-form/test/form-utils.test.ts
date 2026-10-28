@@ -5,6 +5,7 @@ import {
   buildSelectionString,
   buildSubmissionPayload,
   calcPayout,
+  easternDateIso,
   evaluateSubmissionGuards,
   getMarketTypesForSport,
   inferStatTypeFromMarketTypeId,
@@ -33,6 +34,19 @@ function buildBaseValues(overrides: Partial<BetFormValues> = {}): BetFormValues 
     ...overrides,
   };
 }
+
+test('easternDateIso returns the Eastern calendar date across standard-time boundaries', () => {
+  assert.equal(easternDateIso(new Date('2026-10-29T01:30:00Z')), '2026-10-28');
+  assert.equal(easternDateIso(new Date('2026-12-01T04:59:00Z')), '2026-11-30');
+  assert.equal(easternDateIso(new Date('2026-12-01T05:00:00Z')), '2026-12-01');
+});
+
+test('easternDateIso handles spring-forward and fall-back boundary instants', () => {
+  assert.equal(easternDateIso(new Date('2026-03-08T06:59:00Z')), '2026-03-08');
+  assert.equal(easternDateIso(new Date('2026-03-08T07:00:00Z')), '2026-03-08');
+  assert.equal(easternDateIso(new Date('2026-11-01T05:59:00Z')), '2026-11-01');
+  assert.equal(easternDateIso(new Date('2026-11-01T06:00:00Z')), '2026-11-01');
+});
 
 const catalog: CatalogData = {
   sports: [

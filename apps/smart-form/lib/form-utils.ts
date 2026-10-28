@@ -13,6 +13,19 @@ import {
   type MarketTypeId,
 } from './market-types';
 
+const easternDateFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+export function easternDateIso(now: Date): string {
+  const parts = easternDateFormatter.formatToParts(now);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 export interface SubmissionContext {
   submissionMode?: 'live-offer' | 'manual';
   eventId?: string | null;

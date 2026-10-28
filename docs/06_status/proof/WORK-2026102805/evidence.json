@@ -1,0 +1,44 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102805",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "focused_tests": {
+    "command": "pnpm exec tsx --test apps/smart-form/test/form-utils.test.ts",
+    "tests": 39,
+    "passed": 39,
+    "failed": 0
+  },
+  "suite_tests": {
+    "command": "pnpm --filter @unit-talk/smart-form test",
+    "tests": 226,
+    "passed": 226,
+    "failed": 0
+  },
+  "type_check": {
+    "command": "pnpm type-check",
+    "status": "PASS"
+  },
+  "writable_live_db": {
+    "status": "BLOCKED_DEFERRED",
+    "reason": "Target identity could not be resolved from URL (host=unparseable); staging-ci with xskgrzbteyqdufktjrjx is required."
+  },
+  "verify_static": {
+    "command": "pnpm verify:static",
+    "status": "PASS"
+  },
+  "r_level": {
+    "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "status": "PASS",
+    "rules_matched": ["operator-ui"]
+  },
+  "merge_sha": null,
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "23588057b4c33fd2cdfb29a98be7cd17509e1b33",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  }
+}
