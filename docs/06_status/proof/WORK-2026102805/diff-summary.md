@@ -18,5 +18,5 @@ Writable live-DB proof is blocked/deferred: target identity could not be resolve
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 1f181e702e5a08e9a2e3d9b1a0df57f7529226fc
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1797

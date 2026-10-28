@@ -1,6 +1,6 @@
 # PROOF: WORK-2026102805
 
-MERGE_SHA: pending merge
+MERGE_SHA: 1f181e702e5a08e9a2e3d9b1a0df57f7529226fc
 
 Issue: WORK-2026102805
 Tier: T2
@@ -39,6 +39,6 @@ Writable live DB: not applicable to a client-side date default. The local run wa
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 1f181e702e5a08e9a2e3d9b1a0df57f7529226fc
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1797
 Execution SHA: 23588057b4c33fd2cdfb29a98be7cd17509e1b33

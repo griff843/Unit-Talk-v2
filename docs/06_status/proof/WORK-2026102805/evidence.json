@@ -4,7 +4,7 @@
   "tier": "T2",
   "lane_type": "delivery-ui",
   "proof_profile": "app-runtime",
-  "status": "pre_merge",
+  "status": "merged",
   "focused_tests": {
     "command": "pnpm exec tsx --test apps/smart-form/test/form-utils.test.ts",
     "tests": 39,
@@ -32,13 +32,17 @@
   "r_level": {
     "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
     "status": "PASS",
-    "rules_matched": ["operator-ui"]
+    "rules_matched": [
+      "operator-ui"
+    ]
   },
   "merge_sha": null,
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "1f181e702e5a08e9a2e3d9b1a0df57f7529226fc",
     "verified_source_sha": "23588057b4c33fd2cdfb29a98be7cd17509e1b33",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-28T14:28:54.047Z"
   }
 }
