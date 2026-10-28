@@ -12,5 +12,5 @@ The preflight work order (`.ops/work/WORK-2026102703.md`) is deliberately not in
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: b0aea600d979c8b4e3854d979912307147c0d970
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1792

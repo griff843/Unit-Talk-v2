@@ -1,6 +1,6 @@
 # PROOF: WORK-2026102703
 
-MERGE_SHA: pending merge
+MERGE_SHA: b0aea600d979c8b4e3854d979912307147c0d970
 
 Issue: WORK-2026102703
 Tier: T2
@@ -44,7 +44,7 @@ Runtime verification: this change takes effect only after the owner sets `COMMAN
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: b0aea600d979c8b4e3854d979912307147c0d970
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1792
 Execution SHA: 4e4816147479dd43f5909925b6f9bd570e1c652d
 
