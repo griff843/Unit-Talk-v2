@@ -1,0 +1,40 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102802",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "ready_for_review",
+  "suite_tests": {
+    "command": "pnpm test:command-center",
+    "tests": 701,
+    "passed": 701,
+    "failed": 0
+  },
+  "type_check": {
+    "command": "pnpm --filter @unit-talk/command-center type-check",
+    "status": "PASS"
+  },
+  "build": {
+    "command": "pnpm --filter @unit-talk/command-center build",
+    "status": "PASS"
+  },
+  "writable_live_db": {
+    "status": "NOT_APPLICABLE",
+    "reason": "Read-only Command Center surfaces; protected staging-ci proof runs in CI verify."
+  },
+  "r_level": {
+    "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "status": "PASS",
+    "rules_matched": [
+      "operator-ui"
+    ]
+  },
+  "merge_sha": null,
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "9efd8ca0b07db65fba2876ea6cada7f4d2738547",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  }
+}
