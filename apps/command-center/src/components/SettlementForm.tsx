@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import {
   checkSettlementScore,
   canSubmitSettlementScoreCheck,
+  settlementEventTeams,
   supportsSettlementScoreMarket,
   type SettlementScoreCheck,
 } from '@/lib/settlement-score-check';
@@ -71,7 +72,10 @@ export function SettlementForm({
 
   const hasSupportedMarketContext =
     supportsSettlementScoreMarket(market) && Boolean(selection?.trim());
-  const scoreCheck: SettlementScoreCheck | null = hasSupportedMarketContext && awayScore !== '' && homeScore !== ''
+  const teams = settlementEventTeams(eventName);
+  const isScore = (value: string) => /^\d{1,3}$/.test(value.trim());
+  const scoresEntered = isScore(awayScore) && isScore(homeScore);
+  const scoreCheck: SettlementScoreCheck | null = hasSupportedMarketContext && scoresEntered
     ? checkSettlementScore({
         eventName,
         market: market ?? '',
@@ -84,9 +88,10 @@ export function SettlementForm({
     : null;
   const scoreMismatch =
     scoreCheck !== null && scoreCheck.result !== 'unsupported' && selected !== null && selected !== 'void' && scoreCheck.result !== selected;
-  const scoreReady =
-    !hasSupportedMarketContext ||
-    (awayScore !== '' && homeScore !== '' && scoreCheck?.result !== 'unsupported');
+  // A supported market needs the final score. When the check still cannot decide
+  // (e.g. the selection names neither team), the score is recorded and the
+  // operator proceeds as today -- the check never blocks on its own uncertainty.
+  const scoreReady = !hasSupportedMarketContext || selected === 'void' || scoresEntered;
 
   const attestationComplete =
     outcomeBasis.trim() !== '' &&
@@ -116,7 +121,7 @@ export function SettlementForm({
 
   function handleSubmit() {
     if (!selected) return;
-    const enteredScore = hasSupportedMarketContext ? `Final score: ${awayScore}-${homeScore}` : '';
+    const enteredScore = hasSupportedMarketContext && scoresEntered ? `Final score (away-home): ${awayScore.trim()}-${homeScore.trim()}` : '';
     const attestation: OperatorGradingContextInput = {
       outcomeBasis: [outcomeBasis.trim(), enteredScore].filter(Boolean).join(' • '),
       resultSourceUrl,
@@ -226,16 +231,19 @@ export function SettlementForm({
               <p className="text-xs text-blue-100">Enter the final score to check the selected result.</p>
               <div className="grid grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1 text-xs text-gray-400" htmlFor="settle-away-score">
-                  Away score
+                  {teams ? `Away score (${teams[0]})` : 'Away score'}
                   <input id="settle-away-score" className="cc-input" inputMode="numeric" value={awayScore} onChange={(e) => setAwayScore(e.target.value)} disabled={isPending} />
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-gray-400" htmlFor="settle-home-score">
-                  Home score
+                  {teams ? `Home score (${teams[1]})` : 'Home score'}
                   <input id="settle-home-score" className="cc-input" inputMode="numeric" value={homeScore} onChange={(e) => setHomeScore(e.target.value)} disabled={isPending} />
                 </label>
               </div>
-              {scoreCheck?.result === 'unsupported' && awayScore !== '' && homeScore !== '' && (
-                <p className="text-xs text-amber-300">Score check unavailable: {scoreCheck.reason}</p>
+              {(awayScore !== '' || homeScore !== '') && !scoresEntered && (
+                <p className="text-xs text-amber-300">Enter each final score as a whole number.</p>
+              )}
+              {scoreCheck?.result === 'unsupported' && (
+                <p className="text-xs text-amber-300">Score check unavailable: {scoreCheck.reason} The score is still recorded; confirm the result yourself.</p>
               )}
               {scoreMismatch && (
                 <label className="flex flex-col gap-1 text-xs text-amber-300" htmlFor="settle-score-override">

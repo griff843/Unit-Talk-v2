@@ -17,7 +17,8 @@ export interface SettlementScoreCheckInput {
   eventName?: string | null;
   market: string;
   selection: string;
-  line: number | null;
+  // numeric columns arrive from PostgREST as strings ("6.50")
+  line: number | string | null;
   side?: 'away' | 'home' | string | null;
   awayScore: number;
   homeScore: number;
@@ -31,8 +32,10 @@ function marketKind(market: string): 'moneyline' | 'spread' | 'game-total' | 'te
   const value = normalize(market).replace(/[_-]+/g, ' ');
   if (/^(moneyline|money line|ml)$/.test(value)) return 'moneyline';
   if (/^(spread|point spread|puck line|run line)$/.test(value)) return 'spread';
-  if (/^(total|game total|game totals|game total points|over under|over\/under)$/.test(value)) return 'game-total';
-  if (/^(team total|team totals|team total points)$/.test(value)) return 'team-total';
+  // Smart Form persists game lines as `moneyline`, `spread`, `game_total_ou`, `team_total_ou`.
+  // Period markets (`1h_spread`, `1q_total_ou`, ...) are not decided by the final score and stay unsupported.
+  if (/^(total|total ou|game total|game total ou|game totals|game total points|over under|over\/under)$/.test(value)) return 'game-total';
+  if (/^(team total|team total ou|team totals|team total points)$/.test(value)) return 'team-total';
   return null;
 }
 
@@ -46,8 +49,14 @@ function outcome(value: number, line: number, side: 'over' | 'under'): Settlemen
 }
 
 function splitTeams(eventName: string): [string, string] | null {
-  const match = eventName.trim().match(/^(.+?)\s+(?:@|at|vs\.?|v\.)\s+(.+)$/i);
+  // Only `@` / `at` say which team is home; `vs` does not, so it is not split.
+  const match = eventName.trim().match(/^(.+?)\s+(?:@|at)\s+(.+)$/i);
   return match ? [match[1].trim(), match[2].trim()] : null;
+}
+
+/** `[away, home]` from an "Away @ Home" event name, or null when it cannot be split. */
+export function settlementEventTeams(eventName: string | null | undefined): [string, string] | null {
+  return eventName ? splitTeams(eventName) : null;
 }
 
 function resolveSide(input: SettlementScoreCheckInput): 'away' | 'home' | null {
@@ -65,12 +74,19 @@ function resolveSide(input: SettlementScoreCheckInput): 'away' | 'home' | null {
 
 function selectionSide(selection: string): 'over' | 'under' | null {
   const value = normalize(selection);
-  const over = /\bover\b|\b o\b/.test(value);
-  const under = /\bunder\b|\b u\b/.test(value);
+  // Smart Form writes game totals as `O 6.5` / `U 6.5` and team totals as `Ducks Over 3.5`.
+  const over = /(^|\s)(over|o)(\s|$)/.test(value);
+  const under = /(^|\s)(under|u)(\s|$)/.test(value);
   return over === under ? null : over ? 'over' : 'under';
 }
 
-export function checkSettlementScore(input: SettlementScoreCheckInput): SettlementScoreCheck {
+function numericLine(line: number | string | null): number | null {
+  const value = typeof line === 'string' && line.trim() ? Number(line) : line;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+export function checkSettlementScore(rawInput: SettlementScoreCheckInput): SettlementScoreCheck {
+  const input = { ...rawInput, line: numericLine(rawInput.line) };
   if (!Number.isFinite(input.awayScore) || !Number.isFinite(input.homeScore) || input.awayScore < 0 || input.homeScore < 0) {
     return { result: 'unsupported', reason: 'Scores must be non-negative numbers.' };
   }
