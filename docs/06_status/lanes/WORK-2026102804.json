@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102804-settlement-score-check",
   "branch": "codex/work-2026102804-settlement-score-check",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "468c1604c92b906616829783436acaae9868df25",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1799",
   "files_changed": [],
   "file_scope_lock": [
@@ -22,14 +22,22 @@
     "docs/06_status/proof/WORK-2026102804/verification.md",
     "docs/06_status/proof/WORK-2026102804/model-routing.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-10-28T13:57:55.595Z",
-  "heartbeat_at": "2026-10-28T13:57:55.595Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-28T14:51:57.603Z",
+  "closed_at": "2026-10-28T14:51:57.603Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026102804-settlement-score-check.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-28T14:51:54.942Z",
+      "verdict": "pass",
+      "merge_sha": "468c1604c92b906616829783436acaae9868df25",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-luna-medium",

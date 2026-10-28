@@ -1,6 +1,6 @@
 # PROOF: WORK-2026102804
 
-MERGE_SHA: pending merge
+MERGE_SHA: 468c1604c92b906616829783436acaae9868df25
 
 Issue: WORK-2026102804
 Tier: T2
@@ -42,6 +42,6 @@ Writable live DB: not applicable; this is client-side form logic with no new rea
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 468c1604c92b906616829783436acaae9868df25
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1799
 Execution SHA: 0775eab7cf910f73aaa9267a57aaf2e805536639
