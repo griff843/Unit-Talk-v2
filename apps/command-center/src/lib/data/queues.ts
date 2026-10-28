@@ -2,7 +2,7 @@
 import { getDataClient, isTestFixturePick } from './client';
 import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
 import { applyPickPopulation, applyOperatorPickPopulation, readPickPopulation } from '../governed-population';
-import { pickIdPrefixRange } from '../picks-explorer-query';
+import { pickIdPrefixRange } from '../command-palette-model';
 
 // ── Shared internal type ─────────────────────────────────────────────────────
 

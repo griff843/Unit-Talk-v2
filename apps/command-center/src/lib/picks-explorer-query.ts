@@ -38,19 +38,3 @@ export function picksExplorerHref(query: PicksExplorerQuery, page: number): stri
   if (query.fixtures) params.set('population', 'fixtures');
   return `/picks?${params}`;
 }
-
-/**
- * The inclusive uuid range covering every id that starts with `query`, or null
- * when `query` is not an id fragment (at least 6 hex digits, dashes ignored).
- * Postgres orders uuids by their bytes, i.e. by these hex digits.
- */
-export function pickIdPrefixRange(query: string): { from: string; to: string } | null {
-  const hex = query.trim().toLowerCase().replace(/-/g, '');
-  if (!/^[0-9a-f]{6,32}$/.test(hex)) return null;
-  const format = (digits: string) =>
-    `${digits.slice(0, 8)}-${digits.slice(8, 12)}-${digits.slice(12, 16)}-${digits.slice(16, 20)}-${digits.slice(20)}`;
-  return {
-    from: format(hex.padEnd(32, '0')),
-    to: format(hex.padEnd(32, 'f')),
-  };
-}
