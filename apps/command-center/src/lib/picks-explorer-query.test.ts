@@ -29,3 +29,11 @@ test('distribution mode is allow-listed and page links preserve it across naviga
   assert.equal(next.searchParams.get('population'), 'fixtures');
   assert.equal(readPicksExplorerQuery(Object.fromEntries(next.searchParams)).page, 2);
 });
+
+test('parses and preserves capper, sport, date and ID-prefix search state', () => {
+  const query = readPicksExplorerQuery({ q: 'abcdef', capper: 'kingro623', sport: 'NBA', dateFrom: '2026-10-01', dateTo: '2026-10-28' });
+  assert.deepEqual({ q: query.q, capper: query.capper, sport: query.sport, dateFrom: query.dateFrom, dateTo: query.dateTo }, { q: 'abcdef', capper: 'kingro623', sport: 'NBA', dateFrom: '2026-10-01', dateTo: '2026-10-28' });
+  const href = new URL(picksExplorerHref(query, 2), 'http://localhost');
+  assert.equal(href.searchParams.get('capper'), 'kingro623');
+  assert.equal(href.searchParams.get('dateTo'), '2026-10-28');
+});

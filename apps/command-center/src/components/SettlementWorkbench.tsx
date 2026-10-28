@@ -1,4 +1,6 @@
 import { SettlementForm } from '@/components/SettlementForm';
+import { SettlementTargetSummary } from '@/components/SettlementTargetSummary';
+import { getPickIdentity } from '@/lib/data/pick-identity';
 
 type SettlementWorkbenchProps = {
   pickId: string | null;
@@ -6,11 +8,12 @@ type SettlementWorkbenchProps = {
   pickLoadError: string | null;
 };
 
-export function SettlementWorkbench({
+export async function SettlementWorkbench({
   pickId,
   isAlreadySettled,
   pickLoadError,
 }: SettlementWorkbenchProps) {
+  const target = pickId && !pickLoadError ? await getPickIdentity(pickId) : null;
   return (
     <section className="cc-surface p-5" aria-labelledby="settlement-workbench-heading">
       <div className="max-w-3xl">
@@ -50,6 +53,7 @@ export function SettlementWorkbench({
         </div>
       ) : pickId && isAlreadySettled !== null ? (
         <div className="mt-6 border-t border-gray-800 pt-5">
+          {target ? <SettlementTargetSummary target={target} /> : null}
           <p className="mb-3 text-xs cc-text-muted">
             Authoritative target: <span className="font-mono text-gray-300">{pickId}</span>
           </p>

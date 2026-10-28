@@ -2,6 +2,7 @@
 import { getDataClient, isTestFixturePick } from './client';
 import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
 import { applyPickPopulation, applyOperatorPickPopulation, readPickPopulation } from '../governed-population';
+import { pickIdPrefixRange } from '../command-palette-model';
 
 // ── Shared internal type ─────────────────────────────────────────────────────
 
@@ -533,18 +534,25 @@ export const VIEW_DERIVED_COLUMNS = [
  * therefore cannot escape the guard in `queues-count-relation.test.ts`, and a
  * filter added anywhere else is not applied at all.
  */
-const SEARCH_PICKS_TEXT_COLUMNS = ['market', 'selection', 'source'] as const;
+const SEARCH_PICKS_TEXT_COLUMNS = ['market', 'selection', 'source', 'capper_id'] as const;
 
-const SEARCH_PICKS_EQ_FILTERS = [
+// Capper handles are stored lowercase (`kingro623`) and sport ids uppercase
+// (`NHL`); normalising here lets an operator type either case.
+const SEARCH_PICKS_EQ_FILTERS: ReadonlyArray<{ param: string; column: string; normalize?: (value: string) => string }> = [
   { param: 'source', column: 'source' },
   { param: 'status', column: 'status' },
   { param: 'approval', column: 'approval_status' },
-] as const;
+  { param: 'capper', column: 'capper_id', normalize: (value) => value.toLowerCase() },
+  { param: 'sport', column: 'sport_id', normalize: (value) => value.toUpperCase() },
+];
 
 const SEARCH_PICKS_RANGE_FILTERS = [
   { param: 'dateFrom', column: 'created_at', op: 'gte' },
   { param: 'dateTo', column: 'created_at', op: 'lte' },
 ] as const;
+
+/** A search for a pick ID or ID fragment is a range on `id`, which `ilike` cannot do on a uuid. */
+const SEARCH_PICKS_ID_COLUMN = 'id';
 
 /** Every column `searchPicks` filters on. Must stay disjoint from the set above. */
 export const SEARCH_PICKS_FILTER_COLUMNS = Array.from(
@@ -552,8 +560,10 @@ export const SEARCH_PICKS_FILTER_COLUMNS = Array.from(
     ...SEARCH_PICKS_TEXT_COLUMNS,
     ...SEARCH_PICKS_EQ_FILTERS.map((f) => f.column),
     ...SEARCH_PICKS_RANGE_FILTERS.map((f) => f.column),
+    SEARCH_PICKS_ID_COLUMN,
   ]),
 );
+
 
 export async function searchPicks(
   params: Record<string, string>,
@@ -613,12 +623,15 @@ export async function searchPicks(
       lte: (c: string, v: string) => T;
     }>(base: T): T => {
       let next = base;
-      if (q) {
+      const idRange = q ? pickIdPrefixRange(q) : null;
+      if (idRange) {
+        next = next.gte(SEARCH_PICKS_ID_COLUMN, idRange.from).lte(SEARCH_PICKS_ID_COLUMN, idRange.to);
+      } else if (q) {
         next = next.or(SEARCH_PICKS_TEXT_COLUMNS.map((c) => `${c}.ilike.${JSON.stringify(`%${q}%`)}`).join(','));
       }
       for (const filter of SEARCH_PICKS_EQ_FILTERS) {
         const value = params[filter.param]?.trim();
-        if (value) next = next.eq(filter.column, value);
+        if (value) next = next.eq(filter.column, filter.normalize ? filter.normalize(value) : value);
       }
       for (const filter of SEARCH_PICKS_RANGE_FILTERS) {
         const value = params[filter.param]?.trim();
