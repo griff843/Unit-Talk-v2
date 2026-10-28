@@ -6,3 +6,8 @@
 - Added the Settlement page stat card, table, canonical pick links, and explicit empty state.
 - Added focused `node:test` coverage for inclusion, exclusions, ordering, count, and query predicate.
 - No settlement, write, API, schema, migration, delivery, worker, authentication, or attribution changes.
+
+## SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1796

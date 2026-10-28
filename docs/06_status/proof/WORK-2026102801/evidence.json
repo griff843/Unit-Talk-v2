@@ -1,20 +1,44 @@
 {
-  "issue": "WORK-2026102801",
-  "status": "verified_static_deferred_live_db",
-  "checks": [
-    {
-      "command": "pnpm exec tsx --test apps/command-center/src/lib/data/results-ops.test.ts",
-      "result": "pass"
-    },
-    {
-      "command": "pnpm type-check",
-      "result": "pass"
-    }
-  ],
-  "live_db": {
-    "result": "blocked_deferred",
-    "reason": "target identity could not be resolved from its URL (host=unparseable)",
-    "required_identity": "xskgrzbteyqdufktjrjx",
-    "execution_path": "staging-ci GitHub environment with CI_SUPABASE_* credentials"
+  "schema_version": 2,
+  "issue_id": "WORK-2026102801",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "focused_tests": {
+    "command": "pnpm exec tsx --test apps/command-center/src/lib/data/results-ops.test.ts",
+    "tests": 1,
+    "passed": 1,
+    "failed": 0
+  },
+  "suite_tests": {
+    "command": "pnpm test:command-center",
+    "tests": 695,
+    "passed": 695,
+    "failed": 0
+  },
+  "type_check": {
+    "command": "pnpm --filter @unit-talk/command-center type-check",
+    "status": "PASS"
+  },
+  "writable_live_db": {
+    "status": "BLOCKED_DEFERRED",
+    "reason": "Target identity could not be resolved from URL (host=unparseable); staging-ci with xskgrzbteyqdufktjrjx is required."
+  },
+  "verify_static": {
+    "command": "pnpm verify:static",
+    "status": "PASS"
+  },
+  "r_level": {
+    "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "status": "PASS",
+    "rules_matched": []
+  },
+  "merge_sha": null,
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "4fdc61527e01ba1626b4c8b8881cb439c80aa8ae",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
   }
 }
