@@ -1,4 +1,5 @@
 import { getPerformanceData } from '@/lib/data';
+import Link from '@/components/OperatorLink';
 
 export const metadata = { title: 'Roi — Unit Talk Command Center' };
 
@@ -94,12 +95,16 @@ export default async function RoiOverviewPage() {
   return (
     <div className="space-y-6">
       <div>
+        <p className="text-sm text-gray-300">
+          Published cohort · rolling today, last 7 days, last 30 days, and month to date windows.
+          Internal <strong>Track Only</strong> picks are excluded from these metrics; see <Link href="/performance" className="text-blue-300 underline">Performance</Link> for that internal record.
+        </p>
       </div>
 
       {!hasData ? (
         <div className="rounded-md border border-gray-700 bg-gray-900/50 px-4 py-6 text-center">
-          <p className="text-sm text-gray-400">No settled picks yet.</p>
-          <p className="text-xs text-gray-600 mt-1">ROI breakdown appears after picks are settled.</p>
+          <p className="text-sm text-gray-400">No settled picks yet in the published cohort.</p>
+          <p className="text-xs text-gray-600 mt-1">This rolling-window view excludes internal Track Only picks. See <Link href="/performance" className="text-blue-300 underline">Performance</Link> for those picks.</p>
         </div>
       ) : (
         <>

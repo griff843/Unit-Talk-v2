@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   filterCommands,
   moveActiveIndex,
+  pickSearchEntry,
   type CommandEntry,
 } from '@/lib/command-palette-model';
 
@@ -21,7 +22,11 @@ export function CommandPalette({ entries, open, onClose }: CommandPaletteProps) 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
-  const results = useMemo(() => filterCommands(entries, query).slice(0, 12), [entries, query]);
+  const results = useMemo(() => {
+    const pickEntry = pickSearchEntry(query);
+    const matches = filterCommands(entries, query);
+    return (pickEntry ? [{ ...pickEntry, score: 100 }, ...matches] : matches).slice(0, 12);
+  }, [entries, query]);
 
   useEffect(() => {
     if (open) {

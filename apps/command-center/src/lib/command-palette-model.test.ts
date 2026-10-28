@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   filterCommands,
   moveActiveIndex,
+  pickIdPrefixRange,
+  pickSearchEntry,
   scoreEntry,
   scoreMatch,
   type CommandEntry,
@@ -61,4 +63,25 @@ test('moveActiveIndex wraps both directions and handles empty lists', () => {
   assert.equal(moveActiveIndex(2, 1, 3), 0);
   assert.equal(moveActiveIndex(0, -1, 3), 2);
   assert.equal(moveActiveIndex(5, 1, 0), 0);
+});
+
+test('pickSearchEntry jumps to the picks explorer for an id fragment only', () => {
+  const entry = pickSearchEntry(' 706B136B ');
+  assert.equal(entry?.href, '/picks?q=706b136b');
+  assert.equal(entry?.group, 'Picks');
+  assert.equal(pickSearchEntry('dfcd9486-12')?.href, '/picks?q=dfcd9486-12');
+  assert.equal(pickSearchEntry('abc12'), null);
+  assert.equal(pickSearchEntry('settlement'), null);
+  assert.equal(pickSearchEntry(''), null);
+});
+
+test('pickIdPrefixRange bounds every uuid that starts with the fragment', () => {
+  assert.deepEqual(pickIdPrefixRange('FA5E1DD2-43'), {
+    from: 'fa5e1dd2-4300-0000-0000-000000000000',
+    to: 'fa5e1dd2-43ff-ffff-ffff-ffffffffffff',
+  });
+  const full = 'fa5e1dd2-4330-4fe5-978c-f4f168dca531';
+  assert.deepEqual(pickIdPrefixRange(full), { from: full, to: full });
+  assert.equal(pickIdPrefixRange('fa5e1'), null);
+  assert.equal(pickIdPrefixRange('kingro623'), null);
 });
