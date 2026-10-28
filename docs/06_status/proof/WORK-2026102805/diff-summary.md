@@ -16,6 +16,7 @@ No submission API contract, payload shape, validation rule, Track Only/delivery 
 
 Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (`host=unparseable`). The packet requires staging-CI GitHub environment credentials (`CI_SUPABASE_*`) for writable DB verification.
 
-## SHA binding
+## SHA Binding
 
-Merge SHA: pending PR / governed merge.
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1797
