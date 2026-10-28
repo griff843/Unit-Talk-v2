@@ -1,12 +1,9 @@
-# Diff summary: WORK-2026102804
+# WORK-2026102804 diff summary
 
-> Scaffolded by `ops:lane-start`. Replace this note with the files this lane changed
-> and why. Until then this file records nothing.
+Implemented final-score settlement checks in Command Center.
 
-| File | Change |
-|---|---|
-
-## SHA Binding
-
-Merge SHA: pending merge
-PR: pending
+- Added a pure, fail-closed resolver for moneyline, spread, game totals, and team totals.
+- Added focused tests for both sides, pushes, team identity resolution, unsupported markets, and mismatch overrides.
+- Passed optional pick context from the pick detail page into `SettlementForm`.
+- Added score entry, mismatch blocking, explicit override notes, and final-score attestation text.
+- No API, schema, authentication, lifecycle, delivery, or containment changes.

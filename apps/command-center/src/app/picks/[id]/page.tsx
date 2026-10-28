@@ -405,7 +405,15 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         ) : allowedActions.includes('correct') || (alreadySettled && allowedActions.includes('settle')) ? (
           <CorrectionForm pickId={pickId} />
         ) : allowedActions.includes('settle') ? (
-          <SettlementForm pickId={pickId} isAlreadySettled={alreadySettled} />
+          <SettlementForm
+            pickId={pickId}
+            isAlreadySettled={alreadySettled}
+            eventName={pick.matchup}
+            market={pick.market}
+            selection={pick.selection}
+            line={pick.line}
+            odds={pick.odds}
+          />
         ) : (
           <p className="text-sm text-gray-400">No actions available for this pick.</p>
         )}

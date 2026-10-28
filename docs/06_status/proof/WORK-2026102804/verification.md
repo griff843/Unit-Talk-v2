@@ -1,28 +1,11 @@
-# PROOF: WORK-2026102804
+# WORK-2026102804 verification
 
-MERGE_SHA: pending merge
+- `pnpm exec tsx --test apps/command-center/src/lib/settlement-score-check.test.ts` — PASS, 6 tests.
+- `pnpm type-check` — PASS.
+- `pnpm verify:static` — PASS.
+- `git diff --check` — PASS.
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — required after this artifact is recorded.
 
-> Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command
-> actually executed and its real result before review. `post-merge-lane-close.yml`
-> binds the merge SHA; never write one here by hand.
+Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires `xskgrzbteyqdufktjrjx`. Run it through the staging-ci GitHub environment with `CI_SUPABASE_*` credentials.
 
-Issue: WORK-2026102804
-Tier: T2
-result: not_run
-
-## ASSERTIONS:
-
-- [ ] (state each behavior this lane proves, and the test that proves it)
-
-## EVIDENCE:
-
-(paste measured output here, in fenced blocks)
-
-## Verification
-
-(record every verification command run on the final code commit, with its real result)
-
-## Merge SHA Binding
-
-Merge SHA: pending merge
-PR: pending
+The static gate emitted one known repository baseline warning for the shadowed `apps/qa-agent/src/**/*.test.ts` glob; no new warning was introduced by this lane.

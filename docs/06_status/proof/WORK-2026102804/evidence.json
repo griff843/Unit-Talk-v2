@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "issue_id": "WORK-2026102804",
+  "tier": "T2",
+  "title": "Final-score check when settling a game-line pick in Command Center",
+  "status": "draft_review_candidate",
+  "static_proof": {
+    "focused_tests": {
+      "command": "pnpm exec tsx --test apps/command-center/src/lib/settlement-score-check.test.ts",
+      "status": "PASS",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0
+    },
+    "type_check": { "command": "pnpm type-check", "status": "PASS" },
+    "verify_static": { "command": "pnpm verify:static", "status": "PASS" },
+    "diff_check": { "command": "git diff --check", "status": "PASS" },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none"
+    }
+  },
+  "runtime_proof": {
+    "status": "BLOCKED_DEFERRED",
+    "note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials."
+  },
+  "scope": {
+    "application_files": [
+      "apps/command-center/src/app/picks/[id]/page.tsx",
+      "apps/command-center/src/components/SettlementForm.tsx",
+      "apps/command-center/src/lib/settlement-score-check.test.ts",
+      "apps/command-center/src/lib/settlement-score-check.ts"
+    ],
+    "guardrails": "No API or schema change; no settle.ts, authentication, attribution, corrections, delivery, or containment changes."
+  },
+  "verdict": "PASS_STATIC_DEFERRED_LIVE_DB"
+}

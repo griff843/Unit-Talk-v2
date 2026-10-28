@@ -8,6 +8,12 @@ import {
   type HumanCapperRecapResult,
 } from '@/lib/human-capper-recap';
 import { Button } from '@/components/ui/Button';
+import {
+  checkSettlementScore,
+  canSubmitSettlementScoreCheck,
+  supportsSettlementScoreMarket,
+  type SettlementScoreCheck,
+} from '@/lib/settlement-score-check';
 
 type ResultType = 'win' | 'loss' | 'push' | 'void';
 type ConfidenceType = 'confirmed' | 'estimated' | 'pending';
@@ -29,9 +35,24 @@ const CONFIDENCES: ConfidenceType[] = ['confirmed', 'estimated', 'pending'];
 interface SettlementFormProps {
   pickId: string;
   isAlreadySettled: boolean;
+  eventName?: string | null;
+  market?: string | null;
+  selection?: string | null;
+  line?: number | null;
+  odds?: number | null;
+  side?: 'away' | 'home' | string | null;
 }
 
-export function SettlementForm({ pickId, isAlreadySettled }: SettlementFormProps) {
+export function SettlementForm({
+  pickId,
+  isAlreadySettled,
+  eventName,
+  market,
+  selection,
+  line,
+  odds,
+  side,
+}: SettlementFormProps) {
   const [selected, setSelected] = useState<ResultType | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -44,9 +65,35 @@ export function SettlementForm({ pickId, isAlreadySettled }: SettlementFormProps
   const [observedAt, setObservedAt] = useState('');
   const [confidence, setConfidence] = useState<ConfidenceType>('confirmed');
   const [notes, setNotes] = useState('');
+  const [awayScore, setAwayScore] = useState('');
+  const [homeScore, setHomeScore] = useState('');
+  const [overrideReason, setOverrideReason] = useState('');
+
+  const hasSupportedMarketContext =
+    supportsSettlementScoreMarket(market) && Boolean(selection?.trim());
+  const scoreCheck: SettlementScoreCheck | null = hasSupportedMarketContext && awayScore !== '' && homeScore !== ''
+    ? checkSettlementScore({
+        eventName,
+        market: market ?? '',
+        selection: selection ?? '',
+        line: line ?? null,
+        side,
+        awayScore: Number(awayScore),
+        homeScore: Number(homeScore),
+      })
+    : null;
+  const scoreMismatch =
+    scoreCheck !== null && scoreCheck.result !== 'unsupported' && selected !== null && selected !== 'void' && scoreCheck.result !== selected;
+  const scoreReady =
+    !hasSupportedMarketContext ||
+    (awayScore !== '' && homeScore !== '' && scoreCheck?.result !== 'unsupported');
 
   const attestationComplete =
-    outcomeBasis.trim() !== '' && resultSourceUrl.trim() !== '' && observedAt.trim() !== '';
+    outcomeBasis.trim() !== '' &&
+    resultSourceUrl.trim() !== '' &&
+    observedAt.trim() !== '' &&
+    scoreReady &&
+    canSubmitSettlementScoreCheck(selected, scoreCheck, overrideReason);
 
   function handleSelect(value: ResultType) {
     setSelected(value);
@@ -69,12 +116,15 @@ export function SettlementForm({ pickId, isAlreadySettled }: SettlementFormProps
 
   function handleSubmit() {
     if (!selected) return;
+    const enteredScore = hasSupportedMarketContext ? `Final score: ${awayScore}-${homeScore}` : '';
     const attestation: OperatorGradingContextInput = {
-      outcomeBasis,
+      outcomeBasis: [outcomeBasis.trim(), enteredScore].filter(Boolean).join(' • '),
       resultSourceUrl,
       observedAt,
       confidence,
-      notes,
+      notes: [notes.trim(), scoreMismatch ? `Score-check override: ${overrideReason.trim()}` : '']
+        .filter(Boolean)
+        .join(' • '),
     };
     startTransition(async () => {
       const res = await settlePick(pickId, selected, attestation);
@@ -140,6 +190,17 @@ export function SettlementForm({ pickId, isAlreadySettled }: SettlementFormProps
       <p className="text-xs text-gray-500">
         Settlement writes an immutable record — corrections append, they never overwrite.
       </p>
+      {(eventName || market || selection || line !== undefined || odds !== undefined) && (
+        <div className="rounded-md border border-gray-700 bg-gray-950/60 p-3 text-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Pick being settled</p>
+          <p className="mt-1 text-gray-100">{eventName ?? 'Event unavailable'}</p>
+          <p className="mt-1 text-xs text-gray-400">
+            {market ?? 'Market unavailable'} • {selection ?? 'Selection unavailable'}
+            {line != null ? ` • line ${line}` : ''}
+            {odds != null ? ` • odds ${odds}` : ''}
+          </p>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
         {RESULTS.map(({ value, label, variant, idleClass }) => (
           <Button
@@ -160,6 +221,30 @@ export function SettlementForm({ pickId, isAlreadySettled }: SettlementFormProps
           <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
             Grading attestation
           </legend>
+          {hasSupportedMarketContext && (
+            <div className="flex flex-col gap-3 rounded border border-blue-900/60 bg-blue-950/30 p-3">
+              <p className="text-xs text-blue-100">Enter the final score to check the selected result.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1 text-xs text-gray-400" htmlFor="settle-away-score">
+                  Away score
+                  <input id="settle-away-score" className="cc-input" inputMode="numeric" value={awayScore} onChange={(e) => setAwayScore(e.target.value)} disabled={isPending} />
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-gray-400" htmlFor="settle-home-score">
+                  Home score
+                  <input id="settle-home-score" className="cc-input" inputMode="numeric" value={homeScore} onChange={(e) => setHomeScore(e.target.value)} disabled={isPending} />
+                </label>
+              </div>
+              {scoreCheck?.result === 'unsupported' && awayScore !== '' && homeScore !== '' && (
+                <p className="text-xs text-amber-300">Score check unavailable: {scoreCheck.reason}</p>
+              )}
+              {scoreMismatch && (
+                <label className="flex flex-col gap-1 text-xs text-amber-300" htmlFor="settle-score-override">
+                  The score implies <span className="font-semibold uppercase">{scoreCheck.result}</span>. Explain why you are overriding it.
+                  <input id="settle-score-override" className="cc-input" value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} disabled={isPending} placeholder="Example: official correction is pending" />
+                </label>
+              )}
+            </div>
+          )}
           <p className="text-xs text-gray-500">
             Required. The API refuses a manual settlement of an evidence-plane pick that does not say
             where the outcome came from.
