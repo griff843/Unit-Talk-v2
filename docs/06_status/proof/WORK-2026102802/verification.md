@@ -1,6 +1,6 @@
 # PROOF: WORK-2026102802
 
-MERGE_SHA: pending merge
+MERGE_SHA: 8eff8d2301fc2f05684ea99ed014fdf283e42077
 
 Issue: WORK-2026102802
 Tier: T2
@@ -49,6 +49,6 @@ Writable live DB: not applicable to read-only Command Center surfaces. The prote
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 8eff8d2301fc2f05684ea99ed014fdf283e42077
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1798
 Execution SHA: 9efd8ca0b07db65fba2876ea6cada7f4d2738547
