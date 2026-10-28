@@ -11,7 +11,7 @@ Issue: WORK-2026102803
 Tier: T3
 Lane type: hygiene
 Branch: claude/work-2026102803-proof-2703-verify-mentions
-PR URL: PR_URL_TBD
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1795
 Head SHA: 04df2a765ef949f354a9d41fa70bea260a3cd081
 Execution SHA: 04df2a765ef949f354a9d41fa70bea260a3cd081
 Diff base: 00270a0b31161d0af27ff5a48aca3e2df5afa1b4
