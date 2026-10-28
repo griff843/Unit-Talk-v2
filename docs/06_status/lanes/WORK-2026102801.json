@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102801-track-only-settlement-queue",
   "branch": "codex/work-2026102801-track-only-settlement-queue",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "f4354929bd700d105f8103eb61038c174c0958f1",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1796",
   "files_changed": [],
   "file_scope_lock": [
@@ -22,14 +22,22 @@
     "docs/06_status/proof/WORK-2026102801/verification.md",
     "docs/06_status/proof/WORK-2026102801/model-routing.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-10-28T11:51:29.043Z",
-  "heartbeat_at": "2026-10-28T11:51:29.043Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-28T13:05:48.415Z",
+  "closed_at": "2026-10-28T13:05:48.415Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026102801-track-only-settlement-queue.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-28T13:05:46.471Z",
+      "verdict": "pass",
+      "merge_sha": "f4354929bd700d105f8103eb61038c174c0958f1",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-luna-medium",
