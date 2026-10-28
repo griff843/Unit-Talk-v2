@@ -18,7 +18,7 @@ export default async function PicksPage({
   const offset = (query.page - 1) * query.limit;
   try {
     const { picks, total } = await searchPicks({
-      q: query.q, status: query.status, limit: String(query.limit), offset: String(offset),
+      q: query.q, status: query.status, limit: String(query.limit), offset: String(offset), capper: query.capper, sport: query.sport, dateFrom: query.dateFrom, dateTo: query.dateTo,
       ...(fixtureMode ? {} : { distributionMode: query.distributionMode }),
       ...(fixtureMode ? { population: 'fixtures' } : {}),
     });
@@ -34,11 +34,15 @@ export default async function PicksPage({
       </nav>
     );
     const filters = (
-      <form action="/picks" method="get" key={`${query.q}:${query.status}:${query.distributionMode}:${query.limit}`} className="flex flex-wrap items-end gap-3">
+      <form action="/picks" method="get" key={`${query.q}:${query.status}:${query.distributionMode}:${query.capper}:${query.sport}:${query.dateFrom}:${query.dateTo}:${query.limit}`} className="flex flex-wrap items-end gap-3">
         {fixtureMode ? <input type="hidden" name="population" value="fixtures" /> : null}
         <label className="flex w-full flex-col gap-1 text-sm sm:w-auto sm:min-w-[220px] sm:flex-1">Search picks
-          <input name="q" defaultValue={query.q} maxLength={200} placeholder="Selection, market or source" className="cc-input min-w-0" />
+          <input name="q" defaultValue={query.q} maxLength={200} placeholder="Selection, capper or pick ID" className="cc-input min-w-0" />
         </label>
+        <label className="flex flex-col gap-1 text-sm">Capper<input name="capper" defaultValue={query.capper} className="cc-input" /></label>
+        <label className="flex flex-col gap-1 text-sm">Sport<input name="sport" defaultValue={query.sport} className="cc-input" /></label>
+        <label className="flex flex-col gap-1 text-sm">From<input type="date" name="dateFrom" defaultValue={query.dateFrom} className="cc-input" /></label>
+        <label className="flex flex-col gap-1 text-sm">To<input type="date" name="dateTo" defaultValue={query.dateTo} className="cc-input" /></label>
         <label className="flex flex-col gap-1 text-sm">Lifecycle status
           <select name="status" defaultValue={query.status} className="cc-select">
             <option value="">All statuses</option>

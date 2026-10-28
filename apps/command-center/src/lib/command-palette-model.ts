@@ -3,15 +3,32 @@
  * feeds it the nav registry and a query; it returns ranked matches.
  */
 
+import { pickIdPrefixRange } from './picks-explorer-query.js';
+
 export interface CommandEntry {
   href: string;
   label: string;
   group: string;
   keywords?: string[];
+  detail?: string;
 }
 
 export interface RankedCommand extends CommandEntry {
   score: number;
+}
+
+/**
+ * A "find pick" jump for an id fragment (6+ hex digits, dashes allowed), so an
+ * operator can paste part of a pick id anywhere. Null for any other query.
+ */
+export function pickSearchEntry(query: string): CommandEntry | null {
+  const fragment = query.trim().toLowerCase();
+  if (!pickIdPrefixRange(fragment)) return null;
+  return {
+    href: `/picks?${new URLSearchParams({ q: fragment })}`,
+    label: `Find pick ${fragment}`,
+    group: 'Picks',
+  };
 }
 
 function normalize(value: string): string {

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   filterCommands,
   moveActiveIndex,
+  pickSearchEntry,
   scoreEntry,
   scoreMatch,
   type CommandEntry,
@@ -61,4 +62,14 @@ test('moveActiveIndex wraps both directions and handles empty lists', () => {
   assert.equal(moveActiveIndex(2, 1, 3), 0);
   assert.equal(moveActiveIndex(0, -1, 3), 2);
   assert.equal(moveActiveIndex(5, 1, 0), 0);
+});
+
+test('pickSearchEntry jumps to the picks explorer for an id fragment only', () => {
+  const entry = pickSearchEntry(' 706B136B ');
+  assert.equal(entry?.href, '/picks?q=706b136b');
+  assert.equal(entry?.group, 'Picks');
+  assert.equal(pickSearchEntry('dfcd9486-12')?.href, '/picks?q=dfcd9486-12');
+  assert.equal(pickSearchEntry('abc12'), null);
+  assert.equal(pickSearchEntry('settlement'), null);
+  assert.equal(pickSearchEntry(''), null);
 });
