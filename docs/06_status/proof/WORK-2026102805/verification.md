@@ -12,7 +12,7 @@ Executor: codex-cli
 - [x] `pnpm exec tsx --test apps/smart-form/test/form-utils.test.ts`: PASS — 39/39 tests.
 - [x] `pnpm verify:quick`: PASS — known baseline `WIRING_GLOB_SHADOWED` warning only; no new warning.
 - [x] `pnpm verify:static`: PASS — repository verification completed; Smart Form suite 226/226 passed, E2E not run because `UNIT_TALK_SMART_FORM_E2E` is unset.
-- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS — no rules matched.
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS — `operator-ui` matched; its required `qa-experience-report` artifact is present at `apps/qa-agent/artifacts/unit-talk-command_center-research_lines-operator/2026-05-13T14-30-59-lopam7/result.json`. This pre-existing artifact is not claimed as lane-specific QA evidence.
 
 ## Live DB
 

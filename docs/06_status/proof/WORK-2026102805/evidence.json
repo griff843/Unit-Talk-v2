@@ -21,7 +21,7 @@
     },
     "verify_quick": {"command": "pnpm verify:quick", "status": "PASS", "baseline_warning": "WIRING_GLOB_SHADOWED"},
     "verify_static": {"command": "pnpm verify:static", "status": "PASS", "smart_form_tests": 226, "smart_form_pass": 226, "smart_form_fail": 0, "e2e": "not_run_unset_UNIT_TALK_SMART_FORM_E2E"},
-    "r_level": {"command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD", "status": "PASS", "rules_matched": "none"}
+    "r_level": {"command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD", "status": "PASS", "rules_matched": ["operator-ui"], "required_artifact_present": true, "required_artifact_note": "Pre-existing qa-experience-report artifact is present; it is not claimed as lane-specific QA evidence."}
   },
   "runtime_proof": {
     "status": "blocked_deferred",
