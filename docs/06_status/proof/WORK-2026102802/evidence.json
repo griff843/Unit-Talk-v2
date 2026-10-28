@@ -32,9 +32,11 @@
   },
   "merge_sha": null,
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "8eff8d2301fc2f05684ea99ed014fdf283e42077",
     "verified_source_sha": "9efd8ca0b07db65fba2876ea6cada7f4d2738547",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-28T13:52:00.514Z"
   }
 }
