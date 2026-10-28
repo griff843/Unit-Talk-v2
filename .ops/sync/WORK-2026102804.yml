@@ -1,0 +1,190 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102804
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102804
+  objective: WORK-2026102804 — Final-score check when settling a game-line pick in
+    Command Center
+  acceptance_criteria:
+    - A pure function in `apps/command-center/src/lib/settlement-score-check.ts`
+      takes the pick's market, selection, line and side, plus an entered final
+      score (away and home), and returns the implied result (`win`, `loss` or
+      `push`), or `unsupported` with a reason.
+    - It covers moneyline, spread, game total over/under and team total
+      over/under. A team total is resolved to the named team.
+    - Player props and anything ambiguous return `unsupported`. It never guesses.
+    - The pick page passes the pick's event name, market, selection, line and
+      odds into `SettlementForm`, and the form shows them above the result
+      buttons.
+    - For supported markets, the form asks for the final score. If the entered
+      score implies a result that differs from the one the operator chose, the
+      form blocks submission. The operator can still proceed by giving an
+      explicit override reason, which is carried in the settlement notes.
+    - The entered score is included in the attestation (`outcomeBasis` or
+      notes), so the settlement record shows what it was based on. No API or
+      schema change.
+    - For unsupported markets the form behaves exactly as it does today.
+    - The new `SettlementForm` props are optional. `SettlementWorkbench` (the
+      `/settlement?pickId=` page) also renders `SettlementForm`, is not in this
+      lane's scope and must keep compiling unchanged. Without pick context, the
+      form behaves as it does today; that page already shows a target summary
+      above the form.
+    - "Unit tests cover:"
+    - each supported market, both sides and a push;
+    - a team total resolved to the correct team when the named team is home and
+      when it is away;
+    - unsupported markets;
+    - the blocked-mismatch and override paths.
+    - "Fixtures include the real cases:"
+    - Ducks team total over 3.5 with Canucks 6, Ducks 5 is a win.
+    - Game total over 6.5 with Kings 1, Devils 3 is a loss.
+  guardrails:
+    - No change to `settle.ts`, the API settle contract, authentication,
+      operator identity, `settled_by` attribution, corrections, schema, delivery
+      or containment.
+    - "No external fetch: the operator enters the score."
+    - No new dependency.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged through `ops:merge-wrapper pr-merge` on green required checks.
+      Deployment is a separate, owner-authorized release.
+  unmapped_sections:
+    - >-
+      WORK-2026102804 — Final-score check when settling a game-line pick in
+      Command Center
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). This is
+      plan item B2, approved by Griff on 2026-10-28. Every Track Only pick is
+      settled by hand from an outside result. Picks store the matchup as free
+      text with no canonical event, and a real pick was entered against the
+      wrong game ("Golden Knights @ Canucks" when Vancouver played Anaheim).
+      Today the settlement form accepts a win, loss or push with nothing tying
+      that result to the actual score, so a mistyped game or a misread line
+      silently becomes a wrong statistic.
+
+
+      ## File Scope
+
+
+      - apps/command-center/src/lib/settlement-score-check.ts
+
+      - apps/command-center/src/lib/settlement-score-check.test.ts
+
+      - apps/command-center/src/components/SettlementForm.tsx
+
+      - apps/command-center/src/app/picks/[id]/page.tsx
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102804.md
+    title: WORK-2026102804 — Final-score check when settling a game-line pick in
+      Command Center
+    description: >-
+      # WORK-2026102804 — Final-score check when settling a game-line pick in
+      Command Center
+
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). This is
+      plan item B2, approved by Griff on 2026-10-28. Every Track Only pick is
+      settled by hand from an outside result. Picks store the matchup as free
+      text with no canonical event, and a real pick was entered against the
+      wrong game ("Golden Knights @ Canucks" when Vancouver played Anaheim).
+      Today the settlement form accepts a win, loss or push with nothing tying
+      that result to the actual score, so a mistyped game or a misread line
+      silently becomes a wrong statistic.
+
+
+      ## Acceptance Criteria
+
+
+      - A pure function in
+      `apps/command-center/src/lib/settlement-score-check.ts` takes the pick's
+      market, selection, line and side, plus an entered final score (away and
+      home), and returns the implied result (`win`, `loss` or `push`), or
+      `unsupported` with a reason.
+        - It covers moneyline, spread, game total over/under and team total over/under. A team total is resolved to the named team.
+        - Player props and anything ambiguous return `unsupported`. It never guesses.
+      - The pick page passes the pick's event name, market, selection, line and
+      odds into `SettlementForm`, and the form shows them above the result
+      buttons.
+
+      - For supported markets, the form asks for the final score. If the entered
+      score implies a result that differs from the one the operator chose, the
+      form blocks submission. The operator can still proceed by giving an
+      explicit override reason, which is carried in the settlement notes.
+
+      - The entered score is included in the attestation (`outcomeBasis` or
+      notes), so the settlement record shows what it was based on. No API or
+      schema change.
+
+      - For unsupported markets the form behaves exactly as it does today.
+
+      - The new `SettlementForm` props are optional. `SettlementWorkbench` (the
+      `/settlement?pickId=` page) also renders `SettlementForm`, is not in this
+      lane's scope and must keep compiling unchanged. Without pick context, the
+      form behaves as it does today; that page already shows a target summary
+      above the form.
+
+      - Unit tests cover:
+        - each supported market, both sides and a push;
+        - a team total resolved to the correct team when the named team is home and when it is away;
+        - unsupported markets;
+        - the blocked-mismatch and override paths.
+      - Fixtures include the real cases:
+        - Ducks team total over 3.5 with Canucks 6, Ducks 5 is a win.
+        - Game total over 6.5 with Kings 1, Devils 3 is a loss.
+
+      ## File Scope
+
+
+      - apps/command-center/src/lib/settlement-score-check.ts
+
+      - apps/command-center/src/lib/settlement-score-check.test.ts
+
+      - apps/command-center/src/components/SettlementForm.tsx
+
+      - apps/command-center/src/app/picks/[id]/page.tsx
+
+
+      ## Guardrails
+
+
+      - No change to `settle.ts`, the API settle contract, authentication,
+      operator identity, `settled_by` attribution, corrections, schema, delivery
+      or containment.
+
+      - No external fetch: the operator enters the score.
+
+      - No new dependency.
+
+
+      ## Exit Criteria
+
+
+      - PR merged through `ops:merge-wrapper pr-merge` on green required checks.
+      Deployment is a separate, owner-authorized release.
+    captured_at: 2026-10-28T13:57:46.757Z
+    description_sha256: 2bb49e1b75c6535748c4c87ab19ec5682ed684bbab82f04e8e163e294e08d014
+  contract_hash: e1bf4a1cf230471d19a08c62789c1ebb2a9ab7240815e0ea1a9f891445fc2230

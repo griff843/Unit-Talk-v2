@@ -1,0 +1,42 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102804",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "ready_for_review",
+  "focused_tests": {
+    "command": "pnpm exec tsx --test apps/command-center/src/lib/settlement-score-check.test.ts",
+    "tests": 9,
+    "passed": 9,
+    "failed": 0
+  },
+  "suite_tests": {
+    "command": "pnpm test:command-center",
+    "tests": 710,
+    "passed": 710,
+    "failed": 0
+  },
+  "type_check": {
+    "command": "pnpm --filter @unit-talk/command-center type-check",
+    "status": "PASS"
+  },
+  "writable_live_db": {
+    "status": "NOT_APPLICABLE",
+    "reason": "Client-side form logic; protected staging-ci proof runs in CI verify."
+  },
+  "r_level": {
+    "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "status": "PASS",
+    "rules_matched": [
+      "operator-ui"
+    ]
+  },
+  "merge_sha": null,
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "0775eab7cf910f73aaa9267a57aaf2e805536639",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  }
+}
