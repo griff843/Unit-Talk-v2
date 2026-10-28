@@ -1,12 +1,21 @@
 # Diff summary: WORK-2026102805
 
-> Scaffolded by `ops:lane-start`. Replace this note with the files this lane changed
-> and why. Until then this file records nothing.
+Implementation source SHA: `4ac8c1b488019d78b5d7cde987f55a78702ebfb7` (pre-merge)
 
 | File | Change |
 |---|---|
+| `apps/smart-form/lib/form-utils.ts` | Adds pure `easternDateIso(now)` using `Intl.DateTimeFormat` in `America/New_York`, with DST-aware calendar conversion and no dependency. |
+| `apps/smart-form/app/submit/components/BetForm.tsx` | Evaluates the Eastern game date when form defaults/reset/fallback render, and compares timestamp dates against the Eastern calendar. Submission payload shape, validation, delivery choice, and auth are unchanged. |
+| `apps/smart-form/test/form-utils.test.ts` | Adds the requested evening, EST transition, spring-forward, and fall-back boundary assertions. |
 
-## SHA Binding
+## Explicitly untouched
 
-Merge SHA: pending merge
-PR: pending
+No submission API contract, payload shape, validation rule, Track Only/delivery choice, authentication, or production data path was changed. Capper-entered dates remain the values submitted.
+
+## Runtime boundary
+
+Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (`host=unparseable`). The packet requires staging-CI GitHub environment credentials (`CI_SUPABASE_*`) for writable DB verification.
+
+## SHA binding
+
+Merge SHA: pending PR / governed merge.

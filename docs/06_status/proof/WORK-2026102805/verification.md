@@ -1,28 +1,27 @@
-# PROOF: WORK-2026102805
+# WORK-2026102805 Verification
 
-MERGE_SHA: pending merge
-
-> Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command
-> actually executed and its real result before review. `post-merge-lane-close.yml`
-> binds the merge SHA; never write one here by hand.
-
-Issue: WORK-2026102805
+Generated: 2026-10-28
+Branch: `codex/work-2026102805-smart-form-eastern-game-date`
+Issue: `WORK-2026102805`
 Tier: T2
-result: not_run
-
-## ASSERTIONS:
-
-- [ ] (state each behavior this lane proves, and the test that proves it)
-
-## EVIDENCE:
-
-(paste measured output here, in fenced blocks)
+Executor: codex-cli
 
 ## Verification
 
-(record every verification command run on the final code commit, with its real result)
+- [x] `pnpm type-check`: PASS — `tsc -b tsconfig.json` exited 0.
+- [x] `pnpm exec tsx --test apps/smart-form/test/form-utils.test.ts`: PASS — 39/39 tests.
+- [x] `pnpm verify:quick`: PASS — known baseline `WIRING_GLOB_SHADOWED` warning only; no new warning.
+- [x] `pnpm verify:static`: PASS — repository verification completed; Smart Form suite 226/226 passed, E2E not run because `UNIT_TALK_SMART_FORM_E2E` is unset.
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS — no rules matched.
 
-## Merge SHA Binding
+## Live DB
 
-Merge SHA: pending merge
-PR: pending
+Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (`host=unparseable`). Run through staging CI with `CI_SUPABASE_*` credentials as required by the work packet. No production or database writes were performed by this lane.
+
+## Checkpoint note
+
+The lane checkpoint was initialized for attempt 1 and records completed `orient`, `plan`, `implement`, and `verify` phases. `closeout` remains pending because PR/PM/merge actions are outside executor closeout authority.
+
+## Review state
+
+This is a verified draft review candidate. PM approval, governed merge, lane finalization, and post-merge orchestration reconciliation remain pending.

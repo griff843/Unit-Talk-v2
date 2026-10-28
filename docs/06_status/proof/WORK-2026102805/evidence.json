@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "issue_id": "WORK-2026102805",
+  "tier": "T2",
+  "title": "Smart Form defaults the game date to today in US Eastern, not UTC",
+  "generated_at": "2026-10-28T13:00:00-04:00",
+  "status": "draft_review_candidate",
+  "sha_binding": {
+    "verified_source_sha": "4ac8c1b488019d78b5d7cde987f55a78702ebfb7",
+    "merge_sha": null,
+    "sha_type": "pending_merge"
+  },
+  "static_proof": {
+    "type_check": {"command": "pnpm type-check", "status": "PASS"},
+    "focused_tests": {
+      "command": "pnpm exec tsx --test apps/smart-form/test/form-utils.test.ts",
+      "status": "PASS",
+      "tests": 39,
+      "pass": 39,
+      "fail": 0
+    },
+    "verify_quick": {"command": "pnpm verify:quick", "status": "PASS", "baseline_warning": "WIRING_GLOB_SHADOWED"},
+    "verify_static": {"command": "pnpm verify:static", "status": "PASS", "smart_form_tests": 226, "smart_form_pass": 226, "smart_form_fail": 0, "e2e": "not_run_unset_UNIT_TALK_SMART_FORM_E2E"},
+    "r_level": {"command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD", "status": "PASS", "rules_matched": "none"}
+  },
+  "runtime_proof": {
+    "status": "blocked_deferred",
+    "note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Run through staging-ci GitHub environment with CI_SUPABASE_* credentials.",
+    "production_writes": "none"
+  },
+  "acceptance_criteria": {
+    "eastern_date_iso_with_dst": "PASS",
+    "runtime_form_defaults_and_reset": "PASS",
+    "eastern_relative_timestamp_dates": "PASS",
+    "payload_validation_delivery_auth_unchanged": "PASS"
+  },
+  "verdict": "PASS_STATIC_REVIEW_CANDIDATE"
+}
