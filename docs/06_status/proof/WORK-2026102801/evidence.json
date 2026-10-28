@@ -1,0 +1,20 @@
+{
+  "issue": "WORK-2026102801",
+  "status": "verified_static_deferred_live_db",
+  "checks": [
+    {
+      "command": "pnpm exec tsx --test apps/command-center/src/lib/data/results-ops.test.ts",
+      "result": "pass"
+    },
+    {
+      "command": "pnpm type-check",
+      "result": "pass"
+    }
+  ],
+  "live_db": {
+    "result": "blocked_deferred",
+    "reason": "target identity could not be resolved from its URL (host=unparseable)",
+    "required_identity": "xskgrzbteyqdufktjrjx",
+    "execution_path": "staging-ci GitHub environment with CI_SUPABASE_* credentials"
+  }
+}

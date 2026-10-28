@@ -1,28 +1,17 @@
-# PROOF: WORK-2026102801
+# WORK-2026102801 verification
 
-MERGE_SHA: pending merge
+## Passed
 
-> Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command
-> actually executed and its real result before review. `post-merge-lane-close.yml`
-> binds the merge SHA; never write one here by hand.
+- `pnpm exec tsx --test apps/command-center/src/lib/data/results-ops.test.ts`
+- `pnpm type-check`
+- `pnpm test:command-center` (695 passed)
+- `pnpm verify:static` (pass)
+- `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` (PASS; no matching R-level artifacts required)
 
-Issue: WORK-2026102801
-Tier: T2
-result: not_run
+The repository-wide `pnpm test` completed with 3,682 passed, 13 failed, and 10 skipped. The failures are outside the touched Command Center surface; the scoped Command Center suite passed in full.
 
-## ASSERTIONS:
+## Deferred
 
-- [ ] (state each behavior this lane proves, and the test that proves it)
+Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires `xskgrzbteyqdufktjrjx` through the staging-ci GitHub environment with `CI_SUPABASE_*` credentials.
 
-## EVIDENCE:
-
-(paste measured output here, in fenced blocks)
-
-## Verification
-
-(record every verification command run on the final code commit, with its real result)
-
-## Merge SHA Binding
-
-Merge SHA: pending merge
-PR: pending
+The change is read-only and does not require settlement or database writes.

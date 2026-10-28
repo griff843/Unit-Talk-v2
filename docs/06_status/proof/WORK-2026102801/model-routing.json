@@ -1,0 +1,8 @@
+{
+  "issue": "WORK-2026102801",
+  "model_routing": "codex-cli",
+  "lane_type": "delivery-ui",
+  "implementation_scope": "command-center settlement read model and UI",
+  "runtime_write_path": false,
+  "live_db_proof": "deferred_per_work_order"
+}
