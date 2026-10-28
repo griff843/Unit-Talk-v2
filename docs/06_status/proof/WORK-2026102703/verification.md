@@ -47,3 +47,18 @@ Runtime verification: this change takes effect only after the owner sets `COMMAN
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1792
 Execution SHA: 4e4816147479dd43f5909925b6f9bd570e1c652d
+
+### Merge-SHA verification (added by WORK-2026102803)
+
+The sections above name `pnpm type-check` and `pnpm test` but not `pnpm verify`. This section adds
+what CI ran on the merge SHA `b0aea600d979c8b4e3854d979912307147c0d970` (#1792). Each line names the
+run and job that executed it, as read from the GitHub API on 2026-10-28.
+
+- `pnpm verify` — CI splits it across two jobs of `ci.yml` run 40527619683, both `success`:
+  - job `verify` (122279306944) runs its static half, `pnpm verify:static`;
+  - job `Writable DB proof (staging only)` (122271365039) runs its live half, `pnpm test:live-db`, and `verify` checks that job's receipt.
+- `pnpm type-check` — runs inside `pnpm verify:static` in job 122279306944, `success`.
+- `pnpm test` — runs inside `pnpm verify:static` in job 122279306944, `success`.
+
+These ran on the merged tree, including this lane's source changes. They are recorded because the
+closeout gate (truth-check P13) requires the evidence to be named.
