@@ -43,6 +43,18 @@ export interface ModelRoutingOverride {
   authorized_by: string;
   reason: string;
   at?: string;
+  /**
+   * Present only on a block written by reconcileObservedModelRouting: the routing the
+   * lane declared at lane-start, before it was reconciled to what actually ran.
+   */
+  declared?: DeclaredModelRouting;
+}
+
+export interface DeclaredModelRouting {
+  profile: string;
+  model: string;
+  reasoning_effort: string;
+  selected_by: string;
 }
 
 export interface ModelRoutingBlock {
@@ -130,7 +142,8 @@ export type ModelRoutingResultCode =
   | 'REASONING_EFFORT_INVALID'
   | 'POLICY_VERSION_MISMATCH'
   | 'TRUSTED_AUTHORIZATION_UNAVAILABLE'
-  | 'OVERRIDE_INVALID';
+  | 'OVERRIDE_INVALID'
+  | 'RECONCILED_OBSERVATION';
 
 export interface ModelRoutingResolution {
   ok: boolean;
@@ -324,6 +337,18 @@ export function validatePersistedModelRouting(
     return { ok: false, code: 'POLICY_LOAD_FAILED', message: error instanceof Error ? error.message : String(error) };
   }
 
+  if (modelRouting.override?.declared) {
+    // A reconciled block records what an external session ran. It never authorizes
+    // codex-exec to spawn anything, even when the observed values happen to match a profile.
+    return {
+      ok: false,
+      code: 'RECONCILED_OBSERVATION',
+      message:
+        `manifest model_routing was reconciled to an observed execution (declared profile ` +
+        `"${modelRouting.override.declared.profile}"); codex-exec cannot run a reconciled lane.`,
+    };
+  }
+
   if (modelRouting.policy_version !== loadedPolicy.policy_version) {
     return {
       ok: false,
@@ -358,6 +383,65 @@ export function validatePersistedModelRouting(
   }
 
   return { ok: true, code: 'OK', message: 'model routing validated', model_routing: modelRouting };
+}
+
+/**
+ * Record the model a started Codex lane actually ran on, when it differs from the
+ * routing declared at lane-start (WORK-2026102902). An independent Codex session picks
+ * its own model outside this repository, and the closeout rebind and pre-merge contract
+ * both require the proof sidecar to match the manifest. Without this, the only ways to
+ * close such a lane are fabricating the sidecar or hand-editing the manifest.
+ *
+ * The result is a manual-override block: the sidecar must then carry override_used: true
+ * and the same override_authorized_by. The original declaration is kept in
+ * override.declared, and a repeated reconciliation keeps the first one.
+ */
+export function reconcileObservedModelRouting(
+  current: ModelRoutingBlock,
+  observed: { profile: string; model: string; reasoning_effort: string },
+  authorization: { authorized_by: string; reason: string },
+  now: string,
+): ModelRoutingBlock {
+  const missing: string[] = [];
+  for (const [name, value] of [
+    ['profile', observed.profile],
+    ['model', observed.model],
+    ['reasoning_effort', observed.reasoning_effort],
+    ['authorized_by', authorization.authorized_by],
+    ['reason', authorization.reason],
+  ] as const) {
+    if (typeof value !== 'string' || value.trim() === '') {
+      missing.push(name);
+    }
+  }
+  if (missing.length > 0) {
+    throw new Error(`reconcile-routing requires non-empty ${missing.join(', ')}`);
+  }
+  const profile = observed.profile.trim();
+  const model = observed.model.trim();
+  const reasoningEffort = observed.reasoning_effort.trim();
+  if (profile === current.profile && model === current.model && reasoningEffort === current.reasoning_effort) {
+    throw new Error('reconcile-routing refused: the observed routing already equals the manifest model_routing');
+  }
+  const declared: DeclaredModelRouting = current.override?.declared ?? {
+    profile: current.profile,
+    model: current.model,
+    reasoning_effort: current.reasoning_effort,
+    selected_by: current.selected_by,
+  };
+  return {
+    profile,
+    model,
+    reasoning_effort: reasoningEffort,
+    selected_by: 'manual-override',
+    policy_version: current.policy_version,
+    override: {
+      authorized_by: authorization.authorized_by.trim(),
+      reason: authorization.reason.trim(),
+      at: now,
+      declared,
+    },
+  };
 }
 
 /**

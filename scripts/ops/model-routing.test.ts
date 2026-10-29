@@ -6,11 +6,13 @@ import path from 'node:path';
 import {
   buildCodexModelArgs,
   loadModelRoutingPolicy,
+  reconcileObservedModelRouting,
   resolveLegacyModelRouting,
   resolveModelProfile,
   validateOverride,
   validatePersistedModelRouting,
   validatePreMergeModelRoutingEvidence,
+  type ModelRoutingBlock,
   type ModelRoutingPolicy,
 } from './model-routing.js';
 
@@ -374,4 +376,85 @@ test('pre-merge sidecar contract accepts execution identity without claiming mer
     },
   });
   assert.deepEqual(result, { valid: true, violations: [] });
+});
+
+// ── WORK-2026102902: reconciling a lane to the model its session actually ran ──
+
+const DECLARED: ModelRoutingBlock = {
+  profile: 'codex-luna-medium',
+  model: 'gpt-5.6-luna',
+  reasoning_effort: 'medium',
+  selected_by: 'three-brain',
+  policy_version: '1.0.0',
+};
+const OBSERVED = { profile: 'session-default', model: 'gpt-6.1-sol', reasoning_effort: 'not exposed to the agent' };
+const AUTH = { authorized_by: 'griff843', reason: 'independent Codex terminal ran a different model' };
+const NOW = '2026-10-29T12:00:00.000Z';
+
+test('reconcileObservedModelRouting records the observed routing and keeps the declaration', () => {
+  const result = reconcileObservedModelRouting(DECLARED, OBSERVED, AUTH, NOW);
+  assert.deepStrictEqual(result, {
+    ...OBSERVED,
+    selected_by: 'manual-override',
+    policy_version: '1.0.0',
+    override: {
+      ...AUTH,
+      at: NOW,
+      declared: { profile: 'codex-luna-medium', model: 'gpt-5.6-luna', reasoning_effort: 'medium', selected_by: 'three-brain' },
+    },
+  });
+});
+
+test('a second reconciliation keeps the first declaration', () => {
+  const first = reconcileObservedModelRouting(DECLARED, OBSERVED, AUTH, NOW);
+  const second = reconcileObservedModelRouting(first, { ...OBSERVED, reasoning_effort: 'high' }, AUTH, NOW);
+  assert.strictEqual(second.reasoning_effort, 'high');
+  assert.deepStrictEqual(second.override?.declared, first.override?.declared);
+});
+
+test('reconcileObservedModelRouting refuses a no-op', () => {
+  assert.throws(
+    () => reconcileObservedModelRouting(DECLARED, { profile: 'codex-luna-medium', model: 'gpt-5.6-luna', reasoning_effort: 'medium' }, AUTH, NOW),
+    /already equals the manifest model_routing/,
+  );
+});
+
+test('reconcileObservedModelRouting names every empty field', () => {
+  assert.throws(
+    () => reconcileObservedModelRouting(DECLARED, { profile: ' ', model: '', reasoning_effort: 'x' }, { authorized_by: '', reason: 'r' }, NOW),
+    /requires non-empty profile, model, authorized_by$/,
+  );
+});
+
+test('a reconciled manifest accepts the honest sidecar and rejects one matching the original declaration', () => {
+  const reconciled = reconcileObservedModelRouting(DECLARED, OBSERVED, AUTH, NOW);
+  const honest = {
+    issue_id: 'WORK-2026102806',
+    model_profile: OBSERVED.profile,
+    model: OBSERVED.model,
+    reasoning_effort: OBSERVED.reasoning_effort,
+    policy_version: '1.0.0',
+    override_used: true,
+    override_authorized_by: 'griff843',
+  };
+  assert.deepStrictEqual(
+    validatePreMergeModelRoutingEvidence(honest, { expectedIssueId: 'WORK-2026102806', manifestRouting: reconciled }),
+    { valid: true, violations: [] },
+  );
+  const declaredSidecar = { ...honest, model_profile: 'codex-luna-medium', model: 'gpt-5.6-luna', reasoning_effort: 'medium', override_used: false };
+  const result = validatePreMergeModelRoutingEvidence(declaredSidecar, { manifestRouting: reconciled });
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.violations.includes('model does not match manifest model_routing'));
+});
+
+test('codex-exec refuses a reconciled lane even when the observed values match a policy profile', () => {
+  const reconciled = reconcileObservedModelRouting(
+    DECLARED,
+    { profile: 'codex-sol-medium', model: 'gpt-5.6-sol', reasoning_effort: 'medium' },
+    AUTH,
+    NOW,
+  );
+  const result = validatePersistedModelRouting(reconciled, 'T2', fixturePolicy());
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.code, 'RECONCILED_OBSERVATION');
 });

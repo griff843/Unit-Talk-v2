@@ -377,7 +377,7 @@ Optional field `model_routing` (schema: `docs/05_operations/schemas/lane_manifes
 
 Canonical policy (concrete model IDs, reasoning efforts, enabled/disabled, permitted tiers, PM-authorization requirement): `docs/05_operations/policies/codex-model-routing.json`. This spec never duplicates that mapping.
 
-**Who writes it:** `ops:lane-start` only, at manifest creation, via `scripts/ops/model-routing.ts#resolveModelProfile` — never a later `update`. Required (creation fails without it) for any lane whose `executor` is `codex-cli` or `codex-cloud`. Forbidden (creation fails if present) for `executor: claude`. `validateManifest` independently rejects `model_routing` on a non-Codex `executor` on every write, defending against a hand-edited manifest, not just the creation-time guard.
+**Who writes it:** `ops:lane-start` at manifest creation, via `scripts/ops/model-routing.ts#resolveModelProfile` — never a later `update`. The one later writer is `reconcile-routing`, described below. Required (creation fails without it) for any lane whose `executor` is `codex-cli` or `codex-cloud`. Forbidden (creation fails if present) for `executor: claude`. `validateManifest` independently rejects `model_routing` on a non-Codex `executor` on every write, defending against a hand-edited manifest, not just the creation-time guard.
 
 **Compatibility cutoff:** there is no `schema_version` bump for this field — `schema_version` stays `1`. The cutoff is the field's *presence*. Manifests created by `ops:lane-start` after this field shipped always carry `model_routing`. Manifests created before it simply lack the field, and are never retroactively rewritten to add it — `writeManifest`/`updateManifest` never synthesize a missing `model_routing` for an existing manifest.
 
@@ -386,6 +386,31 @@ Canonical policy (concrete model IDs, reasoning efforts, enabled/disabled, permi
 **Fail-closed conditions** (creation or execution refuses to proceed): unknown profile, disabled profile, profile not permitted for the lane's tier, missing/invalid manual-override authority+reason on a profile that requires one, manifest's `model`/`reasoning_effort` no longer matching what current policy defines for that profile (drift/tamper), and manifest `model_routing.policy_version` not matching the currently loaded policy's version.
 
 A `model_routing` decision — including any manual override — never implies merge, scope, or tier authority. It only selects which Codex model and reasoning effort execute a lane whose tier, scope, and merge gates were already satisfied independently.
+
+### 15.1 Reconciling to the model a session actually ran (WORK-2026102902)
+
+An independent Codex session, such as the browser-enabled Codex terminal, picks its model outside this repository. That model can differ from the routing declared at lane-start. Closeout (`rebindModelRoutingJsonSha`) and the pre-merge contract (`validatePreMergeModelRoutingEvidence`) both require the proof's `model-routing.json` to match the manifest. An honest sidecar would therefore leave the lane unable to close.
+
+```bash
+pnpm ops:lane-manifest -- reconcile-routing <ID> --profile <p> --model <m> \
+  --reasoning-effort <e> --authorized-by <who> --reason <why> [--json]
+```
+
+What the command does:
+- It rewrites `model_routing` to the observed values with `selected_by: "manual-override"` and the same `policy_version`.
+- It sets `override` to `{ authorized_by, reason, at, declared }`, where `declared` is the lane-start routing. A second reconciliation keeps the first `declared`.
+- The proof sidecar must then record the observed `model`, `reasoning_effort` and `model_profile`, plus `override_used: true` and the same `override_authorized_by`.
+
+It refuses in these cases:
+- a non-Codex lane;
+- a lane with no `model_routing`;
+- a `done` lane;
+- a no-op;
+- any missing flag. All missing flags are named in one error.
+
+Limits:
+- Reconciliation records what ran. It never authorizes execution: `validatePersistedModelRouting` returns `RECONCILED_OBSERVATION`, so `codex-exec` refuses a reconciled lane.
+- `authorized_by` is caller-supplied text, as with every `override`. The manifest change is reviewed in the lane's PR diff, so it carries no more authority than that review.
 
 ## 16. Verification-lane target (UTV2-1533)
 

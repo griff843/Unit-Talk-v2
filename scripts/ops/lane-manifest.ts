@@ -22,7 +22,7 @@ import {
   type LaneExecutor,
 } from './shared.js';
 import { buildLaneExecutionLocation } from './lane-execution.js';
-import { resolveModelProfile, type ModelRoutingBlock } from './model-routing.js';
+import { reconcileObservedModelRouting, resolveModelProfile, type ModelRoutingBlock } from './model-routing.js';
 import { runScopeRelease } from './scope-release.js';
 
 interface PullRequestMergeInfo {
@@ -62,6 +62,9 @@ export function main(argv = process.argv.slice(2)): number {
         return 0;
       case 'scope-release':
         return scopeReleaseCommand(positionals[1], flags, bools.has('json'));
+      case 'reconcile-routing':
+        reconcileRoutingCommand(positionals[1], flags, bools.has('json'));
+        return 0;
       case 'record-merge':
         recordMergeCommand(positionals[1], flags, bools.has('json'));
         return 0;
@@ -221,6 +224,68 @@ function updateCommand(
  * release can never be applied to a lane state the operator did not actually
  * inspect.
  */
+const RECONCILE_ROUTING_FLAGS = ['profile', 'model', 'reasoning-effort', 'authorized-by', 'reason'] as const;
+
+/**
+ * Re-record a started Codex lane's model_routing to what its session actually ran
+ * (WORK-2026102902). Every missing flag is named in one error. A done lane is refused:
+ * its proof is already bound at closeout.
+ */
+export function reconcileRoutingCommand(
+  issueId: string | undefined,
+  flags: Map<string, string[]>,
+  json: boolean,
+  now = new Date().toISOString(),
+): LaneManifest {
+  const missing = [
+    ...(issueId ? [] : ['<issue id>']),
+    ...RECONCILE_ROUTING_FLAGS.filter((flag) => !getFlag(flags, flag)?.trim()).map((flag) => `--${flag}`),
+  ];
+  if (missing.length > 0) {
+    throw new Error(
+      `reconcile-routing is missing ${missing.join(', ')}. Usage: ` +
+        'reconcile-routing <ID> --profile <p> --model <m> --reasoning-effort <e> --authorized-by <who> --reason <why>',
+    );
+  }
+  const id = issueId!.toUpperCase();
+  if (!manifestExists(id)) {
+    throw new Error(`Manifest not found for ${id}`);
+  }
+  const manifest = readManifest(id);
+  if (manifest.executor !== 'codex-cli' && manifest.executor !== 'codex-cloud') {
+    throw new Error(`reconcile-routing refused: ${id} executor is "${manifest.executor ?? 'unset'}"; model_routing is Codex-only`);
+  }
+  if (!manifest.model_routing) {
+    throw new Error(`reconcile-routing refused: ${id} has no model_routing to reconcile`);
+  }
+  if (manifest.status === 'done') {
+    throw new Error(`reconcile-routing refused: ${id} is done; its proof is already bound`);
+  }
+
+  const next: LaneManifest = {
+    ...manifest,
+    model_routing: reconcileObservedModelRouting(
+      manifest.model_routing,
+      {
+        profile: getFlag(flags, 'profile')!,
+        model: getFlag(flags, 'model')!,
+        reasoning_effort: getFlag(flags, 'reasoning-effort')!,
+      },
+      { authorized_by: getFlag(flags, 'authorized-by')!, reason: getFlag(flags, 'reason')! },
+      now,
+    ),
+    heartbeat_at: now,
+  };
+  writeManifest(next);
+
+  if (json) {
+    emitJson({ ok: true, code: 'model_routing_reconciled', issue_id: id, model_routing: next.model_routing });
+  } else {
+    console.log(`${id}: model_routing reconciled to ${next.model_routing!.model} (${next.model_routing!.profile})`);
+  }
+  return next;
+}
+
 function scopeReleaseCommand(
   issueId: string | undefined,
   flags: Map<string, string[]>,
@@ -463,6 +528,7 @@ function usage(): void {
   console.error('  pnpm ops:lane-manifest -- create --issue UTV2-123 --tier T2 --branch codex/utv2-123-foo --files path --preflight-token .out/ops/preflight/...json');
   console.error('  pnpm ops:lane-manifest -- read UTV2-123 [--json]');
   console.error('  pnpm ops:lane-manifest -- update UTV2-123 [--status merged] [--pr-url ...] [--commit-sha ...] [--files-changed path]');
+  console.error('  pnpm ops:lane-manifest -- reconcile-routing UTV2-123 --profile <p> --model <m> --reasoning-effort <e> --authorized-by <who> --reason <why> [--json]');
   console.error('  pnpm ops:lane-manifest -- record-merge UTV2-123 --pr <url-or-number> [--json]');
   console.error('  pnpm ops:lane-manifest -- scope-release UTV2-123 --pr 456 --expected-head-sha <sha> --expected-lock-hash <sha256> --release-path <path> [--release-path <path>] --actor <who> --reason <why> [--json]');
   console.error('  pnpm ops:lane-manifest -- validate UTV2-123 [--json]');

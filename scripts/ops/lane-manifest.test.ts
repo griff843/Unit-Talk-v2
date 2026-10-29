@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { applyPrMergeToManifest, createCommand, main } from './lane-manifest.js';
+import { applyPrMergeToManifest, createCommand, main, reconcileRoutingCommand } from './lane-manifest.js';
 import {
   type ScopeReleaseContext,
   type ScopeReleaseRefusalCode,
@@ -20,6 +20,7 @@ import {
   issueToManifestPath,
   validateScopeReleaseHistory,
   worktreePathForBranch,
+  writeManifest,
 } from './shared.js';
 
 const PR_URL = 'https://github.com/unit-talk/Unit-Talk-v2/pull/1066';
@@ -226,6 +227,106 @@ test('lane-manifest create resolves and persists model_routing for a valid Codex
     fs.rmSync(manifestPath, { force: true });
     fs.rmSync(tokenAbsolutePath, { force: true });
   }
+});
+
+// ── WORK-2026102902: reconcile-routing ────────────────────────────────────────
+
+const RECONCILE_ISSUE = 'UTV2-9904';
+const RECONCILE_FLAGS: Array<[string, string[]]> = [
+  ['profile', ['session-default']],
+  ['model', ['gpt-6.1-sol']],
+  ['reasoning-effort', ['not exposed to the agent']],
+  ['authorized-by', ['griff843']],
+  ['reason', ['independent Codex terminal ran a different model']],
+];
+
+function withReconcileManifest(overrides: Partial<LaneManifest>, body: () => void): void {
+  const manifestPath = issueToManifestPath(RECONCILE_ISSUE);
+  const tokenPath = '.out/ops/preflight/codex/utv2-9904-reconcile.json';
+  const tokenAbsolutePath = path.join(ROOT, tokenPath);
+  fs.mkdirSync(path.dirname(tokenAbsolutePath), { recursive: true });
+  fs.writeFileSync(tokenAbsolutePath, '{"fixture":true}', 'utf8');
+  writeManifest(
+    manifest({
+      issue_id: RECONCILE_ISSUE,
+      branch: 'codex/utv2-9904-reconcile',
+      worktree_path: worktreePathForBranch('codex/utv2-9904-reconcile'),
+      expected_proof_paths: defaultProofPaths(RECONCILE_ISSUE, 'T2'),
+      preflight_token: tokenPath,
+      status: 'started',
+      schema_version: 2,
+      executor: 'codex-cli',
+      model_routing: {
+        profile: 'codex-luna-medium',
+        model: 'gpt-5.6-luna',
+        reasoning_effort: 'medium',
+        selected_by: 'three-brain',
+        policy_version: '2.0.0',
+      },
+      ...overrides,
+    }),
+  );
+  try {
+    body();
+  } finally {
+    fs.rmSync(manifestPath, { force: true });
+    fs.rmSync(tokenAbsolutePath, { force: true });
+  }
+}
+
+test('reconcile-routing rewrites a started Codex lane to the observed routing and keeps the declaration', () => {
+  withReconcileManifest({}, () => {
+    reconcileRoutingCommand(RECONCILE_ISSUE, new Map(RECONCILE_FLAGS), false, '2026-10-29T12:00:00.000Z');
+    const written = JSON.parse(fs.readFileSync(issueToManifestPath(RECONCILE_ISSUE), 'utf8')) as LaneManifest;
+    assert.deepStrictEqual(written.model_routing, {
+      profile: 'session-default',
+      model: 'gpt-6.1-sol',
+      reasoning_effort: 'not exposed to the agent',
+      selected_by: 'manual-override',
+      policy_version: '2.0.0',
+      override: {
+        authorized_by: 'griff843',
+        reason: 'independent Codex terminal ran a different model',
+        at: '2026-10-29T12:00:00.000Z',
+        declared: {
+          profile: 'codex-luna-medium',
+          model: 'gpt-5.6-luna',
+          reasoning_effort: 'medium',
+          selected_by: 'three-brain',
+        },
+      },
+    });
+  });
+});
+
+test('reconcile-routing names every missing flag in one error', () => {
+  assert.throws(
+    () => reconcileRoutingCommand(RECONCILE_ISSUE, new Map([['model', ['gpt-6.1-sol']]]), false),
+    /missing --profile, --reasoning-effort, --authorized-by, --reason\./,
+  );
+  assert.throws(() => reconcileRoutingCommand(undefined, new Map(RECONCILE_FLAGS), false), /missing <issue id>\./);
+});
+
+test('reconcile-routing refuses a done lane', () => {
+  withReconcileManifest({ status: 'done' }, () => {
+    assert.throws(
+      () => reconcileRoutingCommand(RECONCILE_ISSUE, new Map(RECONCILE_FLAGS), false),
+      /is done; its proof is already bound/,
+    );
+  });
+});
+
+test('reconcile-routing refuses a non-Codex lane', () => {
+  withReconcileManifest({ executor: 'claude', model_routing: undefined }, () => {
+    assert.throws(
+      () => reconcileRoutingCommand(RECONCILE_ISSUE, new Map(RECONCILE_FLAGS), false),
+      /executor is "claude"; model_routing is Codex-only/,
+    );
+  });
+});
+
+test('reconcile-routing is a routed subcommand', () => {
+  assert.strictEqual(main(['reconcile-routing', RECONCILE_ISSUE, '--json']), 1);
 });
 
 // ── UTV2-1762: scope-release command surface ────────────────────────────────

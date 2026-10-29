@@ -184,7 +184,19 @@
           "properties": {
             "authorized_by": { "type": "string" },
             "reason": { "type": "string" },
-            "at": { "type": "string" }
+            "at": { "type": "string" },
+            "declared": {
+              "type": "object",
+              "description": "Written only by `ops:lane-manifest reconcile-routing` (WORK-2026102902): the routing the lane declared at lane-start, before it was reconciled to the model its session actually ran.",
+              "required": ["profile", "model", "reasoning_effort", "selected_by"],
+              "properties": {
+                "profile": { "type": "string" },
+                "model": { "type": "string" },
+                "reasoning_effort": { "type": "string" },
+                "selected_by": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
           },
           "additionalProperties": false
         }
