@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "issue_id": "WORK-2026102902",
-  "pr_number": null,
+  "pr_number": 1801,
   "source_sha": "b95b51fb40aeaed90cfe2e39089581471ba9cc67",
   "reviewed_head_sha": "b95b51fb40aeaed90cfe2e39089581471ba9cc67",
   "generated_at": "2026-10-29T00:00:00Z",

@@ -51,7 +51,7 @@ M3 codex-exec refusal removed -> not ok "codex-exec refuses a reconciled lane ..
 - [x] Focused suites: 436 pass, 0 fail.
 - [x] `pnpm test:ops`: 3706 pass, 0 fail, 10 skipped.
 - [x] `pnpm type-check`: exit 0.
-- [x] `pnpm lint` scope (eslint on the four changed scripts): exit 0.
+- [x] `pnpm exec eslint` on the four changed scripts: exit 0. The repo-wide `pnpm lint` runs in CI.
 - [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head b95b51fb40aeaed90cfe2e39089581471ba9cc67`: PASS. 10 changed files, no matching rules, no artifacts required.
 - [ ] `pnpm test:db`: deferred to the protected `staging-ci` environment. The required `verify` check runs "Writable DB proof (staging only)". Staging credentials are not held locally, and no production database was accessed.
 - [ ] `pnpm verify` in CI on the PR head: pending.
@@ -59,4 +59,4 @@ M3 codex-exec refusal removed -> not ok "codex-exec refuses a reconciled lane ..
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1801
