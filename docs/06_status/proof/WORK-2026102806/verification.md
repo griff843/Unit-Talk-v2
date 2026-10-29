@@ -1,6 +1,6 @@
 # WORK-2026102806 verification
 
-Status: IN PROGRESS — browser and closeout evidence are incomplete; no ready-for-review claim.
+Status: Product verification complete for the admitted lane. Governance routing reconciliation is deferred by Griff; merge remains owned by Claude.
 
 ## Verification
 
@@ -10,7 +10,7 @@ Status: IN PROGRESS — browser and closeout evidence are incomplete; no ready-f
 - `pnpm --filter @unit-talk/command-center build`: PASS on d572c0747.
 - `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS, operator-ui, on d572c0747.
 - `pnpm verify` on 5391c9d6b: static phase PASS; local live database stage refused the loopback target. The work order specifies CI-only staging verification.
-- [CI verify and staging database proof](https://github.com/griff843/Unit-Talk-v2/actions/runs/40905838119): PASS on 5391c9d6b. CI on d572c0747 is pending; this earlier run is not evidence for the later commit.
+- [CI verify and staging database proof](https://github.com/griff843/Unit-Talk-v2/actions/runs/40910243492): PASS on 918a48fd49a003e266c349e3629993f0fbeb2078, including the d572c0747 product code and subsequent proof-only changes. New proof commits trigger a fresh CI run before executor handoff.
 
 ## Browser evidence
 
@@ -20,8 +20,16 @@ An isolated loopback mock with a synthetic pick and two append-only settlement r
 - `before-pick-summary.png` shows the prior build displaying the original loss. The initial mock returned a malformed pick object, so its surrounding pick identity is incomplete; the settlement history was the same synthetic correction chain.
 - `after-pick-summary.png` and `correction-confirmation.png` show d572c0747 using the corrected mock response.
 - `contextual-lookup.png` shows the synthetic pick found by capper after opening the palette with Control+K. Escape closed the palette; Tab reached the skip link.
+- The same build returned zero matches for the original loss after correction to win. With the loopback fixture server stopped, the page showed `ACTIVE PICKS UNAVAILABLE`; `results-error.png` captures that state.
+- A delayed fixture response displayed `Loading page…` during navigation; see `results-loading.png`.
 
-Desktop observations above are not a complete QA experience report. Mobile, keyboard navigation, current-build loading and error states, and the remaining required before/after evidence are still outstanding.
+Chrome device emulation was subsequently run at 390 × 844. Picks, pick detail, and correction confirmation reported innerWidth=390 and document scrollWidth=390. The result-filter controls stacked within the viewport; the pick detail retained its effective corrected result. The correction confirmation showed current win, proposed loss, and preservation of the original record, with Confirm and Cancel visible. Cancel was used; no final mutation was submitted. Captures: `mobile-picks.png`, `mobile-detail.png`, and `mobile-correction.png`.
+
+The current fixture performance page used canonical capper attribution, applied one correction, separated Track Only as internal evidence, and displayed N=1 beside each unrated rate. ROI Overview showed `No published record in these windows` and the Track Only exclusion note. See `performance-samples.png` and `roi-empty-published.png`.
+
+## Accepted follow-up and limitations
+
+Production Claude and Griff directed that #1800 finish as admitted. The unfiltered /picks view can still display its timestamp-selected result; WORK-2026102807 will resolve that after #1800 merges and releases its file locks. The attempted follow-up patch is excluded from this PR. Before-pick evidence has the explicitly noted mock-shape limitation above. No production write, deployment, or merge was performed. The model-routing record reports the actual exposed model; its disagreement with the old lane assignment is deferred governance, not an assertion that a different model executed this work.
 
 ## Merge SHA Binding
 

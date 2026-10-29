@@ -1,0 +1,21 @@
+{
+  "issue_id": "WORK-2026102806",
+  "manifest_schema_version": 2,
+  "model_profile": "session-default",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "not exposed to the agent",
+  "policy_version": "2.0.0",
+  "codex_cli_version": null,
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": null,
+  "prompt_bytes": null,
+  "estimated_prompt_tokens": null,
+  "wall_time_ms": null,
+  "execution_sha": "d572c07472136798984a5da416b9b0cab965858d",
+  "routing_reconciliation": {
+    "status": "deferred_by_user",
+    "reason": "The lane declares gpt-5.6-luna/medium; the current session explicitly exposes gpt-6.1-sol. CLI telemetry and reasoning effort are not exposed. Values are not fabricated. Griff directed governance reconciliation to happen later."
+  }
+}
