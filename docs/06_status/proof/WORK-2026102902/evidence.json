@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102902",
+  "pr_number": null,
+  "source_sha": "b95b51fb40aeaed90cfe2e39089581471ba9cc67",
+  "reviewed_head_sha": "b95b51fb40aeaed90cfe2e39089581471ba9cc67",
+  "generated_at": "2026-10-29T00:00:00Z",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "b95b51fb40aeaed90cfe2e39089581471ba9cc67",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm test:ops",
+    "conclusion": "success",
+    "verified_source_sha": "b95b51fb40aeaed90cfe2e39089581471ba9cc67",
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/model-routing.test.ts scripts/ops/lane-manifest.test.ts scripts/ops/codex-exec.test.ts scripts/ops/proof-generate.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts",
+      "tests": 436,
+      "pass": 436,
+      "fail": 0,
+      "skipped": 0
+    },
+    "note": "Local static verification passed; protected exact-head CI and the staging DB receipt remain pending."
+  },
+  "verification": {
+    "focused_tests": "436 pass, 0 fail",
+    "test_ops": "3706 pass, 0 fail, 10 skipped",
+    "type_check": "pass",
+    "r_level": "PASS; 10 changed files; no matching rules",
+    "mutation_checks": "3 of 3 caught",
+    "scope": "all changed files are within the WORK-2026102902 file scope lock"
+  },
+  "db_verification": {
+    "command": "pnpm test:db",
+    "status": "blocked_deferred_to_protected_ci",
+    "required_staging_ref": "xskgrzbteyqdufktjrjx",
+    "production_accessed": false,
+    "write_attempted": false
+  }
+}
