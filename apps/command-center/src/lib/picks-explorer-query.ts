@@ -3,8 +3,9 @@ import { pickLifecycleTransitions } from '@unit-talk/contracts';
 export const PICK_PAGE_SIZES = [5, 25, 50, 100] as const;
 export const PICK_STATUS_OPTIONS = Object.keys(pickLifecycleTransitions);
 export const DISTRIBUTION_MODE_OPTIONS = ['track-only', 'delivery-eligible', 'ungoverned'] as const;
+export const PICK_RESULT_OPTIONS = ['win', 'loss', 'push', 'void', 'pending'] as const;
 export type DistributionModeFilter = typeof DISTRIBUTION_MODE_OPTIONS[number] | '';
-export interface PicksExplorerQuery { q: string; status: string; distributionMode: DistributionModeFilter; capper: string; sport: string; dateFrom: string; dateTo: string; page: number; limit: number; fixtures: boolean }
+export interface PicksExplorerQuery { q: string; status: string; distributionMode: DistributionModeFilter; capper: string; sport: string; dateFrom: string; dateTo: string; result: string; page: number; limit: number; fixtures: boolean }
 
 export function readPicksExplorerQuery(params: Record<string, string | string[] | undefined> = {}): PicksExplorerQuery {
   const one = (key: string) => typeof params[key] === 'string' ? params[key] : '';
@@ -20,6 +21,7 @@ export function readPicksExplorerQuery(params: Record<string, string | string[] 
     sport: one('sport').trim().slice(0, 100),
     dateFrom: one('dateFrom').trim().slice(0, 30),
     dateTo: one('dateTo').trim().slice(0, 30),
+    result: PICK_RESULT_OPTIONS.includes(one('result') as typeof PICK_RESULT_OPTIONS[number]) ? one('result') : '',
     page: Number.isSafeInteger(requestedPage) && requestedPage > 0 ? Math.min(requestedPage, 1_000_000) : 1,
     limit: PICK_PAGE_SIZES.some((size) => size === requestedLimit) ? requestedLimit : 25,
     fixtures: one('population') === 'fixtures',
@@ -35,6 +37,7 @@ export function picksExplorerHref(query: PicksExplorerQuery, page: number): stri
   if (query.sport) params.set('sport', query.sport);
   if (query.dateFrom) params.set('dateFrom', query.dateFrom);
   if (query.dateTo) params.set('dateTo', query.dateTo);
+  if (query.result) params.set('result', query.result);
   if (query.fixtures) params.set('population', 'fixtures');
   return `/picks?${params}`;
 }

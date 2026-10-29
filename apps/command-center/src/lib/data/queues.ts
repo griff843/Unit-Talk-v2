@@ -534,7 +534,7 @@ export const VIEW_DERIVED_COLUMNS = [
  * therefore cannot escape the guard in `queues-count-relation.test.ts`, and a
  * filter added anywhere else is not applied at all.
  */
-const SEARCH_PICKS_TEXT_COLUMNS = ['market', 'selection', 'source', 'capper_id'] as const;
+const SEARCH_PICKS_TEXT_COLUMNS = ['market', 'selection', 'source', 'capper_id', 'metadata->>eventName'] as const;
 
 // Capper handles are stored lowercase (`kingro623`) and sport ids uppercase
 // (`NHL`); normalising here lets an operator type either case.
@@ -554,7 +554,7 @@ const SEARCH_PICKS_RANGE_FILTERS = [
 /** A search for a pick ID or ID fragment is a range on `id`, which `ilike` cannot do on a uuid. */
 const SEARCH_PICKS_ID_COLUMN = 'id';
 
-/** Every column `searchPicks` filters on. Must stay disjoint from the set above. */
+/** Base-column filters which are safe to count directly on `picks`. */
 export const SEARCH_PICKS_FILTER_COLUMNS = Array.from(
   new Set<string>([
     ...SEARCH_PICKS_TEXT_COLUMNS,
@@ -563,6 +563,11 @@ export const SEARCH_PICKS_FILTER_COLUMNS = Array.from(
     SEARCH_PICKS_ID_COLUMN,
   ]),
 );
+
+export const SEARCH_PICKS_RESULT_FILTER_COLUMNS = ['settlement_result'] as const;
+export function searchPicksCountRelation(result: string): 'picks' | 'picks_current_state' {
+  return ['win', 'loss', 'push', 'void', 'pending'].includes(result) ? 'picks_current_state' : 'picks';
+}
 
 
 export async function searchPicks(
@@ -592,6 +597,8 @@ export async function searchPicks(
       'promotion_score',
       'created_at',
       'status',
+      'capper_id',
+      'sport_id',
       'approval_status',
       'metadata',
       'sport_display_name',
@@ -611,16 +618,16 @@ export async function searchPicks(
     /**
      * Apply the caller's filters to a query, driven by the tables above.
      *
-     * Every predicate here is on a column `picks_current_state` takes straight
-     * from its `picks` base row -- none reads a column the view's three lateral
-     * joins produce. That is what makes the count split below sound, and
-     * `queues-count-relation.test.ts` is what keeps it true.
+     * Result filters use a joined view column, so their count must use the
+     * same view. All other predicates are base-column filters.
      */
     const applyFilters = <T extends {
       or: (f: string) => T;
       eq: (c: string, v: string) => T;
       gte: (c: string, v: string) => T;
       lte: (c: string, v: string) => T;
+      is: (c: string, v: null) => T;
+      neq: (c: string, v: string) => T;
     }>(base: T): T => {
       let next = base;
       const idRange = q ? pickIdPrefixRange(q) : null;
@@ -638,6 +645,9 @@ export async function searchPicks(
         if (!value) continue;
         next = filter.op === 'gte' ? next.gte(filter.column, value) : next.lte(filter.column, value);
       }
+      const result = params['result'] ?? '';
+      if (result === 'pending') next = next.is('settlement_result', null).neq('status', 'voided');
+      else if (['win', 'loss', 'push', 'void'].includes(result)) next = next.eq('settlement_result', result);
       return next;
     };
 
@@ -664,7 +674,7 @@ export async function searchPicks(
       .range(offset, offset + limit - 1)
       .abortSignal(AbortSignal.timeout(8_000));
 
-    // The count is taken against `picks`, not `picks_current_state`.
+    // Base-only counts use `picks`; result filters must count the view.
     //
     // Counting the view makes Postgres run its three correlated lateral joins
     // once per candidate row purely to discard every joined column -- 107,866
@@ -680,7 +690,7 @@ export async function searchPicks(
     // so no join can drop a `picks` row or multiply one. Verified against
     // production on three predicates -- unfiltered 107866/107866,
     // source='smart-form' 62629/62629, settled since 2026-01-01 18287/18287.
-    const countBase = applyFilters(client.from('picks').select('id', { count: 'exact', head: true }));
+    const countBase = applyFilters(client.from(searchPicksCountRelation(params['result'] ?? '')).select('id', { count: 'exact', head: true }));
     const countQuery = applyDistributionMode(countBase).abortSignal(AbortSignal.timeout(8_000));
 
     const [
@@ -702,8 +712,8 @@ export async function searchPicks(
         ...row,
         matchup: eventFieldsFromRow(row).eventName,
         eventStartTime: eventFieldsFromRow(row).eventStartTime,
-        sport: asStringOrNull(row['sport_display_name']),
-        submitter: asStringOrNull(row['capper_display_name']),
+        sport: asStringOrNull(row['sport_display_name']) ?? asStringOrNull(row['sport_id']),
+        submitter: asStringOrNull(row['capper_display_name']) ?? asStringOrNull(row['capper_id']),
       }));
 
     return {

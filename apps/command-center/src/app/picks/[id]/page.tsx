@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { DegradedState } from '@/components/ui';
 import { Table, TableHead, TableBody, Th, Td } from '@/components/ui/Table';
 import { CorrectionForm } from '@/components/CorrectionForm';
+import { getPickIdentity } from '@/lib/data/pick-identity';
 import { InterventionAction } from '@/components/InterventionAction';
 import { PickIdentityPanel } from '@/components/PickIdentityPanel';
 import { SettlementForm } from '@/components/SettlementForm';
@@ -257,6 +258,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
   }
 
   const { pick } = detail;
+  const correctionTarget = await getPickIdentity(pickId).catch(() => null);
   const allowedActions = getAllowedActions(pick.status);
   const corrections = detail.settlements.filter((settlement) => settlement.correctsId != null);
   // Read from the settlement plane, not from the lifecycle status. A Track Only
@@ -403,7 +405,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         {allowedActions.length === 0 ? (
           <p className="text-sm text-gray-400">Pick is {pick.status}; no further action available.</p>
         ) : allowedActions.includes('correct') || (alreadySettled && allowedActions.includes('settle')) ? (
-          <CorrectionForm pickId={pickId} />
+          <CorrectionForm pickId={pickId} currentResult={correctionTarget?.settlement?.result ?? null} />
         ) : allowedActions.includes('settle') ? (
           <SettlementForm
             pickId={pickId}

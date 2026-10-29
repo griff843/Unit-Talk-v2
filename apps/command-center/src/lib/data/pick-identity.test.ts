@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mapPickIdentityRead } from './pick-identity.js';
 
-const pick = { id: 'pick-1', source: 'smart-form', market: 'spread', selection: 'Chiefs -2.5', line: -2.5, odds: -110, stake_units: 2, created_at: '2026-10-28T12:00:00Z', status: 'posted', metadata: { eventName: 'Chiefs at Bills', sport: 'NFL', capper: 'kingro623' }, capper_display_name: 'kingro623' };
+const pick = { id: 'pick-1', source: 'smart-form', market: 'spread', selection: 'Chiefs -2.5', line: -2.5, odds: -110, stake_units: 2, created_at: '2026-10-28T12:00:00Z', status: 'posted', metadata: { eventName: 'Chiefs at Bills', sport: 'NFL', capper: 'kingro623' }, capper_id: 'kingro623', capper_display_name: 'kingro623' };
 
 test('maps a pick with no settlement to a truthful pending target', () => {
   const result = mapPickIdentityRead(pick, []);
@@ -13,11 +13,19 @@ test('maps a pick with no settlement to a truthful pending target', () => {
 
 test('maps the latest correction as the current effective settlement', () => {
   const result = mapPickIdentityRead(pick, [
-    { result: 'loss', source: 'operator', settled_at: '2026-10-28T13:00:00Z', corrects_id: 'settlement-1', created_at: '2026-10-28T13:00:00Z', payload: {} },
-    { result: 'win', source: 'operator', settled_at: '2026-10-28T12:30:00Z', corrects_id: null, created_at: '2026-10-28T12:30:00Z', payload: {} },
+    { id: 'settlement-2', result: 'loss', source: 'operator', settled_at: '2026-10-28T13:00:00Z', corrects_id: 'settlement-1', created_at: '2026-10-28T12:00:00Z', payload: {} },
+    { id: 'settlement-1', result: 'win', source: 'operator', settled_at: '2026-10-28T12:30:00Z', corrects_id: null, created_at: '2026-10-28T12:30:00Z', payload: {} },
   ]);
   assert.equal(result.settlement?.result, 'loss');
   assert.equal(result.settlement?.correctsId, 'settlement-1');
+});
+
+test('refuses an incomplete correction chain', () => {
+  assert.throws(() => mapPickIdentityRead(pick, [{ id: 'correction', corrects_id: 'missing', result: 'win' }]), /incomplete/);
+});
+
+test('does not attribute a pick from metadata when canonical capper_id is absent', () => {
+  assert.equal(mapPickIdentityRead({ ...pick, capper_id: null }, []).identity.capper, null);
 });
 
 test('coerces numeric columns that PostgREST returns as strings', () => {

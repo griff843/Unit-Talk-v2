@@ -37,3 +37,11 @@ test('parses and preserves capper, sport, date and ID-prefix search state', () =
   assert.equal(href.searchParams.get('capper'), 'kingro623');
   assert.equal(href.searchParams.get('dateTo'), '2026-10-28');
 });
+
+test('result filter is validated and preserved across pages', () => {
+  assert.equal(readPicksExplorerQuery({ result: 'invalid' }).result, '');
+  for (const result of ['win', 'loss', 'push', 'void', 'pending']) {
+    const query = readPicksExplorerQuery({ result, capper: 'kingro623' });
+    assert.equal(new URL(picksExplorerHref(query, 2), 'http://localhost').searchParams.get('result'), result);
+  }
+});

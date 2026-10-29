@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { lookupPicks } from '@/app/actions/pick-lookup';
 import {
   filterCommands,
   moveActiveIndex,
   pickSearchEntry,
+  pickResultEntry,
   type CommandEntry,
 } from '@/lib/command-palette-model';
 
@@ -19,14 +21,31 @@ export function CommandPalette({ entries, open, onClose }: CommandPaletteProps) 
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
+  const [picks, setPicks] = useState<CommandEntry[]>([]);
+  const [lookupError, setLookupError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
   const results = useMemo(() => {
     const pickEntry = pickSearchEntry(query);
     const matches = filterCommands(entries, query);
-    return (pickEntry ? [{ ...pickEntry, score: 100 }, ...matches] : matches).slice(0, 12);
-  }, [entries, query]);
+    return [...picks.map((entry) => ({ ...entry, score: 100 })), ...(pickEntry ? [{ ...pickEntry, score: 100 }] : []), ...matches].slice(0, 12);
+  }, [entries, query, picks]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPicks([]);
+    setLookupError('');
+    if (!open || query.trim().length < 3 || query.trim().length > 100) return;
+    const timer = window.setTimeout(() => {
+      void lookupPicks(query).then((result) => {
+        if (cancelled) return;
+        if (!result.ok) { setLookupError(result.error); return; }
+        setPicks(result.picks.map(pickResultEntry).filter((entry): entry is CommandEntry => entry !== null));
+      }).catch(() => { if (!cancelled) setLookupError('Pick lookup unavailable. Try again.'); });
+    }, 300);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [open, query]);
 
   useEffect(() => {
     if (open) {
@@ -38,7 +57,7 @@ export function CommandPalette({ entries, open, onClose }: CommandPaletteProps) 
 
   useEffect(() => {
     setActiveIndex(0);
-  }, [query]);
+  }, [query, picks]);
 
   const go = useCallback(
     (href: string) => {
@@ -89,12 +108,13 @@ export function CommandPalette({ entries, open, onClose }: CommandPaletteProps) 
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Jump to a surface… (type to filter)"
+            placeholder="Search surfaces or picks"
             className="w-full bg-transparent text-sm text-cc-ink placeholder:text-cc-ink-3 focus:outline-none"
-            aria-label="Search surfaces"
+            aria-label="Search surfaces or picks"
           />
           <kbd className="rounded border border-cc-line px-1.5 py-0.5 text-[10px] uppercase text-cc-ink-3">esc</kbd>
         </div>
+        {lookupError && <p role="alert" className="px-4 pt-2 text-sm text-amber-300">{lookupError}</p>}
         <ul ref={listRef} className="max-h-[50vh] overflow-y-auto py-2" role="listbox">
           {results.length === 0 && (
             <li className="px-4 py-6 text-center text-sm text-cc-ink-3">No surface matches “{query}”.</li>
@@ -109,7 +129,7 @@ export function CommandPalette({ entries, open, onClose }: CommandPaletteProps) 
                   index === activeIndex ? 'bg-cc-accent/15 text-cc-ink' : 'text-cc-ink-2 hover:bg-cc-hover'
                 }`}
               >
-                <span className="truncate">{result.label}</span>
+                <span className="min-w-0"><span className="block truncate">{result.label}</span>{result.detail && <span className="block text-xs text-cc-ink-3">{result.detail}</span>}</span>
                 <span className="flex shrink-0 items-center gap-2">
                   <span className="text-[10px] uppercase tracking-[0.2em] text-cc-ink-3">{result.group}</span>
                   <span className="font-mono text-[11px] text-cc-ink-3">{result.href}</span>
