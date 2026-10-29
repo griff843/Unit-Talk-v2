@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { DegradedState } from '@/components/ui';
 import { Table, TableHead, TableBody, Th, Td } from '@/components/ui/Table';
 import { CorrectionForm } from '@/components/CorrectionForm';
-import { getPickIdentity } from '@/lib/data/pick-identity';
+import { effectiveSettlementLabel, getPickIdentity } from '@/lib/data/pick-identity';
 import { InterventionAction } from '@/components/InterventionAction';
 import { PickIdentityPanel } from '@/components/PickIdentityPanel';
 import { SettlementForm } from '@/components/SettlementForm';
@@ -207,23 +207,6 @@ function summarizeScoreMeaning(pick: PickDetail) {
   return `Routing score ${formatRoutingScore(pick.promotionScore)} is the weighted model/board policy fit. This pick holds no board target; the score is not a win probability.`;
 }
 
-function summarizeSettlementContext(detail: PickDetailViewResponse) {
-  const latest = detail.settlements[0] ?? null;
-  if (!latest) {
-    return 'Pending settlement';
-  }
-
-  if (latest.outcomeExplanation) {
-    return latest.outcomeExplanation;
-  }
-
-  if (latest.gameResult?.eventName) {
-    return `${latest.result ?? latest.status} • ${latest.gameResult.eventName}`;
-  }
-
-  return latest.result ?? latest.status;
-}
-
 function distributionModeLabel(value: unknown): string | null {
   if (value === 'track-only') return 'Track Only';
   if (value === 'delivery-eligible') return 'Delivery eligible';
@@ -272,7 +255,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
   const deviggingResult = readObject(pick.metadata['deviggingResult']);
   const kellySizing = readObject(pick.metadata['kellySizing']);
   const realEdgePresence = readRealEdgePresence(pick.metadata);
-  const latestSettlementSummary = summarizeSettlementContext(detail);
+  const latestSettlementSummary = effectiveSettlementLabel(correctionTarget?.settlement ?? null, detail.settlements.length > 0);
   const scoreMeaning = summarizeScoreMeaning(pick);
   const scoreInsight = buildScoreInsight(pick.metadata);
   const promotion = buildPromotionPresentation({
@@ -350,7 +333,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
               submittedBy: pick.submittedBy,
               capperName: pick.capperName ?? null,
               marketTypeLabel: pick.marketTypeLabel ?? null,
-              settlementResult: detail.settlements[0]?.result ?? null,
+              settlementResult: correctionTarget?.settlement?.status === 'settled' ? correctionTarget.settlement.result : null,
             }}
           />
           <div className="grid gap-3 md:grid-cols-4">

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mapPickIdentityRead } from './pick-identity.js';
+import { effectiveSettlementLabel, mapPickIdentityRead } from './pick-identity.js';
 
 const pick = { id: 'pick-1', source: 'smart-form', market: 'spread', selection: 'Chiefs -2.5', line: -2.5, odds: -110, stake_units: 2, created_at: '2026-10-28T12:00:00Z', status: 'posted', metadata: { eventName: 'Chiefs at Bills', sport: 'NFL', capper: 'kingro623' }, capper_id: 'kingro623', capper_display_name: 'kingro623' };
 
@@ -13,11 +13,17 @@ test('maps a pick with no settlement to a truthful pending target', () => {
 
 test('maps the latest correction as the current effective settlement', () => {
   const result = mapPickIdentityRead(pick, [
-    { id: 'settlement-2', result: 'loss', source: 'operator', settled_at: '2026-10-28T13:00:00Z', corrects_id: 'settlement-1', created_at: '2026-10-28T12:00:00Z', payload: {} },
-    { id: 'settlement-1', result: 'win', source: 'operator', settled_at: '2026-10-28T12:30:00Z', corrects_id: null, created_at: '2026-10-28T12:30:00Z', payload: {} },
+    { id: 'settlement-2', status: 'settled', result: 'loss', source: 'operator', settled_at: '2026-10-28T13:00:00Z', corrects_id: 'settlement-1', created_at: '2026-10-28T12:00:00Z', payload: {} },
+    { id: 'settlement-1', status: 'settled', result: 'win', source: 'operator', settled_at: '2026-10-28T12:30:00Z', corrects_id: null, created_at: '2026-10-28T12:30:00Z', payload: {} },
   ]);
   assert.equal(result.settlement?.result, 'loss');
   assert.equal(result.settlement?.correctsId, 'settlement-1');
+  assert.equal(effectiveSettlementLabel(result.settlement, true), 'loss (corrected)');
+});
+
+test('does not label unavailable settlement history as pending', () => {
+  assert.equal(effectiveSettlementLabel(null, true), 'Settlement history unavailable');
+  assert.equal(effectiveSettlementLabel(null, false), 'Pending settlement');
 });
 
 test('refuses an incomplete correction chain', () => {

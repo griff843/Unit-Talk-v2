@@ -19,6 +19,12 @@ export interface PickIdentityRead {
   } | null;
 }
 
+export function effectiveSettlementLabel(settlement: PickIdentityRead['settlement'], hasHistory: boolean): string {
+  if (!settlement) return hasHistory ? 'Settlement history unavailable' : 'Pending settlement';
+  const result = settlement.status === 'settled' ? settlement.result : settlement.status;
+  return settlement.correctsId ? `${result} (corrected)` : result;
+}
+
 function object(value: unknown): Row {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Row : {};
 }
