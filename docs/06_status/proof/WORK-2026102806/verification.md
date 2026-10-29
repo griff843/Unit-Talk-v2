@@ -1,4 +1,24 @@
-# WORK-2026102806 verification
+# PROOF: WORK-2026102806
+
+MERGE_SHA: pending merge
+
+## ASSERTIONS:
+
+- [x] Result filtering uses effective correction-chain results and consistent filtered IDs for rows and totals.
+- [x] Correction confirmation distinguishes current and proposed results and blocks no-op corrections.
+- [x] Authenticated lookup exposes governed wager context and retains the client bundle boundary.
+- [x] Desktop and 390 × 844 mobile fixture observations are recorded without production mutations.
+- [x] Track Only settlement behavior, score validation and append-only API paths remain preserved.
+
+## EVIDENCE:
+
+```text
+Command Center tests: 723 passed, 0 failed.
+Command Center type-check: PASS.
+Command Center production build: PASS.
+R-level: PASS (operator-ui).
+CI verify and staging proof on 918a48fd4: PASS.
+```
 
 Status: Product verification complete for the admitted lane. Governance routing reconciliation is deferred by Griff; merge remains owned by Claude.
 

@@ -22,5 +22,5 @@
   "browser": { "status": "PASS_FOR_ADMITTED_SCOPE", "environment": "isolated loopback synthetic fixture", "mobile": "390x844 picks, detail and correction confirmation verified", "report": "qa-experience-report.md" },
   "accepted_followup": "WORK-2026102807: resolve unfiltered result from correction chains after #1800 merges",
   "governance": "Model-routing reconciliation deferred by Griff; actual exposed model is recorded without fabricated effort or telemetry",
-  "sha_binding": { "merge_sha": null }
+  "sha_binding": { "merge_sha": null, "verified_source_sha": "d572c07472136798984a5da416b9b0cab965858d", "sha_type": "merge_sha" }
 }
