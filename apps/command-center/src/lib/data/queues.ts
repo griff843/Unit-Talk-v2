@@ -3,6 +3,7 @@ import { getDataClient, isTestFixturePick } from './client';
 import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
 import { applyPickPopulation, applyOperatorPickPopulation, readPickPopulation } from '../governed-population';
 import { pickIdPrefixRange } from '../command-palette-model';
+import { readEffectiveSettlementTruth } from './results-ops';
 
 // ── Shared internal type ─────────────────────────────────────────────────────
 
@@ -564,10 +565,7 @@ export const SEARCH_PICKS_FILTER_COLUMNS = Array.from(
   ]),
 );
 
-export const SEARCH_PICKS_RESULT_FILTER_COLUMNS = ['settlement_result'] as const;
-export function searchPicksCountRelation(result: string): 'picks' | 'picks_current_state' {
-  return ['win', 'loss', 'push', 'void', 'pending'].includes(result) ? 'picks_current_state' : 'picks';
-}
+export const SEARCH_PICKS_RESULT_FILTER_COLUMNS = ['id'] as const;
 
 
 export async function searchPicks(
@@ -585,6 +583,13 @@ export async function searchPicks(
 
   try {
     const client: Client = await getDataClient();
+    const requestedResult = params['result'] ?? '';
+    const resultFilter = ['win', 'loss', 'push', 'void', 'pending'].includes(requestedResult) ? requestedResult : '';
+    const truth = resultFilter ? await readEffectiveSettlementTruth(client, { includeFixtures: population === 'fixtures' || distributionMode === 'ungoverned' }) : null;
+    const effectiveResults = new Map(truth?.settlements.map((row) => [row.pickId, row.status === 'settled' ? row.result : null]) ?? []);
+    const filteredIds = [...effectiveResults].filter(([, result]) => resultFilter === 'pending' ? result !== null : result === resultFilter).map(([id]) => id);
+    if (filteredIds.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) throw new Error('Settlement history contains an invalid pick ID');
+    if (resultFilter && resultFilter !== 'pending' && filteredIds.length === 0) return { picks: [], total: 0, limit, offset };
 
     const selectCols = [
       'id',
@@ -618,16 +623,17 @@ export async function searchPicks(
     /**
      * Apply the caller's filters to a query, driven by the tables above.
      *
-     * Result filters use a joined view column, so their count must use the
-     * same view. All other predicates are base-column filters.
+     * Result filters use pick IDs from the complete correction-chain reader.
+     * Every predicate therefore applies equally to the base table and view.
      */
     const applyFilters = <T extends {
       or: (f: string) => T;
       eq: (c: string, v: string) => T;
       gte: (c: string, v: string) => T;
       lte: (c: string, v: string) => T;
-      is: (c: string, v: null) => T;
       neq: (c: string, v: string) => T;
+      in: (c: string, v: string[]) => T;
+      not: (c: string, op: string, v: string) => T;
     }>(base: T): T => {
       let next = base;
       const idRange = q ? pickIdPrefixRange(q) : null;
@@ -645,9 +651,10 @@ export async function searchPicks(
         if (!value) continue;
         next = filter.op === 'gte' ? next.gte(filter.column, value) : next.lte(filter.column, value);
       }
-      const result = params['result'] ?? '';
-      if (result === 'pending') next = next.is('settlement_result', null).neq('status', 'voided');
-      else if (['win', 'loss', 'push', 'void'].includes(result)) next = next.eq('settlement_result', result);
+      if (resultFilter === 'pending') {
+        next = next.neq('status', 'voided');
+        if (filteredIds.length) next = next.not('id', 'in', `(${filteredIds.join(',')})`);
+      } else if (resultFilter) next = next.in('id', filteredIds);
       return next;
     };
 
@@ -674,7 +681,7 @@ export async function searchPicks(
       .range(offset, offset + limit - 1)
       .abortSignal(AbortSignal.timeout(8_000));
 
-    // Base-only counts use `picks`; result filters must count the view.
+    // All counts use `picks`, including the chain-resolved ID filter.
     //
     // Counting the view makes Postgres run its three correlated lateral joins
     // once per candidate row purely to discard every joined column -- 107,866
@@ -690,7 +697,7 @@ export async function searchPicks(
     // so no join can drop a `picks` row or multiply one. Verified against
     // production on three predicates -- unfiltered 107866/107866,
     // source='smart-form' 62629/62629, settled since 2026-01-01 18287/18287.
-    const countBase = applyFilters(client.from(searchPicksCountRelation(params['result'] ?? '')).select('id', { count: 'exact', head: true }));
+    const countBase = applyFilters(client.from('picks').select('id', { count: 'exact', head: true }));
     const countQuery = applyDistributionMode(countBase).abortSignal(AbortSignal.timeout(8_000));
 
     const [
@@ -710,6 +717,7 @@ export async function searchPicks(
     const picks: Array<Record<string, unknown>> = rows
       .map((row) => ({
         ...row,
+        ...(truth ? { settlement_result: effectiveResults.get(String(row.id)) ?? null } : {}),
         matchup: eventFieldsFromRow(row).eventName,
         eventStartTime: eventFieldsFromRow(row).eventStartTime,
         sport: asStringOrNull(row['sport_display_name']) ?? asStringOrNull(row['sport_id']),

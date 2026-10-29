@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { withRequestContext } from '../test-support/request-context';
 import { withLoopbackSupabaseTarget, withWorkspaceEnvDefaults } from '../test-support/workspace-env';
-import { SEARCH_PICKS_FILTER_COLUMNS, SEARCH_PICKS_RESULT_FILTER_COLUMNS, VIEW_DERIVED_COLUMNS, searchPicksCountRelation } from './queues';
+import { SEARCH_PICKS_FILTER_COLUMNS, SEARCH_PICKS_RESULT_FILTER_COLUMNS, VIEW_DERIVED_COLUMNS } from './queues';
 
 /**
  * `searchPicks` renders its page from `picks_current_state` but takes its total
@@ -39,43 +39,55 @@ test('the two column sets are non-empty, so the guard above cannot pass vacuousl
   assert.ok(SEARCH_PICKS_FILTER_COLUMNS.length > 0);
 });
 
-test('view-derived result filters count the same view as the rows', () => {
-  assert.ok(SEARCH_PICKS_RESULT_FILTER_COLUMNS.every((column) => (VIEW_DERIVED_COLUMNS as readonly string[]).includes(column)));
-  for (const result of ['win', 'loss', 'push', 'void', 'pending']) assert.equal(searchPicksCountRelation(result), 'picks_current_state');
-  assert.equal(searchPicksCountRelation(''), 'picks');
+test('result filtering uses base pick IDs rather than the view-derived result', () => {
+  assert.deepEqual(SEARCH_PICKS_RESULT_FILTER_COLUMNS, ['id']);
+  assert.ok(SEARCH_PICKS_RESULT_FILTER_COLUMNS.every((column) => !(VIEW_DERIVED_COLUMNS as readonly string[]).includes(column)));
 });
 
-test('result pagination uses the same governed view and filter for count and rows', async () => {
+test('corrected result filtering counts the full population on a later page', async () => {
   const restoreDefaults = withWorkspaceEnvDefaults();
   const restoreTarget = withLoopbackSupabaseTarget();
   const originalFetch = globalThis.fetch;
   const oldToken = process.env.COMMAND_CENTER_AUTH_TOKEN;
   process.env.COMMAND_CENTER_AUTH_TOKEN = 'result-filter-test';
   const observed: Array<{ method: string; url: URL }> = [];
+  const pickId = '00000000-0000-4000-8000-000000000001';
+  const rootId = '00000000-0000-4000-8000-000000000002';
+  const correctionId = '00000000-0000-4000-8000-000000000003';
+  const reviewPickId = '00000000-0000-4000-8000-000000000004';
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
     const url = new URL(request.url);
     observed.push({ method: request.method, url });
+    if (url.pathname.endsWith('/settlement_records')) return Response.json([
+      { id: rootId, pick_id: pickId, status: 'settled', result: 'loss', confidence: 'confirmed', corrects_id: null, settled_at: '2026-10-29T12:00:00Z', created_at: '2026-10-29T12:00:00Z', payload: {} },
+      { id: correctionId, pick_id: pickId, status: 'settled', result: 'win', confidence: 'confirmed', corrects_id: rootId, settled_at: '2026-10-28T12:00:00Z', created_at: '2026-10-28T12:00:00Z', payload: {} },
+      { id: '00000000-0000-4000-8000-000000000005', pick_id: reviewPickId, status: 'manual_review', result: 'win', confidence: 'pending', corrects_id: null, settled_at: '2026-10-28T12:00:00Z', created_at: '2026-10-28T12:00:00Z', payload: {} },
+      { id: '00000000-0000-4000-8000-000000000006', pick_id: '00000000-0000-4000-8000-000000000007', status: 'settled', result: 'win', confidence: 'confirmed', corrects_id: null, settled_at: '2026-10-28T12:00:00Z', created_at: '2026-10-28T12:00:00Z', payload: {} },
+      { id: '00000000-0000-4000-8000-000000000008', pick_id: '00000000-0000-4000-8000-000000000009', status: 'settled', result: 'win', confidence: 'confirmed', corrects_id: null, settled_at: '2026-10-28T12:00:00Z', created_at: '2026-10-28T12:00:00Z', payload: {} },
+    ], { headers: { 'content-range': '0-4/5' } });
     if (request.method === 'HEAD') return new Response(null, { headers: { 'content-range': '*/3' } });
-    return Response.json([{ id: 'corrected-pick', selection: 'example', settlement_result: 'win', metadata: { distributionMode: 'track-only' } }]);
+    return Response.json([{ id: pickId, selection: 'example', settlement_result: 'loss', metadata: { distributionMode: 'track-only' } }]);
   };
   try {
     const { searchPicks } = await import('./queues');
     const result = await withRequestContext({ authorization: 'Bearer result-filter-test' }, () => searchPicks({ result: 'win', limit: '2', offset: '2', capper: 'Kingro623' }));
     assert.equal(result.total, 3);
     assert.equal(result.picks[0]?.settlement_result, 'win');
-    assert.equal(observed.length, 2);
-    for (const { url } of observed) {
-      assert.ok(url.pathname.endsWith('/picks_current_state'));
-      assert.equal(url.searchParams.get('settlement_result'), 'eq.win');
+    const pickRequests = observed.filter(({ url }) => !url.pathname.endsWith('/settlement_records'));
+    assert.equal(pickRequests.length, 2);
+    for (const { url } of pickRequests) {
+      assert.match(url.searchParams.get('id') ?? '', /^in\./);
+      assert.match(url.searchParams.get('id') ?? '', new RegExp(pickId));
       assert.equal(url.searchParams.get('capper_id'), 'eq.kingro623');
       assert.equal(url.searchParams.get('metadata->distributionMode'), 'not.is.null');
     }
-    assert.equal(observed.find((request) => request.method !== 'HEAD')?.url.searchParams.get('offset'), '2');
+    assert.equal(pickRequests.find((request) => request.method !== 'HEAD')?.url.searchParams.get('offset'), '2');
     observed.length = 0;
     await withRequestContext({ authorization: 'Bearer result-filter-test' }, () => searchPicks({ result: 'pending', limit: '2' }));
-    for (const { url } of observed) {
-      assert.equal(url.searchParams.get('settlement_result'), 'is.null');
+    for (const { url } of observed.filter(({ url }) => !url.pathname.endsWith('/settlement_records'))) {
+      assert.match(url.searchParams.get('id') ?? '', /^not\.in\./);
+      assert.doesNotMatch(url.searchParams.get('id') ?? '', new RegExp(reviewPickId));
       assert.equal(url.searchParams.get('status'), 'neq.voided');
     }
   } finally {

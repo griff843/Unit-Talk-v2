@@ -12,6 +12,7 @@ export interface PickIdentityRead {
   odds: number | null;
   settlement: {
     result: string;
+    status: string;
     source: string | null;
     settledAt: string | null;
     correctsId: string | null;
@@ -70,6 +71,7 @@ export function mapPickIdentityRead(pick: Row, settlements: Row[], submissionPay
     submittedAt: string(pick.created_at), stakeUnits: number(pick.stake_units), line: number(pick.line), odds: number(pick.odds),
     settlement: current ? {
       result: string(current.result) ?? 'unknown', source: string(current.source) ?? string(object(current.payload).source),
+      status: string(current.status) ?? 'unknown',
       settledAt: string(current.settled_at), correctsId: string(current.corrects_id),
     } : null,
   };
@@ -80,7 +82,7 @@ export async function getPickIdentity(pickId: string): Promise<PickIdentityRead 
   const client = await getDataClient();
   const [pickResult, settlementResult] = await Promise.all([
     client.from('picks_current_state').select('id, source, market, selection, line, odds, stake_units, created_at, status, metadata, capper_id, sport_display_name, capper_display_name, market_type_display_name, submission_id').eq('id', pickId).maybeSingle(),
-    client.from('settlement_records').select('id, result, source, settled_at, corrects_id, created_at, payload', { count: 'exact' }).eq('pick_id', pickId).order('created_at', { ascending: false }),
+    client.from('settlement_records').select('id, status, result, source, settled_at, corrects_id, created_at, payload', { count: 'exact' }).eq('pick_id', pickId).order('created_at', { ascending: false }),
   ]);
   if (pickResult.error || !pickResult.data || settlementResult.error || settlementResult.count !== (settlementResult.data ?? []).length) return null;
   let submissionPayload: Row | null = null;
