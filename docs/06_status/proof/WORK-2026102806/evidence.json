@@ -16,8 +16,8 @@
   "app_build": { "command": "pnpm --filter @unit-talk/command-center build", "status": "PASS" },
   "writable_live_db": {
     "status": "PASS_BEFORE_PROOF_ONLY_COMMIT",
-    "previous_pass_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/40910243492",
-    "previous_pass_head": "918a48fd49a003e266c349e3629993f0fbeb2078"
+    "previous_pass_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/40919185777",
+    "previous_pass_head": "5b73b6fdd6d91a96ccf65624b80201b55ffe78a3"
   },
   "browser": { "status": "PASS_FOR_ADMITTED_SCOPE", "environment": "isolated loopback synthetic fixture", "mobile": "390x844 picks, detail and correction confirmation verified", "report": "qa-experience-report.md" },
   "accepted_followup": "WORK-2026102807: resolve unfiltered result from correction chains after #1800 merges",

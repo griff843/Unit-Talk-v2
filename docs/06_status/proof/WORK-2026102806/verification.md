@@ -31,6 +31,8 @@ Status: Product verification complete for the admitted lane. Governance routing 
 - `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS, operator-ui, on d572c0747.
 - `pnpm verify` on 5391c9d6b: static phase PASS; local live database stage refused the loopback target. The work order specifies CI-only staging verification.
 - [CI verify and staging database proof](https://github.com/griff843/Unit-Talk-v2/actions/runs/40910243492): PASS on 918a48fd49a003e266c349e3629993f0fbeb2078, including the d572c0747 product code and subsequent proof-only changes. New proof commits trigger a fresh CI run before executor handoff.
+- [CI verify and staging database proof on 5b73b6fdd](https://github.com/griff843/Unit-Talk-v2/actions/runs/40919185777): PASS. The subsequent screenshot recapture is proof-only; product source is unchanged.
+- `pnpm exec tsx scripts/ops/proof-auditor-gate.ts --proof-dir docs/06_status/proof/WORK-2026102806 --sha 5b73b6fdd6d91a96ccf65624b80201b55ffe78a3 --require-executed-command "pnpm test:db" --json`: PASS after a fresh mobile detail capture. The previous PNG accidentally contained the binary bytes TBD, which the auditor scans as text. The replacement is a genuine browser capture centered on the corrected settlement, not an edited image.
 
 ## Browser evidence
 
