@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026103002",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "f1c0f0c463eac75b393f1a3b3a96fdacf7da24ce",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm test",
+    "conclusion": "success",
+    "verified_source_sha": "f1c0f0c463eac75b393f1a3b3a96fdacf7da24ce",
+    "full_suite": {
+      "command": "pnpm test",
+      "tests": 7701,
+      "pass": 7688,
+      "fail": 0,
+      "skipped": 13
+    },
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts",
+      "tests": 98,
+      "pass": 98,
+      "fail": 0,
+      "skipped": 0
+    },
+    "type_check": "pass",
+    "r_level": "PASS; no R-level artifacts required",
+    "mutation_checks": "6 of 6 caught",
+    "note": "Measured on f1c0f0c46. Protected exact-head CI and the staging DB receipt remain pending."
+  },
+  "db_verification": {
+    "command": "pnpm test:db",
+    "status": "blocked_deferred_to_protected_ci",
+    "required_staging_ref": "xskgrzbteyqdufktjrjx",
+    "production_accessed": false,
+    "write_attempted": false
+  }
+}
