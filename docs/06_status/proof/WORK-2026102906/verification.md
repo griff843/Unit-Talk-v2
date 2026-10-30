@@ -1,6 +1,6 @@
 # PROOF: WORK-2026102906
 
-MERGE_SHA: pending merge
+MERGE_SHA: d4ee1be5bf989a7a23465d2e9252ed255f39bc8c
 
 Issue: WORK-2026102906
 Tier: T1
@@ -79,6 +79,6 @@ Runtime: this lane changes operator tooling and a policy file; it has no service
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: d4ee1be5bf989a7a23465d2e9252ed255f39bc8c
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1805
 Execution SHA: 8663a9a7db77a4d5361ffa4dce7f2a6590c8e4c6

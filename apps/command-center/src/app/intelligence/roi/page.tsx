@@ -13,6 +13,8 @@ interface Stats {
   roiPct: number;
   avgScore: number | null;
   avgClvPct: number | null;
+  clvSampleSize?: number;
+  unpriced: number;
   avgStakeUnits: number | null;
 }
 
@@ -20,7 +22,7 @@ interface PerformanceData {
   windows: { today: Stats; last7d: Stats; last30d: Stats; mtd: Stats };
   bySource: { capper: Stats; system: Stats };
   bySport: Record<string, Stats>;
-  byIndividualSource: Record<string, Stats>;
+  byCapper: Record<string, Stats>;
   decisions: { approved: Stats; denied: Stats; held: Stats; heldCount: number };
 }
 
@@ -44,15 +46,15 @@ function RoiRow({ label, stats }: { label: string; stats: Stats | null }) {
   return (
     <tr className="border-b border-gray-800/50">
       <td className="py-2 pr-4 text-sm text-gray-300">{label}</td>
-      <td className={`py-2 pr-4 text-sm font-bold ${roiColor(stats.roiPct)}`}>{fmtRoi(stats.roiPct)}</td>
-      <td className="py-2 pr-4 text-sm text-gray-400">{fmt(stats.hitRatePct)}%</td>
+      <td className={`py-2 pr-4 text-sm font-bold ${roiColor(stats.roiPct)}`}>{fmtRoi(stats.roiPct)} <span className="text-xs text-gray-400">N={stats.settled - stats.unpriced}</span></td>
+      <td className="py-2 pr-4 text-sm text-gray-400">{stats.wins + stats.losses ? `${fmt(stats.hitRatePct)}%` : '—'} <span className="text-xs">N={stats.wins + stats.losses}</span></td>
       <td className="py-2 pr-4 text-sm text-gray-400">{stats.settled}</td>
       <td className="py-2 pr-4 text-sm text-gray-400">
         <span className="text-emerald-400">{stats.wins}</span>-
         <span className="text-red-400">{stats.losses}</span>-
         <span className="text-gray-300">{stats.pushes}</span>
       </td>
-      <td className={`py-2 text-sm ${roiColor(stats.avgClvPct ?? null)}`}>{stats.avgClvPct != null ? fmtRoi(stats.avgClvPct) : '—'}</td>
+      <td className={`py-2 text-sm ${roiColor(stats.avgClvPct ?? null)}`}>{stats.avgClvPct != null ? `${fmtRoi(stats.avgClvPct)} · N=${stats.clvSampleSize ?? 'unavailable'}` : '—'}</td>
     </tr>
   );
 }
@@ -86,9 +88,9 @@ export default async function RoiOverviewPage() {
     );
   }
 
-  const { windows, bySource, bySport, byIndividualSource, decisions } = perf;
+  const { windows, bySource, bySport, byCapper, decisions } = perf;
   const sportEntries = Object.entries(bySport).filter(([, s]) => s.settled > 0);
-  const capperEntries = Object.entries(byIndividualSource).filter(([, s]) => s.settled > 0);
+  const capperEntries = Object.entries(byCapper).filter(([, s]) => s.settled > 0);
 
   const hasData = windows.last30d.settled > 0;
 
@@ -99,11 +101,12 @@ export default async function RoiOverviewPage() {
           Published cohort · rolling today, last 7 days, last 30 days, and month to date windows.
           Internal <strong>Track Only</strong> picks are excluded from these metrics; see <Link href="/performance" className="text-blue-300 underline">Performance</Link> for that internal record.
         </p>
+        <p className="mt-2 text-xs text-gray-400">Volume gate not configured. A small sample does not establish an edge.</p>
       </div>
 
       {!hasData ? (
         <div className="rounded-md border border-gray-700 bg-gray-900/50 px-4 py-6 text-center">
-          <p className="text-sm text-gray-400">No settled picks yet in the published cohort.</p>
+          <p className="text-sm text-gray-400">No published record in these windows.</p>
           <p className="text-xs text-gray-600 mt-1">This rolling-window view excludes internal Track Only picks. See <Link href="/performance" className="text-blue-300 underline">Performance</Link> for those picks.</p>
         </div>
       ) : (

@@ -15,6 +15,17 @@ export interface RankedCommand extends CommandEntry {
   score: number;
 }
 
+export function pickResultEntry(row: Record<string, unknown>): CommandEntry | null {
+  if (typeof row.id !== 'string') return null;
+  const field = (key: string) => row[key] == null || row[key] === '' ? '—' : String(row[key]);
+  return {
+    href: `/picks/${encodeURIComponent(row.id)}`,
+    label: `${field('submitter')} · ${field('sport')} · ${field('matchup')}`,
+    detail: `${field('market')} · ${field('selection')} · ${field('line')} · ${field('status')} · ${row.settlement_result == null ? 'pending' : field('settlement_result')}`,
+    group: 'Picks',
+  };
+}
+
 /**
  * The inclusive uuid range covering every id that starts with `query`, or null
  * when `query` is not an id fragment (at least 6 hex digits, dashes ignored).

@@ -3,6 +3,7 @@ import { getDataClient, isTestFixturePick } from './client';
 import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
 import { applyPickPopulation, applyOperatorPickPopulation, readPickPopulation } from '../governed-population';
 import { pickIdPrefixRange } from '../command-palette-model';
+import { readEffectiveSettlementTruth } from './results-ops';
 
 // ── Shared internal type ─────────────────────────────────────────────────────
 
@@ -534,7 +535,7 @@ export const VIEW_DERIVED_COLUMNS = [
  * therefore cannot escape the guard in `queues-count-relation.test.ts`, and a
  * filter added anywhere else is not applied at all.
  */
-const SEARCH_PICKS_TEXT_COLUMNS = ['market', 'selection', 'source', 'capper_id'] as const;
+const SEARCH_PICKS_TEXT_COLUMNS = ['market', 'selection', 'source', 'capper_id', 'metadata->>eventName'] as const;
 
 // Capper handles are stored lowercase (`kingro623`) and sport ids uppercase
 // (`NHL`); normalising here lets an operator type either case.
@@ -554,7 +555,7 @@ const SEARCH_PICKS_RANGE_FILTERS = [
 /** A search for a pick ID or ID fragment is a range on `id`, which `ilike` cannot do on a uuid. */
 const SEARCH_PICKS_ID_COLUMN = 'id';
 
-/** Every column `searchPicks` filters on. Must stay disjoint from the set above. */
+/** Base-column filters which are safe to count directly on `picks`. */
 export const SEARCH_PICKS_FILTER_COLUMNS = Array.from(
   new Set<string>([
     ...SEARCH_PICKS_TEXT_COLUMNS,
@@ -563,6 +564,8 @@ export const SEARCH_PICKS_FILTER_COLUMNS = Array.from(
     SEARCH_PICKS_ID_COLUMN,
   ]),
 );
+
+export const SEARCH_PICKS_RESULT_FILTER_COLUMNS = ['id'] as const;
 
 
 export async function searchPicks(
@@ -580,6 +583,13 @@ export async function searchPicks(
 
   try {
     const client: Client = await getDataClient();
+    const requestedResult = params['result'] ?? '';
+    const resultFilter = ['win', 'loss', 'push', 'void', 'pending'].includes(requestedResult) ? requestedResult : '';
+    const truth = resultFilter ? await readEffectiveSettlementTruth(client, { includeFixtures: population === 'fixtures' || distributionMode === 'ungoverned' }) : null;
+    const effectiveResults = new Map(truth?.settlements.map((row) => [row.pickId, row.status === 'settled' ? row.result : null]) ?? []);
+    const filteredIds = [...effectiveResults].filter(([, result]) => resultFilter === 'pending' ? result !== null : result === resultFilter).map(([id]) => id);
+    if (filteredIds.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) throw new Error('Settlement history contains an invalid pick ID');
+    if (resultFilter && resultFilter !== 'pending' && filteredIds.length === 0) return { picks: [], total: 0, limit, offset };
 
     const selectCols = [
       'id',
@@ -592,6 +602,8 @@ export async function searchPicks(
       'promotion_score',
       'created_at',
       'status',
+      'capper_id',
+      'sport_id',
       'approval_status',
       'metadata',
       'sport_display_name',
@@ -611,16 +623,17 @@ export async function searchPicks(
     /**
      * Apply the caller's filters to a query, driven by the tables above.
      *
-     * Every predicate here is on a column `picks_current_state` takes straight
-     * from its `picks` base row -- none reads a column the view's three lateral
-     * joins produce. That is what makes the count split below sound, and
-     * `queues-count-relation.test.ts` is what keeps it true.
+     * Result filters use pick IDs from the complete correction-chain reader.
+     * Every predicate therefore applies equally to the base table and view.
      */
     const applyFilters = <T extends {
       or: (f: string) => T;
       eq: (c: string, v: string) => T;
       gte: (c: string, v: string) => T;
       lte: (c: string, v: string) => T;
+      neq: (c: string, v: string) => T;
+      in: (c: string, v: string[]) => T;
+      not: (c: string, op: string, v: string) => T;
     }>(base: T): T => {
       let next = base;
       const idRange = q ? pickIdPrefixRange(q) : null;
@@ -638,6 +651,10 @@ export async function searchPicks(
         if (!value) continue;
         next = filter.op === 'gte' ? next.gte(filter.column, value) : next.lte(filter.column, value);
       }
+      if (resultFilter === 'pending') {
+        next = next.neq('status', 'voided');
+        if (filteredIds.length) next = next.not('id', 'in', `(${filteredIds.join(',')})`);
+      } else if (resultFilter) next = next.in('id', filteredIds);
       return next;
     };
 
@@ -664,7 +681,7 @@ export async function searchPicks(
       .range(offset, offset + limit - 1)
       .abortSignal(AbortSignal.timeout(8_000));
 
-    // The count is taken against `picks`, not `picks_current_state`.
+    // All counts use `picks`, including the chain-resolved ID filter.
     //
     // Counting the view makes Postgres run its three correlated lateral joins
     // once per candidate row purely to discard every joined column -- 107,866
@@ -700,10 +717,11 @@ export async function searchPicks(
     const picks: Array<Record<string, unknown>> = rows
       .map((row) => ({
         ...row,
+        ...(truth ? { settlement_result: effectiveResults.get(String(row.id)) ?? null } : {}),
         matchup: eventFieldsFromRow(row).eventName,
         eventStartTime: eventFieldsFromRow(row).eventStartTime,
-        sport: asStringOrNull(row['sport_display_name']),
-        submitter: asStringOrNull(row['capper_display_name']),
+        sport: asStringOrNull(row['sport_display_name']) ?? asStringOrNull(row['sport_id']),
+        submitter: asStringOrNull(row['capper_display_name']) ?? asStringOrNull(row['capper_id']),
       }));
 
     return {
