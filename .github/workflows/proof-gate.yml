@@ -142,7 +142,7 @@ jobs:
             [ -z "$proof_dir" ] && continue
             echo "--- Auditing: $proof_dir ---"
 
-            issue_id=$(echo "$proof_dir" | grep -oiE 'utv2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
+            issue_id=$(echo "$proof_dir" | grep -oiE '(utv2|uni|work)-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)
             manifest="docs/06_status/lanes/${issue_id}.json"
             proof_kind=""
             if [ -n "$issue_id" ] && [ -f "$manifest" ]; then
@@ -204,9 +204,10 @@ jobs:
 
       - name: Detect issue ID
         id: issue
+        env:
+          BRANCH: ${{ github.head_ref }}
         run: |
-          BRANCH="${{ github.head_ref }}"
-          ISSUE_ID=$(echo "$BRANCH" | grep -oiP '(utv2|uni)-\d+' | head -1 | tr '[:lower:]' '[:upper:]')
+          ISSUE_ID=$(echo "$BRANCH" | grep -oiE '(utv2|uni|work)-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)
           echo "id=${ISSUE_ID}" >> "$GITHUB_OUTPUT"
           echo "Branch: $BRANCH  →  Issue: ${ISSUE_ID:-<none>}"
 
@@ -305,9 +306,11 @@ jobs:
 
       - name: Extract issue ID
         id: extract_issue
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
-          branch="${{ github.event.pull_request.head.ref }}"
-          issue_id=$(echo "$branch" | grep -oiE 'utv2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
+          branch="$BRANCH"
+          issue_id=$(echo "$branch" | grep -oiE '(utv2|uni|work)-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)
           if [ -z "$issue_id" ]; then
             echo "issue_id=" >> "$GITHUB_OUTPUT"
             echo "skip=true" >> "$GITHUB_OUTPUT"
