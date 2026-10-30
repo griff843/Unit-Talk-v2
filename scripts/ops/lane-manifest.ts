@@ -25,6 +25,7 @@ import { buildLaneExecutionLocation } from './lane-execution.js';
 import {
   UNAVAILABLE_ROUTING_VALUE,
   reconcileObservedModelRouting,
+  reResolveModelRouting,
   resolveModelProfile,
   verifyRoutingApproval,
   type ModelRoutingBlock,
@@ -71,6 +72,9 @@ export function main(argv = process.argv.slice(2)): number {
         return scopeReleaseCommand(positionals[1], flags, bools.has('json'));
       case 'reconcile-routing':
         reconcileRoutingCommand(positionals[1], flags, bools, bools.has('json'));
+        return 0;
+      case 're-resolve-routing':
+        reResolveRoutingCommand(positionals[1], bools.has('json'));
         return 0;
       case 'record-merge':
         recordMergeCommand(positionals[1], flags, bools.has('json'));
@@ -347,6 +351,51 @@ export function reconcileRoutingCommand(
   return next;
 }
 
+/**
+ * Move a Codex lane's model_routing to the current policy version, keeping its profile
+ * (WORK-2026102906). The authority is the policy change itself, which lands on main by
+ * PR; this adds no capability the profile does not already have under that policy. See
+ * reResolveModelRouting for what is refused.
+ */
+export function reResolveRoutingCommand(
+  issueId: string | undefined,
+  json: boolean,
+  now = new Date().toISOString(),
+): LaneManifest {
+  if (!issueId) {
+    throw new Error('re-resolve-routing is missing <issue id>. Usage: re-resolve-routing <ID> [--json]');
+  }
+  const id = issueId.toUpperCase();
+  if (!manifestExists(id)) {
+    throw new Error(`Manifest not found for ${id}`);
+  }
+  const manifest = readManifest(id);
+  if (manifest.executor !== 'codex-cli' && manifest.executor !== 'codex-cloud') {
+    throw new Error(`re-resolve-routing refused: ${id} executor is "${manifest.executor ?? 'unset'}"; model_routing is Codex-only`);
+  }
+  if (!manifest.model_routing) {
+    throw new Error(`re-resolve-routing refused: ${id} has no model_routing to re-resolve`);
+  }
+  if (manifest.status === 'done') {
+    throw new Error(`re-resolve-routing refused: ${id} is done; its proof is already bound`);
+  }
+
+  const next: LaneManifest = {
+    ...manifest,
+    model_routing: reResolveModelRouting(manifest.model_routing, manifest.tier, now),
+    heartbeat_at: now,
+  };
+  writeManifest(next);
+
+  const routing = next.model_routing!;
+  if (json) {
+    emitJson({ ok: true, code: 'model_routing_re_resolved', issue_id: id, model_routing: routing });
+  } else {
+    console.log(`${id}: model_routing re-resolved to ${routing.model} / ${routing.reasoning_effort} (policy ${routing.policy_version})`);
+  }
+  return next;
+}
+
 function scopeReleaseCommand(
   issueId: string | undefined,
   flags: Map<string, string[]>,
@@ -589,6 +638,7 @@ function usage(): void {
   console.error('  pnpm ops:lane-manifest -- create --issue UTV2-123 --tier T2 --branch codex/utv2-123-foo --files path --preflight-token .out/ops/preflight/...json');
   console.error('  pnpm ops:lane-manifest -- read UTV2-123 [--json]');
   console.error('  pnpm ops:lane-manifest -- update UTV2-123 [--status merged] [--pr-url ...] [--commit-sha ...] [--files-changed path]');
+  console.error('  pnpm ops:lane-manifest -- re-resolve-routing UTV2-123 [--json]');
   console.error('  pnpm ops:lane-manifest -- reconcile-routing UTV2-123 --profile <p> --model <m> (--reasoning-effort <e> | --reasoning-effort-unavailable) --source <where observed> --approval-comment <id-or-url> [--json]');
   console.error('  pnpm ops:lane-manifest -- record-merge UTV2-123 --pr <url-or-number> [--json]');
   console.error('  pnpm ops:lane-manifest -- scope-release UTV2-123 --pr 456 --expected-head-sha <sha> --expected-lock-hash <sha256> --release-path <path> [--release-path <path>] --actor <who> --reason <why> [--json]');

@@ -1,15 +1,15 @@
 {
-  "policy_version": "2.0.0",
+  "policy_version": "3.0.0",
   "schema_version": 1,
   "description": "Canonical usage-optimized Codex model-profile routing policy. Luna handles bounded high-volume work, Sol handles work requiring broader judgment, and Astra is reserved for explicit escalation. Logical profiles are resolved only by scripts/ops/model-routing.ts and scripts/ops/codex-exec.ts.",
   "verified_against": {
-    "codex_cli_version": "0.153.3",
-    "verified_at": "2026-09-29",
-    "verification_method": "Official OpenAI model-selection and Codex configuration documentation plus the installed Codex 0.153.3 model catalog and live model acceptance smoke test. The signed-in ChatGPT account rejects gpt-6-luna for Codex CLI, so executable efficient profiles use the supported 5.6 Luna/Sol slugs; GPT-6 Astra remains a disabled escalation."
+    "codex_cli_version": "0.162.1",
+    "verified_at": "2026-10-29",
+    "verification_method": "Installed Codex 0.162.1 model catalog (models_cache.json fetched 2026-10-28) plus a live acceptance smoke test of each slug on the signed-in ChatGPT account (codex exec --model <slug> -c model_reasoning_effort=low; every run reported the requested model and returned). gpt-6-luna, rejected for Codex CLI at the 2026-09-29 verification, is now accepted; the catalog lists the 5.6 slugs as older generation. GPT-6 Astra was accepted but remains a disabled escalation."
   },
   "profiles": {
     "codex-luna-low": {
-      "model": "gpt-5.6-luna",
+      "model": "gpt-6-luna",
       "reasoning_effort": "low",
       "enabled": true,
       "permitted_tiers": ["T2"],
@@ -18,7 +18,7 @@
       "description": "Lowest-cost profile for narrow, deterministic T2 work. Select explicitly when the packet is small and verification is straightforward."
     },
     "codex-luna-medium": {
-      "model": "gpt-5.6-luna",
+      "model": "gpt-6-luna",
       "reasoning_effort": "medium",
       "enabled": true,
       "permitted_tiers": ["T2"],
@@ -27,7 +27,7 @@
       "description": "Default profile for normal clear-scope T2 implementation from a complete work packet."
     },
     "codex-sol-medium": {
-      "model": "gpt-5.6-sol",
+      "model": "gpt-6.1-sol",
       "reasoning_effort": "medium",
       "enabled": true,
       "permitted_tiers": ["T1", "T2"],
@@ -36,7 +36,7 @@
       "description": "Balanced profile for everyday coding that needs judgment. Default for guarded T1 lanes and complex T2 lanes."
     },
     "codex-sol-high": {
-      "model": "gpt-5.6-sol",
+      "model": "gpt-6.1-sol",
       "reasoning_effort": "high",
       "enabled": true,
       "permitted_tiers": ["T1", "T2"],
@@ -54,7 +54,7 @@
       "description": "Frontier escalation only. Disabled until a trusted external authorization mechanism can prove explicit approval; caller-supplied override text cannot unlock it."
     },
     "codex-terra-medium": {
-      "model": "gpt-5.6-luna",
+      "model": "gpt-6-luna",
       "reasoning_effort": "medium",
       "enabled": true,
       "permitted_tiers": ["T2"],
@@ -63,7 +63,7 @@
       "description": "Deprecated compatibility alias for existing operator commands. New manifests must use codex-luna-medium."
     },
     "codex-sol-max": {
-      "model": "gpt-5.6-sol",
+      "model": "gpt-6.1-sol",
       "reasoning_effort": "max",
       "enabled": false,
       "permitted_tiers": ["T1", "T2"],
@@ -73,8 +73,8 @@
     }
   },
   "reasoning_effort_catalog": {
-    "gpt-5.6-luna": ["low", "medium", "high", "xhigh", "max"],
-    "gpt-5.6-sol": ["low", "medium", "high", "xhigh", "max", "ultra"],
+    "gpt-6-luna": ["low", "medium", "high", "xhigh", "max"],
+    "gpt-6.1-sol": ["low", "medium", "high", "xhigh", "max", "ultra"],
     "gpt-6-astra": ["low", "medium", "high", "xhigh", "max", "ultra"]
   },
   "legacy_compatibility": {

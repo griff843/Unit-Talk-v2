@@ -7,6 +7,7 @@ import {
   buildCodexModelArgs,
   loadModelRoutingPolicy,
   reconcileObservedModelRouting,
+  reResolveModelRouting,
   verifyRoutingApproval,
   type RoutingApproval,
   type RoutingApprovalComment,
@@ -95,11 +96,11 @@ test('the real canonical policy file loads and validates', () => {
   }
   assert.deepStrictEqual(
     [policy.profiles['codex-luna-medium']!.model, policy.profiles['codex-luna-medium']!.reasoning_effort],
-    ['gpt-5.6-luna', 'medium'],
+    ['gpt-6-luna', 'medium'],
   );
   assert.deepStrictEqual(
     [policy.profiles['codex-sol-medium']!.model, policy.profiles['codex-sol-medium']!.reasoning_effort],
-    ['gpt-5.6-sol', 'medium'],
+    ['gpt-6.1-sol', 'medium'],
   );
   assert.strictEqual(policy.profiles['codex-astra-medium']!.enabled, false);
   assert.strictEqual(policy.profiles['codex-astra-medium']!.requires_pm_authorization, true);
@@ -552,4 +553,77 @@ test('codex-exec refuses a reconciled lane even when the reported values match a
   const result = validatePersistedModelRouting(reconciled, 'T2', fixturePolicy());
   assert.strictEqual(result.ok, false);
   assert.strictEqual(result.code, 'RECONCILED_OBSERVATION');
+});
+
+// ── WORK-2026102906: re-resolve a lane's routing onto a new policy version ──
+
+function nextPolicy(): ModelRoutingPolicy {
+  const policy = fixturePolicy();
+  policy.policy_version = '2.0.0';
+  policy.profiles['codex-luna-medium']!.model = 'gpt-6-luna';
+  policy.profiles['codex-sol-high']!.model = 'gpt-6.1-sol';
+  policy.reasoning_effort_catalog['gpt-6-luna'] = ['low', 'medium', 'high'];
+  policy.reasoning_effort_catalog['gpt-6.1-sol'] = ['low', 'medium', 'high', 'max'];
+  return policy;
+}
+
+const PINNED_V1: ModelRoutingBlock = {
+  profile: 'codex-luna-medium',
+  model: 'gpt-5.6-luna',
+  reasoning_effort: 'medium',
+  selected_by: 'three-brain',
+  policy_version: '1.0.0',
+};
+
+test('re-resolve moves a stranded lane to the current policy, same profile, and codex-exec then accepts it', () => {
+  const policy = nextPolicy();
+  assert.strictEqual(validatePersistedModelRouting(PINNED_V1, 'T2', policy).code, 'POLICY_VERSION_MISMATCH');
+  const next = reResolveModelRouting(PINNED_V1, 'T2', NOW, policy);
+  assert.deepStrictEqual(next, {
+    profile: 'codex-luna-medium',
+    model: 'gpt-6-luna',
+    reasoning_effort: 'medium',
+    selected_by: 'three-brain',
+    policy_version: '2.0.0',
+    re_resolutions: [
+      { from_policy_version: '1.0.0', from_model: 'gpt-5.6-luna', from_reasoning_effort: 'medium', to_policy_version: '2.0.0', at: NOW },
+    ],
+  });
+  assert.strictEqual(validatePersistedModelRouting(next, 'T2', policy).ok, true);
+});
+
+test('re-resolve appends to earlier re-resolutions and keeps an audit override', () => {
+  const policy = nextPolicy();
+  const earlier = { from_policy_version: '0.9.0', from_model: 'm', from_reasoning_effort: 'medium', to_policy_version: '1.0.0', at: 'then' };
+  const override = { authorized_by: 'griff843', reason: 'operator chose high' };
+  const next = reResolveModelRouting(
+    { ...PINNED_V1, profile: 'codex-sol-high', model: 'gpt-5.6-sol', reasoning_effort: 'high', selected_by: 'manual-override', override, re_resolutions: [earlier] },
+    'T1',
+    NOW,
+    policy,
+  );
+  assert.strictEqual(next.model, 'gpt-6.1-sol');
+  assert.strictEqual(next.selected_by, 'manual-override');
+  assert.deepStrictEqual(next.override, override);
+  assert.deepStrictEqual(next.re_resolutions?.map((r) => r.to_policy_version), ['1.0.0', '2.0.0']);
+});
+
+test('adversarial: re-resolve never substitutes a profile the new policy removed, disabled or denies the tier', () => {
+  const removed = nextPolicy();
+  delete removed.profiles['codex-luna-medium'];
+  removed.legacy_compatibility.default_profile = 'codex-luna-low';
+  assert.throws(() => reResolveModelRouting(PINNED_V1, 'T2', NOW, removed), /PROFILE_UNKNOWN/);
+  const disabled = nextPolicy();
+  disabled.profiles['codex-luna-medium']!.enabled = false;
+  assert.throws(() => reResolveModelRouting(PINNED_V1, 'T2', NOW, disabled), /PROFILE_DISABLED/);
+  assert.throws(() => reResolveModelRouting(PINNED_V1, 'T1', NOW, nextPolicy()), /PROFILE_NOT_PERMITTED_FOR_TIER/);
+  const gated = nextPolicy();
+  gated.profiles['codex-luna-medium']!.requires_pm_authorization = true;
+  assert.throws(() => reResolveModelRouting(PINNED_V1, 'T2', NOW, gated), /TRUSTED_AUTHORIZATION_UNAVAILABLE/);
+});
+
+test('re-resolve refuses a reconciled lane and a lane already on the current policy', () => {
+  const reconciled = reconcileObservedModelRouting(DECLARED, OBSERVED, APPROVAL, NOW);
+  assert.throws(() => reResolveModelRouting(reconciled, 'T2', NOW, nextPolicy()), /reconciled to an observed execution/);
+  assert.throws(() => reResolveModelRouting(PINNED_V1, 'T2', NOW, fixturePolicy()), /already on policy version 1\.0\.0/);
 });
