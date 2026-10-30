@@ -10,5 +10,5 @@ Not changed: the reserved decisions, standing holds, Track Only semantics, the r
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `e28b8a0e21a1caa1390d49c60cb6b3c65a239836`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1810
