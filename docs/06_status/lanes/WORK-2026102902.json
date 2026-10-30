@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026102902-observed-model-routing",
   "branch": "claude/work-2026102902-observed-model-routing",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "b4ab31a3a7c78f3d476a61154824a0da79031555",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1801",
   "files_changed": [],
   "file_scope_lock": [
@@ -23,14 +23,22 @@
     "docs/06_status/proof/WORK-2026102902/evidence.json",
     "docs/06_status/proof/WORK-2026102902/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-10-29T23:06:08.473Z",
-  "heartbeat_at": "2026-10-29T23:06:08.473Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-30T03:11:54.371Z",
+  "closed_at": "2026-10-30T03:11:54.371Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026102902-observed-model-routing.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-30T03:11:51.951Z",
+      "verdict": "pass",
+      "merge_sha": "b4ab31a3a7c78f3d476a61154824a0da79031555",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {

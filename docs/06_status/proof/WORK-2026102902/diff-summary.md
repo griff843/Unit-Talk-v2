@@ -15,5 +15,5 @@ Not changed: `codex-model-routing.json`, `policy_version`, `shared.ts` manifest 
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `b4ab31a3a7c78f3d476a61154824a0da79031555`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1801
