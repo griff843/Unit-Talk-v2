@@ -1,8 +1,39 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { effectiveSettlementLabel, mapPickIdentityRead } from './pick-identity.js';
+import { effectiveSettlementLabel, effectiveSettlementTimestamp, mapPickIdentityRead } from './pick-identity.js';
 
 const pick = { id: 'pick-1', source: 'smart-form', market: 'spread', selection: 'Chiefs -2.5', line: -2.5, odds: -110, stake_units: 2, created_at: '2026-10-28T12:00:00Z', status: 'posted', metadata: { eventName: 'Chiefs at Bills', sport: 'NFL', capper: 'kingro623' }, capper_id: 'kingro623', capper_display_name: 'kingro623' };
+
+test('WORK-2026103020: Track Only displays effective settlement time while lifecycle timestamp stays null', () => {
+  const row = { ...pick, status: 'validated', settled_at: null };
+  const identity = mapPickIdentityRead(row, [{ id: 'settlement', status: 'settled', result: 'win',
+    settled_at: '2026-10-30T00:18:51Z', created_at: '2026-10-30T00:18:51Z' }]);
+  assert.equal(effectiveSettlementTimestamp(identity.settlement), '2026-10-30T00:18:51Z');
+  assert.equal(row.status, 'validated');
+  assert.equal(row.settled_at, null);
+});
+
+test('WORK-2026103020: older correction time wins over its newer parent and stale lifecycle time', () => {
+  const identity = mapPickIdentityRead({ ...pick, settled_at: '2026-10-30T14:00:00Z' }, [
+    { id: 'original', status: 'settled', result: 'loss', settled_at: '2026-10-30T13:00:00Z', created_at: '2026-10-30T13:00:00Z' },
+    { id: 'correction', corrects_id: 'original', status: 'settled', result: 'win', settled_at: '2026-10-30T12:00:00Z', created_at: '2026-10-30T12:00:00Z' },
+  ]);
+  assert.equal(effectiveSettlementTimestamp(identity.settlement), '2026-10-30T12:00:00Z');
+});
+
+test('WORK-2026103020: pending, manual review and missing/invalid effective times never fall back to the lifecycle time', () => {
+  const row = { ...pick, settled_at: '2026-10-30T14:00:00Z' };
+  assert.equal(effectiveSettlementTimestamp(mapPickIdentityRead(row, []).settlement), null);
+  for (const status of ['manual_review', 'pending']) {
+    const identity = mapPickIdentityRead(row, [{ id: 'original', status: 'settled', result: 'win', settled_at: '2026-10-30T13:00:00Z' },
+      { id: 'current', corrects_id: 'original', status, result: 'win', settled_at: '2026-10-30T12:00:00Z' }]);
+    assert.equal(effectiveSettlementTimestamp(identity.settlement), null);
+  }
+  for (const settled_at of [null, '', 'invalid-time']) {
+    const identity = mapPickIdentityRead(row, [{ id: 'current', status: 'settled', result: 'win', settled_at }]);
+    assert.equal(effectiveSettlementTimestamp(identity.settlement), null);
+  }
+});
 
 test('maps a pick with no settlement to a truthful pending target', () => {
   const result = mapPickIdentityRead(pick, []);
