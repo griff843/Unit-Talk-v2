@@ -1,14 +1,14 @@
 # Diff summary: WORK-2026102902
 
-Execution SHA: b95b51fb40aeaed90cfe2e39089581471ba9cc67
+Execution SHA: 3af5aada24ba425b849cc4c0b227093dce6e1a0e
 
 | File | Change |
 |---|---|
-| scripts/ops/model-routing.ts | Adds `reconcileObservedModelRouting` and the `DeclaredModelRouting` type, plus `override.declared`. `validatePersistedModelRouting` refuses a reconciled block with `RECONCILED_OBSERVATION`. |
-| scripts/ops/model-routing.test.ts | Six tests: the observed values, keeping the first declaration, the no-op refusal, empty fields, sidecar acceptance and rejection through `validatePreMergeModelRoutingEvidence`, and the codex-exec refusal. |
-| scripts/ops/lane-manifest.ts | New `reconcile-routing` subcommand: Codex-only, refuses `done` lanes, names every missing flag in one error. |
-| scripts/ops/lane-manifest.test.ts | Five tests: the rewrite, missing flags, a done lane, a non-Codex lane, and command routing. |
+| scripts/ops/model-routing.ts | Adds `verifyRoutingApproval` (pm-verdict/v1 APPROVED by a CODEOWNERS non-bot author on the lane's PR at its head, naming the exact routing) and `reconcileObservedModelRouting` (observed vs unavailable, unverified-external-session flag, original declaration kept). The pre-merge sidecar contract enforces the flag, unavailable fields and authorizer on a reconciled lane. `validatePersistedModelRouting` refuses a reconciled block. |
+| scripts/ops/model-routing.test.ts | Reconciliation, unavailable sentinel, adversarial approvals and fabricated sidecars, codex-exec refusal. |
+| scripts/ops/lane-manifest.ts | `reconcile-routing` subcommand: fetches the approval comment and the PR head from GitHub, and takes no caller-supplied authorizer. |
+| scripts/ops/lane-manifest.test.ts | Command path with a fake GitHub: recorded reviewer, forged approval, missing and conflicting flags, refused lane states. |
 | docs/05_operations/LANE_MANIFEST_SPEC.md | Section 15.1 documents the command and its limits. |
-| docs/05_operations/schemas/lane_manifest_v1.schema.json | Admits `model_routing.override.declared`, which `additionalProperties: false` would otherwise contradict. |
+| docs/05_operations/schemas/lane_manifest_v1.schema.json | Admits `override.declared`, `override.observation` and `override.approval`. |
 
 Not changed: `codex-model-routing.json`, `policy_version`, `shared.ts` manifest validation, the proof validators and closeout rebind, the merge gate, workflows, runtime code and schema migrations.

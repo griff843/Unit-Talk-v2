@@ -2,16 +2,16 @@
   "schema_version": 2,
   "issue_id": "WORK-2026102902",
   "pr_number": 1801,
-  "source_sha": "b95b51fb40aeaed90cfe2e39089581471ba9cc67",
-  "reviewed_head_sha": "b95b51fb40aeaed90cfe2e39089581471ba9cc67",
-  "generated_at": "2026-10-29T00:00:00Z",
+  "source_sha": "3af5aada24ba425b849cc4c0b227093dce6e1a0e",
+  "reviewed_head_sha": "3af5aada24ba425b849cc4c0b227093dce6e1a0e",
+  "generated_at": "2026-10-30T00:30:00Z",
   "tier": "T1",
   "lane_type": "governance",
   "proof_profile": "static",
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "b95b51fb40aeaed90cfe2e39089581471ba9cc67",
+    "verified_source_sha": "3af5aada24ba425b849cc4c0b227093dce6e1a0e",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -19,23 +19,24 @@
     "status": "pass",
     "command": "pnpm test:ops",
     "conclusion": "success",
-    "verified_source_sha": "b95b51fb40aeaed90cfe2e39089581471ba9cc67",
+    "verified_source_sha": "3af5aada24ba425b849cc4c0b227093dce6e1a0e",
     "focused_tests": {
-      "command": "pnpm exec tsx --test scripts/ops/model-routing.test.ts scripts/ops/lane-manifest.test.ts scripts/ops/codex-exec.test.ts scripts/ops/proof-generate.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts",
-      "tests": 436,
-      "pass": 436,
+      "command": "pnpm exec tsx --test scripts/ops/model-routing.test.ts scripts/ops/lane-manifest.test.ts scripts/ops/codex-exec.test.ts scripts/ops/proof-generate.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/pre-merge-authorization.test.ts",
+      "tests": 497,
+      "pass": 497,
       "fail": 0,
       "skipped": 0
     },
     "note": "Local static verification passed; protected exact-head CI and the staging DB receipt remain pending."
   },
   "verification": {
-    "focused_tests": "436 pass, 0 fail",
-    "test_ops": "3706 pass, 0 fail, 10 skipped",
+    "focused_tests": "497 pass, 0 fail",
+    "test_ops": "3710 pass, 0 fail, 10 skipped",
     "type_check": "pass",
     "r_level": "PASS; 10 changed files; no matching rules",
-    "mutation_checks": "3 of 3 caught",
-    "scope": "all changed files are within the WORK-2026102902 file scope lock"
+    "mutation_checks": "7 of 7 caught",
+    "scope": "all changed files are within the WORK-2026102902 file scope lock",
+    "pm_review": "corrects CHANGES REQUIRED comment 6511391881"
   },
   "db_verification": {
     "command": "pnpm test:db",
