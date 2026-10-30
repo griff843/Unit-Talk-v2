@@ -1,0 +1,236 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102904
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102904
+  objective: "WORK-2026102904 — Command Center operator bridge: end the client
+    connection when Command Center closes it"
+  acceptance_criteria:
+    - The browser-pattern repro through the real bridge answers after a 7 s and
+      a 70 s idle period. Recorded in verification.md.
+    - The integration test fails with the old `nc` command (mutation check
+      recorded).
+    - "`pnpm verify` is green in CI."
+  guardrails: []
+  non_goals:
+    - The in-page sign-in timeout and retry live in
+      `apps/command-center/src/lib/sign-in-response.ts`. They need a delivery-ui
+      lane for `apps/command-center`, and WORK-2026102806 (#1800) holds that
+      app's only delivery-ui slot until it closes. They also need a production
+      deployment, which only Griff can dispatch. The `nc` wording in
+      `docs/05_operations/COMMAND_CENTER_OPERATOR_ACCESS.md` is outside this
+      lane type's allowed paths and goes with that follow-up.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026102904 — Command Center operator bridge: end the client
+      connection when Command Center closes it
+
+      Tier: T2
+
+      Lane type: hygiene
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). Griff
+      asked on 2026-10-29 for a bounded Command Center login-repair lane, kept
+      separate from #1800. This lane covers the root cause, which lives entirely
+      in the operator bridge `scripts/ops/command-center-bridge.ts`. The bridge
+      runs on the operator's machine, so the fix needs no production deployment
+      and changes nothing on the host. This is the same lane type and tier the
+      bridge was built under (WORK-2026092407: hygiene, T2).
+
+
+      ## Reproduction (before this lane, against production through the real
+      bridge)
+
+
+      A keep-alive client (a browser's connection pool) loads a page, waits,
+      then POSTs `/api/session` with no credentials on the pooled socket:
+
+
+      | idle before POST | result |
+
+      |---|---|
+
+      | 0 s, 3 s | 401 in ~110 ms |
+
+      | 7 s, 70 s | no response within 30 s (stall) |
+
+
+      A fresh-connection client (curl) never stalls, which is why the stall
+      shows only in a browser.
+
+
+      ## Cause
+
+
+      Command Center (Next.js) closes an idle keep-alive connection after 5 s
+      (`Keep-Alive: timeout=5`). On the host, the bridge's remote command `nc
+      127.0.0.1 4300` does not exit when the server closes. It waits for its
+      stdin, which is the operator's socket. So the ssh session and the
+      operator-side socket stay open. The browser reuses that apparently live
+      socket for the sign-in POST, the bytes go to a dead upstream, and nothing
+      ever answers. Measured over ssh: `nc` stayed alive until the client gave
+      up after 20 s, while a reader-in-the-foreground relay exited about 5 s
+      after the server closed.
+
+
+      ## Change
+
+
+      1. `buildSshArgs` runs a relay whose upstream reader is in the foreground:
+      `exec bash -c 'exec 3<>/dev/tcp/127.0.0.1/<port> || exit 1; cat <&0 >&3 &
+      w=$!; cat <&3; kill $w 2>/dev/null'`. When Command Center closes, the
+      reader ends, the writer is killed and the ssh session exits. The bridge's
+      existing graceful drain then ends the operator socket, so the browser
+      opens a fresh connection. The remote command is still built only from a
+      literal and a port re-validated as an integer.
+
+      2. Tests in `command-center-bridge.test.ts`:
+         - The exact remote command, and its input validation.
+         - An integration test that runs the relay locally (bash `/dev/tcp`) through `createBridgeServer` against a local HTTP server with a short keep-alive timeout. The pooled request after the idle period answers instead of stalling. The test fails on the `nc` command.
+         - Successful request, refused credential (401) and an interrupted connection (the upstream dies mid-request, and the client socket closes rather than hanging).
+
+      Prototype verified against production through the real bridge: after the
+      idle period, the POST returned 401 in about 1.6 s on a fresh socket.
+
+
+      ## File Scope
+
+
+      - scripts/ops/command-center-bridge.ts
+
+      - scripts/ops/command-center-bridge.test.ts
+
+
+      Only `docs/06_status/proof/WORK-2026102904/*`, the lane manifest, the sync
+      file and this work order may be added outside it.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102904.md
+    title: "WORK-2026102904 — Command Center operator bridge: end the client
+      connection when Command Center closes it"
+    description: >-
+      # WORK-2026102904 — Command Center operator bridge: end the client
+      connection when Command Center closes it
+
+
+      Tier: T2
+
+      Lane type: hygiene
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). Griff
+      asked on 2026-10-29 for a bounded Command Center login-repair lane, kept
+      separate from #1800. This lane covers the root cause, which lives entirely
+      in the operator bridge `scripts/ops/command-center-bridge.ts`. The bridge
+      runs on the operator's machine, so the fix needs no production deployment
+      and changes nothing on the host. This is the same lane type and tier the
+      bridge was built under (WORK-2026092407: hygiene, T2).
+
+
+      ## Reproduction (before this lane, against production through the real
+      bridge)
+
+
+      A keep-alive client (a browser's connection pool) loads a page, waits,
+      then POSTs `/api/session` with no credentials on the pooled socket:
+
+
+      | idle before POST | result |
+
+      |---|---|
+
+      | 0 s, 3 s | 401 in ~110 ms |
+
+      | 7 s, 70 s | no response within 30 s (stall) |
+
+
+      A fresh-connection client (curl) never stalls, which is why the stall
+      shows only in a browser.
+
+
+      ## Cause
+
+
+      Command Center (Next.js) closes an idle keep-alive connection after 5 s
+      (`Keep-Alive: timeout=5`). On the host, the bridge's remote command `nc
+      127.0.0.1 4300` does not exit when the server closes. It waits for its
+      stdin, which is the operator's socket. So the ssh session and the
+      operator-side socket stay open. The browser reuses that apparently live
+      socket for the sign-in POST, the bytes go to a dead upstream, and nothing
+      ever answers. Measured over ssh: `nc` stayed alive until the client gave
+      up after 20 s, while a reader-in-the-foreground relay exited about 5 s
+      after the server closed.
+
+
+      ## Change
+
+
+      1. `buildSshArgs` runs a relay whose upstream reader is in the foreground:
+      `exec bash -c 'exec 3<>/dev/tcp/127.0.0.1/<port> || exit 1; cat <&0 >&3 &
+      w=$!; cat <&3; kill $w 2>/dev/null'`. When Command Center closes, the
+      reader ends, the writer is killed and the ssh session exits. The bridge's
+      existing graceful drain then ends the operator socket, so the browser
+      opens a fresh connection. The remote command is still built only from a
+      literal and a port re-validated as an integer.
+
+      2. Tests in `command-center-bridge.test.ts`:
+         - The exact remote command, and its input validation.
+         - An integration test that runs the relay locally (bash `/dev/tcp`) through `createBridgeServer` against a local HTTP server with a short keep-alive timeout. The pooled request after the idle period answers instead of stalling. The test fails on the `nc` command.
+         - Successful request, refused credential (401) and an interrupted connection (the upstream dies mid-request, and the client socket closes rather than hanging).
+
+      Prototype verified against production through the real bridge: after the
+      idle period, the POST returned 401 in about 1.6 s on a fresh socket.
+
+
+      ## Out of scope (separate lane)
+
+
+      The in-page sign-in timeout and retry live in
+      `apps/command-center/src/lib/sign-in-response.ts`. They need a delivery-ui
+      lane for `apps/command-center`, and WORK-2026102806 (#1800) holds that
+      app's only delivery-ui slot until it closes. They also need a production
+      deployment, which only Griff can dispatch. The `nc` wording in
+      `docs/05_operations/COMMAND_CENTER_OPERATOR_ACCESS.md` is outside this
+      lane type's allowed paths and goes with that follow-up.
+
+
+      ## Acceptance Criteria
+
+
+      - The browser-pattern repro through the real bridge answers after a 7 s
+      and a 70 s idle period. Recorded in verification.md.
+
+      - The integration test fails with the old `nc` command (mutation check
+      recorded).
+
+      - `pnpm verify` is green in CI.
+
+
+      ## File Scope
+
+
+      - scripts/ops/command-center-bridge.ts
+
+      - scripts/ops/command-center-bridge.test.ts
+
+
+      Only `docs/06_status/proof/WORK-2026102904/*`, the lane manifest, the sync
+      file and this work order may be added outside it.
+    captured_at: 2026-10-30T00:58:29.390Z
+    description_sha256: 295523f02934d503cbead53d60f25514e3f8cf56d7630f46d31d39124dd08b77
+  contract_hash: d3c313a9d12c57d48d30cc685e83cca5a0e65a89bc601673ef70a5276ea10033
