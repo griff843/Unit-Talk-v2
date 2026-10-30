@@ -4,7 +4,8 @@ import { useState, useTransition } from 'react';
 import { settlePick } from '@/app/actions/settle';
 import type { OperatorGradingContextInput } from '@/lib/operator-grading-context';
 import { Button } from '@/components/ui/Button';
-import { correctionConfirmation } from '@/lib/correction-confirmation';
+import { correctionConfirmation, correctionOutcomeFeedback } from '@/lib/correction-confirmation';
+import type { HumanCapperRecapResult } from '@/lib/human-capper-recap';
 
 type ResultType = 'win' | 'loss' | 'push' | 'void';
 type ConfidenceType = 'confirmed' | 'estimated' | 'pending';
@@ -27,7 +28,11 @@ export function CorrectionForm({ pickId, currentResult }: CorrectionFormProps) {
   const [selected, setSelected] = useState<ResultType | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [outcome, setOutcome] = useState<{ ok: boolean; message: string } | null>(null);
+  const [outcome, setOutcome] = useState<{
+    ok: boolean;
+    message: string;
+    recap?: HumanCapperRecapResult;
+  } | null>(null);
 
   const [outcomeBasis, setOutcomeBasis] = useState('');
   const [resultSourceUrl, setResultSourceUrl] = useState('');
@@ -70,7 +75,11 @@ export function CorrectionForm({ pickId, currentResult }: CorrectionFormProps) {
     startTransition(async () => {
       const res = await settlePick(pickId, selected, attestation);
       if (res.ok) {
-        setOutcome({ ok: true, message: `Correction recorded. Record ID: ${res.settlementRecordId}` });
+        setOutcome({
+          ok: true,
+          message: `Correction recorded. Record ID: ${res.settlementRecordId}`,
+          ...(res.recap === undefined ? {} : { recap: res.recap }),
+        });
       } else {
         setOutcome({ ok: false, message: res.error });
       }
@@ -79,12 +88,7 @@ export function CorrectionForm({ pickId, currentResult }: CorrectionFormProps) {
   }
 
   if (outcome?.ok) {
-    return (
-      <div className="rounded-md border border-emerald-700 bg-emerald-950 p-4">
-        <p className="text-sm font-medium text-emerald-300">Correction recorded.</p>
-        <p className="mt-1 font-mono text-xs text-emerald-500">{outcome.message}</p>
-      </div>
-    );
+    return correctionOutcomeFeedback(outcome.message, outcome.recap);
   }
 
   return (
