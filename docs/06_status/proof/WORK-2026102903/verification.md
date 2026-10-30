@@ -1,6 +1,6 @@
 # PROOF: WORK-2026102903
 
-MERGE_SHA: pending merge
+MERGE_SHA: cd350ef8b91724a94c568dec246c564cd75264c0
 
 Issue: WORK-2026102903
 Tier: T1
@@ -56,6 +56,6 @@ Lane start used `--singleton-approved` (`.github/workflows/**` is singleton-only
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: cd350ef8b91724a94c568dec246c564cd75264c0
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1802
 Execution SHA: 42c212cee5dfe9daaff19bf9cbc7aa4385eef7f3
