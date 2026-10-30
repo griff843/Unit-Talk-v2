@@ -9,7 +9,7 @@ Source: `80670e87765f770410702c62210f622d08791115`.
 - `pnpm type-check`: PASS after correcting repository-interface usage and optional environment types.
 - Direct `tsx --test` on both admitted files: 2 discovered, 2 safely skipped because no approved staging target is configured locally. Zero writable DB operation executed; this is not live proof.
 - Root live-proof registration appends API then worker tests in the existing `ci:assert-staging` chain. CI_FIXTURE_RUN_ID provides cross-process run identity; credentialed CI must assert the staging URL and namespace instead of skipping.
-- `pnpm verify`: running; final result pending.
+- `pnpm verify`: exited 1 at the repository database-writer inventory behavior test, with the same four missing-classification errors reported below. No unrelated test failure was observed. This is a red required gate, not a completed proof. Genuine output is retained at /tmp/work3007-verify.log.
 - Direct `tsx scripts/ci/db-writer-inventory.ts`: FAIL, four errors covering two unclassified credentialed tests and their script reachability. The policy/classification check was not bypassed or duplicated into a second registry.
 - `git diff --check`: PASS.
 
