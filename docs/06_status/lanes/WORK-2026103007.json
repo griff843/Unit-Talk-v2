@@ -22,9 +22,9 @@
     "docs/06_status/proof/WORK-2026103007/verification.md",
     "docs/06_status/proof/WORK-2026103007/model-routing.json"
   ],
-  "status": "started",
+  "status": "superseded",
   "started_at": "2026-10-30T14:52:50.873Z",
-  "heartbeat_at": "2026-10-30T14:52:50.873Z",
+  "heartbeat_at": "2026-10-30T18:52:01.791Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026103007-human-capper-delivery-live-proof.json",
