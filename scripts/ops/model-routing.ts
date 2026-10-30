@@ -409,7 +409,7 @@ export function validatePersistedModelRouting(
     return {
       ok: false,
       code: 'POLICY_VERSION_MISMATCH',
-      message: `manifest model_routing.policy_version "${modelRouting.policy_version}" does not match current policy version "${loadedPolicy.policy_version}". Re-resolve routing before executing: pnpm ops:lane-manifest -- re-resolve-routing <issue id>.`,
+      message: `manifest model_routing.policy_version "${modelRouting.policy_version}" does not match current policy version "${loadedPolicy.policy_version}". Re-resolve routing before executing: pnpm ops:lane-manifest re-resolve-routing <issue id>.`,
     };
   }
 
