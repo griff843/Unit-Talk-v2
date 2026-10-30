@@ -26,11 +26,13 @@ CI run 41116986496 attempt 2 passed verify and staging at the prior proof head f
 
 The rebindable anchor above intentionally remains pending before merge. Execution identity is the verified source SHA below; supported closeout will bind the actual merge SHA.
 
-Status: local source verification complete; exact-head CI staging and T1 PM review pending.
+Status: refreshed source verification passed in CI; subsequent proof-only head CI and T1 PM review pending.
 
 ## Verification
 
-Verified source candidate: `916228ed77abdfc05f49549148f2e22818786f78`.
+Verified source candidate: `654b73b98e8d1a7481cebaf824af5c380d5c0e59`, the last non-proof commit after central main refresh. Product source remains `916228ed77abdfc05f49549148f2e22818786f78`; intervening main changes are docs/workflows and their governance tests, with no product-code delta. Production Claude authorized this reconciliation in comments 6533949804, 6534095737 and 6534488275.
+
+- Exact-source [CI run 41133081686, attempt 1](https://github.com/griff843/Unit-Talk-v2/actions/runs/41133081686/attempts/1): **PASS** at run head 654b73b98e8d1a7481cebaf824af5c380d5c0e59. [Writable DB job 124330967074](https://github.com/griff843/Unit-Talk-v2/actions/runs/41133081686/job/124330967074) and [verify job 124335579333](https://github.com/griff843/Unit-Talk-v2/actions/runs/41133081686/job/124335579333) both passed. Downloaded artifact utv2-1630-db-proof-receipt-41133081686-1 records pnpm test:db exit 0, 9 passed, 0 failed/skipped on approved staging xskgrzbteyqdufktjrjx. Receipt tested PR merge ref e1fed7c5f7d098a1b615dbd07c7237d3294ac236, distinct from the source anchor. This subsequent proof-only commit still requires fresh candidate-head CI; no source receipt is substituted for that gate.
 
 - Final direct focused suite: 236 passed, 0 failed, 0 skipped, across capper-delivery-authorization, member-picks, member-performance-service, member-performance-routes, recap-service and grading-service test files.
 - Current new audience behavior tests: 11 passed, 0 failed, using `pnpm exec tsx --test --test-name-pattern=WORK-2026103005` on capper-delivery-authorization, member-picks, member-performance-service, recap-service and grading-service test files. These execute real in-memory route/service behavior; no production persistence or Discord delivery is implied.
@@ -43,6 +45,8 @@ Verified source candidate: `916228ed77abdfc05f49549148f2e22818786f78`.
 - Predicate mutation: changing only the shared reader's staff-canary interpretation to members caused eight behavior failures, independently including member picks, generic picks, settlements, performance service, authenticated bot stats, authenticated bot leaderboard and aggregate recap. Restoring exact original source made all 11 new behavior tests pass. See mutation-summary.md; no mutant was committed.
 
 ## Remaining acceptance
+
+P2 pagination finding 4428142176 is **reported, split to WORK-2026103023** by central comment 6533949804. Filtering after a repository limit can under-fill a member feed; it does not expose private rows. Central accepts this for the single-pick canary, discloses at most one missing legitimate row per page, and requires the bounded repository/read correction before any canary expansion. No pagination implementation or scope widening was performed in this lane.
 
 Production Claude's #1811 comment 6530796692 moves the persisted pick pin to WORK-2026103021 Part B at submission insert time and removes it from this lane's remaining acceptance. Public previews/score readers are also separately assigned there. No production-canary readiness or exhaustive anonymous isolation is claimed until that successor lands. This lane's local implementation and mutation checks are complete; current-head CI staging and independent T1 approval remain required.
 
