@@ -8,6 +8,7 @@ import {
   createCommand,
   main,
   reconcileRoutingCommand,
+  reResolveRoutingCommand,
   type ReconcileRoutingGitHub,
 } from './lane-manifest.js';
 import {
@@ -17,6 +18,7 @@ import {
   evaluateScopeRelease,
   runScopeRelease,
 } from './scope-release.js';
+import { loadModelRoutingPolicy, validatePersistedModelRouting } from './model-routing.js';
 import {
   type LaneManifest,
   ROOT,
@@ -227,7 +229,7 @@ test('lane-manifest create resolves and persists model_routing for a valid Codex
     createCommand(flags);
     const written = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as LaneManifest;
     assert.strictEqual(written.model_routing?.profile, 'codex-luna-medium');
-    assert.strictEqual(written.model_routing?.model, 'gpt-5.6-luna');
+    assert.strictEqual(written.model_routing?.model, 'gpt-6-luna');
     assert.strictEqual(written.schema_version, 2);
   } finally {
     fs.rmSync(manifestPath, { force: true });
@@ -379,6 +381,43 @@ test('reconcile-routing refuses a done lane, a lane without a PR and a non-Codex
 
 test('reconcile-routing is a routed subcommand', () => {
   assert.strictEqual(main(['reconcile-routing', RECONCILE_ISSUE, '--json']), 1);
+});
+
+test('re-resolve-routing moves the lane to the current policy, keeps its profile and records the prior pin', () => {
+  withReconcileManifest({}, () => {
+    reResolveRoutingCommand(RECONCILE_ISSUE, false, '2026-10-29T12:00:00.000Z');
+    const written = JSON.parse(fs.readFileSync(issueToManifestPath(RECONCILE_ISSUE), 'utf8')) as LaneManifest;
+    const routing = written.model_routing!;
+    const current = loadModelRoutingPolicy();
+    assert.strictEqual(routing.profile, 'codex-luna-medium');
+    assert.strictEqual(routing.policy_version, current.policy_version);
+    assert.strictEqual(routing.model, current.profiles['codex-luna-medium']!.model);
+    assert.strictEqual(validatePersistedModelRouting(routing, written.tier).ok, true);
+    assert.deepStrictEqual(routing.re_resolutions, [
+      {
+        from_policy_version: '2.0.0',
+        from_model: 'gpt-5.6-luna',
+        from_reasoning_effort: 'medium',
+        to_policy_version: current.policy_version,
+        at: '2026-10-29T12:00:00.000Z',
+      },
+    ]);
+    assert.throws(() => reResolveRoutingCommand(RECONCILE_ISSUE, false), /already on policy version/);
+  });
+});
+
+test('re-resolve-routing refuses a done lane, a non-Codex lane and a missing id, and writes nothing', () => {
+  const run = () => reResolveRoutingCommand(RECONCILE_ISSUE, false);
+  withReconcileManifest({ status: 'done' }, () => {
+    assert.throws(run, /is done; its proof is already bound/);
+    const written = JSON.parse(fs.readFileSync(issueToManifestPath(RECONCILE_ISSUE), 'utf8')) as LaneManifest;
+    assert.strictEqual(written.model_routing?.policy_version, '2.0.0');
+  });
+  withReconcileManifest({ executor: 'claude', model_routing: undefined }, () =>
+    assert.throws(run, /executor is "claude"; model_routing is Codex-only/),
+  );
+  assert.throws(() => reResolveRoutingCommand(undefined, false), /missing <issue id>/);
+  assert.strictEqual(main(['re-resolve-routing', '--json']), 1);
 });
 
 // ── UTV2-1762: scope-release command surface ────────────────────────────────
