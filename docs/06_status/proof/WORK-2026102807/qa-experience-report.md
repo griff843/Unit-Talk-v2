@@ -1,5 +1,7 @@
 # WORK-2026102807 browser verification
 
+MERGE_SHA: pending merge
+
 Source: `943303fafeae286863184451f6b23d301990f7c3`.
 
 The optimized production build ran at `http://localhost:14431` with an isolated loopback read-only HTTP fixture at port 15433. Existing fail-closed Basic operator authentication was configured with synthetic local credentials; no production session or database was used. The fixture refuses POST writes. Its unavailable API-health indicator is expected because no API service was supplied.

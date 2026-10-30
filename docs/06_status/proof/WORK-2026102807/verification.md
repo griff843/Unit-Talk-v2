@@ -24,6 +24,7 @@ Verified source: `943303fafeae286863184451f6b23d301990f7c3`.
 - `pnpm --filter @unit-talk/command-center build`: PASS, optimized production build.
 - `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS, operator-ui.
 - `pnpm --filter @unit-talk/command-center test` within repository verification: PASS, 738 tests, zero failed (previous lane: 728).
+- Repository `pnpm type-check` and `pnpm test`, both executed inside `pnpm verify:static`: PASS. These are the repository-wide commands, in addition to the direct focused tests and app checks above.
 - Repository `pnpm verify`: every static stage passed, including lint, type-check, build, repository tests, production-post-migration tests, Smart Form verification and command/migration checks. Its writable database stage then exited 1 because the staging guard refused the loopback target. This is not a green full gate; current-head CI must provide the staging receipt before readiness.
 - Direct `pnpm test:db`: staging guard refused the same loopback target; no writable test ran locally. Writable database proof belongs to CI's staging run, not a locally configured production target. See verification-output.txt for genuine command output.
 

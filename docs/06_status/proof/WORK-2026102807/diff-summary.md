@@ -1,5 +1,7 @@
 # WORK-2026102807 diff summary
 
+MERGE_SHA: pending merge
+
 A corrected pick could show its original result in the unfiltered list while the filtered list and detail showed the correction. All results pages now resolve complete, page-scoped histories through the existing canonical identity reader and label corrected results.
 
 - `queues.ts`: paginated, timed page-history read; exact-count and count-stability checks; effective settlement mapping; reject disagreement with active result filters.
