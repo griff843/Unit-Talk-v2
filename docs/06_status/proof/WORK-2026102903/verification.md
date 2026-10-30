@@ -57,5 +57,5 @@ Lane start used `--singleton-approved` (`.github/workflows/**` is singleton-only
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1802
 Execution SHA: 42c212cee5dfe9daaff19bf9cbc7aa4385eef7f3
