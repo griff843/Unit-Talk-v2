@@ -45,3 +45,12 @@ Additional tests cover 1,001 history rows over two requests, page-only ID constr
 ## Provenance and coordination
 
 Observed session model: gpt-6.1-sol. Reasoning effort is unavailable; it is not inferred from the lane declaration or the user's model selector. The declaration is codex-sol-medium / gpt-6.1-sol / medium under policy 3.0.0. Claude must reconcile the unavailable effort through the supported PM-verdict procedure. No PM approval or routing override is claimed here. Claude owns CI coordination, branch refresh, merge and closeout.
+
+## Merge SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1808
+
+## CI staging evidence
+
+CI run [41054705791](https://github.com/griff843/Unit-Talk-v2/actions/runs/41054705791) passed both `verify` and `Writable DB proof (staging only)` on candidate head `4fd57c073e5be68096e2d06930905377b82d7ec9`. The same-run ci-db-proof-receipt/v2 records `pnpm test:db`, exit code zero and staging project `xskgrzbteyqdufktjrjx`; the required verify job validated it. Source remains `943303fafeae286863184451f6b23d301990f7c3`. The following proof-only binding-section repair requires a fresh current-head CI pass before merge.
