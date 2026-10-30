@@ -8,7 +8,7 @@
   "branch": "claude/work-2026102905-work-branch-proof-gates",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1804",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/close-eligibility-preflight.yml",
@@ -21,9 +21,9 @@
     "docs/06_status/proof/WORK-2026102905/evidence.json",
     "docs/06_status/proof/WORK-2026102905/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-10-30T02:15:25.482Z",
-  "heartbeat_at": "2026-10-30T02:15:25.482Z",
+  "heartbeat_at": "2026-10-30T02:26:08.825Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026102905-work-branch-proof-gates.json",
