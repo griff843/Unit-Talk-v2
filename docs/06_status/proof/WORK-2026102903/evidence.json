@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102903",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "42c212cee5dfe9daaff19bf9cbc7aa4385eef7f3",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm test",
+    "conclusion": "success",
+    "verified_source_sha": "7b3ef56d0dc6d8b6409b9c7bb72d819d241fb991",
+    "full_suite": {
+      "command": "pnpm test",
+      "tests": 7677,
+      "pass": 7664,
+      "fail": 0,
+      "skipped": 13
+    },
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/lane-link-pr.test.ts",
+      "tests": 26,
+      "pass": 26,
+      "fail": 0,
+      "skipped": 0
+    },
+    "type_check": "pass",
+    "r_level": "PASS; no R-level artifacts required",
+    "mutation_checks": "2 of 2 caught",
+    "note": "Measured on 7b3ef56d0; 42c212cee changes one work-order sentence that no test reads. Protected exact-head CI and the staging DB receipt remain pending."
+  },
+  "db_verification": {
+    "command": "pnpm test:db",
+    "status": "blocked_deferred_to_protected_ci",
+    "required_staging_ref": "xskgrzbteyqdufktjrjx",
+    "production_accessed": false,
+    "write_attempted": false
+  }
+}
