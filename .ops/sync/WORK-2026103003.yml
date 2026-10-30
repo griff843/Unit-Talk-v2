@@ -1,0 +1,185 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026103003
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026103003
+  objective: >-
+    Since #1807, a push-triggered closeout waits for `ci.yml` on the merge SHA
+    before `lane-close` runs. `lane-close` still checks out `github.sha`, which
+    on a push is the merge SHA. Any commit that lands on `main` during the wait
+    therefore makes the checkout stale, and the final guarded push is rejected
+    as non-fast-forward. The guard is correct to refuse a rebase, but the lane
+    then needs a manual replay, which is the outcome #1807 set out to remove.
+
+    Observed on #1807's own closeout:
+
+    | Merge | Push closeout | Wait | Main moved during the wait | Result |
+    Replay | |---|---|---|---|---|---| | `ee8c4bfff` (#1807) | 41055315520 |
+    12:26:13 to 12:51:42, ended when ci.yml 41055315588 succeeded | `773b9f309`
+    readiness refresh at 12:28:05 | every gate passed, G6 included; push
+    rejected, "Main advanced while the closeout merge mutex was held" |
+    41058773012 |
+
+    Before #1807 the closeout pushed about 30 seconds after the merge, so this
+    window was rare. With a wait of 13 to 50 minutes, any other lane's close
+    commit, merge or the 6-hourly readiness refresh landing in that window
+    triggers it.
+  acceptance_criteria:
+    - "`lane-close`'s checkout uses `ref: ${{ github.ref }}`. It therefore
+      checks out the tip of the pushed branch (`main`) when the job starts,
+      after the wait, rather than the merge SHA. A `workflow_dispatch` replay
+      already checks out the tip of its ref, so both triggers now evaluate and
+      push from current `main`."
+    - Merge identity is unchanged. `Resolve merge SHA` still requires the PR's
+      merge commit to equal the push SHA, proof binding still binds that merge
+      SHA, and G3 still requires it on `main` first-parent history.
+    - If the lane was already closed during the wait (for example by a replay),
+      the checked-out manifest is `done` and the push closeout is a no-op.
+    - "`scripts/ops/workflow-hardening.test.ts` asserts the `lane-close`
+      checkout ref. The assertion fails if the `ref` is removed or set to
+      `github.sha`."
+    - "Unchanged: every closeout gate, the guarded push and its refusal to
+      rebase, the wait job, Merge Gate, the required checks, lane admission and
+      `ci.yml`."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026103003 — Push closeout checks out current main after the CI wait
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: regression from WORK-2026103002 (#1807), found by that lane's own
+      live closeout. Mechanical tier floor is T1 (`.github/workflows/**` is a
+      tier-c prefix); the tier is not lowered.
+
+
+      ## File Scope
+
+
+      - `.github/workflows/post-merge-lane-close.yml`
+
+      - `scripts/ops/workflow-hardening.test.ts`
+
+      - `.ops/work/WORK-2026103003.md`
+
+
+      ## Rollback
+
+
+      Revert the PR. The push closeout then checks out the merge SHA again, and
+      any main movement during the CI wait goes back to needing a manual replay.
+      No data, state or required-check configuration changes.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026103003.md
+    title: WORK-2026103003 — Push closeout checks out current main after the CI wait
+    description: >-
+      # WORK-2026103003 — Push closeout checks out current main after the CI
+      wait
+
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: regression from WORK-2026103002 (#1807), found by that lane's own
+      live closeout. Mechanical tier floor is T1 (`.github/workflows/**` is a
+      tier-c prefix); the tier is not lowered.
+
+
+      ## Objective
+
+
+      Since #1807, a push-triggered closeout waits for `ci.yml` on the merge SHA
+      before `lane-close` runs. `lane-close` still checks out `github.sha`,
+      which on a push is the merge SHA. Any commit that lands on `main` during
+      the wait therefore makes the checkout stale, and the final guarded push is
+      rejected as non-fast-forward. The guard is correct to refuse a rebase, but
+      the lane then needs a manual replay, which is the outcome #1807 set out to
+      remove.
+
+
+      Observed on #1807's own closeout:
+
+
+      | Merge | Push closeout | Wait | Main moved during the wait | Result |
+      Replay |
+
+      |---|---|---|---|---|---|
+
+      | `ee8c4bfff` (#1807) | 41055315520 | 12:26:13 to 12:51:42, ended when
+      ci.yml 41055315588 succeeded | `773b9f309` readiness refresh at 12:28:05 |
+      every gate passed, G6 included; push rejected, "Main advanced while the
+      closeout merge mutex was held" | 41058773012 |
+
+
+      Before #1807 the closeout pushed about 30 seconds after the merge, so this
+      window was rare. With a wait of 13 to 50 minutes, any other lane's close
+      commit, merge or the 6-hourly readiness refresh landing in that window
+      triggers it.
+
+
+      ## Acceptance Criteria
+
+
+      - `lane-close`'s checkout uses `ref: ${{ github.ref }}`. It therefore
+      checks out the tip of the pushed branch (`main`) when the job starts,
+      after the wait, rather than the merge SHA. A `workflow_dispatch` replay
+      already checks out the tip of its ref, so both triggers now evaluate and
+      push from current `main`.
+
+      - Merge identity is unchanged. `Resolve merge SHA` still requires the PR's
+      merge commit to equal the push SHA, proof binding still binds that merge
+      SHA, and G3 still requires it on `main` first-parent history.
+
+      - If the lane was already closed during the wait (for example by a
+      replay), the checked-out manifest is `done` and the push closeout is a
+      no-op.
+
+      - `scripts/ops/workflow-hardening.test.ts` asserts the `lane-close`
+      checkout ref. The assertion fails if the `ref` is removed or set to
+      `github.sha`.
+
+      - Unchanged: every closeout gate, the guarded push and its refusal to
+      rebase, the wait job, Merge Gate, the required checks, lane admission and
+      `ci.yml`.
+
+
+      ## File Scope
+
+
+      - `.github/workflows/post-merge-lane-close.yml`
+
+      - `scripts/ops/workflow-hardening.test.ts`
+
+      - `.ops/work/WORK-2026103003.md`
+
+
+      ## Rollback
+
+
+      Revert the PR. The push closeout then checks out the merge SHA again, and
+      any main movement during the CI wait goes back to needing a manual replay.
+      No data, state or required-check configuration changes.
+    captured_at: 2026-10-30T13:01:11.327Z
+    description_sha256: f3b5ccdac6ec6434a332c78a4bb81c37a69e6f2ff1fc6fde6fd928f4f833d288
+  contract_hash: f109fb7c9e820042f8a259fc9f19e452d4837b0cca13b72712b9c13fd6e28e8b
