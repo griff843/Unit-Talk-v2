@@ -1,0 +1,72 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102807",
+  "lane_type": "delivery-ui",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102807-cc-unfiltered-corrected-result",
+  "branch": "codex/work-2026102807-cc-unfiltered-corrected-result",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1808",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/command-center/src/components/PicksExplorerClient.tsx",
+    "apps/command-center/src/lib/data/operations-home.test.ts",
+    "apps/command-center/src/lib/data/queues-count-relation.test.ts",
+    "apps/command-center/src/lib/data/queues.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026102807/diff-summary.md",
+    "docs/06_status/proof/WORK-2026102807/evidence.json",
+    "docs/06_status/proof/WORK-2026102807/verification.md",
+    "docs/06_status/proof/WORK-2026102807/model-routing.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-10-30T11:56:14.225Z",
+  "heartbeat_at": "2026-10-30T13:21:58.566Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/work-2026102807-cc-unfiltered-corrected-result.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "session-default",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "unavailable",
+    "selected_by": "manual-override",
+    "policy_version": "3.0.0",
+    "override": {
+      "authorized_by": "griff843",
+      "reason": "pm-verdict/v1 APPROVED https://github.com/griff843/Unit-Talk-v2/pull/1808#issuecomment-6523836873",
+      "at": "2026-10-30T13:21:58.566Z",
+      "declared": {
+        "profile": "codex-sol-medium",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "medium",
+        "selected_by": "three-brain"
+      },
+      "observation": {
+        "verification": "unverified-external-session",
+        "source": "Codex external session reported exposing gpt-6.1-sol; not independently attested; reasoning effort not exposed",
+        "unavailable_fields": [
+          "reasoning_effort"
+        ]
+      },
+      "approval": {
+        "comment_url": "https://github.com/griff843/Unit-Talk-v2/pull/1808#issuecomment-6523836873",
+        "reviewer": "griff843",
+        "pr_number": 1808,
+        "head_sha": "4f5d64a9712c96ce7a3869f22f38f1c40c1ca153"
+      }
+    }
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102807-cc-unfiltered-corrected-result",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
