@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import type { CanonicalPick } from '@unit-talk/contracts';
+import { humanCapperDeliveryAuthorizationVersion, type CanonicalPick } from '@unit-talk/contracts';
 import test from 'node:test';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { processSubmission } from './submission-service.js';
@@ -472,6 +472,42 @@ test('UTV2-1929: the settlement recap resolves the pinned channel from the recei
     } else {
       process.env.DISCORD_BOT_TOKEN = previousToken;
     }
+  }
+});
+
+test('WORK-2026103005: staff-canary per-pick recap retains only its pinned private destination', async () => {
+  const { repositories, pickId, eventName } = await createPostedPickFixture();
+  const { participant, event } = await attachPlayerEventContext(repositories, pickId, { eventName });
+  await seedGameResult(repositories, { eventId: event.id, participantId: participant.id,
+    marketKey: 'points-all-game-ou', actualValue: 29 });
+  const pick = await repositories.picks.findPickById(pickId);
+  assert.ok(pick);
+  pick.metadata = { ...(pick.metadata as Record<string, unknown>), deliveryAuthorization: {
+    version: humanCapperDeliveryAuthorizationVersion, decision: 'authorized', authority: 'server-allowlist',
+    capperId: 'griff843', allowlistSource: 'UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST',
+    decidedAt: '2026-03-26T00:00:00.000Z', audience: 'staff-canary',
+  } };
+  await seedHumanCapperDistributionReceipt(repositories, pickId, 'discord:official-picks', '1384052464189440120');
+  assert.ok(repositories.killSwitch);
+  for (const target of ['official-picks', 'human-capper-recaps']) {
+    await repositories.killSwitch.setKilled({ target, killed: false, actor: 'test:private-recap' });
+  }
+  const originalToken = process.env.DISCORD_BOT_TOKEN;
+  const originalFetch = globalThis.fetch;
+  const urls: string[] = [];
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+  globalThis.fetch = async (input) => {
+    urls.push(String(input));
+    return new Response(JSON.stringify({ id: 'private-recap-message' }), { status: 200 });
+  };
+  try {
+    const result = await runGradingPass(repositories);
+    assert.equal(result.graded, 1);
+    assert.deepEqual(urls, ['https://discord.com/api/v10/channels/1384052464189440120/messages']);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalToken === undefined) delete process.env.DISCORD_BOT_TOKEN;
+    else process.env.DISCORD_BOT_TOKEN = originalToken;
   }
 });
 
