@@ -3,7 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { applyPrMergeToManifest, createCommand, main, reconcileRoutingCommand } from './lane-manifest.js';
+import {
+  applyPrMergeToManifest,
+  createCommand,
+  main,
+  reconcileRoutingCommand,
+  type ReconcileRoutingGitHub,
+} from './lane-manifest.js';
 import {
   type ScopeReleaseContext,
   type ScopeReleaseRefusalCode,
@@ -232,13 +238,33 @@ test('lane-manifest create resolves and persists model_routing for a valid Codex
 // ── WORK-2026102902: reconcile-routing ────────────────────────────────────────
 
 const RECONCILE_ISSUE = 'UTV2-9904';
+const RECONCILE_HEAD = 'c'.repeat(40);
 const RECONCILE_FLAGS: Array<[string, string[]]> = [
   ['profile', ['session-default']],
   ['model', ['gpt-6.1-sol']],
-  ['reasoning-effort', ['not exposed to the agent']],
-  ['authorized-by', ['griff843']],
-  ['reason', ['independent Codex terminal ran a different model']],
+  ['source', ['executor report in proof']],
+  ['approval-comment', ['https://github.com/o/r/pull/1800#issuecomment-77']],
 ];
+const UNAVAILABLE = new Set(['reasoning-effort-unavailable']);
+
+function fakeGitHub(body?: string, login = 'griff843'): ReconcileRoutingGitHub & { commentIds: string[] } {
+  const commentIds: string[] = [];
+  return {
+    commentIds,
+    fetchComment(commentId) {
+      commentIds.push(commentId);
+      return {
+        html_url: 'https://github.com/o/r/pull/1800#issuecomment-77',
+        user: { login, type: 'User' },
+        body:
+          body ??
+          ['PM_VERDICT: APPROVED', 'schema: pm-verdict/v1', `Issue: ${RECONCILE_ISSUE}`, 'PR: 1800',
+            `Head SHA: ${RECONCILE_HEAD}`, 'Routing reconciliation: gpt-6.1-sol / unavailable'].join('\n'),
+      };
+    },
+    fetchPrHeadSha: () => RECONCILE_HEAD,
+  };
+}
 
 function withReconcileManifest(overrides: Partial<LaneManifest>, body: () => void): void {
   const manifestPath = issueToManifestPath(RECONCILE_ISSUE);
@@ -253,6 +279,7 @@ function withReconcileManifest(overrides: Partial<LaneManifest>, body: () => voi
       worktree_path: worktreePathForBranch('codex/utv2-9904-reconcile'),
       expected_proof_paths: defaultProofPaths(RECONCILE_ISSUE, 'T2'),
       preflight_token: tokenPath,
+      pr_url: 'https://github.com/o/r/pull/1800',
       status: 'started',
       schema_version: 2,
       executor: 'codex-cli',
@@ -274,55 +301,66 @@ function withReconcileManifest(overrides: Partial<LaneManifest>, body: () => voi
   }
 }
 
-test('reconcile-routing rewrites a started Codex lane to the observed routing and keeps the declaration', () => {
+test('reconcile-routing records the reviewer GitHub reports, the unavailable effort and the unverified flag', () => {
   withReconcileManifest({}, () => {
-    reconcileRoutingCommand(RECONCILE_ISSUE, new Map(RECONCILE_FLAGS), false, '2026-10-29T12:00:00.000Z');
+    const github = fakeGitHub();
+    reconcileRoutingCommand(RECONCILE_ISSUE, new Map(RECONCILE_FLAGS), UNAVAILABLE, false, github, '2026-10-29T12:00:00.000Z');
+    assert.deepStrictEqual(github.commentIds, ['77']);
     const written = JSON.parse(fs.readFileSync(issueToManifestPath(RECONCILE_ISSUE), 'utf8')) as LaneManifest;
-    assert.deepStrictEqual(written.model_routing, {
-      profile: 'session-default',
-      model: 'gpt-6.1-sol',
-      reasoning_effort: 'not exposed to the agent',
-      selected_by: 'manual-override',
-      policy_version: '2.0.0',
-      override: {
-        authorized_by: 'griff843',
-        reason: 'independent Codex terminal ran a different model',
-        at: '2026-10-29T12:00:00.000Z',
-        declared: {
-          profile: 'codex-luna-medium',
-          model: 'gpt-5.6-luna',
-          reasoning_effort: 'medium',
-          selected_by: 'three-brain',
-        },
-      },
+    const routing = written.model_routing!;
+    assert.strictEqual(routing.model, 'gpt-6.1-sol');
+    assert.strictEqual(routing.reasoning_effort, 'unavailable');
+    assert.strictEqual(routing.override?.authorized_by, 'griff843');
+    assert.deepStrictEqual(routing.override?.observation, {
+      verification: 'unverified-external-session',
+      source: 'executor report in proof',
+      unavailable_fields: ['reasoning_effort'],
     });
+    assert.deepStrictEqual(routing.override?.declared?.model, 'gpt-5.6-luna');
   });
 });
 
-test('reconcile-routing names every missing flag in one error', () => {
+test('adversarial: reconcile-routing has no caller-supplied authorizer and refuses a forged approval', () => {
+  withReconcileManifest({}, () => {
+    const forged = new Map([...RECONCILE_FLAGS, ['authorized-by', ['griff843']]] as Array<[string, string[]]>);
+    assert.throws(
+      () => reconcileRoutingCommand(RECONCILE_ISSUE, forged, UNAVAILABLE, false, fakeGitHub(undefined, 'mallory')),
+      /"mallory" is not a CODEOWNERS reviewer/,
+    );
+    assert.throws(
+      () => reconcileRoutingCommand(RECONCILE_ISSUE, new Map(RECONCILE_FLAGS), new Set(), false, fakeGitHub(),),
+      /missing --reasoning-effort or --reasoning-effort-unavailable/,
+    );
+    const claimsMedium = new Map([...RECONCILE_FLAGS, ['reasoning-effort', ['medium']]] as Array<[string, string[]]>);
+    assert.throws(
+      () => reconcileRoutingCommand(RECONCILE_ISSUE, claimsMedium, new Set(), false, fakeGitHub()),
+      /does not contain the line "Routing reconciliation: gpt-6.1-sol \/ medium"/,
+    );
+    const written = JSON.parse(fs.readFileSync(issueToManifestPath(RECONCILE_ISSUE), 'utf8')) as LaneManifest;
+    assert.strictEqual(written.model_routing?.model, 'gpt-5.6-luna');
+  });
+});
+
+test('reconcile-routing names every missing flag in one error and refuses both effort flags', () => {
   assert.throws(
-    () => reconcileRoutingCommand(RECONCILE_ISSUE, new Map([['model', ['gpt-6.1-sol']]]), false),
-    /missing --profile, --reasoning-effort, --authorized-by, --reason\./,
+    () => reconcileRoutingCommand(RECONCILE_ISSUE, new Map([['model', ['gpt-6.1-sol']]]), new Set(), false, fakeGitHub()),
+    /missing --profile, --source, --approval-comment, --reasoning-effort or --reasoning-effort-unavailable\./,
   );
-  assert.throws(() => reconcileRoutingCommand(undefined, new Map(RECONCILE_FLAGS), false), /missing <issue id>\./);
+  assert.throws(
+    () => reconcileRoutingCommand(undefined, new Map(RECONCILE_FLAGS), UNAVAILABLE, false, fakeGitHub()),
+    /missing <issue id>\./,
+  );
+  const both = new Map([...RECONCILE_FLAGS, ['reasoning-effort', ['high']]] as Array<[string, string[]]>);
+  assert.throws(() => reconcileRoutingCommand(RECONCILE_ISSUE, both, UNAVAILABLE, false, fakeGitHub()), /not both/);
 });
 
-test('reconcile-routing refuses a done lane', () => {
-  withReconcileManifest({ status: 'done' }, () => {
-    assert.throws(
-      () => reconcileRoutingCommand(RECONCILE_ISSUE, new Map(RECONCILE_FLAGS), false),
-      /is done; its proof is already bound/,
-    );
-  });
-});
-
-test('reconcile-routing refuses a non-Codex lane', () => {
-  withReconcileManifest({ executor: 'claude', model_routing: undefined }, () => {
-    assert.throws(
-      () => reconcileRoutingCommand(RECONCILE_ISSUE, new Map(RECONCILE_FLAGS), false),
-      /executor is "claude"; model_routing is Codex-only/,
-    );
-  });
+test('reconcile-routing refuses a done lane, a lane without a PR and a non-Codex lane', () => {
+  const run = () => reconcileRoutingCommand(RECONCILE_ISSUE, new Map(RECONCILE_FLAGS), UNAVAILABLE, false, fakeGitHub());
+  withReconcileManifest({ status: 'done' }, () => assert.throws(run, /is done; its proof is already bound/));
+  withReconcileManifest({ pr_url: null }, () => assert.throws(run, /has no pr_url/));
+  withReconcileManifest({ executor: 'claude', model_routing: undefined }, () =>
+    assert.throws(run, /executor is "claude"; model_routing is Codex-only/),
+  );
 });
 
 test('reconcile-routing is a routed subcommand', () => {

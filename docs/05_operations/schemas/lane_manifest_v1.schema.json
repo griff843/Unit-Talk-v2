@@ -196,6 +196,29 @@
                 "selected_by": { "type": "string" }
               },
               "additionalProperties": false
+            },
+            "observation": {
+              "type": "object",
+              "description": "Written only by reconcile-routing: the reported routing is never verified execution. A field the session did not expose is recorded as \"unavailable\" and listed in unavailable_fields.",
+              "required": ["verification", "source", "unavailable_fields"],
+              "properties": {
+                "verification": { "const": "unverified-external-session" },
+                "source": { "type": "string" },
+                "unavailable_fields": { "type": "array", "items": { "type": "string" } }
+              },
+              "additionalProperties": false
+            },
+            "approval": {
+              "type": "object",
+              "description": "Written only by reconcile-routing: the pm-verdict/v1 APPROVED comment on the lane's own PR, verified against GitHub. authorized_by is this comment's author.",
+              "required": ["comment_url", "reviewer", "pr_number", "head_sha"],
+              "properties": {
+                "comment_url": { "type": "string" },
+                "reviewer": { "type": "string" },
+                "pr_number": { "type": "integer" },
+                "head_sha": { "type": "string" }
+              },
+              "additionalProperties": false
             }
           },
           "additionalProperties": false

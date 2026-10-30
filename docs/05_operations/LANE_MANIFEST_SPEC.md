@@ -387,30 +387,42 @@ Canonical policy (concrete model IDs, reasoning efforts, enabled/disabled, permi
 
 A `model_routing` decision — including any manual override — never implies merge, scope, or tier authority. It only selects which Codex model and reasoning effort execute a lane whose tier, scope, and merge gates were already satisfied independently.
 
-### 15.1 Reconciling to the model a session actually ran (WORK-2026102902)
+### 15.1 Reconciling to the model a session reported running (WORK-2026102902)
 
 An independent Codex session, such as the browser-enabled Codex terminal, picks its model outside this repository. That model can differ from the routing declared at lane-start. Closeout (`rebindModelRoutingJsonSha`) and the pre-merge contract (`validatePreMergeModelRoutingEvidence`) both require the proof's `model-routing.json` to match the manifest. An honest sidecar would therefore leave the lane unable to close.
 
 ```bash
 pnpm ops:lane-manifest -- reconcile-routing <ID> --profile <p> --model <m> \
-  --reasoning-effort <e> --authorized-by <who> --reason <why> [--json]
+  (--reasoning-effort <e> | --reasoning-effort-unavailable) \
+  --source <where it was observed> --approval-comment <comment id or URL> [--json]
 ```
 
-What the command does:
-- It rewrites `model_routing` to the observed values with `selected_by: "manual-override"` and the same `policy_version`.
-- It sets `override` to `{ authorized_by, reason, at, declared }`, where `declared` is the lane-start routing. A second reconciliation keeps the first `declared`.
-- The proof sidecar must then record the observed `model`, `reasoning_effort` and `model_profile`, plus `override_used: true` and the same `override_authorized_by`.
+**Authorization.** There is no caller-supplied authorizer. The command fetches the approval comment from GitHub and accepts it only if all of these hold:
+- It is a `pm-verdict/v1` `APPROVED` verdict on the lane's own PR, which is read from `pr_url`.
+- Its author is a CODEOWNERS reviewer and is not a bot.
+- Its `Issue:`, `PR:` and `Head SHA:` match the lane and the PR's current head.
+- It contains the exact line `Routing reconciliation: <model> / <reasoning effort or unavailable>`.
 
-It refuses in these cases:
-- a non-Codex lane;
-- a lane with no `model_routing`;
-- a `done` lane;
-- a no-op;
-- any missing flag. All missing flags are named in one error.
+`override.authorized_by` is the comment author that GitHub reports. `override.approval` records the comment URL, the PR number and the head SHA.
 
-Limits:
-- Reconciliation records what ran. It never authorizes execution: `validatePersistedModelRouting` returns `RECONCILED_OBSERVATION`, so `codex-exec` refuses a reconciled lane.
-- `authorized_by` is caller-supplied text, as with every `override`. The manifest change is reviewed in the lane's PR diff, so it carries no more authority than that review.
+**Observed versus unavailable.** A reasoning effort the session did not expose is recorded as `unavailable`, never as a guessed value. `unavailable` cannot be passed through `--reasoning-effort`. Every reconciliation records the following in `override.observation`:
+- `verification: "unverified-external-session"`: the only level available, because this repository cannot attest an external session's model;
+- `source`;
+- `unavailable_fields`.
+
+The original routing is kept in `override.declared`, and a second reconciliation keeps the first one. The command refuses a non-Codex lane, a lane without `pr_url` or `model_routing`, a `done` lane, a no-op and missing flags. All missing flags are named in one error.
+
+**Sidecar.** On a reconciled lane, `validatePreMergeModelRoutingEvidence` requires the sidecar to carry:
+- the reported `model`, `reasoning_effort` and `model_profile`;
+- `override_used: true`, with `override_authorized_by` equal to the reviewer;
+- `execution_verification: "unverified-external-session"`;
+- the same `unavailable_fields`.
+
+So a sidecar cannot present the report as verified execution or claim an exact reasoning effort the manifest records as unavailable.
+
+**Limits:**
+- Reconciliation authorizes no execution. `validatePersistedModelRouting` returns `RECONCILED_OBSERVATION`, so `codex-exec` refuses a reconciled lane.
+- The approval is verified when the command runs. A later hand edit of the manifest shows up in the PR diff and can be re-checked against `override.approval.comment_url`.
 
 ## 16. Verification-lane target (UTV2-1533)
 
