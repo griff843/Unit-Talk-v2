@@ -1,0 +1,318 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102807
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102807
+  objective: "WORK-2026102807 — Command Center: the unfiltered pick list shows the
+    effective (corrected) settlement result"
+  acceptance_criteria:
+    - On `/picks` with **no** result filter, every settled row shows its current
+      effective result from the settlement chain, and a corrected pick shows
+      "(corrected)". The filtered and unfiltered views agree for the same pick.
+    - An unsettled pick still shows "pending". A pick whose effective record is
+      not `settled` (for example `manual_review`) does not show a result.
+    - History reads fail closed. An incomplete or changed history during
+      pagination is an error, never a silently stale result.
+    - The result filter's total stays correct. Every assertion WORK-2026102806
+      added to `queues-count-relation.test.ts` stays green.
+    - "`queues-count-relation.test.ts` gains an unfiltered-path assertion: a
+      corrected pick shows its corrected result and `settlement_corrected:
+      true`. It must fail if the page-history resolution is removed (mutation
+      check recorded in verification.md)."
+    - "`operations-home.test.ts` is updated only to answer the new per-page
+      `settlement_records` request in its fetch mock. Its existing assertions
+      are unchanged."
+    - "Query cost stays bounded: at most one paginated `settlement_records` read
+      per page of results, filtered by `pick_id IN (<page ids>)`, with a
+      timeout."
+  guardrails:
+    - "**Authentication:** every `searchPicks` path still runs behind the
+      existing request authentication. No new unauthenticated entry point; no
+      server-action change."
+    - "**Track Only:** no change to population filters
+      (`applyOperatorPickPopulation`), distribution-mode handling, the Track
+      Only settlement queue, or the published or Track Only cohort split. No
+      delivery is created, enqueued or requeued."
+    - "**Score validation:** `settlement-score-check.ts` and `SettlementForm`
+      are out of scope and unchanged."
+    - "**Append-only settlement:** read-only against `settlement_records`. No
+      update, delete or new write path; `settle.ts` and the API are unchanged."
+    - No schema, migration, API, worker or dependency change. No containment,
+      kill-switch, Whop or access change. Pick `706b136b` is untouched.
+    - Live database proof comes from CI's "Writable DB proof (staging only)"
+      job. Staging credentials are not placed locally.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - "`pnpm verify` is green on the branch."
+    - "Proof is in `docs/06_status/proof/WORK-2026102807/`: verification.md,
+      diff-summary.md and evidence.json (schema_version 2, proof_profile
+      app-runtime, merge_sha null), plus model-routing.json."
+    - "An `EXECUTOR_RESULT: READY_FOR_REVIEW` / `schema: executor-result/v1`
+      comment (`Lane: codex`) on the current head."
+    - Merged through `pnpm -s ops:merge-wrapper pr-merge --issue WORK-2026102807
+      --branch <branch> --pr <N>`. Deployment is a separate release that Griff
+      authorizes.
+  unmapped_sections:
+    - >-
+      WORK-2026102807 — Command Center: the unfiltered pick list shows the
+      effective (corrected) settlement result
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli (the independent browser-enabled Codex terminal)
+
+
+      This is a repo-owned work order (tracker independence, ratified
+      2026-09-05), directed on 2026-10-29 as a bounded follow-up to
+      WORK-2026102806 (#1800).
+
+
+      ## Defect
+
+
+      `searchPicks` (`apps/command-center/src/lib/data/queues.ts`) resolves the
+      effective settlement result from the full settlement chain only when a
+      `result` filter is active. That is the `truth` / `effectiveResults` path
+      WORK-2026102806 added. Without a filter, `/picks` renders the view's
+      `settlement_result`, which comes from the newest timestamp and is not
+      necessarily the chain tip. So after an append-only correction, the
+      unfiltered list can still show the **original** result. The filtered list
+      and the pick page show the corrected one, so the same pick reads
+      differently depending on whether a filter is set.
+
+
+      ## Attempted patch
+
+
+      The attempted patch is preserved at
+      `.out/work-orders/WORK-2026102807-attempted.patch` (a copy of
+      `/tmp/cc-2806-unfiltered-correction.patch`).
+
+      - For each page, it fetches the complete `settlement_records` history of
+      the page's pick IDs, paginated with a count-stability check that fails
+      closed.
+
+      - It resolves each row through `mapPickIdentityRead` and sets
+      `settlement_result` to the effective result, plus `settlement_corrected`.
+
+      - If a result filter is active and the page re-resolution disagrees with
+      the filter's effective result, it throws instead of rendering an
+      inconsistent page.
+
+      - `PicksExplorerClient` renders "(corrected)" next to the badge.
+
+
+      It could not land in #1800 because the new per-page `settlement_records`
+      request breaks the fetch mock in `operations-home.test.ts`, which is
+      outside WORK-2026102806's immutable scope.
+
+
+      ## File Scope
+
+
+      - apps/command-center/src/lib/data/queues.ts
+
+      - apps/command-center/src/components/PicksExplorerClient.tsx
+
+      - apps/command-center/src/lib/data/queues-count-relation.test.ts
+
+      - apps/command-center/src/lib/data/operations-home.test.ts
+
+
+      The scope is immutable once the lane starts. Only
+      `docs/06_status/proof/WORK-2026102807/*` may be added outside it.
+
+
+      ## Model provenance (handoff to the Codex executor)
+
+
+      The lane is admitted under routing policy 3.0.0 as `codex-sol-medium`
+      (gpt-6.1-sol / medium), the profile closest to the model the Codex
+      terminal's sessions have exposed so far.
+
+      - **Record what you observe.** In `model-routing.json`, record the model
+      and reasoning effort your session actually exposes. If either one is not
+      exposed, record it as unavailable; never copy the declared values.
+
+      - **If the observation differs from the declaration**, say so in the
+      executor result. Claude will route it through `reconcile-routing` with a
+      PM verdict on this PR, as was done for WORK-2026102806.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102807.md
+    title: "WORK-2026102807 — Command Center: the unfiltered pick list shows the
+      effective (corrected) settlement result"
+    description: >-
+      # WORK-2026102807 — Command Center: the unfiltered pick list shows the
+      effective (corrected) settlement result
+
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli (the independent browser-enabled Codex terminal)
+
+
+      This is a repo-owned work order (tracker independence, ratified
+      2026-09-05), directed on 2026-10-29 as a bounded follow-up to
+      WORK-2026102806 (#1800).
+
+
+      ## Defect
+
+
+      `searchPicks` (`apps/command-center/src/lib/data/queues.ts`) resolves the
+      effective settlement result from the full settlement chain only when a
+      `result` filter is active. That is the `truth` / `effectiveResults` path
+      WORK-2026102806 added. Without a filter, `/picks` renders the view's
+      `settlement_result`, which comes from the newest timestamp and is not
+      necessarily the chain tip. So after an append-only correction, the
+      unfiltered list can still show the **original** result. The filtered list
+      and the pick page show the corrected one, so the same pick reads
+      differently depending on whether a filter is set.
+
+
+      ## Attempted patch
+
+
+      The attempted patch is preserved at
+      `.out/work-orders/WORK-2026102807-attempted.patch` (a copy of
+      `/tmp/cc-2806-unfiltered-correction.patch`).
+
+      - For each page, it fetches the complete `settlement_records` history of
+      the page's pick IDs, paginated with a count-stability check that fails
+      closed.
+
+      - It resolves each row through `mapPickIdentityRead` and sets
+      `settlement_result` to the effective result, plus `settlement_corrected`.
+
+      - If a result filter is active and the page re-resolution disagrees with
+      the filter's effective result, it throws instead of rendering an
+      inconsistent page.
+
+      - `PicksExplorerClient` renders "(corrected)" next to the badge.
+
+
+      It could not land in #1800 because the new per-page `settlement_records`
+      request breaks the fetch mock in `operations-home.test.ts`, which is
+      outside WORK-2026102806's immutable scope.
+
+
+      ## Acceptance Criteria
+
+
+      - On `/picks` with **no** result filter, every settled row shows its
+      current effective result from the settlement chain, and a corrected pick
+      shows "(corrected)". The filtered and unfiltered views agree for the same
+      pick.
+
+      - An unsettled pick still shows "pending". A pick whose effective record
+      is not `settled` (for example `manual_review`) does not show a result.
+
+      - History reads fail closed. An incomplete or changed history during
+      pagination is an error, never a silently stale result.
+
+      - The result filter's total stays correct. Every assertion WORK-2026102806
+      added to `queues-count-relation.test.ts` stays green.
+
+      - `queues-count-relation.test.ts` gains an unfiltered-path assertion: a
+      corrected pick shows its corrected result and `settlement_corrected:
+      true`. It must fail if the page-history resolution is removed (mutation
+      check recorded in verification.md).
+
+      - `operations-home.test.ts` is updated only to answer the new per-page
+      `settlement_records` request in its fetch mock. Its existing assertions
+      are unchanged.
+
+      - Query cost stays bounded: at most one paginated `settlement_records`
+      read per page of results, filtered by `pick_id IN (<page ids>)`, with a
+      timeout.
+
+
+      ## File Scope
+
+
+      - apps/command-center/src/lib/data/queues.ts
+
+      - apps/command-center/src/components/PicksExplorerClient.tsx
+
+      - apps/command-center/src/lib/data/queues-count-relation.test.ts
+
+      - apps/command-center/src/lib/data/operations-home.test.ts
+
+
+      The scope is immutable once the lane starts. Only
+      `docs/06_status/proof/WORK-2026102807/*` may be added outside it.
+
+
+      ## Guardrails
+
+
+      - **Authentication:** every `searchPicks` path still runs behind the
+      existing request authentication. No new unauthenticated entry point; no
+      server-action change.
+
+      - **Track Only:** no change to population filters
+      (`applyOperatorPickPopulation`), distribution-mode handling, the Track
+      Only settlement queue, or the published or Track Only cohort split. No
+      delivery is created, enqueued or requeued.
+
+      - **Score validation:** `settlement-score-check.ts` and `SettlementForm`
+      are out of scope and unchanged.
+
+      - **Append-only settlement:** read-only against `settlement_records`. No
+      update, delete or new write path; `settle.ts` and the API are unchanged.
+
+      - No schema, migration, API, worker or dependency change. No containment,
+      kill-switch, Whop or access change. Pick `706b136b` is untouched.
+
+      - Live database proof comes from CI's "Writable DB proof (staging only)"
+      job. Staging credentials are not placed locally.
+
+
+      ## Exit Criteria
+
+
+      - `pnpm verify` is green on the branch.
+
+      - Proof is in `docs/06_status/proof/WORK-2026102807/`: verification.md,
+      diff-summary.md and evidence.json (schema_version 2, proof_profile
+      app-runtime, merge_sha null), plus model-routing.json.
+
+      - An `EXECUTOR_RESULT: READY_FOR_REVIEW` / `schema: executor-result/v1`
+      comment (`Lane: codex`) on the current head.
+
+      - Merged through `pnpm -s ops:merge-wrapper pr-merge --issue
+      WORK-2026102807 --branch <branch> --pr <N>`. Deployment is a separate
+      release that Griff authorizes.
+
+
+      ## Model provenance (handoff to the Codex executor)
+
+
+      The lane is admitted under routing policy 3.0.0 as `codex-sol-medium`
+      (gpt-6.1-sol / medium), the profile closest to the model the Codex
+      terminal's sessions have exposed so far.
+
+      - **Record what you observe.** In `model-routing.json`, record the model
+      and reasoning effort your session actually exposes. If either one is not
+      exposed, record it as unavailable; never copy the declared values.
+
+      - **If the observation differs from the declaration**, say so in the
+      executor result. Claude will route it through `reconcile-routing` with a
+      PM verdict on this PR, as was done for WORK-2026102806.
+    captured_at: 2026-10-30T11:55:58.995Z
+    description_sha256: 83e775500fec4b297ecd301765f5a1a9701769fd5cebdb43b7002dd0b78ddb9c
+  contract_hash: da431d761bc9031746246ba278b0f11e323741ae881560fe2e94589d97857554
