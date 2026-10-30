@@ -1,0 +1,15 @@
+{
+  "issue_id": "WORK-2026103007",
+  "manifest_schema_version": 2,
+  "model_profile": "session-default",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "unavailable",
+  "policy_version": "3.0.0",
+  "codex_cli_version": null,
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "execution_sha": "80670e87765f770410702c62210f622d08791115",
+  "execution_verification": "unverified-external-session",
+  "unavailable_fields": ["reasoning_effort", "codex_cli_version"],
+  "declared_routing": { "profile": "codex-sol-medium", "model": "gpt-6.1-sol", "reasoning_effort": "medium" }
+}

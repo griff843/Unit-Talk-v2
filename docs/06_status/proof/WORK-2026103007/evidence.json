@@ -1,0 +1,15 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026103007",
+  "tier": "T1",
+  "lane_type": "verification",
+  "proof_profile": "app-runtime",
+  "status": "draft_pending_central_classification_ledger_resolution_and_ci_staging",
+  "verified_source_sha": "80670e87765f770410702c62210f622d08791115",
+  "static_proof": { "status": "PARTIAL", "type_check": "PASS", "direct_tests": 2, "local_skipped": 2, "db_writer_inventory": "FAIL_UNCLASSIFIED_TWO_NEW_TESTS" },
+  "runtime_proof": { "status": "NOT_EXECUTED_LOCALLY", "environment": "requires approved staging-ci", "queries": [], "row_counts": [] },
+  "transport": "SIMULATED Discord adapter; no real Discord delivery is claimed",
+  "production_mutations": false,
+  "runtime_verified": false,
+  "sha_binding": { "merge_sha": null, "verified_source_sha": "80670e87765f770410702c62210f622d08791115", "evidence_commit_sha": "CI_RESOLVED", "current_pr_head_sha": "CI_RESOLVED" }
+}
