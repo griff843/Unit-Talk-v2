@@ -4,9 +4,9 @@
   "tier": "T1",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
-  "status": "draft_incomplete_persisted_pick_pin_and_verification",
+  "status": "local_verified_pending_exact_head_ci_and_pm_review",
   "verified_source_sha": "916228ed77abdfc05f49549148f2e22818786f78",
-  "static_proof": { "status": "PENDING", "new_behavior_tests": 11, "failed": 0, "r_level": "PASS" },
+  "static_proof": { "status": "PASS", "focused_tests": 236, "new_behavior_tests": 11, "failed": 0, "r_level": "PASS", "lint": "PASS", "type_check": "PASS", "build": "PASS", "repository_tests": "PASS", "full_verify_exit_code": 1, "full_verify_limitation": "writable staging guard refused loopback" },
   "runtime_proof": {
     "environment": "in-memory route/service fixtures only; exact-head CI staging receipt pending",
     "queries": [
@@ -20,6 +20,7 @@
   "writable_live_db": { "status": "PENDING_CI_STAGING", "local_status": "REFUSED_LOOPBACK", "project_ref": "xskgrzbteyqdufktjrjx" },
   "production_mutations": false,
   "production_acceptance": false,
-  "known_incomplete": ["persisted pick deliveryAuthorization audience", "WORK-2026103021 separately owns public preview and score readers"],
+  "mutation_check": { "status": "PASS", "mutant_failed_behavior_tests": 8, "restored_behavior_tests": 11, "source_restored": true },
+  "central_follow_up": ["WORK-2026103021 Part B owns insert-time pick deliveryAuthorization audience", "WORK-2026103021 separately owns public preview and score readers"],
   "sha_binding": { "merge_sha": null, "verified_source_sha": "916228ed77abdfc05f49549148f2e22818786f78", "evidence_commit_sha": "CI_RESOLVED", "current_pr_head_sha": "CI_RESOLVED" }
 }

@@ -16,6 +16,6 @@ This is a bounded source/consumer audit, not production canary acceptance. Produ
 | Pre-auth routing-preview / promotion-preview | Outside lock; Claude classified as anonymously reachable by UUID and assigned WORK-2026103021 after 3005 merges. Isolation remains incomplete until that lane lands. |
 | Pre-auth `/api/operator/promotion-scores?pickId=` | Same separate WORK-2026103021 treatment; operator URL prefix does not supply auth. |
 | QA pick-status | Guard runs before repository reads: explicit QA flag required, production NODE_ENV rejected. No flags changed, no endpoint invoked. |
-| Pick trace / Command Center | Operator trace stays behind explicit auth; canonical records are retained. Persisted pick audience and operator labeling are not claimed complete by this draft. |
+| Pick trace / Command Center | Operator trace stays behind explicit auth; canonical records are retained. Insert-time pick audience belongs to WORK-2026103021 Part B per Claude's split; no operator identity or lifecycle is rewritten by this lane. |
 
 No member command, missing API reader or static web page was built to manufacture test coverage. No real submission, settlement, correction, delivery, audience change, kill switch or deployment was performed.
