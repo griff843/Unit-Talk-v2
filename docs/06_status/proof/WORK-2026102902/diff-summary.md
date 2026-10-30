@@ -12,3 +12,8 @@ Execution SHA: 01090aa0f82baa722398b5ad801af5f14090b176
 | docs/05_operations/schemas/lane_manifest_v1.schema.json | Admits `override.declared`, `override.observation` and `override.approval`. |
 
 Not changed: `codex-model-routing.json`, `policy_version`, `shared.ts` manifest validation, the closeout rebind (`proof-generate.ts`), the merge gate and `merge-gate-verdict.cjs` (reused, not modified), workflows, runtime code and schema migrations. `validatePreMergeModelRoutingEvidence` changed only for reconciled lanes.
+
+## Merge SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1801
