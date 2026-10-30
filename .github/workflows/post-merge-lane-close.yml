@@ -177,6 +177,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          # WORK-2026103003: check out the tip of main as this job starts, not
+          # github.sha. On a push, github.sha is the merge SHA, and main can
+          # advance while wait-for-merge-ci holds this job back; the guarded
+          # push below would then be rejected. Merge identity is still pinned
+          # by Resolve merge SHA and G3, not by the checkout.
+          ref: ${{ github.ref }}
           fetch-depth: 0
           # SYNC_BOT_TOKEN is a PAT from the repo owner (admin bypass on classic
           # branch protection). Falls back to GITHUB_TOKEN if not configured, but
