@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026103001",
+  "pr_number": 1806,
+  "source_sha": "8642030a7f112382a7ee6c9514b6069c8212120a",
+  "reviewed_head_sha": "8642030a7f112382a7ee6c9514b6069c8212120a",
+  "generated_at": "2026-10-30T04:58:37Z",
+  "tier": "T2",
+  "lane_type": "hygiene",
+  "proof_profile": "static",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "da84ae0fcbdfe5e8f6197a667345033ac8efd965",
+    "verified_source_sha": "8642030a7f112382a7ee6c9514b6069c8212120a",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "head_sha": "8642030a7f112382a7ee6c9514b6069c8212120a",
+      "ci_run": "pending",
+      "note": "Carried because the pre-proof hook requires a non-empty ci_sentinels for a pre-merge bundle. No CI conclusion is asserted for this head: the exact-head result is the PR's required checks."
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-30T05:36:37.226Z"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm type-check",
+    "conclusion": "success",
+    "verified_source_sha": "8642030a7f112382a7ee6c9514b6069c8212120a",
+    "focused_tests": {
+      "command": "pnpm exec tsx --test apps/api/src/t1-proof-work-2026092802-track-only-intent-live.test.ts",
+      "tests": 5,
+      "pass": 0,
+      "fail": 0,
+      "skipped": 5
+    },
+    "note": "Live suite skips locally without a staging target by design; it runs in CI's Writable DB proof (staging only) job. Exact-head CI pending."
+  },
+  "verification": {
+    "type_check": "exit 0",
+    "eslint": "exit 0 on the changed file",
+    "r_level": "PASS, no artifacts required",
+    "staging_plans": "selection = scan 1880 ms; capper_id = index scan 6 ms (read-only EXPLAIN ANALYZE on staging)",
+    "scope": "the only code change is within the WORK-2026103001 file scope lock"
+  }
+}
