@@ -11,4 +11,4 @@ Not changed: production code (submit handler, member read, auth/allow-list), sch
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1806

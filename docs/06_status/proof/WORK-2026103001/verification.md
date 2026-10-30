@@ -53,4 +53,4 @@ Remaining cost (not changed here): the member read takes 3528 ms on staging (`pi
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1806

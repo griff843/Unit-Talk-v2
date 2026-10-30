@@ -8,7 +8,7 @@
   "branch": "claude/work-2026103001-live-proof-indexed-fixture-lookup",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1806",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/t1-proof-work-2026092802-track-only-intent-live.test.ts"
