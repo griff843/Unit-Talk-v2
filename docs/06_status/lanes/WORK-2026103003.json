@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026103003-closeout-checkout-main",
   "branch": "claude/work-2026103003-closeout-checkout-main",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "985fcdb4c3fa5a6df8b49c8ce3df6471666c7938",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1809",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,14 +20,22 @@
     "docs/06_status/proof/WORK-2026103003/evidence.json",
     "docs/06_status/proof/WORK-2026103003/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-10-30T13:01:25.594Z",
-  "heartbeat_at": "2026-10-30T13:11:49.606Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-30T21:35:23.964Z",
+  "closed_at": "2026-10-30T21:35:23.964Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026103003-closeout-checkout-main.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-30T21:35:20.617Z",
+      "verdict": "pass",
+      "merge_sha": "985fcdb4c3fa5a6df8b49c8ce3df6471666c7938",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {
