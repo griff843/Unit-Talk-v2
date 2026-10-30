@@ -21,5 +21,7 @@
 
 ## SHA Binding
 
+PM review follow-up: CorrectionForm preserves the returned recap field. The pure correctionOutcomeFeedback view in correction-confirmation.ts renders correction persistence separately from posted, suppressed and unresolved recap feedback. Five additional behavioral rendering tests cover posted, suppressed, unresolved, absent and unknown failure responses. Four genuine browser captures exercise the returned outcomes through the real form against an isolated local API; delivery controls and settlement backend behavior are unchanged.
+
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1800

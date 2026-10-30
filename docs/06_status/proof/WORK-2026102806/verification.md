@@ -9,6 +9,7 @@ MERGE_SHA: pending merge
 - [x] Authenticated lookup exposes governed wager context and retains the client bundle boundary.
 - [x] Desktop and 390 × 844 mobile fixture observations are recorded without production mutations.
 - [x] Track Only settlement behavior, score validation and append-only API paths remain preserved.
+- [x] PM review recap-feedback repair preserves returned recap outcomes and separates correction persistence from downstream posted, suppressed or unresolved feedback; absent recaps produce no recap panel.
 
 ## EVIDENCE:
 
@@ -20,7 +21,7 @@ R-level: PASS (operator-ui).
 CI verify and staging proof on 918a48fd4: PASS.
 ```
 
-Status: Product verification complete for the admitted lane. Governance routing reconciliation is deferred by Griff; merge remains owned by Claude.
+Status: Original lane verification and the PM review recap-feedback repair are locally complete. Exact-head CI staging proof and PM approval are still required after the new push. Claude owns CI coordination, routing reconciliation, merge and closeout.
 
 ## Verification
 
@@ -53,6 +54,21 @@ The current fixture performance page used canonical capper attribution, applied 
 ## Accepted follow-up and limitations
 
 Production Claude and Griff directed that #1800 finish as admitted. The unfiltered /picks view can still display its timestamp-selected result; WORK-2026102807 will resolve that after #1800 merges and releases its file locks. The attempted follow-up patch is excluded from this PR. Before-pick evidence has the explicitly noted mock-shape limitation above. No production write, deployment, or merge was performed. The model-routing record reports the actual exposed model; its disagreement with the old lane assignment is deferred governance, not an assertion that a different model executed this work.
+
+## PM review recap-feedback repair
+
+Source commit: `8de7a35c18240a45914e74c618ec9b7863faa723`.
+
+- `pnpm exec tsx --test apps/command-center/src/lib/correction-confirmation.test.ts`: PASS, 6 tests. Five added rendering tests cover posted, suppressed, unresolved, absent, and unknown failure reasons. Existing no-op/current-result assertions remain intact.
+- `pnpm --filter @unit-talk/command-center test`: PASS, 728 tests, 0 failures (previously 723).
+- `pnpm --filter @unit-talk/command-center type-check`: PASS.
+- `pnpm --filter @unit-talk/command-center build`: PASS, optimized production build.
+- `pnpm exec eslint apps/command-center/src/components/CorrectionForm.tsx apps/command-center/src/lib/correction-confirmation.ts apps/command-center/src/lib/correction-confirmation.test.ts`: PASS.
+- `pnpm verify`: static stages, including repository tests, passed; the writable DB stage refused the loopback target with `assert-staging` requiring `xskgrzbteyqdufktjrjx`. No local staging credentials were added. Required final-head verification must come from CI's staging-only producer and verify job.
+- `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS, operator-ui.
+- Browser verification used the built production app and the actual CorrectionForm/server-action flow with isolated loopback API responses. Posted and suppressed states were checked at desktop width; unresolved and absent states at 390 × 844. The unresolved state had innerWidth=390 and document scrollWidth=390. Four genuine captures are documented in qa-experience-report.md. These are UI response fixtures, not a claim of live delivery testing.
+- Delivery controls, settlement backend/action behavior, score validation and authentication contracts are unchanged. All source changes remain inside the lane's immutable file scope. No production mutation or deployment was performed for this repair.
+- External-session routing provenance remains `gpt-6.1-sol / unavailable`; reasoning effort and CLI telemetry are not exposed to the executor. This is a factual report, not a claim of routing-reconciliation approval.
 
 ## Merge SHA Binding
 
