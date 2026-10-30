@@ -1,6 +1,6 @@
 # PROOF: WORK-2026103001
 
-MERGE_SHA: pending merge
+MERGE_SHA: da84ae0fcbdfe5e8f6197a667345033ac8efd965
 
 Issue: WORK-2026103001
 Tier: T2
@@ -52,5 +52,5 @@ Remaining cost (not changed here): the member read takes 3528 ms on staging (`pi
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `da84ae0fcbdfe5e8f6197a667345033ac8efd965`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1806

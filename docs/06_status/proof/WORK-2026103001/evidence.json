@@ -8,9 +8,9 @@
   "tier": "T2",
   "lane_type": "hygiene",
   "proof_profile": "static",
-  "status": "pre_merge",
+  "status": "merged",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "da84ae0fcbdfe5e8f6197a667345033ac8efd965",
     "verified_source_sha": "8642030a7f112382a7ee6c9514b6069c8212120a",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -18,7 +18,9 @@
       "head_sha": "8642030a7f112382a7ee6c9514b6069c8212120a",
       "ci_run": "pending",
       "note": "Carried because the pre-proof hook requires a non-empty ci_sentinels for a pre-merge bundle. No CI conclusion is asserted for this head: the exact-head result is the PR's required checks."
-    }
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-30T05:36:37.226Z"
   },
   "static_proof": {
     "status": "pass",
