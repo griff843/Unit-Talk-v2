@@ -1,10 +1,10 @@
 # Diff summary: WORK-2026102902
 
-Execution SHA: 3af5aada24ba425b849cc4c0b227093dce6e1a0e
+Execution SHA: 01090aa0f82baa722398b5ad801af5f14090b176
 
 | File | Change |
 |---|---|
-| scripts/ops/model-routing.ts | Adds `verifyRoutingApproval` (pm-verdict/v1 APPROVED by a CODEOWNERS non-bot author on the lane's PR at its head, naming the exact routing) and `reconcileObservedModelRouting` (observed vs unavailable, unverified-external-session flag, original declaration kept). The pre-merge sidecar contract enforces the flag, unavailable fields and authorizer on a reconciled lane. `validatePersistedModelRouting` refuses a reconciled block. |
+| scripts/ops/model-routing.ts | Adds `verifyRoutingApproval` (pm-verdict/v1 APPROVED by a CODEOWNERS non-bot author on the lane's PR at its head, with placement checked against GitHub's `issue_url` and the comment URL, naming the exact routing) and `reconcileObservedModelRouting` (observed vs unavailable, unverified-external-session flag, original declaration kept). The pre-merge sidecar contract enforces the flag, unavailable fields and authorizer on a reconciled lane. `validatePersistedModelRouting` refuses a reconciled block. |
 | scripts/ops/model-routing.test.ts | Reconciliation, unavailable sentinel, adversarial approvals and fabricated sidecars, codex-exec refusal. |
 | scripts/ops/lane-manifest.ts | `reconcile-routing` subcommand: fetches the approval comment and the PR head from GitHub, and takes no caller-supplied authorizer. |
 | scripts/ops/lane-manifest.test.ts | Command path with a fake GitHub: recorded reviewer, forged approval, missing and conflicting flags, refused lane states. |
