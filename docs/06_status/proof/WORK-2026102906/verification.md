@@ -80,5 +80,5 @@ Runtime: this lane changes operator tooling and a policy file; it has no service
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1805
 Execution SHA: 8663a9a7db77a4d5361ffa4dce7f2a6590c8e4c6
