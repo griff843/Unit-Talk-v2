@@ -4,6 +4,7 @@ import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
 import { applyPickPopulation, applyOperatorPickPopulation, readPickPopulation } from '../governed-population';
 import { pickIdPrefixRange } from '../command-palette-model';
 import { readEffectiveSettlementTruth } from './results-ops';
+import { mapPickIdentityRead } from './pick-identity';
 
 // ── Shared internal type ─────────────────────────────────────────────────────
 
@@ -712,17 +713,53 @@ export async function searchPicks(
     assertQuerySucceeded({ error: countError }, 'searchPicks count');
 
     const rows = (data ?? []) as JsonObject[];
+    // Resolve complete histories for this page even when no result filter is
+    // selected. The view's newest timestamp is not necessarily a chain tip.
+    const pageIds = rows.map((row) => String(row.id));
+    const pageHistories = new Map<string, JsonObject[]>();
+    if (pageIds.length) {
+      let total: number | null = null;
+      let received = 0;
+      for (let from = 0; total === null || from < total; from += 1000) {
+        const page = await client.from('settlement_records')
+          .select('id, pick_id, status, result, source, settled_at, corrects_id, created_at, payload', { count: 'exact' })
+          .in('pick_id', pageIds).order('created_at', { ascending: true }).order('id', { ascending: true })
+          .range(from, from + 999).abortSignal(AbortSignal.timeout(8_000));
+        assertQuerySucceeded(page, 'pick page settlement histories');
+        const count = readAuthoritativeCount(page, 'pick page settlement histories');
+        if (total !== null && total !== count) throw new Error('Pick page settlement histories changed during pagination');
+        total = count;
+        const history = (page.data ?? []) as JsonObject[];
+        received += history.length;
+        for (const record of history) {
+          const id = String(record.pick_id);
+          const group = pageHistories.get(id) ?? [];
+          group.push(record);
+          pageHistories.set(id, group);
+        }
+        if (!history.length) break;
+      }
+      if (received !== total) throw new Error('Pick page settlement histories are incomplete');
+    }
 
     // Remap snake_case columns to camelCase expected by PickResultRow
     const picks: Array<Record<string, unknown>> = rows
-      .map((row) => ({
-        ...row,
-        ...(truth ? { settlement_result: effectiveResults.get(String(row.id)) ?? null } : {}),
-        matchup: eventFieldsFromRow(row).eventName,
-        eventStartTime: eventFieldsFromRow(row).eventStartTime,
-        sport: asStringOrNull(row['sport_display_name']) ?? asStringOrNull(row['sport_id']),
-        submitter: asStringOrNull(row['capper_display_name']) ?? asStringOrNull(row['capper_id']),
-      }));
+      .map((row) => {
+        const settlement = mapPickIdentityRead(row, pageHistories.get(String(row.id)) ?? []).settlement;
+        const effectiveResult = settlement?.status === 'settled' ? settlement.result : null;
+        if (truth && effectiveResult !== (effectiveResults.get(String(row.id)) ?? null)) {
+          throw new Error('Pick settlement changed while filtering results');
+        }
+        return {
+          ...row,
+          settlement_result: effectiveResult,
+          settlement_corrected: !!settlement?.correctsId,
+          matchup: eventFieldsFromRow(row).eventName,
+          eventStartTime: eventFieldsFromRow(row).eventStartTime,
+          sport: asStringOrNull(row['sport_display_name']) ?? asStringOrNull(row['sport_id']),
+          submitter: asStringOrNull(row['capper_display_name']) ?? asStringOrNull(row['capper_id']),
+        };
+      });
 
     return {
       picks,
