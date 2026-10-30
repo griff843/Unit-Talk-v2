@@ -5,10 +5,18 @@ import {
   moveActiveIndex,
   pickIdPrefixRange,
   pickSearchEntry,
+  pickResultEntry,
   scoreEntry,
   scoreMatch,
   type CommandEntry,
 } from './command-palette-model.js';
+
+test('pick lookup results retain identity and effective result context', () => {
+  const result = pickResultEntry({ id: '123', submitter: 'capper', sport: 'NHL', matchup: 'A @ B', market: 'total', selection: 'over', line: '6.5', status: 'validated', settlement_result: 'win' });
+  assert.equal(result?.href, '/picks/123');
+  assert.match(result?.label ?? '', /capper.*NHL.*A @ B/);
+  assert.match(result?.detail ?? '', /total.*over.*6.5.*validated.*win/);
+});
 
 const ENTRIES: CommandEntry[] = [
   { href: '/', label: 'Executive Overview', group: 'Desk' },

@@ -4,6 +4,8 @@ import { useState, useTransition } from 'react';
 import { settlePick } from '@/app/actions/settle';
 import type { OperatorGradingContextInput } from '@/lib/operator-grading-context';
 import { Button } from '@/components/ui/Button';
+import { correctionConfirmation, correctionOutcomeFeedback } from '@/lib/correction-confirmation';
+import type { HumanCapperRecapResult } from '@/lib/human-capper-recap';
 
 type ResultType = 'win' | 'loss' | 'push' | 'void';
 type ConfidenceType = 'confirmed' | 'estimated' | 'pending';
@@ -19,13 +21,18 @@ const CONFIDENCES: ConfidenceType[] = ['confirmed', 'estimated', 'pending'];
 
 interface CorrectionFormProps {
   pickId: string;
+  currentResult: string | null;
 }
 
-export function CorrectionForm({ pickId }: CorrectionFormProps) {
+export function CorrectionForm({ pickId, currentResult }: CorrectionFormProps) {
   const [selected, setSelected] = useState<ResultType | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [outcome, setOutcome] = useState<{ ok: boolean; message: string } | null>(null);
+  const [outcome, setOutcome] = useState<{
+    ok: boolean;
+    message: string;
+    recap?: HumanCapperRecapResult;
+  } | null>(null);
 
   const [outcomeBasis, setOutcomeBasis] = useState('');
   const [resultSourceUrl, setResultSourceUrl] = useState('');
@@ -35,6 +42,7 @@ export function CorrectionForm({ pickId }: CorrectionFormProps) {
 
   const attestationComplete =
     outcomeBasis.trim() !== '' && resultSourceUrl.trim() !== '' && observedAt.trim() !== '';
+  const confirmation = correctionConfirmation(currentResult, selected);
 
   function handleSelect(value: ResultType) {
     setSelected(value);
@@ -43,7 +51,7 @@ export function CorrectionForm({ pickId }: CorrectionFormProps) {
   }
 
   function handleConfirmClick() {
-    if (!selected || !attestationComplete) return;
+    if (!selected || !attestationComplete || !confirmation.allowed) return;
     setConfirming(true);
   }
 
@@ -56,7 +64,7 @@ export function CorrectionForm({ pickId }: CorrectionFormProps) {
   }
 
   function handleSubmit() {
-    if (!selected) return;
+    if (!selected || !confirmation.allowed) return;
     const attestation: OperatorGradingContextInput = {
       outcomeBasis,
       resultSourceUrl,
@@ -67,7 +75,11 @@ export function CorrectionForm({ pickId }: CorrectionFormProps) {
     startTransition(async () => {
       const res = await settlePick(pickId, selected, attestation);
       if (res.ok) {
-        setOutcome({ ok: true, message: `Correction recorded. Record ID: ${res.settlementRecordId}` });
+        setOutcome({
+          ok: true,
+          message: `Correction recorded. Record ID: ${res.settlementRecordId}`,
+          ...(res.recap === undefined ? {} : { recap: res.recap }),
+        });
       } else {
         setOutcome({ ok: false, message: res.error });
       }
@@ -76,12 +88,7 @@ export function CorrectionForm({ pickId }: CorrectionFormProps) {
   }
 
   if (outcome?.ok) {
-    return (
-      <div className="rounded-md border border-emerald-700 bg-emerald-950 p-4">
-        <p className="text-sm font-medium text-emerald-300">Correction recorded.</p>
-        <p className="mt-1 font-mono text-xs text-emerald-500">{outcome.message}</p>
-      </div>
-    );
+    return correctionOutcomeFeedback(outcome.message, outcome.recap);
   }
 
   return (
@@ -107,6 +114,7 @@ export function CorrectionForm({ pickId }: CorrectionFormProps) {
         ))}
       </div>
 
+      {selected && !confirmation.allowed && <p role="alert" className="text-sm text-amber-300">{confirmation.message}</p>}
       {selected && (
         <fieldset className="flex flex-col gap-3 rounded-md border border-gray-700 bg-gray-900/60 p-4">
           <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
@@ -198,7 +206,7 @@ export function CorrectionForm({ pickId }: CorrectionFormProps) {
           variant="primary"
           size="sm"
           onClick={handleConfirmClick}
-          disabled={isPending || !attestationComplete}
+          disabled={isPending || !attestationComplete || !confirmation.allowed}
           className="w-fit"
         >
           Submit Correction
@@ -208,8 +216,7 @@ export function CorrectionForm({ pickId }: CorrectionFormProps) {
       {confirming && selected && (
         <div className="flex flex-col gap-3 rounded-md border border-gray-700 bg-gray-900 p-4">
           <p className="text-sm text-gray-200">
-            Confirm: correct this pick to{' '}
-            <span className="font-semibold uppercase text-white">{selected}</span>?
+            <span className="font-semibold text-white">{confirmation.message}</span>
           </p>
           <p className="text-xs text-gray-500">
             The original settlement record will be preserved and a new correction record will be linked to it.
