@@ -11,5 +11,5 @@ Not changed: bind-address and host validation, credential handling (none injecte
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `487d129a34c4d033caa8c5ae1413f1b649b673f6`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1803
