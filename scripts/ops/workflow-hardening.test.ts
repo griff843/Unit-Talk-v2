@@ -3045,3 +3045,78 @@ test('every job that runs the staging seed reset, and only those, is serialized 
   assert.ok(resetters.length >= 2, `expected at least 2 jobs running the staging seed reset, found ${resetters.length}: ${resetters.join(', ')}`);
   assert.deepEqual(grouped, resetters, 'only jobs that run the staging seed reset may join staging-ci-db');
 });
+
+// A lane gate that resolves its lane from the PR branch must recognise every
+// ISSUE_ID_NAMESPACES entry. These gates used to match only UTV2 (or UTV2/UNI),
+// so on a WORK-### branch each one logged a skip and reported success: proof-gate's
+// T1 Proof Gate and Runtime Verifier Gate jobs and the close-eligibility preflight
+// never evaluated the lane.
+function runBranchResolveStep(
+  workflow: string,
+  stepName: string,
+  branch: string,
+): { stdout: string; outputs: Record<string, string> } {
+  const doc = readWorkflowYaml(workflow);
+  const jobs = Object.values(objectField(doc, 'jobs')) as WorkflowDocument[];
+  const step = jobs
+    .flatMap((job) => (job.steps as WorkflowDocument[] | undefined) ?? [])
+    .find((s) => s.name === stepName);
+  assert.ok(step && typeof step.run === 'string', `${workflow} must have a "${stepName}" run step`);
+  assert.doesNotMatch(step.run as string, /\$\{\{/, `${workflow} "${stepName}" must read the branch from env, not template substitution`);
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'branch-resolve-'));
+  try {
+    const outputFile = path.join(dir, 'github-output');
+    fs.writeFileSync(outputFile, '');
+    const result = spawnSync('bash', ['-e', '-c', step.run as string], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: {
+        PATH: process.env.PATH ?? '',
+        BRANCH: branch,
+        HEAD_REF: branch,
+        GITHUB_OUTPUT: outputFile,
+        GITHUB_STEP_SUMMARY: path.join(dir, 'step-summary'),
+      },
+    });
+    assert.equal(result.status, 0, `${workflow} "${stepName}" exited ${result.status}: ${result.stderr}`);
+    const outputs = Object.fromEntries(
+      fs.readFileSync(outputFile, 'utf8').split('\n').filter(Boolean).map((line) => {
+        const at = line.indexOf('=');
+        return [line.slice(0, at), line.slice(at + 1)];
+      }),
+    );
+    return { stdout: result.stdout, outputs };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('branch-resolved lane gates recognise UTV2, UNI and WORK lanes', () => {
+  const cases = [
+    { branch: 'claude/work-2026102903-work-lane-pr-binding', id: 'WORK-2026102903' },
+    { branch: 'codex/utv2-1977-results-fix', id: 'UTV2-1977' },
+    { branch: 'claude/uni-42-thing', id: 'UNI-42' },
+  ];
+  for (const { branch, id } of cases) {
+    const t1 = runBranchResolveStep('proof-gate.yml', 'Extract issue ID', branch);
+    assert.equal(t1.outputs.issue_id, id, `proof-gate T1 on ${branch}`);
+    assert.equal(t1.outputs.skip, 'false', `proof-gate T1 on ${branch}`);
+
+    const runtime = runBranchResolveStep('proof-gate.yml', 'Detect issue ID', branch);
+    assert.equal(runtime.outputs.id, id, `proof-gate runtime-verifier on ${branch}`);
+
+    // Run in an empty directory, so the step resolves the lane and then stops at
+    // the missing manifest; the path it names proves which lane it resolved.
+    const close = runBranchResolveStep('close-eligibility-preflight.yml', 'Evaluate close eligibility', branch);
+    assert.match(close.stdout, new RegExp(`no lane manifest at docs/06_status/lanes/${id}\\.json`), `close-eligibility on ${branch}`);
+  }
+
+  const none = 'claude/cc-middleware-dotted-path-bypass';
+  assert.equal(runBranchResolveStep('proof-gate.yml', 'Extract issue ID', none).outputs.skip, 'true');
+  assert.equal(runBranchResolveStep('proof-gate.yml', 'Detect issue ID', none).outputs.id, '');
+  assert.match(
+    runBranchResolveStep('close-eligibility-preflight.yml', 'Evaluate close eligibility', none).stdout,
+    /resolves to no lane issue id/,
+  );
+});
