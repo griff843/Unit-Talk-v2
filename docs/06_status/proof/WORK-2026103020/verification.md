@@ -10,7 +10,7 @@ Source: `286ecb3bc20a1433bd3b7e353dbc69a359b82d07`.
 - `pnpm --filter @unit-talk/command-center type-check`: PASS.
 - `pnpm build`: PASS. The first app-suite attempt preceded workspace dependency compilation and failed on missing generated dist entries; building the supported worktree resolved that setup issue.
 - Final `pnpm --filter @unit-talk/command-center test`: 741 passed, 0 failed.
-- `pnpm verify`: running; final result not yet claimed.
+- `pnpm verify`: all static stages passed; full command exited 1 only at the writable staging-target guard, which refused the loopback target. No local writable DB test or green full gate is claimed. Exact-head CI staging proof is required. Genuine command output retained at /tmp/work3020-verify.log.
 - R-level: PASS, operator-ui. `git diff --check`: PASS.
 - Generated next-env.d.ts change from the local Next server was restored; it is not part of this fix.
 

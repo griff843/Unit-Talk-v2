@@ -8,4 +8,4 @@ Three source/test files changed: the existing identity projection helper, its re
 
 Focused tests: 9 passed. Command Center suite: 741 passed. Mutation mapping the timestamp back to the pick row failed the three new behavior cases; restoration passed all 9 tests. Genuine isolated browser evidence is in qa-experience-report.md and desktop/mobile PNG plus AX files.
 
-Repository verification and exact-head CI remain pending. No production acceptance or deployment is claimed; the real-pick fix waits for a separately authorized deployment.
+Repository verification passed all static stages, then its writable staging guard refused loopback. Exact-head CI staging verification remains required. No production acceptance or deployment is claimed; the real-pick fix waits for a separately authorized deployment.

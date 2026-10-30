@@ -4,9 +4,9 @@
   "tier": "T2",
   "lane_type": "delivery-ui",
   "proof_profile": "app-runtime",
-  "status": "local_app_verified_pending_repository_verify_and_ci",
+  "status": "local_static_verified_pending_exact_head_ci",
   "verified_source_sha": "286ecb3bc20a1433bd3b7e353dbc69a359b82d07",
-  "static_proof": { "status": "PASS", "focused_tests": 9, "command_center_tests": 741, "type_check": "PASS", "workspace_build": "PASS", "r_level": "PASS" },
+  "static_proof": { "status": "PASS", "focused_tests": 9, "command_center_tests": 741, "type_check": "PASS", "workspace_build": "PASS", "r_level": "PASS", "repository_static_verify": "PASS", "full_verify_exit_code": 1, "limitation": "writable staging guard refused loopback" },
   "runtime_proof": {
     "environment": "isolated authenticated Next browser with synthetic loopback reads only",
     "queries": [
