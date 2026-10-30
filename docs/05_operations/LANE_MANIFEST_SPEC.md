@@ -398,7 +398,7 @@ pnpm ops:lane-manifest -- reconcile-routing <ID> --profile <p> --model <m> \
 ```
 
 **Authorization.** There is no caller-supplied authorizer. The command fetches the approval comment from GitHub and accepts it only if all of these hold:
-- It is a `pm-verdict/v1` `APPROVED` verdict on the lane's own PR, which is read from `pr_url`.
+- It is a `pm-verdict/v1` `APPROVED` verdict on the lane's own PR, which is read from `pr_url`. Placement is checked against the GitHub-supplied `issue_url` and the comment URL (repository and PR number), never against the comment's text.
 - Its author is a CODEOWNERS reviewer and is not a bot.
 - Its `Issue:`, `PR:` and `Head SHA:` match the lane and the PR's current head.
 - It contains the exact line `Routing reconciliation: <model> / <reasoning effort or unavailable>`.

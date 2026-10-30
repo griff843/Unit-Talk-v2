@@ -234,11 +234,15 @@ function updateCommand(
 const RECONCILE_ROUTING_FLAGS = ['profile', 'model', 'source', 'approval-comment'] as const;
 
 export interface ReconcileRoutingGitHub {
+  repository(): string;
   fetchComment(commentId: string): RoutingApprovalComment;
   fetchPrHeadSha(prNumber: number): string;
 }
 
 const ghReconcileRouting: ReconcileRoutingGitHub = {
+  repository() {
+    return runGh(['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner']).trim();
+  },
   fetchComment(commentId) {
     return JSON.parse(runGh(['api', `repos/{owner}/{repo}/issues/comments/${commentId}`])) as RoutingApprovalComment;
   },
@@ -257,8 +261,8 @@ function runGh(args: string[]): string {
 
 /**
  * Re-record a started Codex lane's model_routing to what its session reported running
- * (WORK-2026102902). Authority comes only from a pm-verdict/v1 APPROVED comment on the
- * lane's own PR, verified against GitHub; there is no caller-supplied authorizer. Every
+ * (WORK-2026102902). Authority comes only from a pm-verdict/v1 APPROVED comment that GitHub
+ * places on the lane's own PR (issue_url), verified against GitHub; there is no caller-supplied authorizer. Every
  * missing flag is named in one error. A done lane is refused: its proof is already bound.
  */
 export function reconcileRoutingCommand(
@@ -310,6 +314,7 @@ export function reconcileRoutingCommand(
   }
   const model = getFlag(flags, 'model')!.trim();
   const approval = verifyRoutingApproval(github.fetchComment(commentId), {
+    repository: github.repository(),
     issueId: id,
     prNumber,
     headSha: github.fetchPrHeadSha(prNumber),

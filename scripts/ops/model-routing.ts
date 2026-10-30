@@ -446,6 +446,8 @@ export const ROUTING_APPROVAL_REVIEWERS: ReadonlySet<string> = new Set(['griff84
 
 export interface RoutingApprovalComment {
   html_url: string;
+  /** GitHub-supplied: the API URL of the issue or PR the comment is on. */
+  issue_url?: string | null;
   body: string | null;
   user: { login: string; type: string } | null;
 }
@@ -458,9 +460,24 @@ export interface RoutingApprovalComment {
  */
 export function verifyRoutingApproval(
   comment: RoutingApprovalComment,
-  context: { issueId: string; prNumber: number; headSha: string; model: string; reasoningEffort: string },
+  context: {
+    repository: string;
+    issueId: string;
+    prNumber: number;
+    headSha: string;
+    model: string;
+    reasoningEffort: string;
+  },
 ): RoutingApproval {
   const errors: string[] = [];
+  // Where the comment actually lives comes from GitHub, never from the comment's text.
+  const expectedIssueUrl = `https://api.github.com/repos/${context.repository}/issues/${context.prNumber}`;
+  if (comment.issue_url !== expectedIssueUrl) {
+    errors.push(`comment is on ${comment.issue_url ?? '<no issue_url>'}, not ${expectedIssueUrl}`);
+  }
+  if (!comment.html_url?.startsWith(`https://github.com/${context.repository}/pull/${context.prNumber}#`)) {
+    errors.push(`comment URL ${comment.html_url} is not on ${context.repository} PR #${context.prNumber}`);
+  }
   const login = comment.user?.login ?? '';
   if (comment.user?.type === 'Bot') {
     errors.push(`author ${login} is a bot`);

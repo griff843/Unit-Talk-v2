@@ -247,14 +247,20 @@ const RECONCILE_FLAGS: Array<[string, string[]]> = [
 ];
 const UNAVAILABLE = new Set(['reasoning-effort-unavailable']);
 
-function fakeGitHub(body?: string, login = 'griff843'): ReconcileRoutingGitHub & { commentIds: string[] } {
+function fakeGitHub(
+  body?: string,
+  login = 'griff843',
+  issueUrl = 'https://api.github.com/repos/o/r/issues/1800',
+): ReconcileRoutingGitHub & { commentIds: string[] } {
   const commentIds: string[] = [];
   return {
     commentIds,
+    repository: () => 'o/r',
     fetchComment(commentId) {
       commentIds.push(commentId);
       return {
-        html_url: 'https://github.com/o/r/pull/1800#issuecomment-77',
+        html_url: issueUrl.replace('https://api.github.com/repos/', 'https://github.com/').replace('/issues/', '/pull/') + '#issuecomment-77',
+        issue_url: issueUrl,
         user: { login, type: 'User' },
         body:
           body ??
@@ -330,6 +336,14 @@ test('adversarial: reconcile-routing has no caller-supplied authorizer and refus
     assert.throws(
       () => reconcileRoutingCommand(RECONCILE_ISSUE, new Map(RECONCILE_FLAGS), new Set(), false, fakeGitHub(),),
       /missing --reasoning-effort or --reasoning-effort-unavailable/,
+    );
+    assert.throws(
+      () =>
+        reconcileRoutingCommand(
+          RECONCILE_ISSUE, new Map(RECONCILE_FLAGS), UNAVAILABLE, false,
+          fakeGitHub(undefined, 'griff843', 'https://api.github.com/repos/o/r/issues/1799'),
+        ),
+      /comment is on .*issues\/1799, not .*issues\/1800/,
     );
     const claimsMedium = new Map([...RECONCILE_FLAGS, ['reasoning-effort', ['medium']]] as Array<[string, string[]]>);
     assert.throws(

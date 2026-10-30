@@ -399,11 +399,12 @@ const APPROVAL: RoutingApproval = {
   head_sha: HEAD,
 };
 const NOW = '2026-10-29T12:00:00.000Z';
-const CONTEXT = { issueId: 'WORK-2026102806', prNumber: 1800, headSha: HEAD, model: 'gpt-6.1-sol', reasoningEffort: 'unavailable' };
+const CONTEXT = { repository: 'o/r', issueId: 'WORK-2026102806', prNumber: 1800, headSha: HEAD, model: 'gpt-6.1-sol', reasoningEffort: 'unavailable' };
 
 function verdictComment(overrides: Partial<RoutingApprovalComment> = {}, body?: string): RoutingApprovalComment {
   return {
     html_url: APPROVAL.comment_url,
+    issue_url: 'https://api.github.com/repos/o/r/issues/1800',
     user: { login: 'griff843', type: 'User' },
     body:
       body ??
@@ -483,6 +484,23 @@ test('adversarial: approvals that are forged, stale, misdirected or for other va
   refuse(verdictComment(), /is not the PR head/, { ...CONTEXT, headSha: 'b'.repeat(40) });
   refuse(verdictComment(), /does not contain the line "Routing reconciliation: gpt-6.1-sol \/ medium"/, { ...CONTEXT, reasoningEffort: 'medium' });
   refuse(verdictComment(), /Routing reconciliation: gpt-5.6-sol/, { ...CONTEXT, model: 'gpt-5.6-sol' });
+});
+
+test('adversarial: a genuine matching verdict posted on a different PR or repository is refused', () => {
+  const refuse = (overrides: Partial<RoutingApprovalComment>, pattern: RegExp) =>
+    assert.throws(() => verifyRoutingApproval(verdictComment(overrides), CONTEXT), pattern);
+  refuse(
+    { issue_url: 'https://api.github.com/repos/o/r/issues/1799', html_url: 'https://github.com/o/r/pull/1799#issuecomment-1' },
+    /comment is on https:\/\/api.github.com\/repos\/o\/r\/issues\/1799, not .*issues\/1800/,
+  );
+  refuse({ issue_url: 'https://api.github.com/repos/o/r/issues/1799' }, /comment is on .*issues\/1799/);
+  refuse({ html_url: 'https://github.com/o/r/pull/1799#issuecomment-1' }, /is not on o\/r PR #1800/);
+  refuse(
+    { issue_url: 'https://api.github.com/repos/x/r/issues/1800', html_url: 'https://github.com/x/r/pull/1800#issuecomment-1' },
+    /comment is on https:\/\/api.github.com\/repos\/x\/r\/issues\/1800/,
+  );
+  refuse({ issue_url: undefined }, /comment is on <no issue_url>/);
+  refuse({ html_url: 'https://github.com/o/r/pull/18000#issuecomment-1' }, /is not on o\/r PR #1800/);
 });
 
 function honestSidecar(reconciled: ModelRoutingBlock) {
