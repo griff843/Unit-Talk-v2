@@ -28,5 +28,11 @@
       "reasoning_effort": "medium"
     },
     "note": "Reconciled with pnpm ops:lane-manifest reconcile-routing. gpt-6.1-sol is the model the Codex session reported exposing; it is not independently attested. Reasoning effort and CLI telemetry were not exposed and are recorded as unavailable, not inferred."
+  },
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": "d169ff9289bea044b533bf1aa0f4fad9625f9ad1",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1808",
+    "bound_at": "2026-10-30T14:04:39.172Z"
   }
 }

@@ -6,31 +6,113 @@
   "proof_profile": "app-runtime",
   "status": "local_verified_pending_exact_head_ci_and_pm_review",
   "verified_source_sha": "943303fafeae286863184451f6b23d301990f7c3",
-  "focused_tests": {"tests": 19, "passed": 19, "failed": 0},
-  "suite_tests": {"command": "pnpm --filter @unit-talk/command-center test", "tests": 738, "passed": 738, "failed": 0},
-  "local_verify": {"static": "PASS", "full_exit_code": 1, "writable_db": "REFUSED_LOOPBACK_REQUIRES_CI_STAGING"},
-  "static_proof": {"status": "PASS", "verified_source_sha": "943303fafeae286863184451f6b23d301990f7c3", "command_center_tests": 738, "focused_tests": 19, "type_check": "PASS", "production_build": "PASS", "ci_verify_run": "https://github.com/griff843/Unit-Talk-v2/actions/runs/41054705791"},
+  "focused_tests": {
+    "tests": 19,
+    "passed": 19,
+    "failed": 0
+  },
+  "suite_tests": {
+    "command": "pnpm --filter @unit-talk/command-center test",
+    "tests": 738,
+    "passed": 738,
+    "failed": 0
+  },
+  "local_verify": {
+    "static": "PASS",
+    "full_exit_code": 1,
+    "writable_db": "REFUSED_LOOPBACK_REQUIRES_CI_STAGING"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "verified_source_sha": "943303fafeae286863184451f6b23d301990f7c3",
+    "command_center_tests": 738,
+    "focused_tests": 19,
+    "type_check": "PASS",
+    "production_build": "PASS",
+    "ci_verify_run": "https://github.com/griff843/Unit-Talk-v2/actions/runs/41054705791"
+  },
   "runtime_proof": {
     "environment": "isolated loopback browser fixture; writable database proof supplied separately by CI staging receipt",
     "queries": [
-      {"surface": "GET /picks", "observation": "Page-only settlement history resolves corrected win instead of stale loss; two other picks remain pending"},
-      {"surface": "GET /picks?result=win", "observation": "One matching corrected pick; agrees with unfiltered list and detail"},
-      {"surface": "GET /picks?result=loss", "observation": "Zero matches after correction to win"},
-      {"surface": "GET /picks with incomplete history or HTTP 500", "observation": "Active picks unavailable; no stale result rows"}
+      {
+        "surface": "GET /picks",
+        "observation": "Page-only settlement history resolves corrected win instead of stale loss; two other picks remain pending"
+      },
+      {
+        "surface": "GET /picks?result=win",
+        "observation": "One matching corrected pick; agrees with unfiltered list and detail"
+      },
+      {
+        "surface": "GET /picks?result=loss",
+        "observation": "Zero matches after correction to win"
+      },
+      {
+        "surface": "GET /picks with incomplete history or HTTP 500",
+        "observation": "Active picks unavailable; no stale result rows"
+      }
     ],
     "row_counts": [
-      {"source": "synthetic browser fixture", "query": "unfiltered picks", "count": 3},
-      {"source": "synthetic browser fixture", "query": "effective win filter", "count": 1},
-      {"source": "synthetic browser fixture", "query": "effective loss filter", "count": 0},
-      {"source": "synthetic browser fixture", "query": "corrected pick settlement history", "count": 2}
+      {
+        "source": "synthetic browser fixture",
+        "query": "unfiltered picks",
+        "count": 3
+      },
+      {
+        "source": "synthetic browser fixture",
+        "query": "effective win filter",
+        "count": 1
+      },
+      {
+        "source": "synthetic browser fixture",
+        "query": "effective loss filter",
+        "count": 0
+      },
+      {
+        "source": "synthetic browser fixture",
+        "query": "corrected pick settlement history",
+        "count": 2
+      }
     ]
   },
-  "type_check": {"status": "PASS"},
-  "app_build": {"status": "PASS"},
-  "r_level": {"status": "PASS", "rules": ["operator-ui"]},
-  "writable_live_db": {"status": "PASS_FOR_VERIFIED_SOURCE_PENDING_PROOF_ONLY_HEAD_CI", "target": "staging-ci", "project_ref": "xskgrzbteyqdufktjrjx", "pass_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/41054705791", "pass_head": "4fd57c073e5be68096e2d06930905377b82d7ec9"},
-  "browser": {"status": "PASS_FOR_ADMITTED_SCOPE", "environment": "isolated loopback synthetic read-only fixture", "desktop": "1424x1248", "mobile": "390x844", "report": "qa-experience-report.md"},
-  "mutation_check": {"status": "PASS", "mutant": "view result bypasses history resolution", "failure": "loss !== win", "restored": "PASS"},
+  "type_check": {
+    "status": "PASS"
+  },
+  "app_build": {
+    "status": "PASS"
+  },
+  "r_level": {
+    "status": "PASS",
+    "rules": [
+      "operator-ui"
+    ]
+  },
+  "writable_live_db": {
+    "status": "PASS_FOR_VERIFIED_SOURCE_PENDING_PROOF_ONLY_HEAD_CI",
+    "target": "staging-ci",
+    "project_ref": "xskgrzbteyqdufktjrjx",
+    "pass_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/41054705791",
+    "pass_head": "4fd57c073e5be68096e2d06930905377b82d7ec9"
+  },
+  "browser": {
+    "status": "PASS_FOR_ADMITTED_SCOPE",
+    "environment": "isolated loopback synthetic read-only fixture",
+    "desktop": "1424x1248",
+    "mobile": "390x844",
+    "report": "qa-experience-report.md"
+  },
+  "mutation_check": {
+    "status": "PASS",
+    "mutant": "view result bypasses history resolution",
+    "failure": "loss !== win",
+    "restored": "PASS"
+  },
   "production_mutations": false,
-  "sha_binding": {"merge_sha": null, "verified_source_sha": "943303fafeae286863184451f6b23d301990f7c3", "evidence_commit_sha": "CI_RESOLVED", "current_pr_head_sha": "CI_RESOLVED", "sha_type": "merge_sha"}
+  "sha_binding": {
+    "merge_sha": "d169ff9289bea044b533bf1aa0f4fad9625f9ad1",
+    "verified_source_sha": "943303fafeae286863184451f6b23d301990f7c3",
+    "evidence_commit_sha": "CI_RESOLVED",
+    "current_pr_head_sha": "CI_RESOLVED",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-30T14:04:37.221Z"
+  }
 }

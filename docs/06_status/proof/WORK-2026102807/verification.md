@@ -1,6 +1,6 @@
 # PROOF: WORK-2026102807
 
-MERGE_SHA: pending merge
+MERGE_SHA: d169ff9289bea044b533bf1aa0f4fad9625f9ad1
 
 ## ASSERTIONS:
 
@@ -48,9 +48,8 @@ Observed session model: gpt-6.1-sol. Reasoning effort is unavailable; it is not 
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `d169ff9289bea044b533bf1aa0f4fad9625f9ad1`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1808
-
 ## CI staging evidence
 
 CI run [41054705791](https://github.com/griff843/Unit-Talk-v2/actions/runs/41054705791) passed both `verify` and `Writable DB proof (staging only)` on candidate head `4fd57c073e5be68096e2d06930905377b82d7ec9`. The same-run ci-db-proof-receipt/v2 records `pnpm test:db`, exit code zero and staging project `xskgrzbteyqdufktjrjx`; the required verify job validated it. Source remains `943303fafeae286863184451f6b23d301990f7c3`. The following proof-only binding-section repair requires a fresh current-head CI pass before merge.
