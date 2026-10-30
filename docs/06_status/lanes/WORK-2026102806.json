@@ -48,7 +48,7 @@
   ],
   "status": "in_review",
   "started_at": "2026-10-28T20:20:28.945Z",
-  "heartbeat_at": "2026-10-30T10:32:46.862Z",
+  "heartbeat_at": "2026-10-30T11:15:14.291Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026102806-cc-wave2-results-corrections.json",
@@ -56,11 +56,35 @@
   "truth_check_history": [],
   "reopen_history": [],
   "model_routing": {
-    "profile": "codex-luna-medium",
-    "model": "gpt-5.6-luna",
-    "reasoning_effort": "medium",
-    "selected_by": "three-brain",
-    "policy_version": "2.0.0"
+    "profile": "session-default",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "unavailable",
+    "selected_by": "manual-override",
+    "policy_version": "2.0.0",
+    "override": {
+      "authorized_by": "griff843",
+      "reason": "pm-verdict/v1 APPROVED https://github.com/griff843/Unit-Talk-v2/pull/1800#issuecomment-6521305731",
+      "at": "2026-10-30T11:15:14.291Z",
+      "declared": {
+        "profile": "codex-luna-medium",
+        "model": "gpt-5.6-luna",
+        "reasoning_effort": "medium",
+        "selected_by": "three-brain"
+      },
+      "observation": {
+        "verification": "unverified-external-session",
+        "source": "Codex executor report in docs/06_status/proof/WORK-2026102806/model-routing.json: the session explicitly exposed gpt-6.1-sol; reasoning effort and CLI telemetry not exposed",
+        "unavailable_fields": [
+          "reasoning_effort"
+        ]
+      },
+      "approval": {
+        "comment_url": "https://github.com/griff843/Unit-Talk-v2/pull/1800#issuecomment-6521305731",
+        "reviewer": "griff843",
+        "pr_number": 1800,
+        "head_sha": "14d250fee626f4b7c7ab674f664cf30f4de4a693"
+      }
+    }
   },
   "execution_location": {
     "mode": "worktree",
