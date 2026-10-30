@@ -1,5 +1,7 @@
 # WORK-2026103020 — effective settlement timestamp
 
+MERGE_SHA: 286ecb3bc20a1433bd3b7e353dbc69a359b82d07
+
 Source: `286ecb3bc20a1433bd3b7e353dbc69a359b82d07`.
 
 Pick Detail now projects Settled At from the effective settlement already resolved by the canonical identity reader. It does not use the pick lifecycle's timestamp or add a history request. Non-settled, absent and missing/invalid effective timestamps show the existing unknown marker.

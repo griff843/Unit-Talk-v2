@@ -1,5 +1,7 @@
 # Browser acceptance — WORK-2026103020
 
+MERGE_SHA: 286ecb3bc20a1433bd3b7e353dbc69a359b82d07
+
 Genuine local browser acceptance of the actual Next application with synthetic loopback data. Normal fixture username/password authentication succeeded; no auth bypass or production credentials were used. The user's authenticated real session on port 14302 was left untouched.
 
 | Case | Observed result | Evidence |

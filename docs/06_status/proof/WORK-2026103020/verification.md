@@ -1,6 +1,16 @@
 # PROOF: WORK-2026103020
 
-MERGE_SHA: pending merge
+MERGE_SHA: 286ecb3bc20a1433bd3b7e353dbc69a359b82d07
+
+ASSERTIONS:
+
+- Settled At uses the effective settlement, including an older correction; lifecycle remains unchanged.
+- Pending, manual-review and missing/invalid effective times remain unknown, with no fallback to an obsolete pick-row time.
+- The page reuses its existing correction-chain read; no extra query, authentication change or write is added.
+
+EVIDENCE:
+
+The SHA anchor above is the verified pre-merge source commit; supported closeout will bind the actual merge SHA.
 
 ## Verification
 
@@ -11,8 +21,12 @@ Source: `286ecb3bc20a1433bd3b7e353dbc69a359b82d07`.
 - `pnpm build`: PASS. The first app-suite attempt preceded workspace dependency compilation and failed on missing generated dist entries; building the supported worktree resolved that setup issue.
 - Final `pnpm --filter @unit-talk/command-center test`: 741 passed, 0 failed.
 - `pnpm verify`: all static stages passed; full command exited 1 only at the writable staging-target guard, which refused the loopback target. No local writable DB test or green full gate is claimed. Exact-head CI staging proof is required. Genuine command output retained at /tmp/work3020-verify.log.
+- Repository-wide `pnpm type-check` and `pnpm test` were executed by `pnpm verify`, in addition to the app checks above; both passed before the writable staging guard. These are actual executed commands recorded in /tmp/work3020-verify.log.
+- `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS, operator-ui; rerun on the bound lane head before this proof repair.
 - R-level: PASS, operator-ui. `git diff --check`: PASS.
 - Generated next-env.d.ts change from the local Next server was restored; it is not part of this fix.
+- CI QA Experience Regression (Advisory), run 41112997928: failed only at posting its PR comment with `Resource not accessible by integration`. This advisory authorization failure is recorded rather than treated as a product or browser acceptance failure; no workflow scope expansion was made.
+- Local `evaluateCloseEligibilityPreflight` after section/anchor and exact-command references: eligible true, zero blocking findings. Proof-only repair leaves product source unchanged and requires fresh exact-head CI after the queue permits its push.
 
 ## Required mutation
 
