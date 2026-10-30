@@ -23,7 +23,7 @@ Revision: bounded correction for PM review comment 6511391881 (CHANGES REQUIRED 
   `authorized_by` is the author GitHub reports.
 - [x] Adversarial tests refuse each of these approvals: a forged author, a bot, a null user, a body that is not a verdict, `CHANGES_REQUIRED`, a wrong issue, a wrong PR, a stale head, a wrong effort and a wrong model. A forged `--authorized-by` flag has no effect, and the manifest stays unchanged after each refusal. Fabricated sidecars fail against a reconciled manifest.
 - [x] The original declaration is kept in `override.declared`, and a second reconciliation keeps the first one. No-ops, missing flags (all named at once), both effort flags together, `done` lanes, lanes without a PR and non-Codex lanes are refused.
-- [x] No policy file, policy version, closeout rebind, merge gate, workflow, runtime or migration path changed.
+- [x] No policy file, policy version, closeout rebind, merge gate, workflow, runtime or migration path changed. `validatePreMergeModelRoutingEvidence` adds checks only for reconciled lanes.
 
 ## EVIDENCE:
 

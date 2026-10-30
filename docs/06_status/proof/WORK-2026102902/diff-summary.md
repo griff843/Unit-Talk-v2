@@ -11,4 +11,4 @@ Execution SHA: 3af5aada24ba425b849cc4c0b227093dce6e1a0e
 | docs/05_operations/LANE_MANIFEST_SPEC.md | Section 15.1 documents the command and its limits. |
 | docs/05_operations/schemas/lane_manifest_v1.schema.json | Admits `override.declared`, `override.observation` and `override.approval`. |
 
-Not changed: `codex-model-routing.json`, `policy_version`, `shared.ts` manifest validation, the proof validators and closeout rebind, the merge gate, workflows, runtime code and schema migrations.
+Not changed: `codex-model-routing.json`, `policy_version`, `shared.ts` manifest validation, the closeout rebind (`proof-generate.ts`), the merge gate and `merge-gate-verdict.cjs` (reused, not modified), workflows, runtime code and schema migrations. `validatePreMergeModelRoutingEvidence` changed only for reconciled lanes.
