@@ -59,5 +59,5 @@ Runtime: this lane changes a GitHub Actions workflow; it has no service runtime 
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1807
 Execution SHA: f1c0f0c463eac75b393f1a3b3a96fdacf7da24ce
