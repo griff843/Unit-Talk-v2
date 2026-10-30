@@ -51,21 +51,73 @@ on:
         required: false
         type: string
 
-concurrency:
-  group: merge-closeout-mutex
-  cancel-in-progress: false
-
 permissions:
   contents: write
   pull-requests: write
 
 jobs:
+  # A push-triggered closeout used to start ~30s after the merge, while ci.yml on
+  # the merge SHA was still running. Lanes whose closeout reads that run (G6's
+  # verify + staging receipt, the bound DB proof receipt) then always failed and
+  # needed a manual workflow_dispatch replay. This job only waits for that run to
+  # finish; it decides nothing, and every closeout gate still runs unchanged in
+  # lane-close. It holds no concurrency group, so waiting never occupies the
+  # closeout mutex or its single pending slot.
+  wait-for-merge-ci:
+    name: Wait for merge-SHA CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
+    permissions:
+      actions: read
+    steps:
+      - name: Wait for ci.yml on the merge SHA to finish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          MERGE_SHA: ${{ github.sha }}
+          WAIT_MINUTES: "50"
+          ABSENT_GRACE_SECONDS: "300"
+          POLL_SECONDS: "30"
+        run: |
+          start=$(date +%s)
+          while :; do
+            elapsed=$(( $(date +%s) - start ))
+            state=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$MERGE_SHA&event=push&per_page=10" \
+              --jq 'if (.workflow_runs | length) == 0 then "absent"
+                    elif all(.workflow_runs[]; .status == "completed") then "completed"
+                    else "running" end' 2>/dev/null) || state="unreadable"
+            case "$state" in
+              completed)
+                echo "ci.yml on $MERGE_SHA has completed after ${elapsed}s; closeout gates evaluate its result."
+                exit 0
+                ;;
+              absent)
+                if [ "$elapsed" -ge "$ABSENT_GRACE_SECONDS" ]; then
+                  echo "::warning title=post-merge-lane-close::no ci.yml run for $MERGE_SHA after ${elapsed}s; proceeding, and the closeout gates decide."
+                  exit 0
+                fi
+                ;;
+            esac
+            if [ "$elapsed" -ge $(( WAIT_MINUTES * 60 )) ]; then
+              echo "::warning title=post-merge-lane-close::ci.yml on $MERGE_SHA is still $state after ${elapsed}s; proceeding, and the closeout gates decide."
+              exit 0
+            fi
+            sleep "$POLL_SECONDS"
+          done
+
   lane-close:
     name: Auto-close merged lane
+    needs: wait-for-merge-ci
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # Never re-trigger on bot housekeeping commits — prevents infinite push loops.
-    if: github.actor != 'github-actions[bot]' || github.event_name == 'workflow_dispatch'
+    # !cancelled(): the wait job is skipped on workflow_dispatch, and a skipped
+    # dependency would otherwise skip this job too.
+    if: ${{ !cancelled() && (github.actor != 'github-actions[bot]' || github.event_name == 'workflow_dispatch') }}
+    concurrency:
+      group: merge-closeout-mutex
+      cancel-in-progress: false
 
     steps:
       - name: Extract issue ID from commit message and PR branch
