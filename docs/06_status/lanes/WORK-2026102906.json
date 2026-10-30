@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026102906-codex-catalog-v3",
   "branch": "claude/work-2026102906-codex-catalog-v3",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "d4ee1be5bf989a7a23465d2e9252ed255f39bc8c",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1805",
   "files_changed": [],
   "file_scope_lock": [
@@ -24,14 +24,22 @@
     "docs/06_status/proof/WORK-2026102906/evidence.json",
     "docs/06_status/proof/WORK-2026102906/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-10-30T03:19:16.361Z",
-  "heartbeat_at": "2026-10-30T03:46:24.281Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-30T11:16:40.262Z",
+  "closed_at": "2026-10-30T11:16:40.262Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026102906-codex-catalog-v3.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-30T11:16:36.268Z",
+      "verdict": "pass",
+      "merge_sha": "d4ee1be5bf989a7a23465d2e9252ed255f39bc8c",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {
