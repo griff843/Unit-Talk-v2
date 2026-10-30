@@ -1,6 +1,6 @@
 # WORK-2026103005 — private audience member-read boundary
 
-MERGE_SHA: 916228ed77abdfc05f49549148f2e22818786f78
+MERGE_SHA: pending merge
 
 Source candidate: `916228ed77abdfc05f49549148f2e22818786f78`.
 

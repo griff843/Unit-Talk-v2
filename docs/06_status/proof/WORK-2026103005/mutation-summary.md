@@ -1,6 +1,6 @@
 # Required shared-predicate mutation
 
-MERGE_SHA: 916228ed77abdfc05f49549148f2e22818786f78
+MERGE_SHA: pending merge
 
 Temporarily changed the private pin interpretation inside `pinnedAudience` from staff-canary to members; routing parsing was unchanged. Rebuilt contracts and directly ran the five admitted test files with `--test-name-pattern=WORK-2026103005`.
 

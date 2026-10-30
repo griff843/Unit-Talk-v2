@@ -1,6 +1,6 @@
 # Member-reader audit — WORK-2026103005
 
-MERGE_SHA: 916228ed77abdfc05f49549148f2e22818786f78
+MERGE_SHA: pending merge
 
 This is a bounded source/consumer audit, not production canary acceptance. Production Claude's decisions are recorded in CODEX-HANDOFF-2026-10-30.md and #1810 comment 6530441718.
 
