@@ -8,7 +8,7 @@
   "branch": "codex/work-2026103020-cc-effective-settled-at",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1812",
   "files_changed": [],
   "file_scope_lock": [
     "apps/command-center/**"
@@ -19,9 +19,9 @@
     "docs/06_status/proof/WORK-2026103020/verification.md",
     "docs/06_status/proof/WORK-2026103020/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-10-30T18:37:59.029Z",
-  "heartbeat_at": "2026-10-30T18:37:59.029Z",
+  "heartbeat_at": "2026-10-30T19:09:59.895Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026103020-cc-effective-settled-at.json",
