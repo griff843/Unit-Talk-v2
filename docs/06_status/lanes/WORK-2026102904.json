@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026102904-cc-bridge-idle-stall",
   "branch": "claude/work-2026102904-cc-bridge-idle-stall",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "487d129a34c4d033caa8c5ae1413f1b649b673f6",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1803",
   "files_changed": [],
   "file_scope_lock": [
@@ -19,14 +19,22 @@
     "docs/06_status/proof/WORK-2026102904/evidence.json",
     "docs/06_status/proof/WORK-2026102904/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-10-30T00:58:44.075Z",
-  "heartbeat_at": "2026-10-30T00:58:44.075Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-30T01:39:44.385Z",
+  "closed_at": "2026-10-30T01:39:44.385Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026102904-cc-bridge-idle-stall.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-30T01:39:42.567Z",
+      "verdict": "pass",
+      "merge_sha": "487d129a34c4d033caa8c5ae1413f1b649b673f6",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
