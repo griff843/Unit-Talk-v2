@@ -16,3 +16,8 @@ Environment: authenticated local production build, synthetic loopback PostgREST 
 | Published ROI | No published record plus explicit Track Only exclusion. |
 
 Screenshots in this directory document these observations. The final correction was cancelled. This does not claim production write-path testing or a complete automated accessibility audit. The known unfiltered-result defect is explicitly accepted for WORK-2026102807 after merge.
+
+## Merge SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1800

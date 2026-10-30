@@ -29,6 +29,7 @@ Status: Product verification complete for the admitted lane. Governance routing 
 - `pnpm --filter @unit-talk/command-center type-check`: PASS on d572c0747.
 - `pnpm --filter @unit-talk/command-center build`: PASS on d572c0747.
 - `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS, operator-ui, on d572c0747.
+- `pnpm type-check` and `pnpm test` (repo-wide) run inside `pnpm verify:static` in the CI `verify` job; both passed in the CI runs on 918a48fd4 and 5b73b6fdd linked below.
 - `pnpm verify` on 5391c9d6b: static phase PASS; local live database stage refused the loopback target. The work order specifies CI-only staging verification.
 - [CI verify and staging database proof](https://github.com/griff843/Unit-Talk-v2/actions/runs/40910243492): PASS on 918a48fd49a003e266c349e3629993f0fbeb2078, including the d572c0747 product code and subsequent proof-only changes. New proof commits trigger a fresh CI run before executor handoff.
 - [CI verify and staging database proof on 5b73b6fdd](https://github.com/griff843/Unit-Talk-v2/actions/runs/40919185777): PASS. The subsequent screenshot recapture is proof-only; product source is unchanged.
