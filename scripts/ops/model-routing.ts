@@ -85,6 +85,15 @@ export interface RoutingApproval {
   head_sha: string;
 }
 
+/** One policy-version migration of a lane's routing, appended by reResolveModelRouting. */
+export interface RoutingReResolution {
+  from_policy_version: string;
+  from_model: string;
+  from_reasoning_effort: string;
+  to_policy_version: string;
+  at: string;
+}
+
 export interface ModelRoutingBlock {
   profile: string;
   model: string;
@@ -93,6 +102,7 @@ export interface ModelRoutingBlock {
   policy_version: string;
   legacy_resolved?: boolean;
   override?: ModelRoutingOverride;
+  re_resolutions?: RoutingReResolution[];
 }
 
 export interface ModelRoutingEvidenceContractResult {
@@ -399,7 +409,7 @@ export function validatePersistedModelRouting(
     return {
       ok: false,
       code: 'POLICY_VERSION_MISMATCH',
-      message: `manifest model_routing.policy_version "${modelRouting.policy_version}" does not match current policy version "${loadedPolicy.policy_version}". Re-resolve routing before executing.`,
+      message: `manifest model_routing.policy_version "${modelRouting.policy_version}" does not match current policy version "${loadedPolicy.policy_version}". Re-resolve routing before executing: pnpm ops:lane-manifest -- re-resolve-routing <issue id>.`,
     };
   }
 
@@ -577,6 +587,56 @@ export function reconcileObservedModelRouting(
       },
       approval,
     },
+  };
+}
+
+/**
+ * Move a lane's routing to the current policy version without changing its profile
+ * (WORK-2026102906). A policy re-version otherwise strands every open Codex lane:
+ * codex-exec refuses POLICY_VERSION_MISMATCH and nothing could re-resolve. The profile
+ * the lane was routed to is re-resolved under the current policy and tier, with the same
+ * fail-closed checks lane-start applies, so a profile the new policy removed, disabled or
+ * no longer permits for the tier is refused rather than substituted. A reconciled lane is
+ * refused: its block records an observation, not a routing decision. The prior pin is
+ * appended to re_resolutions.
+ */
+export function reResolveModelRouting(
+  current: ModelRoutingBlock,
+  tier: string,
+  now: string,
+  policy?: ModelRoutingPolicy,
+): ModelRoutingBlock {
+  if (current.override?.declared) {
+    throw new Error(
+      `re-resolve-routing refused: model_routing was reconciled to an observed execution (declared profile ` +
+        `"${current.override.declared.profile}"); a reconciled lane cannot be re-resolved`,
+    );
+  }
+  const loadedPolicy = policy ?? loadModelRoutingPolicy();
+  if (current.policy_version === loadedPolicy.policy_version) {
+    throw new Error(`re-resolve-routing refused: model_routing is already on policy version ${loadedPolicy.policy_version}`);
+  }
+  const resolution = resolveModelProfile({
+    profileName: current.profile,
+    tier,
+    policy: loadedPolicy,
+    override: current.override,
+  });
+  if (!resolution.ok) {
+    throw new Error(`re-resolve-routing refused: ${resolution.code} ${resolution.message}`);
+  }
+  return {
+    ...resolution.model_routing!,
+    re_resolutions: [
+      ...(current.re_resolutions ?? []),
+      {
+        from_policy_version: current.policy_version,
+        from_model: current.model,
+        from_reasoning_effort: current.reasoning_effort,
+        to_policy_version: loadedPolicy.policy_version,
+        at: now,
+      },
+    ],
   };
 }
 

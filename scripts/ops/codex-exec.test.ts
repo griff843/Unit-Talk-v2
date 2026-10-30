@@ -37,6 +37,7 @@ import {
 // resolution/evidence/arg-building helpers below are unit-tested directly.
 
 const REAL_POLICY_VERSION = loadModelRoutingPolicy().policy_version;
+const REAL_LUNA_MEDIUM_MODEL = loadModelRoutingPolicy().profiles['codex-luna-medium']!.model;
 
 interface TruthRepoOptions {
   issueId?: string;
@@ -811,7 +812,7 @@ test('resolveExecModelRouting validates a manifest that already carries model_ro
     schema_version: 2,
     model_routing: {
       profile: 'codex-luna-medium',
-      model: 'gpt-5.6-luna',
+      model: REAL_LUNA_MEDIUM_MODEL,
       reasoning_effort: 'medium',
       selected_by: 'three-brain',
       policy_version: REAL_POLICY_VERSION,
@@ -819,7 +820,7 @@ test('resolveExecModelRouting validates a manifest that already carries model_ro
   });
   assert.strictEqual(result.ok, true);
   assert.strictEqual(result.legacy_compatibility_used, false);
-  assert.strictEqual(result.model_routing?.model, 'gpt-5.6-luna');
+  assert.strictEqual(result.model_routing?.model, REAL_LUNA_MEDIUM_MODEL);
 });
 
 test('scenario 13: schema_version-1 legacy manifest (no model_routing) resolves via the documented default and is flagged', () => {
@@ -1357,7 +1358,7 @@ function buildLaneRoot(issueId: string, executor: 'claude' | 'codex-cli'): LaneR
   if (!isClaude) {
     manifest['model_routing'] = {
       profile: 'codex-luna-medium',
-      model: 'gpt-5.6-luna',
+      model: REAL_LUNA_MEDIUM_MODEL,
       reasoning_effort: 'medium',
       selected_by: 'three-brain',
       policy_version: REAL_POLICY_VERSION,
