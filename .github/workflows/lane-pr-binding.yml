@@ -41,10 +41,10 @@ jobs:
       - name: Resolve lane from branch
         id: lane
         run: |
-          issue_id=$(echo "$BRANCH" | grep -oiE 'utv2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)
+          issue_id=$(echo "$BRANCH" | grep -oiE '(utv2|uni|work)-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)
           if [ -z "$issue_id" ]; then
             echo "bind=false" >> "$GITHUB_OUTPUT"
-            echo "Branch $BRANCH is not a UTV2 lane; no manifest binding is required."
+            echo "Branch $BRANCH names no UTV2, UNI or WORK lane; no manifest binding is required."
             exit 0
           fi
           manifest="$GITHUB_WORKSPACE/lane/docs/06_status/lanes/${issue_id}.json"
@@ -90,9 +90,11 @@ jobs:
         working-directory: lane
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_ID: ${{ steps.lane.outputs.issue_id }}
         run: >-
           node "$GITHUB_WORKSPACE/trusted/node_modules/tsx/dist/cli.mjs"
           "$GITHUB_WORKSPACE/trusted/scripts/ops/lane-link-pr.ts"
+          --issue "$ISSUE_ID"
           --branch "$BRANCH"
           --base "$BASE_BRANCH"
           --pr "$PR_URL"
