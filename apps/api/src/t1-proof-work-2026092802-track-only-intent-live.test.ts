@@ -226,13 +226,14 @@ function auth(capperId: string) {
 
 interface PickRow {
   id: string;
+  capper_id: string | null;
   status: string;
   source: string;
   metadata: Record<string, unknown>;
 }
 
 async function readPick(pickId: string): Promise<PickRow> {
-  const rows = await restQuery<PickRow>(`picks?id=eq.${pickId}&select=id,status,source,metadata`);
+  const rows = await restQuery<PickRow>(`picks?id=eq.${pickId}&select=id,capper_id,status,source,metadata`);
   assert.equal(rows.length, 1, `pick ${pickId} must exist`);
   return rows[0]!;
 }
@@ -266,6 +267,8 @@ test(
 
     const pick = await readPick(response.body.data.pickId);
     assert.equal(pick.source, 'smart-form');
+    // Positive control for the capper_id reads below: the submit path populates it.
+    assert.equal(pick.capper_id, CAPPER, 'persisted capper_id, read from the database');
     assert.notEqual(pick.status, 'queued', 'a Track Only pick is never queued');
     assert.equal(pick.metadata['distributionMode'], 'track-only', 'persisted mode, read from the database');
     assert.equal(isHumanCapperDeliveryAuthorized(pick.metadata), false);
@@ -298,6 +301,7 @@ test(
 
     const pick = await readPick(response.body.data.pickId);
     assert.equal(pick.metadata['distributionMode'], 'delivery-eligible');
+    assert.equal(pick.capper_id, CAPPER, 'persisted capper_id, read from the database');
     assert.equal(isHumanCapperDeliveryAuthorized(pick.metadata), true);
     assert.equal(readHumanCapperDeliveryAuthorization(pick.metadata)?.capperId, CAPPER);
 
@@ -324,8 +328,10 @@ test(
     assert.ok(!response.body.ok);
     if (!response.body.ok) assert.equal(response.body.error.code, 'CAPPER_TRACK_ONLY_REQUIRED');
 
-    const selection = encodeURIComponent(`Northgate Foundry ${RUN_NAMESPACE} ML ${label}`);
-    const rows = await restQuery<{ id: string }>(`picks?selection=eq.${selection}&select=id`);
+    // Every pick the run-namespaced outsider could have created, under any selection.
+    // capper_id is indexed; selection is not, and a scan of it outruns staging's
+    // statement timeout as retained fixtures accumulate (WORK-2026103001).
+    const rows = await restQuery<{ id: string }>(`picks?capper_id=eq.${encodeURIComponent(OUTSIDER)}&select=id`);
     assert.equal(rows.length, 0, 'a refused request persists no pick');
   },
 );
@@ -358,9 +364,8 @@ test(
       assert.ok((rows[index - 1]?.created_at ?? '') >= (rows[index]?.created_at ?? ''), 'rows are newest first');
     }
 
-    const runPicks = await restQuery<{ id: string }>(
-      `picks?selection=like.*${encodeURIComponent(RUN_NAMESPACE)}*&select=id`,
-    );
+    // This run's fixtures are all CAPPER's; read them through the indexed capper_id.
+    const runPicks = await restQuery<{ id: string }>(`picks?capper_id=eq.${encodeURIComponent(CAPPER)}&select=id`);
     assert.ok(
       runPicks.length >= 2,
       `expected this run's Track Only and queued delivery-eligible fixtures, found ${runPicks.length}`,
