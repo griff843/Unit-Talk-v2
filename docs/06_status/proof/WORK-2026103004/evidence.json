@@ -1,0 +1,35 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026103004",
+  "pr_number": 1810,
+  "source_sha": "f7716c1488557e16a1cf1a3dc6e0adf85d21c562",
+  "reviewed_head_sha": "f7716c1488557e16a1cf1a3dc6e0adf85d21c562",
+  "generated_at": "2026-10-30T14:20:55Z",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "f7716c1488557e16a1cf1a3dc6e0adf85d21c562",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "head_sha": "f7716c1488557e16a1cf1a3dc6e0adf85d21c562",
+      "ci_run": "pending",
+      "note": "Carried because the pre-proof hook requires a non-empty ci_sentinels for a pre-merge bundle. No CI conclusion is asserted for this head: the exact-head result is the PR's required checks."
+    }
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm type-check",
+    "conclusion": "success",
+    "verified_source_sha": "f7716c1488557e16a1cf1a3dc6e0adf85d21c562",
+    "note": "Docs-only change. Exact-head CI pending."
+  },
+  "verification": {
+    "type_check": "exit 0",
+    "r_level": "PASS, no artifacts required",
+    "scope": "the only content change is docs/mission/intent.md, within the WORK-2026103004 file scope lock"
+  }
+}
