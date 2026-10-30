@@ -19,5 +19,5 @@ Lane metadata (`.ops/sync/`, `docs/06_status/lanes/`, `docs/06_status/proof/`) i
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 985fcdb4c3fa5a6df8b49c8ce3df6471666c7938
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1809

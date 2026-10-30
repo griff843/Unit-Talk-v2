@@ -1,6 +1,6 @@
 # PROOF: WORK-2026103003
 
-MERGE_SHA: pending merge
+MERGE_SHA: 985fcdb4c3fa5a6df8b49c8ce3df6471666c7938
 
 Issue: WORK-2026103003
 Tier: T1
@@ -68,6 +68,6 @@ Runtime: this lane changes a GitHub Actions workflow; it has no service runtime 
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 985fcdb4c3fa5a6df8b49c8ce3df6471666c7938
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1809
 Execution SHA: 957e02580e8fae76fcc4a7f657def78bb4cd3247
