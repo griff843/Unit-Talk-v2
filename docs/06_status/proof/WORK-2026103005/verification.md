@@ -4,11 +4,25 @@ MERGE_SHA: pending merge
 
 ASSERTIONS:
 
-- Private, unknown and mismatched audience pins are excluded from the in-scope member readers; legacy absent audiences remain members.
-- Outbox audience is pinned at release. Canonical pick records, Track Only controls and private per-pick recap destination are preserved.
-- Every implemented reader class kills the shared-predicate mutant. Insert-time pick pinning and public previews remain the separately approved successor scope.
+- [x] Private, unknown and mismatched audience pins are excluded from the in-scope member readers; legacy absent audiences remain members.
+- [x] Outbox audience is pinned at release. Canonical pick records, Track Only controls and private per-pick recap destination are preserved.
+- [x] Every implemented reader class kills the shared-predicate mutant. Insert-time pick pinning and public previews remain the separately approved successor scope.
 
 EVIDENCE:
+
+Actual final focused TAP summary from /tmp/work3005-final-focused.log:
+
+```text
+# tests 236
+# suites 0
+# pass 236
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
+CI run 41116986496 attempt 2 passed verify and staging at the prior proof head fef4307850b6f34e45034be6ee4bdce09aaf69c7. Downloaded receipt utv2-1630-db-proof-receipt-41116986496-2 records pnpm test:db exit 0, 9 passed, 0 failed/skipped on approved staging xskgrzbteyqdufktjrjx. This checklist/fence-only repair leaves source unchanged and requires fresh exact-head CI before rebinding the executor result.
 
 The rebindable anchor above intentionally remains pending before merge. Execution identity is the verified source SHA below; supported closeout will bind the actual merge SHA.
 
