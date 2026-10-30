@@ -1,6 +1,6 @@
 # PROOF: WORK-2026102902
 
-MERGE_SHA: pending merge
+MERGE_SHA: b4ab31a3a7c78f3d476a61154824a0da79031555
 
 Issue: WORK-2026102902
 Tier: T1
@@ -71,5 +71,5 @@ M9 html_url placement check removed       -> fail 1 (cross-PR test)
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `b4ab31a3a7c78f3d476a61154824a0da79031555`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1801
