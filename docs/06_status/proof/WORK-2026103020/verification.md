@@ -4,11 +4,25 @@ MERGE_SHA: pending merge
 
 ASSERTIONS:
 
-- Settled At uses the effective settlement, including an older correction; lifecycle remains unchanged.
-- Pending, manual-review and missing/invalid effective times remain unknown, with no fallback to an obsolete pick-row time.
-- The page reuses its existing correction-chain read; no extra query, authentication change or write is added.
+- [x] Settled At uses the effective settlement, including an older correction; lifecycle remains unchanged.
+- [x] Pending, manual-review and missing/invalid effective times remain unknown, with no fallback to an obsolete pick-row time.
+- [x] The page reuses its existing correction-chain read; no extra query, authentication change or write is added.
 
 EVIDENCE:
+
+Actual restored focused TAP summary from /tmp/work3020-restored.log:
+
+```text
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
+CI run 41117136479 attempt 2 passed verify and staging at prior proof head 3298d572fe5aa988144cca6cd4f0667d81a70bef. This checklist/fence-only repair leaves source unchanged and requires fresh exact-head CI before executor handoff.
 
 The rebindable anchor above intentionally remains pending before merge. Execution identity is the verified source SHA below; supported closeout will bind the actual merge SHA.
 
@@ -39,7 +53,7 @@ Actual Next page from this source ran on loopback port 14320, authenticated norm
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending creation after staging queue permits it
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1812
 
 ## Provenance
 
