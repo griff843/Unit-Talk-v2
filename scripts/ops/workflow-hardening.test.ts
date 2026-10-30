@@ -3218,3 +3218,15 @@ test('closeout wait is push-only, holds no mutex and cannot skip the closeout', 
   assert.match(String(close.if), /!cancelled\(\)/, 'a skipped or failed wait must not skip the closeout');
   assert.doesNotMatch(closeoutWaitStep(), /\$\{\{/, 'the wait step reads its inputs from env');
 });
+
+test('closeout checks out the branch tip after the wait, not the merge SHA', () => {
+  const close = objectField(objectField(readWorkflowYaml('post-merge-lane-close.yml'), 'jobs'), 'lane-close');
+  const steps = close.steps as Array<Record<string, unknown>>;
+  const checkouts = steps.filter((step) => String(step.uses ?? '').startsWith('actions/checkout@'));
+  assert.equal(checkouts.length, 1);
+  assert.equal(
+    String(objectField(checkouts[0], 'with').ref),
+    '${{ github.ref }}',
+    'checking out github.sha leaves the guarded push stale whenever main advances during the wait',
+  );
+});
