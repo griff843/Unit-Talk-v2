@@ -1,0 +1,117 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102205
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102205
+  objective: Let a migration that ONLY changes security options and privileges on
+    an EXISTING view be verified by a mechanical, positively-asserting alternate
+    drill, instead of the `FAIL-CLOSED-PRECONDITION` relation-decoy drill (which
+    requires a CREATE-time duplicate-object refusal that a privilege-only
+    migration cannot have). Everything else keeps the existing drill
+    requirements.
+  acceptance_criteria:
+    - "The classifier and alternate drill exist with tests; the PR #1775
+      migration text (copied inline into the test file, not edited in place)
+      classifies as privilege-only once it carries the marker, and every
+      tampering case above fails."
+    - Existing `migration-precondition-drill.test.ts` and
+      `participant-catalog-seed-drill.test.ts` still pass; the existing drill is
+      not globally weakened.
+    - No bypass of any required check; no change to merge authority.
+  guardrails:
+    - "DRAFT PR for PM review only. Do not merge, deploy, or apply anything to
+      production. Do not touch #1775, kill switches or Discord recaps."
+    - "Staging CI is shared: do not push while another `ci.yml` run is in
+      progress."
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - Exact-head CI green, independent control review, PM T1 verdict. Merge is
+      PM's.
+  unmapped_sections:
+    - |-
+      WORK-2026102205 — Privilege-only view migration: positively-asserting alternate to the relation-decoy precondition drill
+      Tier: T1
+      Lane type: governance
+      Executor: codex
+
+      Source: PM plan disposition on PR #1775, comment 6349139659 (authorizes a separately governed, narrowly scoped drill amendment; not merge approval). First intended consumer: PR #1775 (`supabase/migrations/20261022090000_revoke_governed_pick_performance_anon.sql`). #1775 and its files are NOT modified by this lane.
+
+      ## Gate design (binding, from PM)
+
+      1. **Mechanical classifier** (`scripts/ci/`): strip comments and string-literal noise, split into statements, and require every statement to be one of: `BEGIN`, `COMMIT`, `ALTER VIEW <schema.view> SET|RESET (security_invoker ...)`, `GRANT|REVOKE ... ON [TABLE] <schema.view> ...`, or a role-existence-guard `DO $$ ... $$` block that matches a strict allowlist (only `IF EXISTS pg_roles`, `FOREACH` over role names, `EXECUTE format('REVOKE|GRANT ... ON TABLE <the one target view> ...')`, `has_table_privilege` checks, `RAISE EXCEPTION`). Anything else (CREATE/DROP/ALTER TABLE, CREATE VIEW/FUNCTION, schema mutation, data DML, any statement naming a second relation, unknown DO content, mixed) => NOT privilege-only => fall back to the existing drill requirements (fail safe).
+      2. **Declaration is checked, never trusted**: an anchored policy marker (`-- PRIVILEGE-ONLY-VIEW: <schema.view> security_invoker=true anon=none authenticated=none service_role=select`) selects the alternate drill but never exempts: it is accepted only if the classifier passes AND the declared view equals the view named in the SQL AND the view resolves on scratch Postgres to a relation of kind `v`. A declaration with failing classification, unresolved target, or non-view target FAILS the drill (no fallback to exemption). A fake/comment-only marker on a non-privilege-only migration fails.
+      3. **Alternate drill** on scratch Postgres: create the roles and a stand-in for the target view (permissive pre-state mirroring the down script's restored state), apply the migration, POSITIVELY assert `security_invoker=true` from `pg_class.reloptions`, assert `has_table_privilege` for every privilege for anon/authenticated/service_role against the expected state DERIVED FROM THE MARKER (not hard-coded for one view), run `db/migrations-rollback/<same-name>.down.sql` and assert the pre-state is restored exactly, reapply and assert parity with the first apply (up/down/up).
+      4. Wire into `.github/workflows/migration-reversibility-gate.yml` (around the "Drill each new migration's fail-closed precondition" step) so the classification happens before the marker greps, with no weakening of the existing relation/routine/seed drills, and add adversarial fixtures to the workflow.
+      5. **Negative tests** under `scripts/ci` (`pnpm exec tsx --test`) that demonstrably fail closed: omitted revocation; migration leaving anon SELECT; wrong security_invoker; down script that does not restore; and proofs the exception CANNOT be used for CREATE TABLE, schema mutation, mixed migrations, a fake declaration/comment, or an unresolved/non-view target.
+
+      ## File Scope
+
+      - .github/workflows/migration-reversibility-gate.yml
+      - scripts/ci/migration-precondition-drill.ts
+      - scripts/ci/migration-precondition-drill.test.ts
+      - scripts/ci/privilege-only-view-drill.ts
+      - scripts/ci/privilege-only-view-drill.test.ts
+      - package.json
+      - .ops/work/WORK-2026102205.md
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102205.md
+    title: "WORK-2026102205 — Privilege-only view migration: positively-asserting
+      alternate to the relation-decoy precondition drill"
+    description: |-
+      # WORK-2026102205 — Privilege-only view migration: positively-asserting alternate to the relation-decoy precondition drill
+
+      Tier: T1
+      Lane type: governance
+      Executor: codex
+
+      Source: PM plan disposition on PR #1775, comment 6349139659 (authorizes a separately governed, narrowly scoped drill amendment; not merge approval). First intended consumer: PR #1775 (`supabase/migrations/20261022090000_revoke_governed_pick_performance_anon.sql`). #1775 and its files are NOT modified by this lane.
+
+      ## Objective
+
+      Let a migration that ONLY changes security options and privileges on an EXISTING view be verified by a mechanical, positively-asserting alternate drill, instead of the `FAIL-CLOSED-PRECONDITION` relation-decoy drill (which requires a CREATE-time duplicate-object refusal that a privilege-only migration cannot have). Everything else keeps the existing drill requirements.
+
+      ## Gate design (binding, from PM)
+
+      1. **Mechanical classifier** (`scripts/ci/`): strip comments and string-literal noise, split into statements, and require every statement to be one of: `BEGIN`, `COMMIT`, `ALTER VIEW <schema.view> SET|RESET (security_invoker ...)`, `GRANT|REVOKE ... ON [TABLE] <schema.view> ...`, or a role-existence-guard `DO $$ ... $$` block that matches a strict allowlist (only `IF EXISTS pg_roles`, `FOREACH` over role names, `EXECUTE format('REVOKE|GRANT ... ON TABLE <the one target view> ...')`, `has_table_privilege` checks, `RAISE EXCEPTION`). Anything else (CREATE/DROP/ALTER TABLE, CREATE VIEW/FUNCTION, schema mutation, data DML, any statement naming a second relation, unknown DO content, mixed) => NOT privilege-only => fall back to the existing drill requirements (fail safe).
+      2. **Declaration is checked, never trusted**: an anchored policy marker (`-- PRIVILEGE-ONLY-VIEW: <schema.view> security_invoker=true anon=none authenticated=none service_role=select`) selects the alternate drill but never exempts: it is accepted only if the classifier passes AND the declared view equals the view named in the SQL AND the view resolves on scratch Postgres to a relation of kind `v`. A declaration with failing classification, unresolved target, or non-view target FAILS the drill (no fallback to exemption). A fake/comment-only marker on a non-privilege-only migration fails.
+      3. **Alternate drill** on scratch Postgres: create the roles and a stand-in for the target view (permissive pre-state mirroring the down script's restored state), apply the migration, POSITIVELY assert `security_invoker=true` from `pg_class.reloptions`, assert `has_table_privilege` for every privilege for anon/authenticated/service_role against the expected state DERIVED FROM THE MARKER (not hard-coded for one view), run `db/migrations-rollback/<same-name>.down.sql` and assert the pre-state is restored exactly, reapply and assert parity with the first apply (up/down/up).
+      4. Wire into `.github/workflows/migration-reversibility-gate.yml` (around the "Drill each new migration's fail-closed precondition" step) so the classification happens before the marker greps, with no weakening of the existing relation/routine/seed drills, and add adversarial fixtures to the workflow.
+      5. **Negative tests** under `scripts/ci` (`pnpm exec tsx --test`) that demonstrably fail closed: omitted revocation; migration leaving anon SELECT; wrong security_invoker; down script that does not restore; and proofs the exception CANNOT be used for CREATE TABLE, schema mutation, mixed migrations, a fake declaration/comment, or an unresolved/non-view target.
+
+      ## Acceptance Criteria
+
+      - The classifier and alternate drill exist with tests; the PR #1775 migration text (copied inline into the test file, not edited in place) classifies as privilege-only once it carries the marker, and every tampering case above fails.
+      - Existing `migration-precondition-drill.test.ts` and `participant-catalog-seed-drill.test.ts` still pass; the existing drill is not globally weakened.
+      - No bypass of any required check; no change to merge authority.
+
+      ## File Scope
+
+      - .github/workflows/migration-reversibility-gate.yml
+      - scripts/ci/migration-precondition-drill.ts
+      - scripts/ci/migration-precondition-drill.test.ts
+      - scripts/ci/privilege-only-view-drill.ts
+      - scripts/ci/privilege-only-view-drill.test.ts
+      - package.json
+      - .ops/work/WORK-2026102205.md
+
+      ## Guardrails
+
+      - DRAFT PR for PM review only. Do not merge, deploy, or apply anything to production. Do not touch #1775, kill switches or Discord recaps.
+      - Staging CI is shared: do not push while another `ci.yml` run is in progress.
+
+      ## Exit Criteria
+
+      - Exact-head CI green, independent control review, PM T1 verdict. Merge is PM's.
+    captured_at: 2026-10-22T19:48:28.402Z
+    description_sha256: 93cd8d7bfafc6056632fbbedaf5de4b66d03148b14fac85bd79a33fa96e64b5a
+  contract_hash: 1e35c6d1a89da4173a59ee7a0a3dac3870d79dd2ffd774b65f61309cc09e6eb2
