@@ -14,6 +14,7 @@
  */
 
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { ROOT, parseJsonFile } from './shared.js';
 
@@ -43,6 +44,45 @@ export interface ModelRoutingOverride {
   authorized_by: string;
   reason: string;
   at?: string;
+  /**
+   * Present only on a block written by reconcileObservedModelRouting: the routing the
+   * lane declared at lane-start, before it was reconciled to what actually ran.
+   */
+  declared?: DeclaredModelRouting;
+  observation?: RoutingObservation;
+  approval?: RoutingApproval;
+}
+
+export interface DeclaredModelRouting {
+  profile: string;
+  model: string;
+  reasoning_effort: string;
+  selected_by: string;
+}
+
+/** Recorded in place of a routing value the executing session did not expose. */
+export const UNAVAILABLE_ROUTING_VALUE = 'unavailable';
+
+/**
+ * The only verification level reconcile-routing can record. The model a session external
+ * to this repository ran cannot be attested here; it is a report, flagged as such.
+ */
+export const UNVERIFIED_EXTERNAL_SESSION = 'unverified-external-session';
+
+export interface RoutingObservation {
+  verification: typeof UNVERIFIED_EXTERNAL_SESSION;
+  /** Where the observation came from, e.g. the executor's own report in the lane's proof. */
+  source: string;
+  /** Fields recorded as UNAVAILABLE_ROUTING_VALUE because the session did not expose them. */
+  unavailable_fields: string[];
+}
+
+/** A pm-verdict/v1 APPROVED comment, checked against GitHub by verifyRoutingApproval. */
+export interface RoutingApproval {
+  comment_url: string;
+  reviewer: string;
+  pr_number: number;
+  head_sha: string;
 }
 
 export interface ModelRoutingBlock {
@@ -116,6 +156,24 @@ export function validatePreMergeModelRoutingEvidence(
     ) {
       violations.push('override_used does not match manifest model_routing.selected_by');
     }
+    const observation = manifest.override?.observation;
+    if (observation) {
+      // A reconciled lane's sidecar must carry the same unverified flag and unavailable
+      // fields, so a matching sidecar cannot present a report as verified execution.
+      if (evidence['execution_verification'] !== observation.verification) {
+        violations.push(`execution_verification must be "${observation.verification}" for a reconciled lane`);
+      }
+      const unavailable = evidence['unavailable_fields'];
+      if (
+        !Array.isArray(unavailable) ||
+        [...unavailable].sort().join('\n') !== [...observation.unavailable_fields].sort().join('\n')
+      ) {
+        violations.push('unavailable_fields does not match manifest model_routing.override.observation');
+      }
+      if (evidence['override_authorized_by'] !== manifest.override?.authorized_by) {
+        violations.push('override_authorized_by does not match manifest model_routing.override.authorized_by');
+      }
+    }
   }
   return { valid: violations.length === 0, violations };
 }
@@ -130,7 +188,8 @@ export type ModelRoutingResultCode =
   | 'REASONING_EFFORT_INVALID'
   | 'POLICY_VERSION_MISMATCH'
   | 'TRUSTED_AUTHORIZATION_UNAVAILABLE'
-  | 'OVERRIDE_INVALID';
+  | 'OVERRIDE_INVALID'
+  | 'RECONCILED_OBSERVATION';
 
 export interface ModelRoutingResolution {
   ok: boolean;
@@ -324,6 +383,18 @@ export function validatePersistedModelRouting(
     return { ok: false, code: 'POLICY_LOAD_FAILED', message: error instanceof Error ? error.message : String(error) };
   }
 
+  if (modelRouting.override?.declared) {
+    // A reconciled block records what an external session ran. It never authorizes
+    // codex-exec to spawn anything, even when the observed values happen to match a profile.
+    return {
+      ok: false,
+      code: 'RECONCILED_OBSERVATION',
+      message:
+        `manifest model_routing was reconciled to an observed execution (declared profile ` +
+        `"${modelRouting.override.declared.profile}"); codex-exec cannot run a reconciled lane.`,
+    };
+  }
+
   if (modelRouting.policy_version !== loadedPolicy.policy_version) {
     return {
       ok: false,
@@ -358,6 +429,155 @@ export function validatePersistedModelRouting(
   }
 
   return { ok: true, code: 'OK', message: 'model routing validated', model_routing: modelRouting };
+}
+
+const require = createRequire(import.meta.url);
+const { parseVerdict } = require('./merge-gate-verdict.cjs') as {
+  parseVerdict: (body: string | null | undefined) => {
+    verdict: 'APPROVED' | 'CHANGES_REQUIRED';
+    issueId: string;
+    prNumber: number | null;
+    headSha: string | null;
+  } | null;
+};
+
+/** Must match the CODEOWNERS reviewer set merge-gate.yml and pre-merge-authorization.ts use. */
+export const ROUTING_APPROVAL_REVIEWERS: ReadonlySet<string> = new Set(['griff843']);
+
+export interface RoutingApprovalComment {
+  html_url: string;
+  /** GitHub-supplied: the API URL of the issue or PR the comment is on. */
+  issue_url?: string | null;
+  body: string | null;
+  user: { login: string; type: string } | null;
+}
+
+/**
+ * Accept a reconciliation only on the existing independent approval artifact: a
+ * pm-verdict/v1 APPROVED comment by a CODEOWNERS reviewer on the lane's own PR, bound to
+ * that PR's current head, naming the exact observed model and reasoning effort. The
+ * reviewer recorded is GitHub's comment author, never caller-supplied text.
+ */
+export function verifyRoutingApproval(
+  comment: RoutingApprovalComment,
+  context: {
+    repository: string;
+    issueId: string;
+    prNumber: number;
+    headSha: string;
+    model: string;
+    reasoningEffort: string;
+  },
+): RoutingApproval {
+  const errors: string[] = [];
+  // Where the comment actually lives comes from GitHub, never from the comment's text.
+  const expectedIssueUrl = `https://api.github.com/repos/${context.repository}/issues/${context.prNumber}`;
+  if (comment.issue_url !== expectedIssueUrl) {
+    errors.push(`comment is on ${comment.issue_url ?? '<no issue_url>'}, not ${expectedIssueUrl}`);
+  }
+  if (!comment.html_url?.startsWith(`https://github.com/${context.repository}/pull/${context.prNumber}#`)) {
+    errors.push(`comment URL ${comment.html_url} is not on ${context.repository} PR #${context.prNumber}`);
+  }
+  const login = comment.user?.login ?? '';
+  if (comment.user?.type === 'Bot') {
+    errors.push(`author ${login} is a bot`);
+  }
+  if (!ROUTING_APPROVAL_REVIEWERS.has(login)) {
+    errors.push(`author "${login}" is not a CODEOWNERS reviewer`);
+  }
+  const parsed = parseVerdict(comment.body);
+  if (!parsed) {
+    errors.push('comment is not a pm-verdict/v1 verdict');
+  } else {
+    if (parsed.verdict !== 'APPROVED') errors.push(`verdict is ${parsed.verdict}, not APPROVED`);
+    if (parsed.issueId.toUpperCase() !== context.issueId.toUpperCase()) {
+      errors.push(`verdict Issue ${parsed.issueId} is not ${context.issueId}`);
+    }
+    if (parsed.prNumber !== context.prNumber) errors.push(`verdict PR ${parsed.prNumber} is not #${context.prNumber}`);
+    if (parsed.headSha !== context.headSha) errors.push(`verdict Head SHA ${parsed.headSha} is not the PR head ${context.headSha}`);
+  }
+  const expected = `Routing reconciliation: ${context.model} / ${context.reasoningEffort}`;
+  const lines = (comment.body ?? '').split(/\r?\n/).map((line) => line.trim());
+  if (!lines.includes(expected)) {
+    errors.push(`verdict does not contain the line "${expected}"`);
+  }
+  if (errors.length > 0) {
+    throw new Error(`reconcile-routing approval refused: ${errors.join('; ')}`);
+  }
+  return { comment_url: comment.html_url, reviewer: login, pr_number: context.prNumber, head_sha: context.headSha };
+}
+
+/**
+ * Record the model a started Codex lane actually ran on, when it differs from the
+ * routing declared at lane-start (WORK-2026102902). An independent Codex session picks
+ * its model outside this repository, and the closeout rebind and pre-merge contract
+ * both require the proof sidecar to match the manifest. Without this, the only ways to
+ * close such a lane are fabricating the sidecar or hand-editing the manifest.
+ *
+ * The result is a manual-override block whose authorized_by is the verified approval's
+ * reviewer. It keeps the original declaration in override.declared (a repeated
+ * reconciliation keeps the first one), records an unexposed reasoning effort as
+ * UNAVAILABLE_ROUTING_VALUE, and flags the observation as unverified.
+ */
+export function reconcileObservedModelRouting(
+  current: ModelRoutingBlock,
+  observed: { profile: string; model: string; reasoning_effort: string | null; source: string },
+  approval: RoutingApproval,
+  now: string,
+): ModelRoutingBlock {
+  const missing: string[] = [];
+  for (const [name, value] of [
+    ['profile', observed.profile],
+    ['model', observed.model],
+    ['source', observed.source],
+  ] as const) {
+    if (typeof value !== 'string' || value.trim() === '') {
+      missing.push(name);
+    }
+  }
+  if (observed.reasoning_effort !== null && observed.reasoning_effort.trim() === '') {
+    missing.push('reasoning_effort');
+  }
+  if (missing.length > 0) {
+    throw new Error(`reconcile-routing requires non-empty ${missing.join(', ')}`);
+  }
+  if (observed.reasoning_effort?.trim().toLowerCase() === UNAVAILABLE_ROUTING_VALUE) {
+    throw new Error(
+      `reconcile-routing refused: "${UNAVAILABLE_ROUTING_VALUE}" is not an observed reasoning effort; ` +
+        'pass the reasoning effort as unavailable instead',
+    );
+  }
+  const profile = observed.profile.trim();
+  const model = observed.model.trim();
+  const reasoningEffort = observed.reasoning_effort?.trim() ?? UNAVAILABLE_ROUTING_VALUE;
+  if (profile === current.profile && model === current.model && reasoningEffort === current.reasoning_effort) {
+    throw new Error('reconcile-routing refused: the observed routing already equals the manifest model_routing');
+  }
+  const declared: DeclaredModelRouting = current.override?.declared ?? {
+    profile: current.profile,
+    model: current.model,
+    reasoning_effort: current.reasoning_effort,
+    selected_by: current.selected_by,
+  };
+  return {
+    profile,
+    model,
+    reasoning_effort: reasoningEffort,
+    selected_by: 'manual-override',
+    policy_version: current.policy_version,
+    override: {
+      authorized_by: approval.reviewer,
+      reason: `pm-verdict/v1 APPROVED ${approval.comment_url}`,
+      at: now,
+      declared,
+      observation: {
+        verification: UNVERIFIED_EXTERNAL_SESSION,
+        source: observed.source.trim(),
+        unavailable_fields: observed.reasoning_effort === null ? ['reasoning_effort'] : [],
+      },
+      approval,
+    },
+  };
 }
 
 /**

@@ -1,0 +1,247 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102902
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102902
+  objective: "WORK-2026102902 — Lane system: an audited way to record what model a
+    started Codex lane actually ran on"
+  acceptance_criteria:
+    - "Unit tests in `model-routing.test.ts`:"
+    - The function sets the observed values and keeps the original declaration
+      under `override.declared`.
+    - It refuses empty fields, a no-op and an empty `authorized_by` or `reason`.
+    - "A reconciled block passes `validatePreMergeModelRoutingEvidence` against
+      a sidecar that records the observed model with `override_used: true` and a
+      matching `override_authorized_by`. It fails against the original
+      declaration."
+    - "`validatePersistedModelRouting` refuses a reconciled block."
+    - "Unit tests in `lane-manifest.test.ts`:"
+    - "`reconcile-routing` rewrites the manifest."
+    - It refuses a non-Codex manifest, a `done` lane and missing flags, and
+      names every missing flag in one error.
+    - "A mutation check: removing the no-op refusal, or dropping `declared`,
+      fails a test. Recorded in verification.md."
+    - "`pnpm verify` is green in CI, including the writable DB proof."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026102902 — Lane system: an audited way to record what model a
+      started Codex lane actually ran on
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      This replaces WORK-2026102901, which was cancelled before any push because
+      its pinned scope left out the manifest JSON schema. This is a repo-owned
+      work order (tracker independence, ratified 2026-09-05). Griff chose this
+      policy fix on 2026-10-29 for the model-routing mismatch on WORK-2026102806
+      (#1800). It changes agent routing and the lane system, so it lands in its
+      own PR and needs Griff's T1 approval (`t1-approved` label plus a
+      `pm-verdict/v1` APPROVED comment).
+
+
+      ## Problem
+
+
+      A Codex lane's `model_routing` is fixed at lane-start from a policy
+      profile (`--model-profile`). Nothing can change it afterwards. Closeout
+      (`rebindModelRoutingJsonSha`, `scripts/ops/proof-generate.ts`) and the
+      pre-merge contract (`validatePreMergeModelRoutingEvidence`) both refuse a
+      proof `model-routing.json` whose model, reasoning effort or profile
+      differs from the manifest.
+
+
+      The remaining Command Center work runs in an independent, browser-enabled
+      Codex terminal. Its model is chosen outside this repository. For
+      WORK-2026102806, the lane declared `gpt-5.6-luna/medium`, while the
+      session ran `gpt-6.1-sol` and did not expose its reasoning effort. The
+      executor recorded that honestly. So the lane can merge but can never
+      close, and it keeps holding its file scope.
+
+
+      The only routes available today are dishonest ones: fabricate a sidecar
+      that matches the declaration, or hand-edit the manifest.
+
+
+      ## Change
+
+
+      1. `scripts/ops/model-routing.ts`: a new pure function
+      `reconcileObservedModelRouting(current, observed, authorization, now)`. It
+      returns a new `model_routing` block:
+         - `profile`, `model` and `reasoning_effort` are the observed values.
+         - `selected_by` is `manual-override`.
+         - `policy_version` is unchanged.
+         - `override` holds `{ authorized_by, reason, at, declared }`, where `declared` is the original lane-start routing. A second reconciliation keeps the first declaration.
+         - It refuses empty fields and a no-op (the observed values already equal the current values).
+      2. `scripts/ops/lane-manifest.ts`: a new subcommand `reconcile-routing
+      <ID> --profile <p> --model <m> --reasoning-effort <e> --authorized-by
+      <who> --reason <why>`.
+         - It works only on a Codex-executor manifest that has `model_routing`, and only before the lane is `done`.
+         - It writes the manifest through `writeManifest`, which validates it.
+      3. A reconciled lane fails closed in `codex-exec`, because its profile no
+      longer resolves through the policy. This is pinned by a test.
+      Reconciliation records what an external session ran. It can never
+      authorize `codex-exec` to run a different model.
+
+      4. `docs/05_operations/LANE_MANIFEST_SPEC.md` documents the command and
+      its limits, and `docs/05_operations/schemas/lane_manifest_v1.schema.json`
+      admits `override.declared`. Its `additionalProperties: false` would
+      otherwise contradict the new field.
+
+
+      No change to `codex-model-routing.json`, `policy_version`, `shared.ts`
+      manifest validation, the proof validators, the merge gate or any workflow.
+
+
+      ## File Scope
+
+
+      - scripts/ops/model-routing.ts
+
+      - scripts/ops/model-routing.test.ts
+
+      - scripts/ops/lane-manifest.ts
+
+      - scripts/ops/lane-manifest.test.ts
+
+      - docs/05_operations/LANE_MANIFEST_SPEC.md
+
+      - docs/05_operations/schemas/lane_manifest_v1.schema.json
+
+
+      Only `docs/06_status/proof/WORK-2026102902/*`, the lane manifest, the sync
+      file and this work order may be added outside it.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102902.md
+    title: "WORK-2026102902 — Lane system: an audited way to record what model a
+      started Codex lane actually ran on"
+    description: >-
+      # WORK-2026102902 — Lane system: an audited way to record what model a
+      started Codex lane actually ran on
+
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      This replaces WORK-2026102901, which was cancelled before any push because
+      its pinned scope left out the manifest JSON schema. This is a repo-owned
+      work order (tracker independence, ratified 2026-09-05). Griff chose this
+      policy fix on 2026-10-29 for the model-routing mismatch on WORK-2026102806
+      (#1800). It changes agent routing and the lane system, so it lands in its
+      own PR and needs Griff's T1 approval (`t1-approved` label plus a
+      `pm-verdict/v1` APPROVED comment).
+
+
+      ## Problem
+
+
+      A Codex lane's `model_routing` is fixed at lane-start from a policy
+      profile (`--model-profile`). Nothing can change it afterwards. Closeout
+      (`rebindModelRoutingJsonSha`, `scripts/ops/proof-generate.ts`) and the
+      pre-merge contract (`validatePreMergeModelRoutingEvidence`) both refuse a
+      proof `model-routing.json` whose model, reasoning effort or profile
+      differs from the manifest.
+
+
+      The remaining Command Center work runs in an independent, browser-enabled
+      Codex terminal. Its model is chosen outside this repository. For
+      WORK-2026102806, the lane declared `gpt-5.6-luna/medium`, while the
+      session ran `gpt-6.1-sol` and did not expose its reasoning effort. The
+      executor recorded that honestly. So the lane can merge but can never
+      close, and it keeps holding its file scope.
+
+
+      The only routes available today are dishonest ones: fabricate a sidecar
+      that matches the declaration, or hand-edit the manifest.
+
+
+      ## Change
+
+
+      1. `scripts/ops/model-routing.ts`: a new pure function
+      `reconcileObservedModelRouting(current, observed, authorization, now)`. It
+      returns a new `model_routing` block:
+         - `profile`, `model` and `reasoning_effort` are the observed values.
+         - `selected_by` is `manual-override`.
+         - `policy_version` is unchanged.
+         - `override` holds `{ authorized_by, reason, at, declared }`, where `declared` is the original lane-start routing. A second reconciliation keeps the first declaration.
+         - It refuses empty fields and a no-op (the observed values already equal the current values).
+      2. `scripts/ops/lane-manifest.ts`: a new subcommand `reconcile-routing
+      <ID> --profile <p> --model <m> --reasoning-effort <e> --authorized-by
+      <who> --reason <why>`.
+         - It works only on a Codex-executor manifest that has `model_routing`, and only before the lane is `done`.
+         - It writes the manifest through `writeManifest`, which validates it.
+      3. A reconciled lane fails closed in `codex-exec`, because its profile no
+      longer resolves through the policy. This is pinned by a test.
+      Reconciliation records what an external session ran. It can never
+      authorize `codex-exec` to run a different model.
+
+      4. `docs/05_operations/LANE_MANIFEST_SPEC.md` documents the command and
+      its limits, and `docs/05_operations/schemas/lane_manifest_v1.schema.json`
+      admits `override.declared`. Its `additionalProperties: false` would
+      otherwise contradict the new field.
+
+
+      No change to `codex-model-routing.json`, `policy_version`, `shared.ts`
+      manifest validation, the proof validators, the merge gate or any workflow.
+
+
+      ## Acceptance Criteria
+
+
+      - Unit tests in `model-routing.test.ts`:
+        - The function sets the observed values and keeps the original declaration under `override.declared`.
+        - It refuses empty fields, a no-op and an empty `authorized_by` or `reason`.
+        - A reconciled block passes `validatePreMergeModelRoutingEvidence` against a sidecar that records the observed model with `override_used: true` and a matching `override_authorized_by`. It fails against the original declaration.
+        - `validatePersistedModelRouting` refuses a reconciled block.
+      - Unit tests in `lane-manifest.test.ts`:
+        - `reconcile-routing` rewrites the manifest.
+        - It refuses a non-Codex manifest, a `done` lane and missing flags, and names every missing flag in one error.
+      - A mutation check: removing the no-op refusal, or dropping `declared`,
+      fails a test. Recorded in verification.md.
+
+      - `pnpm verify` is green in CI, including the writable DB proof.
+
+
+      ## File Scope
+
+
+      - scripts/ops/model-routing.ts
+
+      - scripts/ops/model-routing.test.ts
+
+      - scripts/ops/lane-manifest.ts
+
+      - scripts/ops/lane-manifest.test.ts
+
+      - docs/05_operations/LANE_MANIFEST_SPEC.md
+
+      - docs/05_operations/schemas/lane_manifest_v1.schema.json
+
+
+      Only `docs/06_status/proof/WORK-2026102902/*`, the lane manifest, the sync
+      file and this work order may be added outside it.
+    captured_at: 2026-10-29T23:05:48.083Z
+    description_sha256: 92bf2cdb6a6121bc587e24727bba0dae0b697d09fbd6a303b0489685e5d682f0
+  contract_hash: e776229c4a0834f8a56fcd8753e68afac8c6f84b4dc803ee4c9c6b40d2865d08

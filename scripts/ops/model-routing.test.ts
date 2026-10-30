@@ -6,11 +6,16 @@ import path from 'node:path';
 import {
   buildCodexModelArgs,
   loadModelRoutingPolicy,
+  reconcileObservedModelRouting,
+  verifyRoutingApproval,
+  type RoutingApproval,
+  type RoutingApprovalComment,
   resolveLegacyModelRouting,
   resolveModelProfile,
   validateOverride,
   validatePersistedModelRouting,
   validatePreMergeModelRoutingEvidence,
+  type ModelRoutingBlock,
   type ModelRoutingPolicy,
 } from './model-routing.js';
 
@@ -374,4 +379,177 @@ test('pre-merge sidecar contract accepts execution identity without claiming mer
     },
   });
   assert.deepEqual(result, { valid: true, violations: [] });
+});
+
+// ── WORK-2026102902: reconciling a lane to the model its session reported running ──
+
+const DECLARED: ModelRoutingBlock = {
+  profile: 'codex-luna-medium',
+  model: 'gpt-5.6-luna',
+  reasoning_effort: 'medium',
+  selected_by: 'three-brain',
+  policy_version: '1.0.0',
+};
+const HEAD = 'a'.repeat(40);
+const OBSERVED = { profile: 'session-default', model: 'gpt-6.1-sol', reasoning_effort: null, source: 'executor report in proof' };
+const APPROVAL: RoutingApproval = {
+  comment_url: 'https://github.com/o/r/pull/1800#issuecomment-1',
+  reviewer: 'griff843',
+  pr_number: 1800,
+  head_sha: HEAD,
+};
+const NOW = '2026-10-29T12:00:00.000Z';
+const CONTEXT = { repository: 'o/r', issueId: 'WORK-2026102806', prNumber: 1800, headSha: HEAD, model: 'gpt-6.1-sol', reasoningEffort: 'unavailable' };
+
+function verdictComment(overrides: Partial<RoutingApprovalComment> = {}, body?: string): RoutingApprovalComment {
+  return {
+    html_url: APPROVAL.comment_url,
+    issue_url: 'https://api.github.com/repos/o/r/issues/1800',
+    user: { login: 'griff843', type: 'User' },
+    body:
+      body ??
+      ['PM_VERDICT: APPROVED', 'schema: pm-verdict/v1', 'Issue: WORK-2026102806', 'PR: 1800', `Head SHA: ${HEAD}`,
+        'Routing reconciliation: gpt-6.1-sol / unavailable'].join('\n'),
+    ...overrides,
+  };
+}
+
+test('reconcileObservedModelRouting records the report as unverified, the unexposed effort as unavailable, and keeps the declaration', () => {
+  const result = reconcileObservedModelRouting(DECLARED, OBSERVED, APPROVAL, NOW);
+  assert.deepStrictEqual(result, {
+    profile: 'session-default',
+    model: 'gpt-6.1-sol',
+    reasoning_effort: 'unavailable',
+    selected_by: 'manual-override',
+    policy_version: '1.0.0',
+    override: {
+      authorized_by: 'griff843',
+      reason: `pm-verdict/v1 APPROVED ${APPROVAL.comment_url}`,
+      at: NOW,
+      declared: { profile: 'codex-luna-medium', model: 'gpt-5.6-luna', reasoning_effort: 'medium', selected_by: 'three-brain' },
+      observation: { verification: 'unverified-external-session', source: 'executor report in proof', unavailable_fields: ['reasoning_effort'] },
+      approval: APPROVAL,
+    },
+  });
+});
+
+test('a reported reasoning effort is recorded with no unavailable fields', () => {
+  const result = reconcileObservedModelRouting(DECLARED, { ...OBSERVED, reasoning_effort: 'high' }, APPROVAL, NOW);
+  assert.strictEqual(result.reasoning_effort, 'high');
+  assert.deepStrictEqual(result.override?.observation?.unavailable_fields, []);
+});
+
+test('the unavailable sentinel cannot be passed off as an observed reasoning effort', () => {
+  assert.throws(
+    () => reconcileObservedModelRouting(DECLARED, { ...OBSERVED, reasoning_effort: 'Unavailable' }, APPROVAL, NOW),
+    /is not an observed reasoning effort/,
+  );
+});
+
+test('a second reconciliation keeps the first declaration', () => {
+  const first = reconcileObservedModelRouting(DECLARED, OBSERVED, APPROVAL, NOW);
+  const second = reconcileObservedModelRouting(first, { ...OBSERVED, reasoning_effort: 'high' }, APPROVAL, NOW);
+  assert.strictEqual(second.reasoning_effort, 'high');
+  assert.deepStrictEqual(second.override?.declared, first.override?.declared);
+});
+
+test('reconcileObservedModelRouting refuses a no-op and names every empty field', () => {
+  assert.throws(
+    () => reconcileObservedModelRouting(DECLARED, { profile: 'codex-luna-medium', model: 'gpt-5.6-luna', reasoning_effort: 'medium', source: 's' }, APPROVAL, NOW),
+    /already equals the manifest model_routing/,
+  );
+  assert.throws(
+    () => reconcileObservedModelRouting(DECLARED, { profile: ' ', model: '', reasoning_effort: ' ', source: '' }, APPROVAL, NOW),
+    /requires non-empty profile, model, source, reasoning_effort$/,
+  );
+});
+
+test('verifyRoutingApproval takes the reviewer from the GitHub comment author', () => {
+  assert.deepStrictEqual(verifyRoutingApproval(verdictComment(), CONTEXT), APPROVAL);
+});
+
+test('adversarial: approvals that are forged, stale, misdirected or for other values are refused', () => {
+  const refuse = (comment: RoutingApprovalComment, pattern: RegExp, context = CONTEXT) =>
+    assert.throws(() => verifyRoutingApproval(comment, context), pattern);
+  refuse(verdictComment({ user: { login: 'mallory', type: 'User' } }), /"mallory" is not a CODEOWNERS reviewer/);
+  refuse(verdictComment({ user: { login: 'griff843', type: 'Bot' } }), /is a bot/);
+  refuse(verdictComment({ user: null }), /not a CODEOWNERS reviewer/);
+  refuse(verdictComment({}, 'authorized_by: griff843\nRouting reconciliation: gpt-6.1-sol / unavailable'), /not a pm-verdict\/v1 verdict/);
+  refuse(
+    verdictComment({}, verdictComment().body!.replace('PM_VERDICT: APPROVED', 'PM_VERDICT: CHANGES_REQUIRED')),
+    /verdict is CHANGES_REQUIRED/,
+  );
+  refuse(verdictComment({}, verdictComment().body!.replace('WORK-2026102806', 'WORK-2026102807')), /Issue WORK-2026102807 is not/);
+  refuse(verdictComment({}, verdictComment().body!.replace('PR: 1800', 'PR: 1801')), /PR 1801 is not #1800/);
+  refuse(verdictComment(), /is not the PR head/, { ...CONTEXT, headSha: 'b'.repeat(40) });
+  refuse(verdictComment(), /does not contain the line "Routing reconciliation: gpt-6.1-sol \/ medium"/, { ...CONTEXT, reasoningEffort: 'medium' });
+  refuse(verdictComment(), /Routing reconciliation: gpt-5.6-sol/, { ...CONTEXT, model: 'gpt-5.6-sol' });
+});
+
+test('adversarial: a genuine matching verdict posted on a different PR or repository is refused', () => {
+  const refuse = (overrides: Partial<RoutingApprovalComment>, pattern: RegExp) =>
+    assert.throws(() => verifyRoutingApproval(verdictComment(overrides), CONTEXT), pattern);
+  refuse(
+    { issue_url: 'https://api.github.com/repos/o/r/issues/1799', html_url: 'https://github.com/o/r/pull/1799#issuecomment-1' },
+    /comment is on https:\/\/api.github.com\/repos\/o\/r\/issues\/1799, not .*issues\/1800/,
+  );
+  refuse({ issue_url: 'https://api.github.com/repos/o/r/issues/1799' }, /comment is on .*issues\/1799/);
+  refuse({ html_url: 'https://github.com/o/r/pull/1799#issuecomment-1' }, /is not on o\/r PR #1800/);
+  refuse(
+    { issue_url: 'https://api.github.com/repos/x/r/issues/1800', html_url: 'https://github.com/x/r/pull/1800#issuecomment-1' },
+    /comment is on https:\/\/api.github.com\/repos\/x\/r\/issues\/1800/,
+  );
+  refuse({ issue_url: undefined }, /comment is on <no issue_url>/);
+  refuse({ html_url: 'https://github.com/o/r/pull/18000#issuecomment-1' }, /is not on o\/r PR #1800/);
+});
+
+function honestSidecar(reconciled: ModelRoutingBlock) {
+  return {
+    issue_id: 'WORK-2026102806',
+    model_profile: reconciled.profile,
+    model: reconciled.model,
+    reasoning_effort: reconciled.reasoning_effort,
+    policy_version: '1.0.0',
+    override_used: true,
+    override_authorized_by: 'griff843',
+    execution_verification: 'unverified-external-session',
+    unavailable_fields: ['reasoning_effort'],
+  };
+}
+
+test('a reconciled manifest accepts only a sidecar that carries the unverified flag and unavailable fields', () => {
+  const reconciled = reconcileObservedModelRouting(DECLARED, OBSERVED, APPROVAL, NOW);
+  assert.deepStrictEqual(
+    validatePreMergeModelRoutingEvidence(honestSidecar(reconciled), { expectedIssueId: 'WORK-2026102806', manifestRouting: reconciled }),
+    { valid: true, violations: [] },
+  );
+});
+
+test('adversarial: fabricated sidecars cannot pass against a reconciled manifest', () => {
+  const reconciled = reconcileObservedModelRouting(DECLARED, OBSERVED, APPROVAL, NOW);
+  const violations = (sidecar: Record<string, unknown>) =>
+    validatePreMergeModelRoutingEvidence(sidecar, { manifestRouting: reconciled }).violations;
+  const honest = honestSidecar(reconciled);
+  assert.ok(violations({ ...honest, execution_verification: 'verified' }).some((v) => v.startsWith('execution_verification')));
+  const { execution_verification: _dropped, ...unflagged } = honest;
+  assert.ok(violations(unflagged).some((v) => v.startsWith('execution_verification')));
+  assert.ok(violations({ ...honest, reasoning_effort: 'medium', unavailable_fields: [] }).includes('reasoning_effort does not match manifest model_routing'));
+  assert.ok(violations({ ...honest, unavailable_fields: [] }).some((v) => v.startsWith('unavailable_fields')));
+  assert.ok(violations({ ...honest, override_authorized_by: 'mallory' }).some((v) => v.startsWith('override_authorized_by')));
+  assert.ok(
+    violations({ ...honest, model_profile: 'codex-luna-medium', model: 'gpt-5.6-luna', reasoning_effort: 'medium', override_used: false })
+      .includes('model does not match manifest model_routing'),
+  );
+});
+
+test('codex-exec refuses a reconciled lane even when the reported values match a policy profile', () => {
+  const reconciled = reconcileObservedModelRouting(
+    DECLARED,
+    { profile: 'codex-sol-medium', model: 'gpt-5.6-sol', reasoning_effort: 'medium', source: 's' },
+    APPROVAL,
+    NOW,
+  );
+  const result = validatePersistedModelRouting(reconciled, 'T2', fixturePolicy());
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.code, 'RECONCILED_OBSERVATION');
 });

@@ -22,7 +22,14 @@ import {
   type LaneExecutor,
 } from './shared.js';
 import { buildLaneExecutionLocation } from './lane-execution.js';
-import { resolveModelProfile, type ModelRoutingBlock } from './model-routing.js';
+import {
+  UNAVAILABLE_ROUTING_VALUE,
+  reconcileObservedModelRouting,
+  resolveModelProfile,
+  verifyRoutingApproval,
+  type ModelRoutingBlock,
+  type RoutingApprovalComment,
+} from './model-routing.js';
 import { runScopeRelease } from './scope-release.js';
 
 interface PullRequestMergeInfo {
@@ -62,6 +69,9 @@ export function main(argv = process.argv.slice(2)): number {
         return 0;
       case 'scope-release':
         return scopeReleaseCommand(positionals[1], flags, bools.has('json'));
+      case 'reconcile-routing':
+        reconcileRoutingCommand(positionals[1], flags, bools, bools.has('json'));
+        return 0;
       case 'record-merge':
         recordMergeCommand(positionals[1], flags, bools.has('json'));
         return 0;
@@ -221,6 +231,122 @@ function updateCommand(
  * release can never be applied to a lane state the operator did not actually
  * inspect.
  */
+const RECONCILE_ROUTING_FLAGS = ['profile', 'model', 'source', 'approval-comment'] as const;
+
+export interface ReconcileRoutingGitHub {
+  repository(): string;
+  fetchComment(commentId: string): RoutingApprovalComment;
+  fetchPrHeadSha(prNumber: number): string;
+}
+
+const ghReconcileRouting: ReconcileRoutingGitHub = {
+  repository() {
+    return runGh(['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner']).trim();
+  },
+  fetchComment(commentId) {
+    return JSON.parse(runGh(['api', `repos/{owner}/{repo}/issues/comments/${commentId}`])) as RoutingApprovalComment;
+  },
+  fetchPrHeadSha(prNumber) {
+    return runGh(['pr', 'view', String(prNumber), '--json', 'headRefOid', '-q', '.headRefOid']).trim();
+  },
+};
+
+function runGh(args: string[]): string {
+  const result = spawnSync('gh', args, { encoding: 'utf8' });
+  if (result.status !== 0) {
+    throw new Error(`gh ${args.join(' ')} failed: ${(result.stderr || result.stdout).trim()}`);
+  }
+  return result.stdout;
+}
+
+/**
+ * Re-record a started Codex lane's model_routing to what its session reported running
+ * (WORK-2026102902). Authority comes only from a pm-verdict/v1 APPROVED comment that GitHub
+ * places on the lane's own PR (issue_url), verified against GitHub; there is no caller-supplied authorizer. Every
+ * missing flag is named in one error. A done lane is refused: its proof is already bound.
+ */
+export function reconcileRoutingCommand(
+  issueId: string | undefined,
+  flags: Map<string, string[]>,
+  bools: Set<string>,
+  json: boolean,
+  github: ReconcileRoutingGitHub = ghReconcileRouting,
+  now = new Date().toISOString(),
+): LaneManifest {
+  const effortUnavailable = bools.has('reasoning-effort-unavailable');
+  const effort = getFlag(flags, 'reasoning-effort')?.trim();
+  const missing = [
+    ...(issueId ? [] : ['<issue id>']),
+    ...RECONCILE_ROUTING_FLAGS.filter((flag) => !getFlag(flags, flag)?.trim()).map((flag) => `--${flag}`),
+    ...(effort || effortUnavailable ? [] : ['--reasoning-effort or --reasoning-effort-unavailable']),
+  ];
+  if (missing.length > 0) {
+    throw new Error(
+      `reconcile-routing is missing ${missing.join(', ')}. Usage: reconcile-routing <ID> --profile <p> --model <m> ` +
+        '(--reasoning-effort <e> | --reasoning-effort-unavailable) --source <where it was observed> --approval-comment <id-or-url>',
+    );
+  }
+  if (effort && effortUnavailable) {
+    throw new Error('reconcile-routing refused: pass --reasoning-effort or --reasoning-effort-unavailable, not both');
+  }
+  const id = issueId!.toUpperCase();
+  if (!manifestExists(id)) {
+    throw new Error(`Manifest not found for ${id}`);
+  }
+  const manifest = readManifest(id);
+  if (manifest.executor !== 'codex-cli' && manifest.executor !== 'codex-cloud') {
+    throw new Error(`reconcile-routing refused: ${id} executor is "${manifest.executor ?? 'unset'}"; model_routing is Codex-only`);
+  }
+  if (!manifest.model_routing) {
+    throw new Error(`reconcile-routing refused: ${id} has no model_routing to reconcile`);
+  }
+  if (manifest.status === 'done') {
+    throw new Error(`reconcile-routing refused: ${id} is done; its proof is already bound`);
+  }
+  const prNumber = Number(/\/pull\/(\d+)$/.exec(manifest.pr_url ?? '')?.[1]);
+  if (!Number.isInteger(prNumber) || prNumber <= 0) {
+    throw new Error(`reconcile-routing refused: ${id} has no pr_url; the approval must be on the lane's own PR`);
+  }
+
+  const commentId = /(\d+)$/.exec(getFlag(flags, 'approval-comment')!.trim())?.[1];
+  if (!commentId) {
+    throw new Error('reconcile-routing refused: --approval-comment must be a comment id or a URL ending in one');
+  }
+  const model = getFlag(flags, 'model')!.trim();
+  const approval = verifyRoutingApproval(github.fetchComment(commentId), {
+    repository: github.repository(),
+    issueId: id,
+    prNumber,
+    headSha: github.fetchPrHeadSha(prNumber),
+    model,
+    reasoningEffort: effort ?? UNAVAILABLE_ROUTING_VALUE,
+  });
+
+  const next: LaneManifest = {
+    ...manifest,
+    model_routing: reconcileObservedModelRouting(
+      manifest.model_routing,
+      {
+        profile: getFlag(flags, 'profile')!,
+        model,
+        reasoning_effort: effortUnavailable ? null : effort!,
+        source: getFlag(flags, 'source')!,
+      },
+      approval,
+      now,
+    ),
+    heartbeat_at: now,
+  };
+  writeManifest(next);
+
+  if (json) {
+    emitJson({ ok: true, code: 'model_routing_reconciled', issue_id: id, model_routing: next.model_routing });
+  } else {
+    console.log(`${id}: model_routing reconciled to ${next.model_routing!.model} (unverified external session)`);
+  }
+  return next;
+}
+
 function scopeReleaseCommand(
   issueId: string | undefined,
   flags: Map<string, string[]>,
@@ -463,6 +589,7 @@ function usage(): void {
   console.error('  pnpm ops:lane-manifest -- create --issue UTV2-123 --tier T2 --branch codex/utv2-123-foo --files path --preflight-token .out/ops/preflight/...json');
   console.error('  pnpm ops:lane-manifest -- read UTV2-123 [--json]');
   console.error('  pnpm ops:lane-manifest -- update UTV2-123 [--status merged] [--pr-url ...] [--commit-sha ...] [--files-changed path]');
+  console.error('  pnpm ops:lane-manifest -- reconcile-routing UTV2-123 --profile <p> --model <m> (--reasoning-effort <e> | --reasoning-effort-unavailable) --source <where observed> --approval-comment <id-or-url> [--json]');
   console.error('  pnpm ops:lane-manifest -- record-merge UTV2-123 --pr <url-or-number> [--json]');
   console.error('  pnpm ops:lane-manifest -- scope-release UTV2-123 --pr 456 --expected-head-sha <sha> --expected-lock-hash <sha256> --release-path <path> [--release-path <path>] --actor <who> --reason <why> [--json]');
   console.error('  pnpm ops:lane-manifest -- validate UTV2-123 [--json]');
