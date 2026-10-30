@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102806-cc-wave2-results-corrections",
   "branch": "codex/work-2026102806-cc-wave2-results-corrections",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "28c6836ec2cf62d2ea79601477835542c4ff4764",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1800",
   "files_changed": [],
   "file_scope_lock": [
@@ -46,14 +46,22 @@
     "docs/06_status/proof/WORK-2026102806/verification.md",
     "docs/06_status/proof/WORK-2026102806/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-10-28T20:20:28.945Z",
-  "heartbeat_at": "2026-10-30T11:15:14.291Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-30T11:47:45.915Z",
+  "closed_at": "2026-10-30T11:47:45.915Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026102806-cc-wave2-results-corrections.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-30T11:47:43.994Z",
+      "verdict": "pass",
+      "merge_sha": "28c6836ec2cf62d2ea79601477835542c4ff4764",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "session-default",

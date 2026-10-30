@@ -28,5 +28,11 @@
   "execution_verification": "unverified-external-session",
   "unavailable_fields": [
     "reasoning_effort"
-  ]
+  ],
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": "28c6836ec2cf62d2ea79601477835542c4ff4764",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1800",
+    "bound_at": "2026-10-30T11:47:42.376Z"
+  }
 }

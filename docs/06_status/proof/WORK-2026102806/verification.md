@@ -1,6 +1,6 @@
 # PROOF: WORK-2026102806
 
-MERGE_SHA: pending merge
+MERGE_SHA: 28c6836ec2cf62d2ea79601477835542c4ff4764
 
 ## ASSERTIONS:
 
@@ -72,5 +72,5 @@ Source commit: `8de7a35c18240a45914e74c618ec9b7863faa723`.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `28c6836ec2cf62d2ea79601477835542c4ff4764`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1800

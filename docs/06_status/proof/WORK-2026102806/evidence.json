@@ -34,9 +34,10 @@
   "accepted_followup": "WORK-2026102807: resolve unfiltered result from correction chains after #1800 merges",
   "governance": "Model-routing reconciliation deferred by Griff; actual exposed model is recorded without fabricated effort or telemetry",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "28c6836ec2cf62d2ea79601477835542c4ff4764",
     "verified_source_sha": "8de7a35c18240a45914e74c618ec9b7863faa723",
-    "sha_type": "merge_sha"
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-30T11:47:39.069Z"
   },
   "recap_review_fix": {
     "source_sha": "8de7a35c18240a45914e74c618ec9b7863faa723",
