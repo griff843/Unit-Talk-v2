@@ -1,12 +1,15 @@
 # Diff summary: WORK-2026102904
 
-> Scaffolded by `ops:lane-start`. Replace this note with the files this lane changed
-> and why. Until then this file records nothing.
+Execution SHA: 2f15363f273eefcdae6d67b3ca3108fd49f4d5c5
 
 | File | Change |
 |---|---|
+| scripts/ops/command-center-bridge.ts | New `buildRemoteCommand`: a bash relay with the upstream reader in the foreground replaces `nc 127.0.0.1 <port>`, so the ssh session ends when Command Center closes the connection. `buildSshArgs` uses it. Header comment updated. |
+| scripts/ops/command-center-bridge.test.ts | Exact-command and validation tests updated; four integration tests run the real relay locally: relay exits on server close, idle sign-in answered on a fresh socket, credentials pass through, dropped connection fails fast. |
 
-## SHA Binding
+Not changed: bind-address and host validation, credential handling (none injected), the host, sshd, ports, containers, firewall, any app code and any workflow.
+
+## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1803
