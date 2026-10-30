@@ -1,6 +1,6 @@
 # PROOF: WORK-2026103020
 
-MERGE_SHA: 286ecb3bc20a1433bd3b7e353dbc69a359b82d07
+MERGE_SHA: pending merge
 
 ASSERTIONS:
 
@@ -10,7 +10,7 @@ ASSERTIONS:
 
 EVIDENCE:
 
-The SHA anchor above is the verified pre-merge source commit; supported closeout will bind the actual merge SHA.
+The rebindable anchor above intentionally remains pending before merge. Execution identity is the verified source SHA below; supported closeout will bind the actual merge SHA.
 
 ## Verification
 
