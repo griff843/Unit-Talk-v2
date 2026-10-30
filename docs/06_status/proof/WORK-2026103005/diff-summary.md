@@ -1,5 +1,7 @@
 # WORK-2026103005 — private audience member-read boundary
 
+MERGE_SHA: 916228ed77abdfc05f49549148f2e22818786f78
+
 Source candidate: `916228ed77abdfc05f49549148f2e22818786f78`.
 
 Adds the pure contracts audience declaration/predicate, refuses malformed capper routing audiences, pins the resolved audience onto the release outbox destination, and excludes private/unknown/disagreeing pins from the in-scope member projections. Shared API outbox reads run in batches of at most eight. Member performance retains its existing complete population, delivery receipt, attribution and stable-snapshot checks. Existing Track Only and recap stop guards are preserved.

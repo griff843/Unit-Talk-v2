@@ -1,6 +1,16 @@
 # PROOF: WORK-2026103005
 
-MERGE_SHA: pending merge
+MERGE_SHA: 916228ed77abdfc05f49549148f2e22818786f78
+
+ASSERTIONS:
+
+- Private, unknown and mismatched audience pins are excluded from the in-scope member readers; legacy absent audiences remain members.
+- Outbox audience is pinned at release. Canonical pick records, Track Only controls and private per-pick recap destination are preserved.
+- Every implemented reader class kills the shared-predicate mutant. Insert-time pick pinning and public previews remain the separately approved successor scope.
+
+EVIDENCE:
+
+The SHA anchor above is the verified pre-merge source commit; supported closeout will bind the actual merge SHA.
 
 Status: local source verification complete; exact-head CI staging and T1 PM review pending.
 
@@ -14,6 +24,8 @@ Verified source candidate: `916228ed77abdfc05f49549148f2e22818786f78`.
 - Direct `pnpm test:db`: exited 1 at the staging-target guard. Local host 127.0.0.1 cannot identify approved staging project xskgrzbteyqdufktjrjx, so no writable DB test ran locally. Exact-head CI staging proof is required; local environment must never be pointed at production for writes.
 - R-level check against origin/main and source HEAD: PASS, no matched artifact rules.
 - `git diff --check`: PASS.
+- Candidate `6c15a3d165883de749ab26a8ae48454cfaa05a18` passed both `verify` and staging database proof in CI run [41110318076](https://github.com/griff843/Unit-Talk-v2/actions/runs/41110318076). The staging receipt records exit 0 and 9 tests passed without skips on xskgrzbteyqdufktjrjx. This later proof-only section/anchor repair needs fresh candidate-head CI; the source commit remains unchanged.
+- Local `evaluateCloseEligibilityPreflight` after the section/anchor repair: eligible true, zero blocking findings. Proof binding validator also passes.
 - Predicate mutation: changing only the shared reader's staff-canary interpretation to members caused eight behavior failures, independently including member picks, generic picks, settlements, performance service, authenticated bot stats, authenticated bot leaderboard and aggregate recap. Restoring exact original source made all 11 new behavior tests pass. See mutation-summary.md; no mutant was committed.
 
 ## Remaining acceptance

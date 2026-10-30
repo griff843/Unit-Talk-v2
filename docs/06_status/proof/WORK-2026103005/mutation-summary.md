@@ -1,5 +1,7 @@
 # Required shared-predicate mutation
 
+MERGE_SHA: 916228ed77abdfc05f49549148f2e22818786f78
+
 Temporarily changed the private pin interpretation inside `pinnedAudience` from staff-canary to members; routing parsing was unchanged. Rebuilt contracts and directly ran the five admitted test files with `--test-name-pattern=WORK-2026103005`.
 
 The mutant exited 1 with eight independent behavioral failures:
