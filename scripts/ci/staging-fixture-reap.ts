@@ -21,7 +21,9 @@
  *     append-only and `pick_reviews` has no cascade, so those picks are left
  *     alone rather than forced, and both are re-checked per batch;
  *   - page by offset. It pages by primary key, so its own reads do not add the
- *     offset scans it exists to relieve.
+ *     offset scans it exists to relieve;
+ *   - act on a partial read. Every read is checked against an exact count taken
+ *     before and after it, and a shortfall or change aborts the run.
  */
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -38,7 +40,10 @@ import { collectEffectiveEnv } from './required-db-smoke.js';
 
 /** No pick younger than this is ever selected, whatever cutoff is passed. */
 export const MIN_REAP_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-/** PostgREST caps every response at 1000 rows, so reads page at that size. */
+/**
+ * Rows asked for per read. PostgREST may return fewer (its max-rows cap), so
+ * completeness is checked against an exact count, never inferred from page size.
+ */
 const READ_PAGE_SIZE = 1000;
 /** IDs per `in.(...)` filter and per DELETE. Keeps the request URL well under proxy limits. */
 export const BATCH_SIZE = 150;
@@ -145,6 +150,7 @@ export interface ReapReport {
   deleted_picks: number;
   deleted_submissions: number;
   raced: number;
+  raced_submissions: number;
 }
 
 function tally(rows: ReapCandidate[], key: 'status' | 'source'): Record<string, number> {
@@ -156,59 +162,136 @@ function tally(rows: ReapCandidate[], key: 'status' | 'source'): Record<string, 
   return out;
 }
 
+/** A filter over one table, read keyset-paged by `id`. */
+export interface ReadSpec {
+  table: 'picks' | 'submissions' | 'settlement_records' | 'pick_reviews';
+  columns: string;
+  createdBefore?: string;
+  inFilter?: { column: 'pick_id' | 'submission_id'; values: string[] };
+}
+
+/**
+ * Everything the reap does to the database. `reapStagingFixtures` never touches
+ * a client directly, so the tests can run it against a store that enforces the
+ * PostgREST response cap and the `picks.submission_id` ON DELETE SET NULL rule.
+ */
+export interface ReapStore {
+  /** Exact number of rows the spec matches, or null when the server gave none. */
+  count(spec: ReadSpec): Promise<number | null>;
+  /** Up to `limit` matching rows with `id` greater than `afterId`, ascending by `id`. */
+  page(spec: ReadSpec, afterId: string | null, limit: number): Promise<Record<string, unknown>[]>;
+  deletePicks(ids: string[], cutoffIso: string): Promise<number>;
+  deleteSubmissions(ids: string[], cutoffIso: string): Promise<number>;
+}
+
+function describe(spec: ReadSpec): string {
+  return spec.inFilter ? `${spec.table} by ${spec.inFilter.column}` : spec.table;
+}
+
+/**
+ * Read every row a spec matches, or throw. A response may hold fewer rows than
+ * asked for (PostgREST caps each one at its max-rows setting), so completeness is
+ * judged against an exact count taken before the read and again after it, never
+ * against page length. The read fails closed when the count is missing, when the
+ * two counts differ (the view changed underneath it), when a row repeats, or when
+ * the rows read do not equal the count.
+ */
+export async function readAllVerified(store: ReapStore, spec: ReadSpec): Promise<Record<string, unknown>[]> {
+  const label = describe(spec);
+  const before = await store.count(spec);
+  if (before === null || !Number.isInteger(before) || before < 0) {
+    throw new Error(`reap read of ${label} returned no exact count; refusing an unverifiable read`);
+  }
+  const rows: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+  let after: string | null = null;
+  while (rows.length < before) {
+    const page = await store.page(spec, after, READ_PAGE_SIZE);
+    if (page.length === 0) break;
+    for (const row of page) {
+      const id = String(row['id']);
+      if (seen.has(id)) throw new Error(`reap read of ${label} returned id ${id} twice; refusing an inconsistent read`);
+      seen.add(id);
+      rows.push(row);
+    }
+    after = String(page[page.length - 1]!['id']);
+  }
+  const afterCount = await store.count(spec);
+  if (afterCount !== before) {
+    throw new Error(`reap read of ${label} changed during the read (${before} rows before, ${afterCount} after); nothing was trusted`);
+  }
+  if (rows.length !== before) {
+    throw new Error(`reap read of ${label} is incomplete: read ${rows.length} of ${before} rows; nothing was trusted`);
+  }
+  return rows;
+}
+
 async function idsWithRow(
-  client: BoundarySupabaseClient,
+  store: ReapStore,
   table: 'settlement_records' | 'pick_reviews',
   pickIds: string[],
 ): Promise<Set<string>> {
   const found = new Set<string>();
   for (const ids of chunk(pickIds, BATCH_SIZE)) {
-    const { data, error } = await client.from(table).select('pick_id').in('pick_id', ids);
-    if (error) throw new Error(`reap read of ${table} failed: ${error.message}`);
-    for (const row of (data ?? []) as { pick_id: string }[]) found.add(row.pick_id);
+    const rows = await readAllVerified(store, {
+      table,
+      columns: 'id,pick_id',
+      inFilter: { column: 'pick_id', values: ids },
+    });
+    for (const row of rows) found.add(String(row['pick_id']));
   }
   return found;
 }
 
-async function readAgedRows(
-  client: BoundarySupabaseClient,
-  table: 'picks' | 'submissions',
-  columns: string,
-  cutoffIso: string,
-): Promise<Record<string, unknown>[]> {
-  const rows: Record<string, unknown>[] = [];
-  let after: string | null = null;
-  for (;;) {
-    let query = client.from(table).select(columns).lt('created_at', cutoffIso).order('id', { ascending: true });
-    if (after !== null) query = query.gt('id', after);
-    const { data, error } = await query.limit(READ_PAGE_SIZE);
-    if (error) throw new Error(`reap read of ${table} failed: ${error.message}`);
-    const page = (data ?? []) as unknown as Record<string, unknown>[];
-    rows.push(...page);
-    if (page.length < READ_PAGE_SIZE) break;
-    after = String(page[page.length - 1]!['id']);
-  }
-  return rows;
+/** Every pick that references one of these submissions, read completely. */
+async function linkedPicks(store: ReapStore, submissionIds: string[]): Promise<{ id: string; submission_id: string }[]> {
+  const rows = await readAllVerified(store, {
+    table: 'picks',
+    columns: 'id,submission_id',
+    inFilter: { column: 'submission_id', values: submissionIds },
+  });
+  return rows.map((row) => ({ id: String(row['id']), submission_id: String(row['submission_id']) }));
+}
+
+/**
+ * The pure orphan rule: a submission is orphaned only when every pick that
+ * references it is in `goneOrSelected`. `links` must be the complete set of
+ * linking picks; a partial set makes a retained pick invisible, which is why it
+ * is only ever produced by `readAllVerified`.
+ */
+export function classifyOrphanedSubmissions(
+  submissionIds: readonly string[],
+  links: readonly { id: string; submission_id: string }[],
+  goneOrSelected: ReadonlySet<string>,
+): string[] {
+  const kept = new Set(links.filter((pick) => !goneOrSelected.has(pick.id)).map((pick) => pick.submission_id));
+  return submissionIds.filter((id) => !kept.has(id));
 }
 
 /**
  * Select every reapable pick read-only, then, in execute mode only, delete in
  * batches. Each batch re-checks settlement and review rows and re-asserts the
  * cutoff in the DELETE filter, so a pick that changed after selection is left
- * alone and counted as raced.
+ * alone and counted as raced. Each submission batch is re-read immediately
+ * before its DELETE and any submission that still has a linking pick is kept,
+ * because deleting it would null `submission_id` on that pick.
  */
 export async function reapStagingFixtures(
-  client: BoundarySupabaseClient,
-  options: { cutoff: Date; now?: Date; execute: boolean; maxPicks?: number; projectRef: string },
+  store: ReapStore,
+  options: { cutoff: Date; now?: Date; execute: boolean; maxPicks?: number | undefined; projectRef: string },
 ): Promise<ReapReport> {
   const now = options.now ?? new Date();
   assertReapCutoff(options.cutoff, now);
   const cutoffIso = options.cutoff.toISOString();
 
-  const rows = (await readAgedRows(client, 'picks', 'id,created_at,status,source', cutoffIso)) as unknown as ReapCandidate[];
+  const rows = (await readAllVerified(store, {
+    table: 'picks',
+    columns: 'id,created_at,status,source',
+    createdBefore: cutoffIso,
+  })) as unknown as ReapCandidate[];
   const allIds = rows.map((row) => row.id);
-  const settled = await idsWithRow(client, 'settlement_records', allIds);
-  const reviewed = await idsWithRow(client, 'pick_reviews', allIds);
+  const settled = await idsWithRow(store, 'settlement_records', allIds);
+  const reviewed = await idsWithRow(store, 'pick_reviews', allIds);
   const { selected, skipped } = selectReapablePicks(rows, options.cutoff, settled, reviewed);
 
   if (options.execute) {
@@ -221,49 +304,33 @@ export async function reapStagingFixtures(
   const selectedIds = new Set(selected.map((row) => row.id));
   if (options.execute) {
     for (const batch of chunk([...selectedIds], BATCH_SIZE)) {
-      const settledNow = await idsWithRow(client, 'settlement_records', batch);
-      const reviewedNow = await idsWithRow(client, 'pick_reviews', batch);
+      const settledNow = await idsWithRow(store, 'settlement_records', batch);
+      const reviewedNow = await idsWithRow(store, 'pick_reviews', batch);
       const safe = batch.filter((id) => !settledNow.has(id) && !reviewedNow.has(id));
       raced += batch.length - safe.length;
       for (const id of batch) if (!safe.includes(id)) selectedIds.delete(id);
       if (safe.length === 0) continue;
-      const { error, count } = await client
-        .from('picks')
-        .delete({ count: 'exact' })
-        .in('id', safe)
-        .lt('created_at', cutoffIso);
-      if (error) throw new Error(`reap delete of picks failed after ${deletedPicks} deleted: ${error.message}`);
-      deletedPicks += count ?? 0;
+      deletedPicks += await store.deletePicks(safe, cutoffIso);
     }
   }
 
   // A submission is orphaned when every pick that references it is gone (execute)
   // or selected (dry run). Reading the remaining picks covers both.
-  const submissions = await readAgedRows(client, 'submissions', 'id', cutoffIso);
+  const submissions = await readAllVerified(store, { table: 'submissions', columns: 'id', createdBefore: cutoffIso });
   const orphaned: string[] = [];
   for (const ids of chunk(submissions.map((row) => String(row['id'])), BATCH_SIZE)) {
-    const { data, error } = await client.from('picks').select('id,submission_id').in('submission_id', ids);
-    if (error) throw new Error(`reap read of picks by submission failed: ${error.message}`);
-    const kept = new Set(
-      ((data ?? []) as { id: string; submission_id: string }[])
-        .filter((pick) => !selectedIds.has(pick.id))
-        .map((pick) => pick.submission_id),
-    );
-    for (const id of ids) if (!kept.has(id)) orphaned.push(id);
+    orphaned.push(...classifyOrphanedSubmissions(ids, await linkedPicks(store, ids), selectedIds));
   }
 
   let deletedSubmissions = 0;
+  let racedSubmissions = 0;
   if (options.execute) {
     for (const batch of chunk(orphaned, BATCH_SIZE)) {
-      const { error, count } = await client
-        .from('submissions')
-        .delete({ count: 'exact' })
-        .in('id', batch)
-        .lt('created_at', cutoffIso);
-      if (error) {
-        throw new Error(`reap delete of submissions failed after ${deletedSubmissions} deleted: ${error.message}`);
-      }
-      deletedSubmissions += count ?? 0;
+      // Selected picks are deleted by now, so any linking pick is one being kept.
+      const safe = classifyOrphanedSubmissions(batch, await linkedPicks(store, batch), new Set());
+      racedSubmissions += batch.length - safe.length;
+      if (safe.length === 0) continue;
+      deletedSubmissions += await store.deleteSubmissions(safe, cutoffIso);
     }
   }
 
@@ -280,14 +347,53 @@ export async function reapStagingFixtures(
     deleted_picks: deletedPicks,
     deleted_submissions: deletedSubmissions,
     raced,
+    raced_submissions: racedSubmissions,
+  };
+}
+
+/** The live store: PostgREST through the privileged client boundary. */
+export function supabaseReapStore(client: BoundarySupabaseClient): ReapStore {
+  const filtered = (spec: ReadSpec, head: boolean) => {
+    let query = client.from(spec.table).select(spec.columns, head ? { count: 'exact', head: true } : undefined);
+    if (spec.createdBefore !== undefined) query = query.lt('created_at', spec.createdBefore);
+    if (spec.inFilter !== undefined) query = query.in(spec.inFilter.column, spec.inFilter.values);
+    return query;
+  };
+  return {
+    async count(spec) {
+      const { error, count } = await filtered(spec, true);
+      if (error) throw new Error(`reap count of ${describe(spec)} failed: ${error.message}`);
+      return count ?? null;
+    },
+    async page(spec, afterId, limit) {
+      let query = filtered(spec, false);
+      if (afterId !== null) query = query.gt('id', afterId);
+      const { data, error } = await query.order('id', { ascending: true }).limit(limit);
+      if (error) throw new Error(`reap read of ${describe(spec)} failed: ${error.message}`);
+      return (data ?? []) as unknown as Record<string, unknown>[];
+    },
+    async deletePicks(ids, cutoffIso) {
+      const { error, count } = await client.from('picks').delete({ count: 'exact' }).in('id', ids).lt('created_at', cutoffIso);
+      if (error) throw new Error(`reap delete of picks failed: ${error.message}`);
+      return count ?? 0;
+    },
+    async deleteSubmissions(ids, cutoffIso) {
+      const { error, count } = await client
+        .from('submissions')
+        .delete({ count: 'exact' })
+        .in('id', ids)
+        .lt('created_at', cutoffIso);
+      if (error) throw new Error(`reap delete of submissions failed: ${error.message}`);
+      return count ?? 0;
+    },
   };
 }
 
 export interface ReapArgs {
   execute: boolean;
   cutoff: Date;
-  maxPicks?: number;
-  reportPath?: string;
+  maxPicks?: number | undefined;
+  reportPath?: string | undefined;
 }
 
 export function parseReapArgs(argv: string[], now: Date): ReapArgs {
@@ -342,7 +448,7 @@ async function main(): Promise<void> {
   const client = createPrivilegedClient(url as string, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const report = await reapStagingFixtures(client, {
+  const report = await reapStagingFixtures(supabaseReapStore(client), {
     cutoff: args.cutoff,
     now,
     execute: args.execute,

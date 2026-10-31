@@ -27,9 +27,14 @@ import {
   assertReapCutoff,
   assertWithinCap,
   chunk,
+  classifyOrphanedSubmissions,
   parseReapArgs,
+  readAllVerified,
+  reapStagingFixtures,
   selectReapablePicks,
+  type ReadSpec,
   type ReapCandidate,
+  type ReapStore,
 } from './staging-fixture-reap.js';
 import {
   CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF,
@@ -720,4 +725,188 @@ test('reap defaults to a dry run at the minimum age and rejects unknown flags', 
 test('reap batches ids within the request bound', () => {
   assert.deepEqual(chunk([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]]);
   assert.deepEqual(chunk([], 2), []);
+});
+
+// The PM review of #1813: a read that PostgREST truncates at its 1,000-row cap
+// must never make a retained pick invisible. These run the whole reap against
+// an in-memory store that enforces that cap and the picks.submission_id
+// ON DELETE SET NULL rule.
+
+const REAP_OLD = new Date(REAP_CUTOFF.getTime() - 24 * 60 * 60 * 1000).toISOString();
+const POSTGREST_MAX_ROWS = 1000;
+
+type FakeRow = Record<string, string | null>;
+
+interface FakeStoreOptions {
+  /** Return only the first page of any read, as a single unpaged request would. */
+  truncate?: boolean;
+  /** Report a count that grows by one on every call, as if rows were being inserted. */
+  drift?: boolean;
+  nullCount?: boolean;
+  /** Page with id >= after, so the boundary row repeats. */
+  repeatBoundary?: boolean;
+  onCount?: (spec: ReadSpec, call: number) => void;
+}
+
+function fakeReapStore(tables: Record<ReadSpec['table'], FakeRow[]>, options: FakeStoreOptions = {}) {
+  let countCalls = 0;
+  const matches = (spec: ReadSpec) =>
+    tables[spec.table].filter(
+      (row) =>
+        (spec.createdBefore === undefined || (row['created_at'] ?? '') < spec.createdBefore) &&
+        (spec.inFilter === undefined || spec.inFilter.values.includes(row[spec.inFilter.column] ?? '')),
+    );
+  const store: ReapStore = {
+    async count(spec) {
+      countCalls += 1;
+      const n = matches(spec).length;
+      options.onCount?.(spec, countCalls);
+      if (options.nullCount) return null;
+      return options.drift ? n + countCalls : n;
+    },
+    async page(spec, afterId, limit) {
+      if (options.truncate && afterId !== null) return [];
+      return matches(spec)
+        .sort((a, b) => String(a['id']).localeCompare(String(b['id'])))
+        .filter((row) => afterId === null || (options.repeatBoundary ? String(row['id']) >= afterId : String(row['id']) > afterId))
+        .slice(0, Math.min(limit, POSTGREST_MAX_ROWS))
+        .map((row) => ({ ...row }));
+    },
+    async deletePicks(ids, cutoffIso) {
+      const doomed = new Set(tables.picks.filter((row) => ids.includes(String(row['id'])) && (row['created_at'] ?? '') < cutoffIso).map((row) => row['id']));
+      tables.picks = tables.picks.filter((row) => !doomed.has(row['id']));
+      return doomed.size;
+    },
+    async deleteSubmissions(ids, cutoffIso) {
+      const doomed = new Set(tables.submissions.filter((row) => ids.includes(String(row['id'])) && (row['created_at'] ?? '') < cutoffIso).map((row) => row['id']));
+      tables.submissions = tables.submissions.filter((row) => !doomed.has(row['id']));
+      for (const pick of tables.picks) if (doomed.has(pick['submission_id'] ?? null)) pick['submission_id'] = null;
+      return doomed.size;
+    },
+  };
+  return store;
+}
+
+const pad = (prefix: string, n: number) => `${prefix}${String(n).padStart(4, '0')}`;
+const fakePick = (id: string, submissionId: string | null): FakeRow => ({
+  id,
+  created_at: REAP_OLD,
+  status: 'validated',
+  source: 'smart-form',
+  submission_id: submissionId,
+});
+
+/**
+ * One submission with 1,100 aged picks. The last 100 by id are settled, so they
+ * are retained, and they sort after the first 1,000 linking rows: an unpaged read
+ * of picks by submission returns only the 1,000 reapable ones and calls s1 orphaned.
+ * A second submission's picks are all reapable, so it is orphaned in truth.
+ */
+function overCapTables(): Record<ReadSpec['table'], FakeRow[]> {
+  const picks = Array.from({ length: 1100 }, (_, i) => fakePick(pad('p', i), 's1'));
+  picks.push(...Array.from({ length: 5 }, (_, i) => fakePick(pad('t', i), 's2')));
+  return {
+    picks,
+    submissions: [
+      { id: 's1', created_at: REAP_OLD },
+      { id: 's2', created_at: REAP_OLD },
+    ],
+    settlement_records: Array.from({ length: 100 }, (_, i) => ({ id: pad('sr', i), pick_id: pad('p', 1000 + i) })),
+    pick_reviews: [],
+  };
+}
+
+test('reap keeps a submission whose retained picks sit past the 1,000-row cap, and never nulls their link', async () => {
+  const tables = overCapTables();
+  const store = fakeReapStore(tables);
+  const dry = await reapStagingFixtures(store, { cutoff: REAP_CUTOFF, now: REAP_NOW, execute: false, projectRef: 'test' });
+  assert.equal(dry.selected, 1005);
+  assert.equal(dry.orphaned_submissions, 1, 'only s2 is orphaned');
+
+  const report = await reapStagingFixtures(store, {
+    cutoff: REAP_CUTOFF,
+    now: REAP_NOW,
+    execute: true,
+    maxPicks: dry.selected,
+    projectRef: 'test',
+  });
+  assert.equal(report.deleted_picks, 1005);
+  assert.equal(report.deleted_submissions, 1);
+  assert.deepEqual(tables.submissions.map((row) => row['id']), ['s1']);
+  assert.equal(tables.picks.length, 100);
+  assert.ok(
+    tables.picks.every((row) => row['submission_id'] === 's1'),
+    'every retained pick still references its submission',
+  );
+});
+
+test('reap never selects a settled pick whose settlement row sits past the 1,000-row cap', async () => {
+  // One batch of 150 picks; q0000 carries 1,100 settlement rows that sort first,
+  // so an unpaged read would drop q0149's single row and call it unsettled.
+  const picks = Array.from({ length: 150 }, (_, i) => fakePick(pad('q', i), null));
+  const settlement = Array.from({ length: 1100 }, (_, i) => ({ id: pad('ra', i), pick_id: 'q0000' }));
+  settlement.push({ id: 'rz0000', pick_id: 'q0149' });
+  const store = fakeReapStore({ picks, submissions: [], settlement_records: settlement, pick_reviews: [] });
+  const report = await reapStagingFixtures(store, { cutoff: REAP_CUTOFF, now: REAP_NOW, execute: false, projectRef: 'test' });
+  assert.equal(report.selected, 148);
+  assert.equal(report.skipped.settled, 2);
+});
+
+test('reap fails closed on an incomplete, changed, uncounted or repeating read', async () => {
+  const spec: ReadSpec = { table: 'picks', columns: 'id', inFilter: { column: 'submission_id', values: ['s1'] } };
+  await assert.rejects(readAllVerified(fakeReapStore(overCapTables(), { truncate: true }), spec), /incomplete: read 1000 of 1100/);
+  await assert.rejects(readAllVerified(fakeReapStore(overCapTables(), { drift: true }), spec), /changed during the read/);
+  await assert.rejects(readAllVerified(fakeReapStore(overCapTables(), { nullCount: true }), spec), /no exact count/);
+  await assert.rejects(readAllVerified(fakeReapStore(overCapTables(), { repeatBoundary: true }), spec), /returned id p0999 twice/);
+  assert.equal((await readAllVerified(fakeReapStore(overCapTables()), spec)).length, 1100);
+  // A failed read aborts the whole run before anything is deleted.
+  const tables = overCapTables();
+  await assert.rejects(
+    reapStagingFixtures(fakeReapStore(tables, { truncate: true }), {
+      cutoff: REAP_CUTOFF,
+      now: REAP_NOW,
+      execute: true,
+      maxPicks: 1005,
+      projectRef: 'test',
+    }),
+    /incomplete/,
+  );
+  assert.equal(tables.picks.length, 1105);
+  assert.equal(tables.submissions.length, 2);
+});
+
+test('reap re-reads each submission batch before deleting it and keeps one that gained a pick', async () => {
+  const tables = overCapTables();
+  let classificationCounts = 0;
+  const store = fakeReapStore(tables, {
+    // The classification read of s1/s2 counts before and after it reads. Right
+    // after its second count has been taken, a new pick links to s2.
+    onCount(spec) {
+      if (spec.inFilter?.column !== 'submission_id' || tables.picks.length !== 100) return;
+      classificationCounts += 1;
+      if (classificationCounts === 2) tables.picks.push(fakePick('z0000', 's2'));
+    },
+  });
+  const report = await reapStagingFixtures(store, {
+    cutoff: REAP_CUTOFF,
+    now: REAP_NOW,
+    execute: true,
+    maxPicks: 1005,
+    projectRef: 'test',
+  });
+  assert.equal(report.orphaned_submissions, 1);
+  assert.equal(report.raced_submissions, 1);
+  assert.equal(report.deleted_submissions, 0);
+  assert.deepEqual(tables.submissions.map((row) => row['id']).sort(), ['s1', 's2']);
+  assert.ok(tables.picks.find((row) => row['id'] === 'z0000')?.['submission_id'] === 's2');
+});
+
+test('classifyOrphanedSubmissions orphans only submissions with no kept pick', () => {
+  const links = [
+    { id: 'a', submission_id: 's1' },
+    { id: 'b', submission_id: 's1' },
+    { id: 'c', submission_id: 's2' },
+  ];
+  assert.deepEqual(classifyOrphanedSubmissions(['s1', 's2', 's3'], links, new Set(['a', 'c'])), ['s2', 's3']);
+  assert.deepEqual(classifyOrphanedSubmissions(['s1'], links, new Set(['a', 'b'])), ['s1']);
 });
