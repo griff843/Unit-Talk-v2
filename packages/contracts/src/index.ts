@@ -25,6 +25,7 @@ export * from './distribution.js';
 export * from './dispatch-ledger.js';
 export * from './submission.js';
 export * from './smart-form.js';
+export * from './delivery-audience.js';
 export * from './picks.js';
 export * from './promotion.js';
 export * from './settlement.js';

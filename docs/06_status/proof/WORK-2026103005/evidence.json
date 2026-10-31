@@ -1,0 +1,133 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026103005",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pm_proof_repair_pending_exact_head_staging_ci",
+  "verified_source_sha": "54c0e74320949b8b589f2c969f250632ee1ff74c",
+  "product_source_sha": "916228ed77abdfc05f49549148f2e22818786f78",
+  "static_proof": {
+    "status": "LOCAL_VERIFY_FAILED_TOOLING_ISOLATED_RERUNS_PASS_CI_REQUIRED",
+    "focused_tests": 236,
+    "new_behavior_tests": 11,
+    "failed": 0,
+    "r_level": "PASS",
+    "lint": "PASS",
+    "type_check": "PASS",
+    "build": "PASS",
+    "repository_tests": "current local verify stopped at test:ops; prior focused suite PASS",
+    "full_verify_exit_code": 1,
+    "full_verify_limitation": "PM repair local verify: lint/type-check/build passed; test:ops failed on shared Git test-branch collision and signal timing. Both isolated reruns passed. Required exact-head CI remains pending.",
+    "pm_repair_full_verify": {
+      "exit": 1,
+      "ops_tests": 3739,
+      "ops_pass": 3727,
+      "ops_fail": 2,
+      "ops_skip": 10,
+      "isolated_reruns": "2 PASS",
+      "log": "/tmp/work3005-pm-repair-verify.log"
+    }
+  },
+  "runtime_proof": {
+    "environment": "in-memory route/service behavior plus approved staging CI persistence proof at verified source; subsequent proof-head CI pending",
+    "queries": [
+      {
+        "surface": "member picks and both results handlers",
+        "observation": "six canonical picks retained, two member-visible projections"
+      },
+      {
+        "surface": "performance service, authenticated bot stats/leaderboard",
+        "observation": "normal result retained while private, unknown and mismatched pins excluded"
+      },
+      {
+        "surface": "daily/weekly/monthly aggregates",
+        "observation": "two normal wins and 2u net, private results excluded"
+      },
+      {
+        "surface": "per-pick recap",
+        "observation": "simulated HTTP call retains only fixture private channel with both in-memory controls released"
+      }
+    ],
+    "row_counts": [
+      {
+        "source": "in-memory canonical picks",
+        "count": 6
+      },
+      {
+        "source": "each member/results projection",
+        "count": 2
+      }
+    ]
+  },
+  "writable_live_db": {
+    "status": "HISTORICAL_PASS_NEW_AUDIENCE_CASES_PENDING_CI",
+    "local_status": "REFUSED_LOOPBACK: pnpm test:db exit 1, no writes",
+    "project_ref": "xskgrzbteyqdufktjrjx",
+    "run_id": "41133081686",
+    "attempt": 1,
+    "tests": 9,
+    "pass": 9,
+    "fail": 0,
+    "skipped": 0
+  },
+  "production_mutations": false,
+  "production_acceptance": false,
+  "mutation_check": {
+    "status": "PASS",
+    "mutant_failed_behavior_tests": 8,
+    "restored_behavior_tests": 11,
+    "source_restored": true,
+    "audit_pin_removal": {
+      "environment": "in-memory real release function",
+      "failed": 1,
+      "restored_pass": 3,
+      "restored_source_sha256": "1c5cfc98d129520b9c3f34785faf169e8bcd1fd2fefd5876d98ebdc595d8fae5",
+      "live_mutation_executed": false
+    }
+  },
+  "central_follow_up": [
+    "WORK-2026103021 Part B owns insert-time pick deliveryAuthorization audience",
+    "WORK-2026103021 separately owns public preview and score readers",
+    "P2 pagination reported and split to WORK-2026103023 by central comment 6533949804; required before canary expansion"
+  ],
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "54c0e74320949b8b589f2c969f250632ee1ff74c",
+    "evidence_commit_sha": "54c0e74320949b8b589f2c969f250632ee1ff74c",
+    "current_pr_head_sha": "CI_RESOLVED"
+  },
+  "previous_source_ci": {
+    "run_id": "41133081686",
+    "attempt": 1,
+    "head_sha": "654b73b98e8d1a7481cebaf824af5c380d5c0e59",
+    "verify_job_id": "124335579333",
+    "staging_job_id": "124330967074",
+    "verify": "PASS",
+    "staging": "PASS",
+    "tested_merge_ref_sha": "e1fed7c5f7d098a1b615dbd07c7237d3294ac236",
+    "receipt_sha256": "014a007aed5a3918b8529bcf306dd1b1c04d3c54d57fe47b1afaf2dde2f29c81"
+  },
+  "source_ci": {
+    "status": "PENDING_NEW_HEAD_CI",
+    "source_sha": "54c0e74320949b8b589f2c969f250632ee1ff74c"
+  },
+  "audit_release_live_proof": {
+    "file": "apps/api/src/t1-proof-work-2026092802-track-only-intent-live.test.ts",
+    "new_cases": 2,
+    "local": "2 SKIP: no hosted staging credentials; not live proof",
+    "ci": "pending execution of both cases in Writable DB job",
+    "assertions": [
+      "actual handler and Database repository bundle",
+      "persisted outbox audience and canonical pick identity",
+      "staff-canary excluded and members retained through shared DB-backed member filter",
+      "zero receipts and execution intents"
+    ],
+    "authority_comments": [
+      "6544069205",
+      "6544120372",
+      "6544124518"
+    ],
+    "scope_override": "required at final PR head; Claude coordinates"
+  }
+}
