@@ -578,6 +578,7 @@ export async function releaseHumanCapperDeliveryWithRunTracking(
               version: capperDiscordRoutingVersion,
               guildId: destination.guildId,
               channelId: destination.channelId,
+              audience: destination.audience,
               capperId: destination.capperId,
               source: destination.source,
             },

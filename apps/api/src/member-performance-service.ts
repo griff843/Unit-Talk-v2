@@ -3,6 +3,7 @@ import {
   readHumanCapperDeliveryAuthorization,
   readPinnedDeliveryDestination,
   readSmartFormDistributionMode,
+  isMemberVisibleDeliveryAudience,
 } from '@unit-talk/contracts';
 import type {
   PickRecord,
@@ -47,6 +48,7 @@ function fingerprint(value: unknown): string {
 
 function isCandidate(pick: PickRecord): boolean {
   const metadata = record(pick.metadata);
+  if (!isMemberVisibleDeliveryAudience(metadata)) return false;
   if (
     !['smart-form', 'alert-agent', 'api', 'discord', 'discord-bot'].includes(
       pick.source,
@@ -155,6 +157,9 @@ async function readSnapshot(repositories: RepositoryBundle) {
         const deliveries = outbox.filter(
           (row) => row.target === OFFICIAL_TARGET,
         );
+        if (!isMemberVisibleDeliveryAudience(pick.metadata, outbox.map((row) => row.payload))) {
+          return { evidence: [pick.id, outbox], performance: null };
+        }
         const receipts: Array<ReceiptRecord | null> = [];
         for (
           let receiptStart = 0;
