@@ -1,0 +1,16 @@
+{
+  "issue_id": "WORK-2026103005",
+  "manifest_schema_version": 2,
+  "model_profile": "session-default",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "unavailable",
+  "policy_version": "3.0.0",
+  "codex_cli_version": null,
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "execution_sha": "916228ed77abdfc05f49549148f2e22818786f78",
+  "execution_verification": "unverified-external-session",
+  "unavailable_fields": ["reasoning_effort", "codex_cli_version"],
+  "declared_routing": { "profile": "codex-sol-medium", "model": "gpt-6.1-sol", "reasoning_effort": "medium" },
+  "note": "Observed session report is not independent attestation. No new PM routing override or merge approval is asserted. Central reconciliation remains Claude-owned."
+}

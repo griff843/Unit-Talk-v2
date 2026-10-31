@@ -123,6 +123,40 @@ type Body = {
   error?: { code: string };
 };
 
+for (const route of ['/api/member/picks?status=settled', '/api/picks?status=settled', '/api/settlements/recent']) {
+test(`WORK-2026103005: ${route} excludes canary, unknown and mismatched outbox audiences`, async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const visibleIds: string[] = [];
+  for (const [audience, outboxAudience] of [
+    [undefined, undefined], ['members', 'members'], ['staff-canary', 'staff-canary'],
+    ['unknown', 'unknown'], [null, null], ['members', 'staff-canary'],
+  ]) {
+    const id = randomUUID();
+    if (audience === undefined || (audience === 'members' && outboxAudience === 'members')) visibleIds.push(id);
+    await repositories.picks.savePick({
+      id, submissionId: randomUUID(), market: 'moneyline', selection: id, odds: 100,
+      stakeUnits: 1, source: 'smart-form', approvalStatus: 'approved', promotionStatus: 'not_eligible',
+      lifecycleState: 'settled', createdAt: '2026-10-30T12:00:00.000Z',
+      metadata: { ...official, deliveryAuthorization: { ...authorization('authorized'), ...(audience === undefined ? {} : { audience }) } },
+    });
+    await repositories.outbox.enqueue({ pickId: id, target: 'discord:official-picks', idempotencyKey: id,
+      payload: { deliveryDestination: { ...(outboxAudience === undefined ? {} : { audience: outboxAudience }) } } });
+    await repositories.settlements.record({ pickId: id, status: 'settled', result: 'win', source: 'operator',
+      confidence: 'confirmed', evidenceRef: 'test://audience', settledBy: 'operator:test',
+      settledAt: '2026-10-30T12:00:00.000Z', payload: {} });
+  }
+  await withServer(repositories, async (base) => {
+      const response = await fetch(base + route);
+      assert.equal(response.status, 200, route);
+      const body = await response.json() as { count: number; picks?: Array<{ id: string }>; settlements?: Array<{ pick_id: string }> };
+      assert.equal(body.count, 2, route);
+      assert.deepEqual((body.picks?.map((p) => p.id) ?? body.settlements!.map((s) => s.pick_id)).sort(), visibleIds.slice().sort(), route);
+  });
+  // Exclusion is a projection, never deletion or a lifecycle rewrite.
+  assert.equal((await repositories.picks.listByLifecycleStates(['settled'])).length, 6);
+});
+}
+
 test('the contracts predicate admits exactly the member-visible cases', () => {
   for (const c of cases) {
     assert.equal(isMemberVisibleOfficialPick({ status: c.status, metadata: c.metadata }), c.visible, c.label);

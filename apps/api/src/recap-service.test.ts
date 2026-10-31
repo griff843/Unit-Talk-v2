@@ -1134,6 +1134,7 @@ async function createSettledPick(
     settledAt: string;
     evidencePlane?: boolean;
     trackOnly?: boolean;
+    audience?: unknown;
   },
 ) {
   const created = await processSubmission(
@@ -1147,6 +1148,7 @@ async function createSettledPick(
       metadata: {
         submittedBy: input.submittedBy,
         ...(input.trackOnly ? { distributionMode: 'track-only' } : {}),
+        ...(input.audience === undefined ? {} : { deliveryAuthorization: { audience: input.audience } }),
       },
     },
     repositories,
@@ -1166,6 +1168,31 @@ async function createSettledPick(
 
   return created.pick.id;
 }
+
+test('WORK-2026103005: daily, weekly and monthly aggregates exclude canary/unknown pins and keep normal results', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const ids = new Map<unknown, string>();
+  for (const audience of [undefined, 'members', 'staff-canary', 'unknown', null]) {
+    ids.set(audience, await createSettledPick(repositories, {
+      selection: `audience-${String(audience)}`, market: 'moneyline', odds: 100, stakeUnits: 1,
+      submittedBy: 'canonical-capper', result: 'win', settledAt: '2026-05-31T12:00:00.000Z', audience,
+    }));
+  }
+  const mismatched = await createSettledPick(repositories, {
+    selection: 'mismatched', market: 'moneyline', odds: 100, stakeUnits: 1,
+    submittedBy: 'canonical-capper', result: 'win', settledAt: '2026-05-31T12:00:00.000Z', audience: 'members',
+  });
+  await repositories.outbox.enqueue({ pickId: mismatched, target: 'discord:official-picks',
+    idempotencyKey: mismatched, payload: { deliveryDestination: { audience: 'staff-canary' } } });
+  for (const period of ['daily', 'weekly', 'monthly'] as const) {
+    const summary = await computeRecapSummary(period, repositories, new Date('2026-06-01T16:00:00.000Z'));
+    assert.ok(summary);
+    assert.equal(summary.wins, 2, period);
+    assert.equal(summary.netUnits, 2, period);
+    assert.equal(summary.totalRiskedUnits, 2, period);
+    assert.ok([ids.get(undefined), ids.get('members')].includes(summary.topPlay.pickId));
+  }
+});
 
 // ---------------------------------------------------------------------------
 // UTV2-1672: Track Only picks are excluded from recaps.
