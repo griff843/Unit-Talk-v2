@@ -8,6 +8,9 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { createInMemoryRepositoryBundle } from './persistence.js';
+import { releaseHumanCapperDeliveryWithRunTracking } from './run-audit-service.js';
 
 import {
   CAPPER_DELIVERY_ALLOWLIST_ENV,
@@ -19,9 +22,74 @@ import {
 import {
   isHumanCapperDeliveryAuthorized,
   readHumanCapperDeliveryAuthorization,
+  isMemberVisibleDeliveryAudience,
+  readCapperDiscordRouting,
 } from '@unit-talk/contracts';
 
+test('WORK-2026103005: audience is legacy-compatible and fails closed for private, malformed and disagreeing pins', () => {
+  for (const audience of [undefined, 'members', 'staff-canary', 'unknown', null, 1, false, {}]) {
+    const metadata = { deliveryAuthorization: { ...(audience === undefined ? {} : { audience }) } };
+    assert.equal(isMemberVisibleDeliveryAudience(metadata), audience === undefined || audience === 'members');
+  }
+  assert.equal(isMemberVisibleDeliveryAudience({}), true);
+  assert.equal(isMemberVisibleDeliveryAudience({ deliveryAuthorization: { audience: 'members' } }, [
+    { deliveryDestination: { audience: 'staff-canary' } },
+  ]), false);
+  assert.equal(isMemberVisibleDeliveryAudience({}, [{ deliveryDestination: { audience: 'unknown' } }]), false);
+  assert.equal(isMemberVisibleDeliveryAudience({}, [{ deliveryDestination: { audience: null } }]), false);
+  assert.equal(isMemberVisibleDeliveryAudience({}, [{ deliveryDestination: { audience: 'members' } }]), true);
+});
+
+test('WORK-2026103005: canonical routing recognizes staff-canary and refuses every malformed audience', () => {
+  for (const audience of [undefined, 'members', 'staff-canary', 'unknown', null, 42]) {
+    const result = readCapperDiscordRouting({ discord: {
+      guildId: '1284478946171293736', picksChannelId: '1384052464189440120',
+      ...(audience === undefined ? {} : { audience }),
+    } });
+    if (audience === undefined || audience === 'members' || audience === 'staff-canary') {
+      assert.equal(result.ok, true);
+      if (result.ok) assert.equal(result.routing.audience, audience ?? 'members');
+    } else {
+      assert.deepEqual(result, { ok: false, reason: 'audience-unrecognized' });
+    }
+  }
+});
+
 const POSTURE_ON = { UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED: 'true' };
+
+test('WORK-2026103005: release pins staff audience on its own outbox, never the shared destination map', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const id = randomUUID();
+  const authorization = evaluateCapperDeliveryAuthorization({ capperId: 'test-capper', isAuthenticatedCapper: true,
+    env: { ...POSTURE_ON, UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST: 'test-capper' } });
+  assert.equal(authorization.decision, 'authorized');
+  await repositories.picks.savePick({ id, submissionId: randomUUID(), market: 'moneyline', selection: 'test-pick',
+    odds: 100, stakeUnits: 1, source: 'smart-form', approvalStatus: 'approved', promotionStatus: 'not_eligible',
+    lifecycleState: 'validated', createdAt: '2026-10-30T12:00:00.000Z',
+    metadata: { distributionMode: 'delivery-eligible', deliveryAuthorization: authorization } });
+  const changes = { UNIT_TALK_ENABLED_TARGETS: 'official-picks', UNIT_TALK_APP_ENV: 'production',
+    DISCORD_GUILD_ID: '100000000000000001', DISCORD_CAPPER_CHANNEL_ID: '100000000000000004' };
+  const previous = Object.fromEntries(Object.keys(changes).map((key) => [key, process.env[key]]));
+  Object.assign(process.env, changes);
+  try {
+    const result = await releaseHumanCapperDeliveryWithRunTracking(id, 'operator:test', 'audience test',
+      repositories.picks, repositories.outbox, repositories.runs, repositories.audit, 'submission', {
+        findById: async () => ({ metadata: { discord: { guildId: changes.DISCORD_GUILD_ID,
+          picksChannelId: '100000000000000002', audience: 'staff-canary' } } }),
+      });
+    assert.equal(result.enqueued, true);
+    const rows = await repositories.outbox.listByPickId(id);
+    assert.equal(rows.length, 1);
+    assert.deepEqual((rows[0]!.payload as Record<string, unknown>)['deliveryDestination'], {
+      version: 'capper-discord-routing/v1', capperId: 'test-capper', guildId: changes.DISCORD_GUILD_ID,
+      channelId: '100000000000000002', source: 'cappers.metadata.discord.picksChannelId', audience: 'staff-canary',
+    });
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
+});
 
 test('parseCapperDeliveryAllowlist: every empty shape yields an empty list', () => {
   for (const raw of [undefined, null, '', '   ', ',', ' , , ']) {
