@@ -20,3 +20,7 @@ The release destination and per-pick private recap tests remained executable. Th
 Restored source SHA-256 (delivery-audience.ts): `36866c511b873f133420c9a224e2129dc00eb33029277c69b4bf0e02f3074404`.
 
 Local diagnostic logs: `/tmp/work3005-mutant.log`, `/tmp/work3005-restored.log`, `/tmp/work3005-final-focused.log`. No mutant or production change was committed.
+
+## PM proof repair: independent outbox audience pin
+
+Temporarily removed only `audience: destination.audience` from run-audit-service.ts. The existing direct real-release test failed on the missing staff-canary outbox pin (1 test, 1 behavioral failure, no skips). A finally block byte-restored the source; all 3 focused authorization tests then passed. Source SHA-256: `1c5cfc98d129520b9c3f34785faf169e8bcd1fd2fefd5876d98ebdc595d8fae5`. Logs: /tmp/work3005-audit-pin-mutant.log and /tmp/work3005-audit-pin-restored.log. This mutation executed against InMemory repositories, not staging. The new live case asserts the same exact persisted outbox field and additionally checks the member filter with Database repositories; its staging execution is required in CI. No mutant was committed.

@@ -2,6 +2,24 @@
 
 MERGE_SHA: pending merge
 
+## Current PM proof repair — supersedes the historical CI status below
+
+Current verified source anchor: `54c0e74320949b8b589f2c969f250632ee1ff74c`. Runtime product code is unchanged from the reviewed a03b649840b5a095dfe193ed1fac81ac15d4da3d. This source adds only two staging proof cases and an exact staging-origin guard in the existing live suite. Fresh exact-head CI remains required; earlier receipts do not prove these new cases.
+
+PM review 6544069205 requires live proof for the necessary audit-release outbox pin. Production Claude authorized the supporting live test file in 6544120372 and corrected the expected pin location in 6544124518: outbox payload.deliveryDestination.audience is pinned here; pick metadata is not newly pinned by this lane. The original immutable lock is preserved. Final-head scope-override/v1 and independent T1 approval remain required and are coordinated by Claude.
+
+The two new cases submit through handleSubmitPick using createDatabaseRepositoryBundle, read the actual pick and outbox from staging, assert exact outbox destination/audience and canonical identity, and run filterMemberVisibleDeliveryPicks with the real outbox repository. Staff-canary must be excluded; members must be retained. They create no receipt, delivery intent or Discord call. No kill-switch read/write is added.
+
+Current local evidence:
+
+- API type-check and DB writer inventory: PASS.
+- Direct new live test invocation: two safe local skips because no hosted staging credentials are configured. This is not live proof. CI_FIXTURE_RUN_ID requires execution and fails rather than skipping when credentials are missing.
+- Removing only the audit release audience pin caused the existing real-release InMemory test to fail on the missing staff-canary field. Byte restoration made all three focused authorization tests pass. This mutation was local InMemory evidence, not a live staging mutation. See mutation-summary.md.
+- Full local pnpm verify exited 1: lint/type-check/build passed, then test:ops recorded 3727 passes, 2 failures and 10 skips out of 3739 tests. The failures were an already-existing shared test Git branch in codex-receive.test.ts and signal timing in verify-semaphore.test.ts. Both direct isolated reruns passed (1/1 each). No unrelated tooling fix or manual branch cleanup was made. Log: /tmp/work3005-pm-repair-verify.log. This is not a local full-gate PASS.
+- Direct pnpm test:db exited 1 at the exact staging guard for loopback, without running writable tests. Fresh exact-head CI and execution of both new staging cases remain required. No production acceptance is claimed.
+
+All earlier CI receipts and validator results below are retained as historical evidence only. Current acceptance requires the new head, including Proof Coverage Guard and actual execution of both new staging cases.
+
 ASSERTIONS:
 
 - [x] Private, unknown and mismatched audience pins are excluded from the in-scope member readers; legacy absent audiences remain members.

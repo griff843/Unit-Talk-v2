@@ -17,3 +17,7 @@ Tests exercise the real handlers for member picks, both results endpoints, servi
 Known bounded cost: public list endpoints can perform up to 200 indexed outbox point reads, in batches of eight. Claude accepted this cost for the current scope; a bulk repository reader requires a separate packages/db change. Corrupt cross-pick outbox evidence fails the entire read rather than silently widening visibility.
 
 No production data, delivery controls, Discord audience/channel configuration, live delivery or deployment was changed.
+
+## PM proof repair
+
+Source anchor: `54c0e74320949b8b589f2c969f250632ee1ff74c`. Retains the necessary audit-release audience pin. Adds two real-staging cases in the existing wired/classified live proof: staff-canary exclusion and members compatibility, with persisted outbox identity/pin and DB-backed member-filter assertions. Exact approved staging origin is checked before constructing the client or writing fixtures. No runtime code, package registration, manifest lock or shared control changes. Claude authorized the supporting proof file in comments 6544120372/6544124518 and will obtain the required final-head scope override and T1 verdict.
