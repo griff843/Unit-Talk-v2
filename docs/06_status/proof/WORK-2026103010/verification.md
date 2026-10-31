@@ -59,4 +59,5 @@ Runtime: these are operator CLIs with no deployed surface. The CLI runs above ar
 ## Merge SHA Binding
 
 Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1814
 Execution SHA: 3adab53724f885bd0dcea946bc2caec4e5686619
