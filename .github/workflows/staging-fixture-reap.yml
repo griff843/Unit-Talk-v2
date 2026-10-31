@@ -1,0 +1,160 @@
+# WORK-2026103009 — reap aged, unsettled test fixtures from the staging database.
+#
+# seed-staging-fixtures.ts retains picks and submissions by design, so every CI
+# run leaves rows behind and staging grows without bound. This workflow deletes
+# picks older than a reviewed cutoff (minimum 7 days) that have no
+# settlement_records and no pick_reviews row, plus their cascaded children and
+# any submission left with no remaining pick.
+#
+# Safety properties
+#   * workflow_dispatch only; the default mode is a read-only dry run.
+#   * execute requires the cutoff and a max_picks cap taken from a reviewed dry
+#     run; the script refuses (deleting nothing) if the selection exceeds the cap.
+#   * Binds staging-ci and reads only CI_SUPABASE_*; the script refuses unless
+#     the resolved project is exactly xskgrzbteyqdufktjrjx, before any client is
+#     constructed.
+#   * Its own concurrency group. It must NOT join staging-ci-db: GitHub keeps one
+#     pending job per group, so joining would cancel a pending PR DB proof. The
+#     reap only touches rows older than the cutoff, which no live proof creates.
+name: Staging Fixture Reap
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'dry-run (read only) or execute (deletes)'
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - execute
+      cutoff:
+        description: 'ISO cutoff; picks created strictly before it are candidates. Required for execute.'
+        required: false
+        default: ''
+        type: string
+      max_picks:
+        description: 'Cap from the reviewed dry run. Required for execute.'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-fixture-reap
+  cancel-in-progress: false
+
+jobs:
+  reap:
+    name: Staging fixture reap
+    runs-on: ubuntu-latest
+    environment: staging-ci
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Assert staging credentials present
+        env:
+          CI_SUPABASE_URL: ${{ secrets.CI_SUPABASE_URL }}
+          CI_SUPABASE_PROJECT_REF: ${{ secrets.CI_SUPABASE_PROJECT_REF }}
+          CI_SUPABASE_SECRET_KEY: ${{ secrets.CI_SUPABASE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          for name in CI_SUPABASE_URL CI_SUPABASE_PROJECT_REF CI_SUPABASE_SECRET_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is empty — staging-ci did not release its secrets."
+              exit 1
+            fi
+          done
+          echo "resolved project ref: $CI_SUPABASE_PROJECT_REF"
+          if [ "$CI_SUPABASE_PROJECT_REF" != "xskgrzbteyqdufktjrjx" ]; then
+            echo "::error::project ref is not the approved staging project"
+            exit 1
+          fi
+
+      - name: Materialize staging-only environment
+        env:
+          CI_SUPABASE_URL: ${{ secrets.CI_SUPABASE_URL }}
+          CI_SUPABASE_PROJECT_REF: ${{ secrets.CI_SUPABASE_PROJECT_REF }}
+          CI_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.CI_SUPABASE_PUBLISHABLE_KEY }}
+          CI_SUPABASE_SECRET_KEY: ${{ secrets.CI_SUPABASE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          {
+            echo "NODE_ENV=test"
+            echo "UNIT_TALK_APP_ENV=test"
+            echo "UNIT_TALK_ACTIVE_WORKSPACE=staging-ci"
+            echo "UNIT_TALK_LEGACY_WORKSPACE=staging-ci"
+            echo "LINEAR_TEAM_ID=staging-ci"
+            echo "LINEAR_TEAM_KEY=UTV2"
+            echo "LINEAR_TEAM_NAME=staging-ci"
+            echo "UNIT_TALK_API_RUNTIME_MODE=fail_open"
+            echo "UNIT_TALK_JWT_SECRET=staging-ci-not-a-production-secret"
+            echo "SUPABASE_URL=${CI_SUPABASE_URL}"
+            echo "SUPABASE_PROJECT_REF=${CI_SUPABASE_PROJECT_REF}"
+            echo "SUPABASE_ANON_KEY=${CI_SUPABASE_PUBLISHABLE_KEY}"
+            echo "SUPABASE_SERVICE_ROLE_KEY=${CI_SUPABASE_SECRET_KEY}"
+            echo "UNIT_TALK_DB_ACCESS_MODE=writable-isolated"
+          } > local.env
+          echo "local.env written (values redacted); keys:"
+          cut -d= -f1 local.env | sed 's/^/  /'
+
+      - name: Reap
+        env:
+          MODE: ${{ inputs.mode }}
+          CUTOFF: ${{ inputs.cutoff }}
+          MAX_PICKS: ${{ inputs.max_picks }}
+        run: |
+          set -euo pipefail
+          args=(--report reap-report.json)
+          if [ -n "$CUTOFF" ]; then args+=(--cutoff "$CUTOFF"); fi
+          if [ "$MODE" = "execute" ]; then
+            if [ -z "$CUTOFF" ] || [ -z "$MAX_PICKS" ]; then
+              echo "::error::execute requires both cutoff and max_picks from a reviewed dry run"
+              exit 1
+            fi
+            args+=(--execute --max-picks "$MAX_PICKS")
+          fi
+          pnpm exec tsx scripts/ci/staging-fixture-reap.ts "${args[@]}"
+
+      - name: Summarize
+        if: always()
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          if [ -f reap-report.json ]; then
+            {
+              echo "## Staging fixture reap ($MODE)"
+              echo '```json'
+              cat reap-report.json
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-fixture-reap-${{ github.run_id }}-${{ github.run_attempt }}
+          path: reap-report.json
+          if-no-files-found: ignore
+          retention-days: 30
