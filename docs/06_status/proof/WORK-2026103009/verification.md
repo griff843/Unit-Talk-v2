@@ -74,5 +74,5 @@ Runtime: no dispatch of the new workflow has been run. The first runtime evidenc
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1813
 Execution SHA: 72b91c897879abeedc6a03b587c3a36be00308a9
