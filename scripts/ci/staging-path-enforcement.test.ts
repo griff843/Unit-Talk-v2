@@ -23,6 +23,15 @@ import {
   type BoardDrainCandidate,
 } from './staging-board-drain.js';
 import {
+  MIN_REAP_AGE_MS,
+  assertReapCutoff,
+  assertWithinCap,
+  chunk,
+  parseReapArgs,
+  selectReapablePicks,
+  type ReapCandidate,
+} from './staging-fixture-reap.js';
+import {
   CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF,
   EXPECTED_STAGING_SUPABASE_PROJECT_REF,
 } from './isolated-proof-attestation.js';
@@ -335,6 +344,7 @@ test('no writable-path script guards its CLI entrypoint by filename', () => {
     'scripts/ci/assert-staging-target.ts',
     'scripts/ci/required-db-smoke.ts',
     'scripts/ci/seed-staging-fixtures.ts',
+    'scripts/ci/staging-fixture-reap.ts',
     'scripts/ci/verify-db-proof-receipt.ts',
     'scripts/ci/assert-unmodified-vs-base.ts',
     'scripts/ops/proof-auditor-gate.ts',
@@ -624,4 +634,90 @@ test('drain does not generalize a signature: near-miss fixtures are left alone',
   ]) {
     assert.equal(matchFixtureSignature(row), null, `matched: ${JSON.stringify(row)}`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// WORK-2026103009 — the staging fixture reap deletes only aged, unsettled picks
+// ---------------------------------------------------------------------------
+
+const REAP_NOW = new Date('2026-10-30T12:00:00.000Z');
+const REAP_CUTOFF = new Date(REAP_NOW.getTime() - MIN_REAP_AGE_MS);
+
+function reapRow(id: string, createdAt: string | null): ReapCandidate {
+  return { id, created_at: createdAt, status: 'validated', source: 'smart-form' };
+}
+
+test('reap refuses a cutoff younger than the minimum age', () => {
+  assert.doesNotThrow(() => assertReapCutoff(REAP_CUTOFF, REAP_NOW));
+  assert.throws(() => assertReapCutoff(new Date(REAP_CUTOFF.getTime() + 1), REAP_NOW), /younger than/);
+  assert.throws(() => assertReapCutoff(new Date('not a date'), REAP_NOW), /not a valid date/);
+});
+
+test('reap selects only rows strictly older than the cutoff', () => {
+  const { selected, skipped } = selectReapablePicks(
+    [
+      reapRow('old', new Date(REAP_CUTOFF.getTime() - 1).toISOString()),
+      reapRow('at-cutoff', REAP_CUTOFF.toISOString()),
+      reapRow('young', REAP_NOW.toISOString()),
+    ],
+    REAP_CUTOFF,
+    new Set(),
+    new Set(),
+  );
+  assert.deepEqual(selected.map((r) => r.id), ['old']);
+  assert.equal(skipped.not_older_than_cutoff, 2);
+});
+
+test('reap never selects a settled or reviewed pick, however old', () => {
+  const old = '2026-08-01T00:00:00.000Z';
+  const { selected, skipped } = selectReapablePicks(
+    [reapRow('settled', old), reapRow('reviewed', old), reapRow('plain', old)],
+    REAP_CUTOFF,
+    new Set(['settled']),
+    new Set(['reviewed']),
+  );
+  assert.deepEqual(selected.map((r) => r.id), ['plain']);
+  assert.equal(skipped.settled, 1);
+  assert.equal(skipped.reviewed, 1);
+});
+
+test('reap skips a row whose created_at cannot be parsed', () => {
+  const { selected, skipped } = selectReapablePicks(
+    [reapRow('null', null), reapRow('garbage', 'yesterday-ish')],
+    REAP_CUTOFF,
+    new Set(),
+    new Set(),
+  );
+  assert.equal(selected.length, 0);
+  assert.equal(skipped.unparseable_created_at, 2);
+});
+
+test('reap refuses an execute larger than the reviewed cap', () => {
+  assert.doesNotThrow(() => assertWithinCap(100, 100));
+  assert.throws(() => assertWithinCap(101, 100), /Nothing was deleted/);
+  assert.throws(() => assertWithinCap(0, -1), /non-negative integer/);
+  assert.throws(() => assertWithinCap(0, Number.NaN), /non-negative integer/);
+});
+
+test('reap execute requires an explicit cutoff and cap', () => {
+  const cutoff = REAP_CUTOFF.toISOString();
+  assert.throws(() => parseReapArgs(['--execute'], REAP_NOW), /requires both/);
+  assert.throws(() => parseReapArgs(['--execute', '--cutoff', cutoff], REAP_NOW), /requires both/);
+  assert.throws(() => parseReapArgs(['--execute', '--max-picks', '10'], REAP_NOW), /requires both/);
+  const ok = parseReapArgs(['--execute', '--cutoff', cutoff, '--max-picks', '10'], REAP_NOW);
+  assert.equal(ok.execute, true);
+  assert.equal(ok.maxPicks, 10);
+});
+
+test('reap defaults to a dry run at the minimum age and rejects unknown flags', () => {
+  const args = parseReapArgs([], REAP_NOW);
+  assert.equal(args.execute, false);
+  assert.equal(args.cutoff.getTime(), REAP_CUTOFF.getTime());
+  assert.throws(() => parseReapArgs(['--cutoff', new Date(REAP_NOW.getTime() - 1000).toISOString()], REAP_NOW), /younger than/);
+  assert.throws(() => parseReapArgs(['--force'], REAP_NOW), /unknown argument/);
+});
+
+test('reap batches ids within the request bound', () => {
+  assert.deepEqual(chunk([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]]);
+  assert.deepEqual(chunk([], 2), []);
 });
