@@ -7,7 +7,7 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "72b91c897879abeedc6a03b587c3a36be00308a9",
+    "verified_source_sha": "a0d37b760db24646c36bea6515001150d4ce7292",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -15,25 +15,25 @@
     "status": "pass",
     "command": "pnpm test",
     "conclusion": "success",
-    "verified_source_sha": "72b91c897879abeedc6a03b587c3a36be00308a9",
+    "verified_source_sha": "a0d37b760db24646c36bea6515001150d4ce7292",
     "full_suite": {
       "command": "pnpm test",
-      "tests": 7744,
-      "pass": 7731,
+      "tests": 7749,
+      "pass": 7736,
       "fail": 0,
       "skipped": 13
     },
     "focused_tests": {
       "command": "pnpm exec tsx --test scripts/ci/staging-path-enforcement.test.ts",
-      "tests": 46,
-      "pass": 46,
+      "tests": 51,
+      "pass": 51,
       "fail": 0,
       "skipped": 0
     },
-    "type_check": "pass",
+    "type_check": "pass (direct tsc of the two changed scripts/ci files; pnpm type-check does not cover scripts/)",
     "r_level": "PASS",
-    "mutation_checks": "5 of 5 caught",
-    "note": "Measured on 72b91c897. Protected exact-head CI and the staging DB receipt remain pending."
+    "mutation_checks": "12 of 12 caught on a0d37b760",
+    "note": "Measured on a0d37b760db24646c36bea6515001150d4ce7292. Corrected after the PM T1 review of #1813 (CHANGES REQUIRED at 1013741c2). Protected exact-head CI and the staging DB receipt remain pending."
   },
   "db_verification": {
     "command": "pnpm test:db",
