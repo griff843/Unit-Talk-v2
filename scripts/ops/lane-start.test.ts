@@ -13,7 +13,8 @@ import {
   TaskContractConflictError,
   type TaskContract,
 } from './execution-packet.js';
-import { ROOT, type LaneManifest } from './shared.js';
+import { ROOT, parseArgs, type LaneManifest } from './shared.js';
+import { assertSingleIssueArgs } from './cli-args-guard.js';
 import {
   advanceTrackerIssueOnStart,
   buildProofScaffold,
@@ -2560,4 +2561,26 @@ test('WORK-2026092608: a lane reopened locally keeps its lease although main rea
   assert.equal(read(null, null), null);
   // An unreadable local manifest never justifies a release.
   assert.equal(read('done', new Error('corrupt')), null);
+});
+
+// WORK-2026103010: lane-start and preflight refuse malformed --files.
+test('assertSingleIssueArgs refuses paths left over after a single-valued --files', () => {
+  const { positionals, flags } = parseArgs(['WORK-1', '--files', 'a.ts', 'b.ts', 'c.ts']);
+  assert.throws(() => assertSingleIssueArgs(positionals, flags), /Unexpected argument\(s\): b\.ts c\.ts/);
+});
+
+test('assertSingleIssueArgs refuses a comma-joined --files value', () => {
+  const { positionals, flags } = parseArgs(['WORK-1', '--files', 'a.ts,b.ts']);
+  assert.throws(() => assertSingleIssueArgs(positionals, flags), /comma-joined a\.ts,b\.ts/);
+});
+
+test('assertSingleIssueArgs accepts one positional and a repeated --files', () => {
+  const { positionals, flags } = parseArgs(['WORK-1', '--files', 'a.ts', '--files', 'b.ts', '--refresh']);
+  assert.doesNotThrow(() => assertSingleIssueArgs(positionals, flags));
+  assert.deepEqual(flags.get('files'), ['a.ts', 'b.ts']);
+});
+
+test('assertSingleIssueArgs leaves an absent --files to the existing checks', () => {
+  const { positionals, flags } = parseArgs(['WORK-1', '--tier', 'T2']);
+  assert.doesNotThrow(() => assertSingleIssueArgs(positionals, flags));
 });
