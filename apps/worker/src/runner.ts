@@ -448,7 +448,7 @@ export async function runWorkerCycles(
 async function recordWorkerQueueHealth(
   options: WorkerRunnerOptions,
   cycle: number,
-  results: WorkerProcessResult[],
+  results: WorkerCycleSummary['results'],
 ) {
   if (options.metricsCollector) {
     options.metricsCollector.increment('worker_cycles_total', { workerId: options.workerId });
