@@ -36,7 +36,7 @@
   ],
   "status": "merged",
   "started_at": "2026-10-30T14:25:20.745Z",
-  "heartbeat_at": "2026-10-30T18:41:26.321Z",
+  "heartbeat_at": "2026-11-01T15:35:44.705Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026103005-canary-audience-member-exclusion.json",
@@ -72,11 +72,35 @@
   ],
   "reopen_history": [],
   "model_routing": {
-    "profile": "codex-sol-medium",
+    "profile": "session-default",
     "model": "gpt-6.1-sol",
-    "reasoning_effort": "medium",
-    "selected_by": "three-brain",
-    "policy_version": "3.0.0"
+    "reasoning_effort": "unavailable",
+    "selected_by": "manual-override",
+    "policy_version": "3.0.0",
+    "override": {
+      "authorized_by": "griff843",
+      "reason": "pm-verdict/v1 APPROVED https://github.com/griff843/Unit-Talk-v2/pull/1811#issuecomment-6556418105",
+      "at": "2026-11-01T15:35:44.705Z",
+      "declared": {
+        "profile": "codex-sol-medium",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "medium",
+        "selected_by": "three-brain"
+      },
+      "observation": {
+        "verification": "unverified-external-session",
+        "source": "Codex external session reported gpt-6.1-sol; not independently attested; reasoning effort not exposed",
+        "unavailable_fields": [
+          "reasoning_effort"
+        ]
+      },
+      "approval": {
+        "comment_url": "https://github.com/griff843/Unit-Talk-v2/pull/1811#issuecomment-6556418105",
+        "reviewer": "griff843",
+        "pr_number": 1811,
+        "head_sha": "2cfa7d27bb9eb0f20c0a60d9b2e979bcfd04fd18"
+      }
+    }
   },
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {
