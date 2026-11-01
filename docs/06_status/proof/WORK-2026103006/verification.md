@@ -1,6 +1,7 @@
 # PROOF: WORK-2026103006
 
 MERGE_SHA: pending merge
+Execution SHA: ea13cf2b4db1662f772f2304d08c20043aa3cad7
 
 Issue: WORK-2026103006
 Tier: T1
@@ -37,9 +38,29 @@ Exit 1: the named assertion observed `dead_letter` instead of `kill-switch-unwir
 
 The first isolated-copy mutation attempt failed module resolution and is excluded from mutation evidence. Only the actual assertion failure above is claimed.
 
+## Verification
+
+ASSERTIONS:
+- A missing kill-switch repository refuses every non-canary Discord target before any claim (`kill-switch-unwired`). The row stays pending and unattempted, and no adapter is called.
+- A thrown or rejected kill-switch read refuses delivery (`kill-switch-read-error`), with no claim and no adapter call.
+- `discord:canary` keeps its exemption exactly as before. A released switch still delivers.
+- No existing assertion was loosened. The fakes gained explicit released stubs only.
+
+EVIDENCE:
+- Exact-head CI: `ci.yml` run 41341532349, attempt 1, at `dd1657d2a4747fa071d0974acc477f507ed6bf77`. `verify` job 124955647820 succeeded.
+- `Writable DB proof (staging only)`: job 124952393772 succeeded against staging `xskgrzbteyqdufktjrjx`. The writable proof ran 9/9. The T1 live proof suites ran as 26 suites, with 0 failures and 0 skips.
+- Disclosure: the earlier run 41341060577 at `9ee10708d` failed only in staging test `UTV2-1327 live-DB: picks table is accessible via listByLifecycleStates` (`canceling statement due to statement timeout`). That test is outside this lane, and it is the same staging DB that later passed at `dd1657d2a`. Of the last 25 `ci.yml` runs, only that one hit the timeout.
+- Disclosure: the three live-DB reads in `t1-proof-utv2-993-worker-restart.test.ts` are not in the CI T1 live list. This lane claims only synthetic restart proof for them.
+- Unit and mutation evidence is listed under "Measured verification" and "Mutation" above.
+
+## Merge SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1816
+
 ## Pending authority
 
-Exact-head CI, outer-wrapper execution truth/provenance, PM approval and governed merge remain pending. No child READY_FOR_REVIEW attestation is published. After authorized merge, the post-executor path runs lane-finalize and canonical orchestration reconciliation.
+PM approval (`t1-approved` plus `pm-verdict/v1`), the executor-result attestation at the exact head and the governed merge remain pending. After merge, lane-finalize and closeout run.
 
 ## Final local gate tail
 
