@@ -52,3 +52,7 @@ Source HEAD 799c713e01a7489b59b0a025a7bbd26dc9cf760e; CI run 39027893441, stagin
 ## Successful pre-merge staging proof
 
 CI run 39028456349, staging job 117383991011 passed on source e071c9e19060cfe3c51456c2de571a0815d794d9. Receipt hash, TAP and staging identity checked; GitHub verified the receipt synthetic merge ref has this PR head as second parent. 9 passing query observations and 8 measured seed counts captured. Overall CI static verification remains pending. This proves staging DB checks, not deployed Discord interactions.
+
+## Post-merge addendum (WORK-2026102003)
+
+Added after merge of PR #1767 (merge commit `e22d68f9c8153afbabf4d88ad0ca102660cba26f`). No line above is changed. The static gate recorded above, `pnpm verify:static`, is the repository script whose chain includes `pnpm type-check` and `pnpm test` (checked against `package.json`: `... && pnpm lint && pnpm type-check && pnpm build && pnpm test && ...`). Its PASS, exit 0, therefore covers both `pnpm type-check` and `pnpm test`. This addendum records that fact for the truth check's command-reference rule; it adds no new measurement and claims no new run.
