@@ -25,6 +25,12 @@ export function effectiveSettlementLabel(settlement: PickIdentityRead['settlemen
   return settlement.correctsId ? `${result} (corrected)` : result;
 }
 
+/** Display the effective record's time, never the pick lifecycle's timestamp. */
+export function effectiveSettlementTimestamp(settlement: PickIdentityRead['settlement']): string | null {
+  if (settlement?.status !== 'settled' || !settlement.settledAt) return null;
+  return Number.isFinite(Date.parse(settlement.settledAt)) ? settlement.settledAt : null;
+}
+
 function object(value: unknown): Row {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Row : {};
 }
