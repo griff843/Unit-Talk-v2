@@ -32,6 +32,7 @@ import {
   readAllVerified,
   reapStagingFixtures,
   selectReapablePicks,
+  supabaseReapStore,
   type ReadSpec,
   type ReapCandidate,
   type ReapStore,
@@ -684,6 +685,47 @@ test('reap never selects a settled or reviewed pick, however old', () => {
   assert.deepEqual(selected.map((r) => r.id), ['plain']);
   assert.equal(skipped.settled, 1);
   assert.equal(skipped.reviewed, 1);
+});
+
+// WORK-2026110101 (Griff, Option B): status `settled` is kept without a settlement row.
+test('reap keeps a pick whose status is settled even with no settlement row', () => {
+  const old = '2026-08-01T00:00:00.000Z';
+  const { selected, skipped } = selectReapablePicks(
+    [
+      { ...reapRow('status-only', old), status: 'settled' },
+      { ...reapRow('both', old), status: 'settled' },
+      { ...reapRow('voided', old), status: 'voided' },
+      reapRow('plain', old),
+    ],
+    REAP_CUTOFF,
+    new Set(['both']),
+    new Set(),
+  );
+  assert.deepEqual(selected.map((r) => r.id), ['voided', 'plain']);
+  assert.equal(skipped.status_settled, 1, 'counted once, only where no other rule already kept it');
+  assert.equal(skipped.settled, 1);
+});
+
+test('every live pick DELETE re-asserts the cutoff and excludes status settled', async () => {
+  const calls: Array<[string, ...unknown[]]> = [];
+  const builder: Record<string, (...args: unknown[]) => unknown> = {};
+  for (const method of ['delete', 'in', 'lt', 'neq']) {
+    builder[method] = (...args: unknown[]) => {
+      calls.push([method, ...args]);
+      return builder;
+    };
+  }
+  (builder as { then?: unknown }).then = (resolve: (v: unknown) => void) => resolve({ error: null, count: 2 });
+  const client = { from: (table: string) => (calls.push(['from', table]), builder) };
+  const store = supabaseReapStore(client as unknown as Parameters<typeof supabaseReapStore>[0]);
+  assert.equal(await store.deletePicks(['a', 'b'], '2026-10-24T00:00:00.000Z'), 2);
+  assert.deepEqual(calls, [
+    ['from', 'picks'],
+    ['delete', { count: 'exact' }],
+    ['in', 'id', ['a', 'b']],
+    ['lt', 'created_at', '2026-10-24T00:00:00.000Z'],
+    ['neq', 'status', 'settled'],
+  ]);
 });
 
 test('reap skips a row whose created_at cannot be parsed', () => {
