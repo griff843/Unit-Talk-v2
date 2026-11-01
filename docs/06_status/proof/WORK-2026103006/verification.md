@@ -41,10 +41,10 @@ The first isolated-copy mutation attempt failed module resolution and is exclude
 ## Verification
 
 ASSERTIONS:
-- A missing kill-switch repository refuses every non-canary Discord target before any claim (`kill-switch-unwired`). The row stays pending and unattempted, and no adapter is called.
-- A thrown or rejected kill-switch read refuses delivery (`kill-switch-read-error`), with no claim and no adapter call.
-- `discord:canary` keeps its exemption exactly as before. A released switch still delivers.
-- No existing assertion was loosened. The fakes gained explicit released stubs only.
+- [x] A missing kill-switch repository refuses every non-canary Discord target before any claim (`kill-switch-unwired`). The row stays pending and unattempted, and no adapter is called.
+- [x] A thrown or rejected kill-switch read refuses delivery (`kill-switch-read-error`), with no claim and no adapter call.
+- [x] `discord:canary` keeps its exemption exactly as before. A released switch still delivers.
+- [x] No existing assertion was loosened. The fakes gained explicit released stubs only.
 
 EVIDENCE:
 - Exact-head CI: `ci.yml` run 41341532349, attempt 1, at `dd1657d2a4747fa071d0974acc477f507ed6bf77`. `verify` job 124955647820 succeeded.
