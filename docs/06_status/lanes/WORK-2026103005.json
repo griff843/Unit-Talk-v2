@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026103005-canary-audience-member-exclusion",
   "branch": "codex/work-2026103005-canary-audience-member-exclusion",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "2c52ca206c2c8c1fc570ef23f2cb6760084ebf6a",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1811",
   "files_changed": [],
   "file_scope_lock": [
@@ -34,7 +34,7 @@
     "docs/06_status/proof/WORK-2026103005/verification.md",
     "docs/06_status/proof/WORK-2026103005/model-routing.json"
   ],
-  "status": "blocked",
+  "status": "merged",
   "started_at": "2026-10-30T14:25:20.745Z",
   "heartbeat_at": "2026-10-30T18:41:26.321Z",
   "closed_at": null,
@@ -48,6 +48,24 @@
       "merge_sha": null,
       "failures": [
         "heartbeat_at 32.1h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-11-01T12:08:10.622Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 41.4h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-11-01T12:28:26.399Z",
+      "verdict": "fail",
+      "merge_sha": "2c52ca206c2c8c1fc570ef23f2cb6760084ebf6a",
+      "failures": [
+        "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1811 merged while manifest status was \"blocked\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
       ],
       "runner": "ops:reconcile"
     }
