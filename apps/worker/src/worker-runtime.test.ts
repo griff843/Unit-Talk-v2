@@ -749,6 +749,11 @@ function createWorkerTestRepositories(entries: OutboxRecord[]): {
 
   return {
     repositories: {
+      killSwitch: {
+        isKilled: async () => false,
+        setKilled: async () => { throw new Error('Test stub does not support writes'); },
+        listAll: async () => [],
+      },
       submissions: {} as RepositoryBundle['submissions'],
       picks,
       outbox,
@@ -3368,3 +3373,90 @@ test('UTV2-1952: an attempted delivery emits no skip line', async () => {
     'the row was claimed and processed',
   );
 });
+
+// WORK-2026103006 — missing or unreadable kill-switch wiring must never claim.
+for (const destination of ['official-picks', 'best-bets', 'trader-insights', 'exclusive-insights', 'foo'] as const) {
+  test(`WORK-2026103006: unwired kill switch holds discord:${destination} pending`, async () => {
+    const target = `discord:${destination}`;
+    const outbox = createOutboxRecord(target);
+    const { repositories } = createWorkerTestRepositories([outbox]);
+    delete repositories.killSwitch;
+    const claims = spyOnClaims(repositories);
+    let adapterCalls = 0;
+    const logged = await captureWorkerLogs(async () => {
+      const cycles = await runWorkerCycles({
+        repositories, workerId: 'worker-unwired', targets: [target],
+        deliver: async (row) => { adapterCalls += 1; return createStubDeliveryAdapter()(row); },
+        maxCycles: 1, persistenceMode: 'in_memory',
+        // Synthetic registry does not bypass the canonical blocked-target guard.
+        targetRegistry: [
+          { target: 'official-picks', enabled: true, rolloutPct: 100 },
+          { target: 'best-bets', enabled: true, rolloutPct: 100 },
+          { target: 'trader-insights', enabled: true, rolloutPct: 100 },
+          { target: 'exclusive-insights', enabled: true, rolloutPct: 100 },
+        ],
+      });
+      assert.deepEqual(cycles[0]?.results[0], {
+        status: 'kill-switch-unwired', target, workerId: 'worker-unwired',
+      });
+    });
+    assert.deepEqual(logged.find((line) => line['event'] === 'worker.delivery-skipped-kill-switch-unwired'), {
+      event: 'worker.delivery-skipped-kill-switch-unwired', target,
+      workerId: 'worker-unwired', cycle: 1, reason: 'kill-switch-unwired', outboxClaimed: false,
+    });
+    assert.equal(adapterCalls, 0);
+    assert.equal(claims.count(), 0);
+    assert.equal(outbox.status, 'pending');
+    assert.equal(outbox.attempt_count, 0);
+    assert.equal(outbox.claimed_at, null);
+    assert.equal(outbox.claimed_by, null);
+    assert.ok(await repositories.outbox.claimNext(target, 'proof-claimable'), 'held row remains claimable');
+  });
+}
+
+for (const mode of ['throw', 'reject'] as const) {
+  test(`WORK-2026103006: kill-switch ${mode} fails closed`, async () => {
+    const outbox = createOutboxRecord('discord:official-picks');
+    const { repositories } = createWorkerTestRepositories([outbox]);
+    assert.ok(repositories.killSwitch);
+    repositories.killSwitch.isKilled = mode === 'throw'
+      ? () => { throw new Error('synchronous read failure'); }
+      : () => Promise.reject(new Error('asynchronous read failure'));
+    const claims = spyOnClaims(repositories);
+    let adapterCalls = 0;
+    const logged = await captureWorkerLogs(async () => {
+      const cycles = await runWorkerCycles({
+        repositories, workerId: 'worker-read-error', targets: [outbox.target],
+        deliver: async (row) => { adapterCalls += 1; return createStubDeliveryAdapter()(row); },
+        maxCycles: 1, persistenceMode: 'in_memory',
+        targetRegistry: [{ target: 'official-picks', enabled: true, rolloutPct: 100 }],
+      });
+      assert.equal(cycles[0]?.results[0]?.status, 'kill-switch-read-error');
+    });
+    assert.equal(logged.filter((line) => line['event'] === 'worker.delivery-skipped-kill-switch-read-error').length, 1);
+    assert.equal(adapterCalls, 0);
+    assert.equal(claims.count(), 0);
+    assert.equal(outbox.status, 'pending');
+    assert.equal(outbox.attempt_count, 0);
+    assert.equal(outbox.claimed_at, null);
+    assert.equal(outbox.claimed_by, null);
+  });
+}
+
+for (const target of ['discord:canary', 'discord:best-bets']) {
+  test(`WORK-2026103006: ${target} delivers with ${target === 'discord:canary' ? 'no repository' : 'a released switch'}`, async () => {
+    const outbox = createOutboxRecord(target);
+    const { repositories } = createWorkerTestRepositories([outbox]);
+    if (target === 'discord:canary') delete repositories.killSwitch;
+    let adapterCalls = 0;
+    const cycles = await runWorkerCycles({
+      repositories, workerId: 'worker-positive-control', targets: [target],
+      deliver: async (row) => { adapterCalls += 1; return createStubDeliveryAdapter()(row); },
+      maxCycles: 1, persistenceMode: 'in_memory',
+      targetRegistry: [{ target: 'best-bets', enabled: true, rolloutPct: 100 }],
+    });
+    assert.equal(cycles[0]?.results[0]?.status, 'sent');
+    assert.equal(adapterCalls, 1);
+    assert.equal(outbox.status, 'sent');
+  });
+}
