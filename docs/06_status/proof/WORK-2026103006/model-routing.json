@@ -1,0 +1,13 @@
+{
+  "issue_id": "WORK-2026103006",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-medium",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "medium",
+  "policy_version": "3.0.0",
+  "selected_by": "three-brain",
+  "override_used": false,
+  "execution_sha": "ea13cf2b4db1662f772f2304d08c20043aa3cad7",
+  "provenance_source": "Admitted lane manifest; final executor process provenance remains owned by outer wrapper.",
+  "generated_at": "2026-11-01T19:10:56.282109+00:00"
+}
