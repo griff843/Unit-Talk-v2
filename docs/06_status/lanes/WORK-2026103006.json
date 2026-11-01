@@ -8,7 +8,7 @@
   "branch": "codex/work-2026103006-worker-kill-switch-fail-closed",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1816",
   "files_changed": [],
   "file_scope_lock": [
     "apps/worker/src/official-picks-exactly-once.test.ts",
@@ -22,9 +22,9 @@
     "docs/06_status/proof/WORK-2026103006/verification.md",
     "docs/06_status/proof/WORK-2026103006/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-11-01T15:27:52.579Z",
-  "heartbeat_at": "2026-11-01T15:27:52.579Z",
+  "heartbeat_at": "2026-11-01T19:18:17.712Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026103006-worker-kill-switch-fail-closed.json",
