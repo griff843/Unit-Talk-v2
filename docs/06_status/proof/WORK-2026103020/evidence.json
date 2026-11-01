@@ -1,0 +1,25 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026103020",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "local_static_verified_pending_exact_head_ci",
+  "verified_source_sha": "286ecb3bc20a1433bd3b7e353dbc69a359b82d07",
+  "static_proof": { "status": "PASS", "focused_tests": 9, "command_center_tests": 741, "type_check": "PASS", "workspace_build": "PASS", "r_level": "PASS", "repository_static_verify": "PASS", "full_verify_exit_code": 1, "limitation": "writable staging guard refused loopback" },
+  "runtime_proof": {
+    "environment": "isolated authenticated Next browser with synthetic loopback reads only",
+    "queries": [
+      { "surface": "corrected Pick Detail desktop/mobile", "observation": "effective older correction time 2026-10-28T12:00:00Z; lifecycle remains validated" },
+      { "surface": "manual-review and pending details", "observation": "Settled At unknown rather than parent/lifecycle time" },
+      { "surface": "unavailable history", "observation": "Pick Detail unavailable and governed actions disabled; no obsolete timestamp" },
+      { "surface": "keyboard navigation", "observation": "Tab focuses Skip to main content; Enter navigates to main-content anchor" }
+    ],
+    "row_counts": [ { "source": "synthetic corrected pick settlement chain", "count": 2 }, { "source": "synthetic pending pick settlement chain", "count": 0 } ]
+  },
+  "browser": { "status": "PASS_SYNTHETIC", "desktop_window": "1440x1000", "mobile_viewport": "390x844 DPR1 mobile/touch", "report": "qa-experience-report.md" },
+  "mutation_check": { "status": "PASS", "mutant_failed_tests": 3, "restored_passed_tests": 9, "source_restored": true },
+  "production_mutations": false,
+  "production_acceptance": false,
+  "sha_binding": { "merge_sha": null, "verified_source_sha": "286ecb3bc20a1433bd3b7e353dbc69a359b82d07", "evidence_commit_sha": "CI_RESOLVED", "current_pr_head_sha": "CI_RESOLVED" }
+}

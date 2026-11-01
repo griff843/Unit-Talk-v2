@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { DegradedState } from '@/components/ui';
 import { Table, TableHead, TableBody, Th, Td } from '@/components/ui/Table';
 import { CorrectionForm } from '@/components/CorrectionForm';
-import { effectiveSettlementLabel, getPickIdentity } from '@/lib/data/pick-identity';
+import { effectiveSettlementLabel, effectiveSettlementTimestamp, getPickIdentity } from '@/lib/data/pick-identity';
 import { InterventionAction } from '@/components/InterventionAction';
 import { PickIdentityPanel } from '@/components/PickIdentityPanel';
 import { SettlementForm } from '@/components/SettlementForm';
@@ -461,7 +461,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           <KV label="Submission ID" value={pick.submissionId} />
           <KV label="Created At" value={pick.createdAt} />
           <KV label="Posted At" value={pick.postedAt} />
-          <KV label="Settled At" value={pick.settledAt} />
+          <KV label="Settled At" value={effectiveSettlementTimestamp(correctionTarget?.settlement ?? null)} />
         </div>
       </Card>
 
