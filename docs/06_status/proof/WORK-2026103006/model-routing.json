@@ -5,9 +5,13 @@
   "model": "gpt-6.1-sol",
   "reasoning_effort": "medium",
   "policy_version": "3.0.0",
-  "selected_by": "three-brain",
+  "codex_cli_version": "codex-cli 0.162.1",
+  "legacy_compatibility_used": false,
   "override_used": false,
-  "execution_sha": "ea13cf2b4db1662f772f2304d08c20043aa3cad7",
-  "provenance_source": "Admitted lane manifest; final executor process provenance remains owned by outer wrapper.",
-  "generated_at": "2026-11-01T19:10:56.282109+00:00"
+  "override_authorized_by": null,
+  "codex_exit_code": 0,
+  "prompt_bytes": 14208,
+  "estimated_prompt_tokens": 3552,
+  "wall_time_ms": 1081019,
+  "generated_at": "2026-11-01T19:23:53.168Z"
 }
