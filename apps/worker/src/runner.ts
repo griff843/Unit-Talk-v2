@@ -99,10 +99,16 @@ export interface WorkerRunnerOptions {
   persistenceMode?: 'database' | 'in_memory' | undefined;
 }
 
+export interface WorkerProcessKillSwitchUnavailableResult {
+  status: 'kill-switch-unwired' | 'kill-switch-read-error';
+  target: string;
+  workerId: string;
+}
+
 export interface WorkerCycleSummary {
   cycle: number;
   reapedOutboxIds: string[];
-  results: WorkerProcessResult[];
+  results: (WorkerProcessResult | WorkerProcessKillSwitchUnavailableResult)[];
   autoRecovery: AutoRecoveryResult | null;
 }
 
@@ -231,7 +237,7 @@ export async function runWorkerCycles(
       }
     }
 
-    const results: WorkerProcessResult[] = [];
+    const results: WorkerCycleSummary['results'] = [];
     const reapedById = new Map(reaped.map((entry) => [entry.row.id, entry]));
 
     for (const target of options.targets) {
@@ -278,6 +284,13 @@ export async function runWorkerCycles(
           ? target.slice('discord:'.length)
           : null;
       // UTV2-1923 WORKER_GOVERNED_TARGET_DERIVATION_GUARD_END
+      const killSwitch = options.repositories.killSwitch;
+      // Report missing safety wiring even when the registry also blocks delivery.
+      if (killSwitchTarget !== null && !killSwitch) {
+        logDeliberateDeliverySkip('worker.delivery-skipped-kill-switch-unwired', options.workerId, target, cycle);
+        results.push({ status: 'kill-switch-unwired', target, workerId: options.workerId });
+        continue;
+      }
       if (governedTarget !== null && !isTargetEnabled(governedTarget, registry)) {
         // UTV2-1952: a deliberate refusal must be visible. Without this line a
         // stopped lane and a dead worker look identical from outside: the row
@@ -292,15 +305,19 @@ export async function runWorkerCycles(
         continue;
       }
 
-      // UTV2-1427: live, DB-backed kill switch — distinct from the enabled/rolloutPct
-      // registry above. Both real repository bundles (createInMemoryRepositoryBundle,
-      // createDatabaseRepositoryBundle) always provide `killSwitch`; a bundle built
-      // without it (partial fakes in older tests) is treated as "not wired" and skips
-      // this check rather than fail-closing, to avoid silently breaking pre-existing
-      // callers. `DeliveryKillSwitchRepository.isKilled()` itself is fail-closed for
-      // any target it does know about (missing row or read error → true).
-      if (killSwitchTarget !== null && options.repositories.killSwitch) {
-        const killed = await options.repositories.killSwitch.isKilled(killSwitchTarget);
+      // WORK-2026103006: every non-canary Discord target requires a readable
+      // kill-switch repository before any claim. Partial bundles fail closed too.
+      if (killSwitchTarget !== null && killSwitch) {
+        let killed: boolean;
+        try {
+          killed = await killSwitch.isKilled(killSwitchTarget);
+        } catch {
+          // Database repositories handle reported query errors; contain thrown
+          // or rejected reads from any implementation at this boundary too.
+          logDeliberateDeliverySkip('worker.delivery-skipped-kill-switch-read-error', options.workerId, target, cycle);
+          results.push({ status: 'kill-switch-read-error', target, workerId: options.workerId });
+          continue;
+        }
         if (killed) {
           logDeliberateDeliverySkip('worker.delivery-skipped-kill-switch', options.workerId, target, cycle);
           const killSwitchResult: WorkerProcessKillSwitchEngagedResult = {
@@ -657,7 +674,8 @@ async function completeCircuitRun(
  * `outboxClaimed: false` records that the skip happens before any claim.
  */
 function logDeliberateDeliverySkip(
-  event: 'worker.delivery-skipped-kill-switch' | 'worker.delivery-skipped-target-disabled',
+  event: 'worker.delivery-skipped-kill-switch' | 'worker.delivery-skipped-target-disabled'
+    | 'worker.delivery-skipped-kill-switch-unwired' | 'worker.delivery-skipped-kill-switch-read-error',
   workerId: string,
   target: string,
   cycle: number,
@@ -667,7 +685,9 @@ function logDeliberateDeliverySkip(
     workerId,
     target,
     cycle,
-    reason: event === 'worker.delivery-skipped-kill-switch' ? 'kill-switch-engaged' : 'target-disabled',
+    reason: event === 'worker.delivery-skipped-kill-switch'
+      ? 'kill-switch-engaged'
+      : event.slice('worker.delivery-skipped-'.length),
     outboxClaimed: false,
   }));
 }
