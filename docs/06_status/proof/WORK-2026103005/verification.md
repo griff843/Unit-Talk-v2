@@ -1,6 +1,6 @@
 # PROOF: WORK-2026103005
 
-MERGE_SHA: pending merge
+MERGE_SHA: 2c52ca206c2c8c1fc570ef23f2cb6760084ebf6a
 
 ## Current PM proof repair — supersedes the historical CI status below
 
@@ -74,5 +74,5 @@ Session-reported model gpt-6.1-sol, reasoning effort unavailable, external sessi
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `2c52ca206c2c8c1fc570ef23f2cb6760084ebf6a`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1811

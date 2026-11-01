@@ -7,9 +7,25 @@
   "policy_version": "3.0.0",
   "codex_cli_version": null,
   "legacy_compatibility_used": false,
-  "override_used": false,
+  "override_used": true,
+  "override_authorized_by": "griff843",
+  "override_approval_comment_url": "https://github.com/griff843/Unit-Talk-v2/pull/1812#issuecomment-6556418809",
   "execution_sha": "286ecb3bc20a1433bd3b7e353dbc69a359b82d07",
   "execution_verification": "unverified-external-session",
-  "unavailable_fields": ["reasoning_effort", "codex_cli_version"],
-  "declared_routing": { "profile": "codex-sol-medium", "model": "gpt-6.1-sol", "reasoning_effort": "medium" }
+  "unavailable_fields": [
+    "reasoning_effort",
+    "codex_cli_version"
+  ],
+  "declared_routing": {
+    "profile": "codex-sol-medium",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "medium"
+  },
+  "note": "2026-11-01: the routing override was recorded after merge by Griff's pm-verdict/v1 (https://github.com/griff843/Unit-Talk-v2/pull/1812#issuecomment-6556418809). The observed effort is still not independently attested. Execution-time fields are unchanged.",
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": "e24a79a34f6378b36af91b90fa3f300aad2626b9",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1812",
+    "bound_at": "2026-11-01T19:52:19.165Z"
+  }
 }
