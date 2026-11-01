@@ -20,6 +20,8 @@
  *   - delete a pick that has a settlement or review row. `settlement_records` is
  *     append-only and `pick_reviews` has no cascade, so those picks are left
  *     alone rather than forced, and both are re-checked per batch;
+ *   - delete a pick whose `status` is `settled`, even with no settlement row
+ *     (Griff, 2026-11-01, Option B: WORK-2026110101). Every DELETE re-asserts it;
  *   - page by offset. It pages by primary key, so its own reads do not add the
  *     offset scans it exists to relieve;
  *   - act on a partial read. Every read is checked against an exact count taken
@@ -55,7 +57,15 @@ export interface ReapCandidate {
   source: string | null;
 }
 
-export type ReapSkipReason = 'unparseable_created_at' | 'not_older_than_cutoff' | 'settled' | 'reviewed';
+export type ReapSkipReason =
+  | 'unparseable_created_at'
+  | 'not_older_than_cutoff'
+  | 'settled'
+  | 'reviewed'
+  | 'status_settled';
+
+/** A pick in this status is kept even when it has no `settlement_records` row. */
+export const KEPT_PICK_STATUS = 'settled';
 
 export interface ReapSelection {
   selected: ReapCandidate[];
@@ -94,6 +104,7 @@ export function selectReapablePicks(
     not_older_than_cutoff: 0,
     settled: 0,
     reviewed: 0,
+    status_settled: 0,
   };
   const selected: ReapCandidate[] = [];
   for (const row of rows) {
@@ -112,6 +123,11 @@ export function selectReapablePicks(
     }
     if (reviewedPickIds.has(row.id)) {
       skipped.reviewed += 1;
+      continue;
+    }
+    // Checked last, so this count is exactly what Option B removed from eligibility.
+    if (row.status === KEPT_PICK_STATUS) {
+      skipped.status_settled += 1;
       continue;
     }
     selected.push(row);
@@ -373,7 +389,12 @@ export function supabaseReapStore(client: BoundarySupabaseClient): ReapStore {
       return (data ?? []) as unknown as Record<string, unknown>[];
     },
     async deletePicks(ids, cutoffIso) {
-      const { error, count } = await client.from('picks').delete({ count: 'exact' }).in('id', ids).lt('created_at', cutoffIso);
+      const { error, count } = await client
+        .from('picks')
+        .delete({ count: 'exact' })
+        .in('id', ids)
+        .lt('created_at', cutoffIso)
+        .neq('status', KEPT_PICK_STATUS);
       if (error) throw new Error(`reap delete of picks failed: ${error.message}`);
       return count ?? 0;
     },
