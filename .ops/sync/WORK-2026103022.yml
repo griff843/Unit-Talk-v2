@@ -1,0 +1,143 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026103022
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026103022
+  objective: WORK-2026103022 — Live staging proof of the human-capper delivery
+    path (supersedes WORK-2026103007)
+  acceptance_criteria:
+    - "`pnpm verify` green in CI at the exact head, including `Writable DB proof
+      (staging only)`, with the new live test(s) executed (not skipped) in that
+      job's log."
+    - "A mutation is recorded: removing the allowlist authorization (or the
+      release call) makes step 2 fail."
+    - The proof states which steps are real persistence and which are simulated
+      (the Discord adapter).
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      WORK-2026103022 — Live staging proof of the human-capper delivery path (supersedes WORK-2026103007)
+      Tier: T1
+      Lane type: verification
+      Executor: codex-cli
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). **Supersedes WORK-2026103007**, whose immutable scope lacked `docs/05_operations/db-writer-classification.json`. `scripts/ci/db-writer-inventory.ts` fails on an unclassified credentialed test **and** on a classification whose path does not exist, so the classification must land in the same PR as the tests. Carry the 3007 work over by cherry-picking its WIP commit. Part of Griff's 2026-10-30 private-canary preparation. No production mutation is authorized. **Staging only** (`xskgrzbteyqdufktjrjx`, the CI `Writable DB proof (staging only)` job).
+
+      ## Gap
+
+      Human-capper delivery is proven only in memory (`apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts`). In production it ran once, on 2026-09-18, and those records were deleted on 2026-10-28. No live-DB test covers allowlist authorization → release → outbox → claim → atomic confirm → receipt → dispatch ledger.
+
+      ## Required proof (real persistence, real contracts)
+
+      Against the staging database, using the real Database repository bundle and the real RPCs (`processSubmissionAtomic`, `enqueueDistributionAtomic`, `claimNextAtomic` / `claim_next_outbox`, `confirmDeliveryAtomic` / `confirm_delivery_atomic`):
+
+      1. A run-namespaced capper with a valid `cappers.metadata.discord` routing record is seeded by the test, on the server allowlist the test configures. It submits a `delivery-eligible` pick through the real submission path.
+         - Assert `metadata.deliveryAuthorization.decision = 'authorized'`, the pinned destination, `capper_id`, and lifecycle `validated → queued`.
+      2. Exactly one `distribution_outbox` row exists for the pick, with target `discord:official-picks` and the pinned channel in its payload.
+      3. A **Track Only** pick by the same capper creates **no** outbox row (negative control).
+      4. **The worker side: claim, deliver, confirm.**
+         - Use the worker's real claim/confirm code path with a **stub Discord adapter**, label it simulated in the test name and the proof, and use a run-namespaced target so no live worker or real channel can pick it up.
+         - Assert: one receipt (`receipt_type 'discord.message'`, `status 'sent'`, `external_id` = the stub's message ID, `channel` and `payload.channelId` = the pinned channel), and lifecycle `queued → posted`.
+         - **Ledger boundary (Production Claude decision, 2026-10-30):** the dispatch ledger is written only for governed human-delivery targets (`apps/worker/src/distribution-worker.ts:67`, `isLedgerGovernedTarget`). A run-namespaced target is not governed, and using `discord:official-picks` would mean touching its kill-switch row, which is forbidden.
+           - Assert the **real** contract for this target instead: **zero** `distribution.dispatch_*` ledger rows for the run's pick.
+           - The proof states plainly that the governed-target ledger path is not proven here. It is covered by the existing in-memory ledger tests and will be evidenced by the production canary.
+           - Do not remap the target or fabricate ledger rows.
+      5. **Exactly once:** a second claim cycle posts nothing, and the adapter call count stays 1.
+      6. **Kill switch:** with the switch killed for the run-namespaced target, the row is not claimed and the adapter is not called.
+         - Remember that `delivery_kill_switch` reads a missing row as killed.
+         - The run-namespaced target must be released by a test-owned row, never by touching `official-picks` or any real target row.
+         - Clean up only the test's own kill-switch row.
+
+      Apps must not import from other apps. If the API and worker halves cannot share one test file, split it into an `apps/api` live test (steps 1–3) and an `apps/worker` live test (steps 4–6) that pick up the persisted row by its run-namespaced pick id. Explain the split in the proof.
+
+      **Do not claim a Discord delivery or a governed-ledger proof.** The adapter is a stub, and the proof must say so in plain words.
+
+      ## Constraints
+
+      - Never write to production. Never touch the real `official-picks`, `best-bets`, `trader-insights`, `exclusive-insights` or `human-capper-recaps` kill-switch rows, even on staging.
+      - No timeout increases. Find fixtures through indexed columns (`capper_id`, `pick_id`), never `selection`. Staging statement timeout is 8 s; see WORK-2026103001.
+      - No schema change.
+
+      ## File Scope
+
+      - apps/api/src/t1-proof-work-2026103007-human-capper-delivery-live.test.ts
+      - apps/worker/src/t1-proof-work-2026103007-human-capper-delivery-live.test.ts (if split)
+      - package.json (root): register the new live test file(s) in `test:t1-proof:live`. This lane owns that line; no concurrent lane edits it.
+      - scripts/ci/db-writer-inventory.ts: only if the inventory code itself must change (it should not)
+      - docs/05_operations/db-writer-classification.json: add the classification entries for the new live test file(s), in the existing `credentialed_tests` shape
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026103022.md
+    title: WORK-2026103022 — Live staging proof of the human-capper delivery path
+      (supersedes WORK-2026103007)
+    description: |-
+      # WORK-2026103022 — Live staging proof of the human-capper delivery path (supersedes WORK-2026103007)
+
+      Tier: T1
+      Lane type: verification
+      Executor: codex-cli
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). **Supersedes WORK-2026103007**, whose immutable scope lacked `docs/05_operations/db-writer-classification.json`. `scripts/ci/db-writer-inventory.ts` fails on an unclassified credentialed test **and** on a classification whose path does not exist, so the classification must land in the same PR as the tests. Carry the 3007 work over by cherry-picking its WIP commit. Part of Griff's 2026-10-30 private-canary preparation. No production mutation is authorized. **Staging only** (`xskgrzbteyqdufktjrjx`, the CI `Writable DB proof (staging only)` job).
+
+      ## Gap
+
+      Human-capper delivery is proven only in memory (`apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts`). In production it ran once, on 2026-09-18, and those records were deleted on 2026-10-28. No live-DB test covers allowlist authorization → release → outbox → claim → atomic confirm → receipt → dispatch ledger.
+
+      ## Required proof (real persistence, real contracts)
+
+      Against the staging database, using the real Database repository bundle and the real RPCs (`processSubmissionAtomic`, `enqueueDistributionAtomic`, `claimNextAtomic` / `claim_next_outbox`, `confirmDeliveryAtomic` / `confirm_delivery_atomic`):
+
+      1. A run-namespaced capper with a valid `cappers.metadata.discord` routing record is seeded by the test, on the server allowlist the test configures. It submits a `delivery-eligible` pick through the real submission path.
+         - Assert `metadata.deliveryAuthorization.decision = 'authorized'`, the pinned destination, `capper_id`, and lifecycle `validated → queued`.
+      2. Exactly one `distribution_outbox` row exists for the pick, with target `discord:official-picks` and the pinned channel in its payload.
+      3. A **Track Only** pick by the same capper creates **no** outbox row (negative control).
+      4. **The worker side: claim, deliver, confirm.**
+         - Use the worker's real claim/confirm code path with a **stub Discord adapter**, label it simulated in the test name and the proof, and use a run-namespaced target so no live worker or real channel can pick it up.
+         - Assert: one receipt (`receipt_type 'discord.message'`, `status 'sent'`, `external_id` = the stub's message ID, `channel` and `payload.channelId` = the pinned channel), and lifecycle `queued → posted`.
+         - **Ledger boundary (Production Claude decision, 2026-10-30):** the dispatch ledger is written only for governed human-delivery targets (`apps/worker/src/distribution-worker.ts:67`, `isLedgerGovernedTarget`). A run-namespaced target is not governed, and using `discord:official-picks` would mean touching its kill-switch row, which is forbidden.
+           - Assert the **real** contract for this target instead: **zero** `distribution.dispatch_*` ledger rows for the run's pick.
+           - The proof states plainly that the governed-target ledger path is not proven here. It is covered by the existing in-memory ledger tests and will be evidenced by the production canary.
+           - Do not remap the target or fabricate ledger rows.
+      5. **Exactly once:** a second claim cycle posts nothing, and the adapter call count stays 1.
+      6. **Kill switch:** with the switch killed for the run-namespaced target, the row is not claimed and the adapter is not called.
+         - Remember that `delivery_kill_switch` reads a missing row as killed.
+         - The run-namespaced target must be released by a test-owned row, never by touching `official-picks` or any real target row.
+         - Clean up only the test's own kill-switch row.
+
+      Apps must not import from other apps. If the API and worker halves cannot share one test file, split it into an `apps/api` live test (steps 1–3) and an `apps/worker` live test (steps 4–6) that pick up the persisted row by its run-namespaced pick id. Explain the split in the proof.
+
+      **Do not claim a Discord delivery or a governed-ledger proof.** The adapter is a stub, and the proof must say so in plain words.
+
+      ## Constraints
+
+      - Never write to production. Never touch the real `official-picks`, `best-bets`, `trader-insights`, `exclusive-insights` or `human-capper-recaps` kill-switch rows, even on staging.
+      - No timeout increases. Find fixtures through indexed columns (`capper_id`, `pick_id`), never `selection`. Staging statement timeout is 8 s; see WORK-2026103001.
+      - No schema change.
+
+      ## Acceptance Criteria
+
+      - `pnpm verify` green in CI at the exact head, including `Writable DB proof (staging only)`, with the new live test(s) executed (not skipped) in that job's log.
+      - A mutation is recorded: removing the allowlist authorization (or the release call) makes step 2 fail.
+      - The proof states which steps are real persistence and which are simulated (the Discord adapter).
+
+      ## File Scope
+
+      - apps/api/src/t1-proof-work-2026103007-human-capper-delivery-live.test.ts
+      - apps/worker/src/t1-proof-work-2026103007-human-capper-delivery-live.test.ts (if split)
+      - package.json (root): register the new live test file(s) in `test:t1-proof:live`. This lane owns that line; no concurrent lane edits it.
+      - scripts/ci/db-writer-inventory.ts: only if the inventory code itself must change (it should not)
+      - docs/05_operations/db-writer-classification.json: add the classification entries for the new live test file(s), in the existing `credentialed_tests` shape
+    captured_at: 2026-11-01T10:21:21.919Z
+    description_sha256: 737faaceaf661e61c7fddc12b24fb4489c75e67df2e759d5a99bb6f93f9e0e5e
+  contract_hash: 4f4e12fb845439927f6810935c1be1ebdfaf5575d318392c83e8af2b2edc1822
