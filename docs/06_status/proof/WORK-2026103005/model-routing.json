@@ -7,10 +7,12 @@
   "policy_version": "3.0.0",
   "codex_cli_version": null,
   "legacy_compatibility_used": false,
-  "override_used": false,
+  "override_used": true,
+  "override_authorized_by": "griff843",
+  "override_approval_comment_url": "https://github.com/griff843/Unit-Talk-v2/pull/1811#issuecomment-6556418105",
   "execution_sha": "916228ed77abdfc05f49549148f2e22818786f78",
   "execution_verification": "unverified-external-session",
   "unavailable_fields": ["reasoning_effort", "codex_cli_version"],
   "declared_routing": { "profile": "codex-sol-medium", "model": "gpt-6.1-sol", "reasoning_effort": "medium" },
-  "note": "Observed session report is not independent attestation. No new PM routing override or merge approval is asserted. Central reconciliation remains Claude-owned."
+  "note": "Observed session report is not independent attestation. No new PM routing override or merge approval is asserted. Central reconciliation remains Claude-owned.\n2026-11-01: the routing override was recorded after merge by Griff's pm-verdict/v1 (https://github.com/griff843/Unit-Talk-v2/pull/1811#issuecomment-6556418105). The observed effort is still not independently attested. Execution-time fields are unchanged."
 }
