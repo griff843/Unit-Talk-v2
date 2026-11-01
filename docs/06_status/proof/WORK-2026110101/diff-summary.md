@@ -20,4 +20,4 @@ The workflow file is unchanged. Lane metadata (`.ops/sync/`, `docs/06_status/lan
 ## SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1817
