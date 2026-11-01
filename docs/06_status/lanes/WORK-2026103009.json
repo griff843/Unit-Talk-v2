@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026103009-staging-fixture-reap",
   "branch": "claude/work-2026103009-staging-fixture-reap",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "21d4b26fd60bd6991d3e1e8c8b6fccfab83587e9",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1813",
   "files_changed": [],
   "file_scope_lock": [
@@ -21,14 +21,22 @@
     "docs/06_status/proof/WORK-2026103009/evidence.json",
     "docs/06_status/proof/WORK-2026103009/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-10-31T13:51:46.374Z",
-  "heartbeat_at": "2026-10-31T14:03:21.920Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-11-01T15:28:30.199Z",
+  "closed_at": "2026-11-01T15:28:30.199Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026103009-staging-fixture-reap.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-11-01T15:28:27.744Z",
+      "verdict": "pass",
+      "merge_sha": "21d4b26fd60bd6991d3e1e8c8b6fccfab83587e9",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {
