@@ -1,0 +1,49 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110204",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/wo-2026110101/.out/worktrees/codex__work-2026110204-checkpoint-dir-env",
+  "branch": "codex/work-2026110204-checkpoint-dir-env",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/work/WORK-2026110204.md",
+    "scripts/ops/codex-exec.test.ts",
+    "scripts/ops/codex-exec.ts",
+    "scripts/ops/execution-checkpoint.test.ts",
+    "scripts/ops/execution-checkpoint.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026110204/diff-summary.md",
+    "docs/06_status/proof/WORK-2026110204/evidence.json",
+    "docs/06_status/proof/WORK-2026110204/verification.md",
+    "docs/06_status/proof/WORK-2026110204/model-routing.json"
+  ],
+  "status": "started",
+  "started_at": "2026-11-02T13:17:46.797Z",
+  "heartbeat_at": "2026-11-02T13:17:46.797Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/work-2026110204-checkpoint-dir-env.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-luna-medium",
+    "model": "gpt-6-luna",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "3.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/wo-2026110101/.out/worktrees/codex__work-2026110204-checkpoint-dir-env",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
