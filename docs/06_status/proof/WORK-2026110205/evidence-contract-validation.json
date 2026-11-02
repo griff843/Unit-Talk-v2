@@ -1,0 +1,13 @@
+{
+  "valid": false,
+  "schemaVersion": 1,
+  "profile": "legacy-v1",
+  "profileSource": "legacy-schema",
+  "failures": [
+    {
+      "code": "legacy_v1_not_allowed_pre_merge",
+      "field": "schema_version",
+      "message": "schema-v1 evidence is historical read-only and cannot pass a pre-merge authoring gate"
+    }
+  ]
+}

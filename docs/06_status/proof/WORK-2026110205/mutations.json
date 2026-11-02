@@ -1,0 +1,14 @@
+[
+  {
+    "mutation": "nhl-data0",
+    "sourceSha": "1ec1af6b6ab0835219b96a462e78e968222091bd",
+    "exitCode": 1,
+    "killed": true
+  },
+  {
+    "mutation": "nfl-first-hit",
+    "sourceSha": "1ec1af6b6ab0835219b96a462e78e968222091bd",
+    "exitCode": 1,
+    "killed": true
+  }
+]

@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "issue_id": "WORK-2026110205",
+  "tier": "T1",
+  "generated_at": "2026-11-02T18:25:56.538701+00:00",
+  "verifier": {
+    "identity": "Codex child executor; actual model gpt-6.1-sol, effort medium; see model-routing.json"
+  },
+  "source_sha": "1ec1af6b6ab0835219b96a462e78e968222091bd",
+  "status": "incomplete-pending-snapshot-and-staging-ci",
+  "sha_binding": {
+    "verified_source_sha": "1ec1af6b6ab0835219b96a462e78e968222091bd",
+    "merge_sha": null,
+    "sha_type": "source_sha",
+    "note": "No merge occurred. Authorized post-merge path must bind the actual merge SHA. No exact-head CI success is claimed."
+  },
+  "source_file_sha256": {
+    "apps/api/src/player-enrichment-service.ts": "c86c1bbde947de6debc304c947829e1946aaa9921d5c8971128a8f0e27b9997f",
+    "apps/api/src/player-enrichment-service.test.ts": "7c7d34ccf983744516bfbd400ee3abbe19e1429eaa535f2d4c377b343219b29b",
+    "apps/smart-form/app/submit/components/ParticipantArtwork.tsx": "792f4b4ec92e1cd3bb8ae92e89a341ba35dcc2146ff1fa0602b90fe83d93a815",
+    "apps/smart-form/lib/participant-media.ts": "93824cf0ea8500fff1d149fd39ac32fe68a4ac314b0e6f2db55a68c7903beaa8",
+    "apps/smart-form/test/participant-media.test.ts": "f5c7773af17df43e79827a4b31608be134c4ecde9296c80a4a5be06bc980adce"
+  },
+  "static_proof": {
+    "type_check": "pass, exit 0",
+    "focused_tests": {
+      "pass": 20,
+      "fail": 0,
+      "output": "focused-after.txt"
+    },
+    "regression_first": {
+      "pass": 6,
+      "fail": 3,
+      "output": "regression-before.txt",
+      "service_matches_origin_main": "fddc405696098800209f634e471607b2400eec43"
+    },
+    "mutations": "both killed, see mutations.json",
+    "verify_static": "pass within pnpm verify; final exact-head rerun recorded in .out/ops/ready-for-pr/WORK-2026110205.md",
+    "verify": "FAIL at staging identity guard, exit 1; no DB tests executed",
+    "r_level": "PASS on implementation source; final exact-head rerun recorded in ready-for-pr handoff",
+    "browser_component_proof": "pass; browser-proof.json",
+    "general_qa": "SKIP, local service preflight unavailable; qa-experience.json"
+  },
+  "runtime_proof": {
+    "provider_probes": "live-provider-probes.json; all four existing endpoints returned HTTP 200; raw responses in provider-raw",
+    "stored_headshots_revalidation": {
+      "status": "pending-supplied-snapshot",
+      "input": ".out/media-0205/stored-headshots-snapshot.json",
+      "observed_row_count": null,
+      "sql_reported_row_count": 1497,
+      "note": "SQL comment supplied by Production Claude; not an independently counted snapshot. The required revalidation file has not been fabricated."
+    },
+    "writable_db": {
+      "status": "blocked-deferred",
+      "observed_host": "127.0.0.1",
+      "expected_staging_project": "xskgrzbteyqdufktjrjx",
+      "evidence": "test-db.txt",
+      "next": "CI Writable DB proof (staging only), pnpm test:db and T1 live suites at exact PR head"
+    },
+    "production_connections": 0,
+    "production_writes": 0,
+    "live_db_enrichment_proof_claimed": false
+  },
+  "scope_notes": [
+    "updateMetadata write unchanged; existing string headshot URLs skipped",
+    "package.json is a singleton held by WORK-2026103022 and is out of scope",
+    "No new live DB test added",
+    "All legacy player media stays on branded fallback because the read endpoint has no identity-verification evidence",
+    "No submission, delivery, worker, schema, provider or approved-host change"
+  ],
+  "pending": [
+    "Supply snapshot and revalidate every row with raw provider responses",
+    "Production Claude opens PR when staging capacity is free; no child PR opening",
+    "Exact-head staging CI green",
+    "Outer wrapper executor-result/v1 publication after truth/provenance checks",
+    "Independent Claude review",
+    "Griff t1-approved and pm-verdict/v1 APPROVED at exact head",
+    "Governed merge and actual merge-SHA binding",
+    "Reconcile requested v1 evidence format with pre-merge validator requiring v2"
+  ],
+  "mergeSha": "1ec1af6b6ab0835219b96a462e78e968222091bd",
+  "mergeSha_binding_kind": "Pre-merge source-ancestor binding required by bundle-sha-check; NOT an actual merge SHA. sha_binding.merge_sha remains null pending governed merge.",
+  "proof_format_conflict": {
+    "packet_requires": "evidence bundle v1",
+    "pre_merge_validator": "rejects schema_version=1 as historical read-only",
+    "code": "legacy_v1_not_allowed_pre_merge",
+    "evidence": "evidence-contract-validation.json",
+    "resolution": "Outer authority must reconcile the packet with the pre-merge authoring contract; no guard changes made"
+  }
+}

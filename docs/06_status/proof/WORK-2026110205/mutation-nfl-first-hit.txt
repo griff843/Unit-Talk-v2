@@ -1,0 +1,136 @@
+TAP version 13
+# Subtest: resolveHeadshotUrl returns null for null sport
+ok 1 - resolveHeadshotUrl returns null for null sport
+  ---
+  duration_ms: 1.593201
+  type: 'test'
+  ...
+# Subtest: resolveHeadshotUrl returns null for unknown sport
+ok 2 - resolveHeadshotUrl returns null for unknown sport
+  ---
+  duration_ms: 0.257185
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass skips players with existing headshot_url
+ok 3 - runPlayerEnrichmentPass skips players with existing headshot_url
+  ---
+  duration_ms: 0.638419
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass reports skipped for players with null sport
+ok 4 - runPlayerEnrichmentPass reports skipped for players with null sport
+  ---
+  duration_ms: 0.211454
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass handles empty participant list
+ok 5 - runPlayerEnrichmentPass handles empty participant list
+  ---
+  duration_ms: 0.191642
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass writes system_runs record with correct details
+ok 6 - runPlayerEnrichmentPass writes system_runs record with correct details
+  ---
+  duration_ms: 0.202147
+  type: 'test'
+  ...
+# Subtest: NHL unrelated player is refused
+ok 7 - NHL unrelated player is refused
+  ---
+  duration_ms: 47.436192
+  type: 'test'
+  ...
+# Subtest: NHL ambiguous name is refused
+ok 8 - NHL ambiguous name is refused
+  ---
+  duration_ms: 0.914689
+  type: 'test'
+  ...
+# Subtest: NFL unrelated first result is refused
+not ok 9 - NFL unrelated first result is refused
+  ---
+  duration_ms: 4.80067
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:1:4219'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'https://a.espncdn.com/wrong.png'
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: 'https://a.espncdn.com/wrong.png'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:178:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: all sports require a unique normalized full identity, including symmetric suffixes
+not ok 10 - all sports require a unique normalized full identity, including symmetric suffixes
+  ---
+  duration_ms: 13.260999
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:1:4496'
+  failureType: 'testCodeFailure'
+  error: 'NFL'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:202:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: NFL selects the unique identity after an unrelated first hit and refuses duplicate exact hits
+not ok 11 - NFL selects the unique identity after an unrelated first hit and refuses duplicate exact hits
+  ---
+  duration_ms: 2.516997
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:1:6712'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/2.png&w=350&h=254'
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: 'https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/2.png&w=350&h=254'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:219:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: NHL checks candidate league and team and does not resolve ambiguity using an image
+ok 12 - NHL checks candidate league and team and does not resolve ambiguity using an image
+  ---
+  duration_ms: 0.847421
+  type: 'test'
+  ...
+# Subtest: enrichment records refusal reasons and leaves stored images untouched
+ok 13 - enrichment records refusal reasons and leaves stored images untouched
+  ---
+  duration_ms: 2.233057
+  type: 'test'
+  ...
+1..13
+# tests 13
+# suites 0
+# pass 10
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 646.378122

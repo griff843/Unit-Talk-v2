@@ -1,0 +1,9 @@
+{
+  "issue_id": "WORK-2026110205",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "medium",
+  "observation": "Actual turn_context payload: model=gpt-6.1-sol, effort=medium. Not inferred from profile, config defaults or timeout policy.",
+  "source": "/home/griff843/.codex/sessions/2026/11/02/rollout-2026-11-02T13-14-51-01a19d78-a166-7490-adf2-fec7d9403eac.jsonl",
+  "thread_id": "01a19d78-a166-7490-adf2-fec7d9403eac",
+  "subagents": []
+}

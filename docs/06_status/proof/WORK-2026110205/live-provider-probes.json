@@ -1,0 +1,55 @@
+{
+  "label": "Live provider probes; not stored-headshot revalidation",
+  "results": [
+    {
+      "sport": "MLB",
+      "name": "Aaron Judge",
+      "url": "https://img.mlbstatic.com/mlb-photos/image/upload/w_213,d_people:generic:headshot:silo:current.png,q_auto:best,f_auto/v1/people/592450/headshot/67/current",
+      "reason": "confirmed"
+    },
+    {
+      "sport": "NBA",
+      "name": "LeBron James",
+      "url": "https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png",
+      "reason": "confirmed"
+    },
+    {
+      "sport": "NFL",
+      "name": "Josh Allen",
+      "url": null,
+      "reason": "ambiguous"
+    },
+    {
+      "sport": "NHL",
+      "name": "Jake Evans",
+      "url": null,
+      "reason": "identity-mismatch"
+    }
+  ],
+  "requests": [
+    {
+      "url": "https://statsapi.mlb.com/api/v1/sports/1/players?season=2026",
+      "at": "2026-11-02T18:22:31.295Z",
+      "status": 200,
+      "raw": "docs/06_status/proof/WORK-2026110205/provider-raw/1.txt"
+    },
+    {
+      "url": "https://stats.nba.com/stats/commonallplayers?IsOnlyCurrentSeason=1&LeagueID=00&Season=2026-27",
+      "at": "2026-11-02T18:22:31.642Z",
+      "status": 200,
+      "raw": "docs/06_status/proof/WORK-2026110205/provider-raw/2.txt"
+    },
+    {
+      "url": "https://site.api.espn.com/apis/common/v3/search?query=Josh%20Allen&limit=5&type=player&sport=football&league=nfl",
+      "at": "2026-11-02T18:22:31.782Z",
+      "status": 200,
+      "raw": "docs/06_status/proof/WORK-2026110205/provider-raw/3.txt"
+    },
+    {
+      "url": "https://search.d3.nhle.com/api/v1/search/player?culture=en-us&limit=5&q=Jake%20Evans",
+      "at": "2026-11-02T18:22:31.940Z",
+      "status": 200,
+      "raw": "docs/06_status/proof/WORK-2026110205/provider-raw/4.txt"
+    }
+  ]
+}
