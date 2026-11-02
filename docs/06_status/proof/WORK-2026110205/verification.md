@@ -8,15 +8,28 @@ Tier: T1. Implementation source: `36483d1b993082c13e7dd16e9647d757950618c2`. Ind
 
 ### ASSERTIONS:
 
-- All four resolvers require exactly one normalized full-name candidate. No positional, substring or token-subset player selection remains. Case, diacritics, punctuation and whitespace normalize; Jr/Junior and Sr/Senior normalize symmetrically, while absent/different suffixes and II/III remain distinct.
-- Available team and league identities must agree. A production catalog team key is translated to a full name; provider numeric IDs compare only with numeric IDs. When both sides carry teams but cannot be correlated, the matcher refuses the candidate. NHL abbreviations use a verified 32-team dictionary; MLB IDs use a verified 30-team dictionary. NBA columns are read by header; ESPN relationship identities are checked.
-- NHL/NFL searches now request 100 results instead of five, including namesakes outside the old window. A response filling the 100-result window returns ambiguous because uniqueness is unproven. Zero credible matches returns identity-mismatch, multiple credible matches returns ambiguous, and provider failure returns unresolved. Refusals are counted in run details.
-- Legacy player media carries no identity-verification evidence, so Smart Form keeps it on the approved emblem. The emblem duplicates BrandLogo geometry within Smart Form and carries the participant's accessible name. Image errors also show the emblem. Approved hosts and participant-envelope checks remain intact. Artwork never affects form validity.
-- The existing `updateMetadata` write and existing-headshot skip are unchanged. No existing stored URL is rewritten. `package.json` is a singleton held by WORK-2026103022 and out of scope. No new live DB test was added; no live DB enrichment proof is claimed.
-- No submission, distribution, outbox, worker, schema, domain or contract path changed. No production connection, production write, deploy or provider activation occurred.
-- The packet requests bundle v1; Production Claude explicitly authorized schema_version 2 in `.out/media-0205/REWORK-DIRECTIONS.md` because the pre-merge validator rejects v1. Merge SHA remains null, CI-resolved sentinels remain, and no verifier identity is authored here.
+- [x] All four resolvers require exactly one normalized full-name candidate. No positional, substring or token-subset player selection remains. Case, diacritics, punctuation and whitespace normalize; Jr/Junior and Sr/Senior normalize symmetrically, while absent/different suffixes and II/III remain distinct.
+- [x] Available team and league identities must agree. A production catalog team key is translated to a full name; provider numeric IDs compare only with numeric IDs. When both sides carry teams but cannot be correlated, the matcher refuses the candidate. NHL abbreviations use a verified 32-team dictionary; MLB IDs use a verified 30-team dictionary. NBA columns are read by header; ESPN relationship identities are checked.
+- [x] NHL/NFL searches now request 100 results instead of five, including namesakes outside the old window. A response filling the 100-result window returns ambiguous because uniqueness is unproven. Zero credible matches returns identity-mismatch, multiple credible matches returns ambiguous, and provider failure returns unresolved. Refusals are counted in run details.
+- [x] Legacy player media carries no identity-verification evidence, so Smart Form keeps it on the approved emblem. The emblem duplicates BrandLogo geometry within Smart Form and carries the participant's accessible name. Image errors also show the emblem. Approved hosts and participant-envelope checks remain intact. Artwork never affects form validity.
+- [x] The existing `updateMetadata` write and existing-headshot skip are unchanged. No existing stored URL is rewritten. `package.json` is a singleton held by WORK-2026103022 and out of scope. No new live DB test was added; no live DB enrichment proof is claimed.
+- [x] No submission, distribution, outbox, worker, schema, domain or contract path changed. No production connection, production write, deploy or provider activation occurred.
+- [x] The packet requests bundle v1; Production Claude explicitly authorized schema_version 2 in `.out/media-0205/REWORK-DIRECTIONS.md` because the pre-merge validator rejects v1. Merge SHA remains null, CI-resolved sentinels remain, and no verifier identity is authored here.
 
 ### EVIDENCE:
+
+Focused suites re-run by Production Claude at c0a35a0bf (source identical to 36483d1b9):
+
+```text
+$ pnpm exec tsx --test apps/api/src/player-enrichment-service.test.ts apps/smart-form/test/participant-media.test.ts
+# tests 35
+# suites 0
+# pass 35
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
 
 | Check | Observed result |
 |---|---|
