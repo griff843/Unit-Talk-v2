@@ -973,7 +973,7 @@ test('buildTrialStatusEmbed includes capper guidance when the member is also a c
 
   assert.equal(embed.title, 'Your Unit Talk Access - VIP');
   assert.equal(embed.color, 0xc7a34b);
-  assert.equal(embed.fields?.[0]?.name, 'Capper Role');
+  assert.equal(embed.fields?.[0]?.name, 'Submitting picks');
   assert.equal(
     embed.fields?.[0]?.value,
     'Use the [Unit Talk pick form](https://picks.unit-talk.com/submit).',

@@ -37,7 +37,7 @@ export function buildTrialStatusEmbed(context: MemberTierContext) {
 
   if (context.isCapper) {
     embed.addFields({
-      name: 'Capper Role',
+      name: 'Submitting picks',
       value: 'Use the [Unit Talk pick form](https://picks.unit-talk.com/submit).',
       inline: false,
     });
