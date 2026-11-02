@@ -157,5 +157,13 @@
   "app_type_check": {
     "command": "pnpm --filter @unit-talk/command-center type-check",
     "status": "PASS"
+  },
+  "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1819",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "4856c23593c326059d920bcddb09b469c1fa1b63",
+    "sha_type": "branch_head",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
   }
 }

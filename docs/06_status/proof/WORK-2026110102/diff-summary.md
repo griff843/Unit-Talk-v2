@@ -24,4 +24,4 @@ No production writes, authorization change, query filter/order change, list popu
 
 Verified source SHA: 4856c23593c326059d920bcddb09b469c1fa1b63
 Merge SHA: pending merge
-PR: pending — Production Claude owns opening after staging capacity is free
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1819
