@@ -2,11 +2,11 @@
   "schema_version": 2,
   "issue_id": "WORK-2026110205",
   "tier": "T1",
-  "generated_at": "2026-11-02T19:33:46.111585+00:00",
-  "source_sha": "88ed0431fa3c9ada782351115a54bd569cd30657",
-  "status": "independent-review-repaired-staging-proof-pending",
+  "generated_at": "2026-11-02T19:43:22.377568+00:00",
+  "source_sha": "36483d1b993082c13e7dd16e9647d757950618c2",
+  "status": "narrow-review-repair-staging-proof-pending",
   "sha_binding": {
-    "verified_source_sha": "88ed0431fa3c9ada782351115a54bd569cd30657",
+    "verified_source_sha": "36483d1b993082c13e7dd16e9647d757950618c2",
     "merge_sha": null,
     "sha_type": "source_sha",
     "note": "No merge occurred. Authorized post-merge path must bind the actual merge SHA. No exact-head CI success is claimed.",
@@ -14,18 +14,18 @@
     "current_pr_head_sha": "CI_RESOLVED"
   },
   "source_file_sha256": {
-    "apps/api/src/player-enrichment-service.ts": "0f59000a58ffda7e0ad3773f8d29217cef9cad0e0afda7cad9430bd887909391",
-    "apps/api/src/player-enrichment-service.test.ts": "30ed6dee7fd3caa685774f1967b49c471ed11d4e8995baab9a640768800d5eb3",
+    "apps/api/src/player-enrichment-service.ts": "003616ac0044088c899f792a1c3029c8446aaf8cbb8744f6baefa0f4d05583ea",
+    "apps/api/src/player-enrichment-service.test.ts": "58f3375c7ffc69e7035499a70afca4f8d9e11b6a61bb0447310d207a310f11e1",
     "apps/smart-form/app/submit/components/ParticipantArtwork.tsx": "792f4b4ec92e1cd3bb8ae92e89a341ba35dcc2146ff1fa0602b90fe83d93a815",
     "apps/smart-form/lib/participant-media.ts": "93824cf0ea8500fff1d149fd39ac32fe68a4ac314b0e6f2db55a68c7903beaa8",
     "apps/smart-form/test/participant-media.test.ts": "f5c7773af17df43e79827a4b31608be134c4ecde9296c80a4a5be06bc980adce"
   },
   "static_proof": {
-    "type_check": "PASS after explicit fetch-input type annotation; .out/media-0205/type-check-review.txt",
+    "type_check": "PASS within pnpm verify at source 36483d1b9; .out/media-0205/verify-narrow.txt",
     "focused_tests": {
-      "pass": 31,
+      "pass": 35,
       "fail": 0,
-      "output": "review-focused-after.txt"
+      "output": "narrow-regressions-after.txt"
     },
     "regression_first": {
       "pass": 6,
@@ -33,10 +33,10 @@
       "output": "regression-before.txt",
       "service_matches_origin_main": "fddc405696098800209f634e471607b2400eec43"
     },
-    "mutations": "both killed at 88ed0431fa3c9ada782351115a54bd569cd30657 using isolated exact source/test copies; mutations.json",
-    "verify_static": "PASS: every verify:static gate succeeded within pnpm verify at source head 88ed0431fa3c9ada782351115a54bd569cd30657; lint/type-check/build/root tests/Smart Form verify/command checks",
-    "verify": "exit 1 at 88ed0431fa3c9ada782351115a54bd569cd30657 after all static gates passed; live DB guard refused 127.0.0.1 / unidentified before suites. No exact-final-head green verification claimed.",
-    "r_level": "PASS at 88ed0431fa3c9ada782351115a54bd569cd30657; .out/media-0205/r-level-review.txt; prior caveat about unrelated QA artifact selection remains",
+    "mutations": "all three killed at 36483d1b993082c13e7dd16e9647d757950618c2 in isolated source/test copies; mutations.json",
+    "verify_static": "PASS: all verify:static gates passed at 36483d1b9 within pnpm verify",
+    "verify": "exit 1 at 36483d1b9 after all static gates passed; staging identity guard refused unidentified 127.0.0.1 before DB suites; no exact-final-head green claim",
+    "r_level": "PASS at 36483d1b993082c13e7dd16e9647d757950618c2; .out/media-0205/r-level-narrow.txt; prior QA coverage caveat remains",
     "browser_component_proof": "pass; browser-proof.json",
     "general_qa": "SKIP, local service preflight unavailable; qa-experience.json",
     "espn_relationships_regression": {
@@ -60,20 +60,27 @@
       "pass": 98,
       "fail": 0,
       "output": ".out/media-0205/submission-service-review.txt"
+    },
+    "narrow_regression_first": {
+      "baseline_source_sha": "213644a732c308a8ade430e237458d95b51169fa",
+      "pass": 33,
+      "fail": 2,
+      "output": "narrow-regressions-before.txt",
+      "note": "Unknown-team controls pass; two saturated-search tests fail first."
     }
   },
   "runtime_proof": {
     "provider_probes": "live-provider-probes.json; all four existing endpoints returned HTTP 200; raw responses in provider-raw",
     "stored_headshots_revalidation": {
-      "status": "completed-after-independent-review-repair",
+      "status": "completed-after-narrow-review-repair",
       "input": ".out/media-0205/stored-headshots-snapshot.json",
       "observed_row_count": 1497,
       "non_null_urls": 1488,
       "null_urls": 9,
       "verdicts": {
-        "confirmed": 1103,
-        "mismatch": 388,
-        "ambiguous": 6
+        "confirmed": 1052,
+        "mismatch": 364,
+        "ambiguous": 81
       },
       "requests": 320,
       "http_200": 320,
@@ -86,7 +93,7 @@
         "Nine supplied rows have null stored URLs. NFL has no stored rows and is exercised by the separate live provider probe.",
         "All legacy player URLs remain on the branded fallback because the read endpoint carries no identity-verification evidence."
       ],
-      "source_sha": "88ed0431fa3c9ada782351115a54bd569cd30657",
+      "source_sha": "36483d1b993082c13e7dd16e9647d757950618c2",
       "per_sport": {
         "MLB": {
           "confirmed": 766,
@@ -97,21 +104,21 @@
           "mismatch": 83
         },
         "NHL": {
-          "confirmed": 192,
-          "mismatch": 120,
-          "ambiguous": 6
+          "confirmed": 141,
+          "mismatch": 96,
+          "ambiguous": 81
         }
       },
-      "unique_url_differences": 57,
+      "unique_url_differences": 53,
       "url_differences_artifact": "stored-headshots-url-differences.json",
-      "unique_different_non_null_stored_urls": 51,
+      "unique_different_non_null_stored_urls": 47,
       "unique_resolution_for_null_stored_urls": 6
     },
     "writable_db": {
       "status": "blocked-deferred",
       "observed_host": "127.0.0.1",
       "expected_staging_project": "xskgrzbteyqdufktjrjx",
-      "evidence": "review-test-db.txt",
+      "evidence": "narrow-test-db.txt",
       "next": "CI Writable DB proof (staging only), pnpm test:db and T1 live suites at exact PR head"
     },
     "production_connections": 0,

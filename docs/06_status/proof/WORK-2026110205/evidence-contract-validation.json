@@ -10,7 +10,7 @@
     "mode": "schema-v2",
     "phase": "pre-merge",
     "failures": [],
-    "provenanceAnchorSha": "88ed0431fa3c9ada782351115a54bd569cd30657"
+    "provenanceAnchorSha": "36483d1b993082c13e7dd16e9647d757950618c2"
   },
   "routing": {
     "valid": true,

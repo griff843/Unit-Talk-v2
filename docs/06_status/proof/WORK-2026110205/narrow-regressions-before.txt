@@ -165,14 +165,14 @@ not ok 27 - NHL refuses a full search window even with one matching identity
   error: |-
     Expected values to be strictly deep-equal:
     + actual - expected
-    
+
       {
     +   reason: 'confirmed',
     +   url: 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/1.jpg'
     -   reason: 'ambiguous',
     -   url: null
       }
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected:
@@ -197,14 +197,14 @@ not ok 28 - NFL refuses a full search window even with one matching identity
   error: |-
     Expected values to be strictly deep-equal:
     + actual - expected
-    
+
       {
     +   reason: 'confirmed',
     +   url: 'https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/1.png&w=350&h=254'
     -   reason: 'ambiguous',
     -   url: null
       }
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected:

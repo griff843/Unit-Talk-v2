@@ -1,8 +1,8 @@
 {
   "label": "revalidation of stored headshots \u2014 uniquely resolved URL differences",
-  "sourceSha": "88ed0431fa3c9ada782351115a54bd569cd30657",
-  "rowCount": 57,
-  "nonNullStoredUrls": 51,
+  "sourceSha": "36483d1b993082c13e7dd16e9647d757950618c2",
+  "rowCount": 53,
+  "nonNullStoredUrls": 47,
   "nullStoredUrls": 6,
   "rows": [
     {
@@ -177,15 +177,6 @@
       "reason": "unique identity resolves to a different URL"
     },
     {
-      "participantId": "4fb969c3-8a5e-4a9a-9a0e-2fc647e999e2",
-      "displayName": "Dan Vladar",
-      "sport": "NHL",
-      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8457702.jpg",
-      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478435.jpg",
-      "verdict": "mismatch",
-      "reason": "unique identity resolves to a different URL"
-    },
-    {
       "participantId": "53cff967-35c6-4452-a397-e2c1881530ed",
       "displayName": "NaeQwan Tomlin",
       "sport": "NBA",
@@ -200,15 +191,6 @@
       "sport": "NHL",
       "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478149.jpg",
       "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8480074.jpg",
-      "verdict": "mismatch",
-      "reason": "unique identity resolves to a different URL"
-    },
-    {
-      "participantId": "57f85cfb-e7f1-4810-9fc2-d6af215cb920",
-      "displayName": "Jake Evans",
-      "sport": "NHL",
-      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8484554.jpg",
-      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478133.jpg",
       "verdict": "mismatch",
       "reason": "unique identity resolves to a different URL"
     },
@@ -303,29 +285,11 @@
       "reason": "unique identity resolves to a different URL"
     },
     {
-      "participantId": "79289021-b6fe-45d6-b916-0eaeae446912",
-      "displayName": "Trevor Moore",
-      "sport": "NHL",
-      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8459846.jpg",
-      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8479675.jpg",
-      "verdict": "mismatch",
-      "reason": "unique identity resolves to a different URL"
-    },
-    {
       "participantId": "8e23b8ca-ab9d-4fc3-910c-f9443069b690",
       "displayName": "Mikael Granlund",
       "sport": "NHL",
       "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8468550.jpg",
       "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8475798.jpg",
-      "verdict": "mismatch",
-      "reason": "unique identity resolves to a different URL"
-    },
-    {
-      "participantId": "9ed4aabc-df89-48d7-8266-611b390ff4e9",
-      "displayName": "Ryan Nugent-Hopkins",
-      "sport": "NHL",
-      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8471292.jpg",
-      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8476454.jpg",
       "verdict": "mismatch",
       "reason": "unique identity resolves to a different URL"
     },

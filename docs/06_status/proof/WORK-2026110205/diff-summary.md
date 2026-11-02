@@ -9,9 +9,9 @@
 | apps/smart-form/test/participant-media.test.ts | Approved-host legacy player photos cannot bypass fallback. |
 | docs/06_status/proof/WORK-2026110205/* | Refreshed measured regressions, mutation evidence, raw provider data, dictionary verification, stored-headshot revalidation and pending acceptance gates. |
 
-Implementation head: `88ed0431fa3c9ada782351115a54bd569cd30657`. All 31 focused tests pass; both old positional-selection mutations fail. Team dictionaries use existing provider identity data and add no runtime endpoint or reference-data population. Unknown/incomparable teams fail closed.
+Implementation head: `36483d1b993082c13e7dd16e9647d757950618c2`. All 35 focused tests pass; both old positional-selection mutations fail. Team dictionaries use existing provider identity data and add no runtime endpoint or reference-data population. Unknown/incomparable teams fail closed. Four narrow-review regressions cover unknown MLB/NHL dictionary entries and saturated NHL/NFL searches; saturated windows now return ambiguous. The unknown-team fall-through mutation is killed.
 
-Revalidation of stored headshots covers every supplied row: 1497 rows and 320 HTTP 200 responses. Results: 1103 confirmed stored URLs, 388 mismatches, six ambiguous, zero unresolved. The differences artifact lists 57 unique resolutions to a different URL: 51 non-null stored URLs and six null URLs. Refusals alone do not prove wrong-person photos. All legacy player images remain on the branded fallback; the report authorizes no rewrite.
+Revalidation of stored headshots covers every supplied row: 1497 rows and 320 HTTP 200 responses. Results: 1052 confirmed stored URLs, 364 mismatches, 81 ambiguous, zero unresolved. The differences artifact lists 53 unique resolutions to a different URL: 47 non-null stored URLs and 6 null URLs. Refusals alone do not prove wrong-person photos. All legacy player images remain on the branded fallback; the report authorizes no rewrite.
 
 The existing `updateMetadata(player.id, { headshot_url: headshotUrl })` call and skip of existing string headshots are unchanged. `package.json` is a singleton held by WORK-2026103022 and out of scope. No new live DB test was added; no live DB enrichment proof is claimed.
 
