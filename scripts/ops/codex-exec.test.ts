@@ -1728,25 +1728,29 @@ test('a routing mismatch is reported after evidence persists and before SUCCESS 
 
 test('checkpointRootMismatch flags a lane worktree whose repository root is not the launch root', () => {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'work-2026110203-roots-')));
-  const repo = path.join(dir, 'repo');
-  fs.mkdirSync(path.join(repo, 'sub'), { recursive: true });
-  fs.writeFileSync(path.join(repo, 'sub', 'README.md'), 'fixture\n');
-  for (const args of [
-    ['init', '--initial-branch=main'],
-    ['config', 'user.email', 'test@example.com'],
-    ['config', 'user.name', 'Test'],
-    ['add', '-A'],
-    ['commit', '-m', 'base'],
-    ['worktree', 'add', '-b', 'lane', path.join(dir, 'lane-wt')],
-  ]) {
-    assert.equal(spawnSync('git', args, { cwd: repo, stdio: 'pipe' }).status, 0, `git ${args.join(' ')}`);
+  try {
+    const repo = path.join(dir, 'repo');
+    fs.mkdirSync(path.join(repo, 'sub'), { recursive: true });
+    fs.writeFileSync(path.join(repo, 'sub', 'README.md'), 'fixture\n');
+    for (const args of [
+      ['init', '--initial-branch=main'],
+      ['config', 'user.email', 'test@example.com'],
+      ['config', 'user.name', 'Test'],
+      ['add', '-A'],
+      ['commit', '-m', 'base'],
+      ['worktree', 'add', '-b', 'lane', path.join(dir, 'lane-wt')],
+    ]) {
+      assert.equal(spawnSync('git', args, { cwd: repo, stdio: 'pipe' }).status, 0, `git ${args.join(' ')}`);
+    }
+    assert.equal(checkpointRootMismatch(repo, path.join(repo, 'sub')), null, 'a plain subdirectory shares the root');
+    assert.equal(checkpointRootMismatch(path.join(dir, 'lane-wt'), path.join(dir, 'lane-wt')), null, 'launching from the worktree agrees');
+    assert.deepEqual(checkpointRootMismatch(repo, path.join(dir, 'lane-wt')), {
+      launchRoot: repo,
+      worktreeRoot: path.join(dir, 'lane-wt'),
+    });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
-  assert.equal(checkpointRootMismatch(repo, path.join(repo, 'sub')), null, 'a plain subdirectory shares the root');
-  assert.equal(checkpointRootMismatch(path.join(dir, 'lane-wt'), path.join(dir, 'lane-wt')), null, 'launching from the worktree agrees');
-  assert.deepEqual(checkpointRootMismatch(repo, path.join(dir, 'lane-wt')), {
-    launchRoot: repo,
-    worktreeRoot: path.join(dir, 'lane-wt'),
-  });
 });
 
 test('codex-exec refuses before spawning when launched outside the lane worktree root', () => {
