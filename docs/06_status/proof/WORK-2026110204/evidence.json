@@ -1,0 +1,38 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110204",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "verified_source_sha": "0907b0400fae61aa9031d5a0da18cf05429aec4b",
+    "evidence_commit_sha": null,
+    "current_pr_head_sha": null,
+    "merge_sha": null
+  },
+  "static_proof": {
+    "focused_tests": { "command": "npx tsx --test scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.test.ts", "pass": 89, "fail": 0 },
+    "full_test": { "command": "pnpm test", "result": "exit 0", "final_tap_block_pass": 7, "final_tap_block_fail": 0, "final_tap_block_skipped": 1 },
+    "build": "pass",
+    "type_check": "pass",
+    "eslint": "pass",
+    "verify_static": "pass",
+    "r_level": "PASS; 25 changed files; no R-level artifacts required",
+    "model_routing": "declared codex-luna-medium; codex-exec evidence builder reported no matching rollout, so runtime routing fields are unavailable",
+    "full_pnpm_verify": {
+      "result": "exit 1 after static checks",
+      "writable_live_db_proof": "blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.",
+      "observed_refusal": "[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx"
+    },
+    "mutation_checks": [
+      { "mutation": "M1 buildCodexChildEnv omits UNIT_TALK_EXECUTION_CHECKPOINT_DIR", "result": "failed as required", "failing_test_numbers": [1, 2] },
+      { "mutation": "M2 runCli ignores UNIT_TALK_EXECUTION_CHECKPOINT_DIR", "result": "failed as required", "failing_test_numbers": [1] },
+      { "mutation": "M3 environment directory wins over --dir", "result": "failed as required", "failing_test_numbers": [1] }
+    ]
+  },
+  "runtime_proof": {
+    "status": "deferred",
+    "reason": "Writable live-DB proof is deferred to staging-ci because the local target identity check refused host=127.0.0.1."
+  }
+}

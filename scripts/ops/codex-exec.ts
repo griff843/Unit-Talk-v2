@@ -776,23 +776,6 @@ export function observeModelRouting(input: {
   };
 }
 
-/**
- * WORK-2026110203: the execution checkpoint lives under the launch checkout's repository
- * root, but Codex records phases from inside the lane worktree, under that worktree's own
- * root. When the two differ, every phase record is refused. Returns the conflict, or null
- * when the roots agree or the worktree root cannot be read.
- */
-export function checkpointRootMismatch(
-  launchRoot: string,
-  worktreeCwd: string,
-): { launchRoot: string; worktreeRoot: string } | null {
-  const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: worktreeCwd, stdio: 'pipe', encoding: 'utf8' });
-  if (top.status !== 0) return null;
-  const worktreeRoot = fs.realpathSync(top.stdout.trim());
-  const resolvedLaunchRoot = fs.realpathSync(launchRoot);
-  return worktreeRoot === resolvedLaunchRoot ? null : { launchRoot: resolvedLaunchRoot, worktreeRoot };
-}
-
 export interface PullRequestObservation {
   number: number | null;
   head_sha: string | null;
@@ -949,7 +932,11 @@ export function commitAndPushEvidence(cwd: string, relativeEvidencePath: string,
   return { ok: true, step: 'push', detail: 'committed and pushed' };
 }
 
-export function buildCodexChildEnv(cwd: string, stateIdentity: ExecutionStateIdentity): NodeJS.ProcessEnv {
+export function buildCodexChildEnv(
+  cwd: string,
+  stateIdentity: ExecutionStateIdentity,
+  checkpointDir: string,
+): NodeJS.ProcessEnv {
   const stateRoot = path.join(cwd, '.out', 'codex-pnpm-state');
   const dirs = {
     home: path.join(stateRoot, 'home'),
@@ -976,6 +963,7 @@ export function buildCodexChildEnv(cwd: string, stateIdentity: ExecutionStateIde
     UNIT_TALK_EXECUTION_EPOCH_ID: stateIdentity.epoch_id,
     UNIT_TALK_EXECUTION_ATTEMPT: String(stateIdentity.attempt),
     UNIT_TALK_EXECUTION_MINIMUM_REVISION: String(stateIdentity.minimum_revision),
+    UNIT_TALK_EXECUTION_CHECKPOINT_DIR: path.resolve(checkpointDir),
   };
 }
 
@@ -1148,22 +1136,6 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       issue_id: issueId,
       branch: manifest.branch,
       message: `Worktree CWD does not exist: ${resolvedCwd}. Run pnpm ops:lane-start to set up the worktree.`,
-    } satisfies CodexExecResult);
-    process.exit(2);
-  }
-
-  const checkpointRootConflict = checkpointRootMismatch(ROOT, resolvedCwd);
-  if (checkpointRootConflict) {
-    emitJson({
-      ok: false,
-      code: 'PRECONDITION_FAILED',
-      issue_id: issueId,
-      branch: manifest.branch,
-      message:
-        `codex-exec was launched from ${checkpointRootConflict.launchRoot}, but the lane worktree's repository root is ` +
-        `${checkpointRootConflict.worktreeRoot}. The execution checkpoint lives under the launch root, while Codex records ` +
-        'its phases with `pnpm ops:exec-checkpoint` under the worktree root, so every phase record would be refused and the ' +
-        `run would end INCOMPLETE_PHASE_PROGRESSION. Launch from the worktree instead: cd ${resolvedCwd} && pnpm ops:codex-exec --issue ${issueId}`,
     } satisfies CodexExecResult);
     process.exit(2);
   }
@@ -1380,7 +1352,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     cwd: resolvedCwd,
     stdio: 'inherit',
     shell: process.platform === 'win32',
-    env: buildCodexChildEnv(resolvedCwd, attemptStart.identity),
+    env: buildCodexChildEnv(resolvedCwd, attemptStart.identity, path.dirname(attemptStart.path)),
     timeout: timeoutPolicy.timeout_ms,
   });
 

@@ -9,7 +9,6 @@ import {
   buildCodexChildEnv,
   buildCodexPrompt,
   buildModelRoutingEvidence,
-  checkpointRootMismatch,
   commitAndPushEvidence,
   evaluateExecutionTruth,
   findCodexRollouts,
@@ -24,6 +23,7 @@ import {
   checkpointRecoveryPath,
   finishAttempt,
   recordPhaseComplete,
+  readCheckpoint,
   resolveExecutionTimeout,
   type ExecutionStateIdentity,
 } from './execution-checkpoint.js';
@@ -637,13 +637,15 @@ test('execution truth rejects an epoch baseline that is not an ancestor of HEAD'
   }
 });
 
-test('Codex child environment carries the originating checkpoint identity', () => {
+test('Codex child environment carries the checkpoint directory and originating identity', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1711-child-env-'));
   try {
-    const env = buildCodexChildEnv(dir, { epoch_id: 'epoch-1', attempt: 2, minimum_revision: 7 });
+    const checkpointDir = path.join(dir, 'parent-checkpoints');
+    const env = buildCodexChildEnv(dir, { epoch_id: 'epoch-1', attempt: 2, minimum_revision: 7 }, checkpointDir);
     assert.equal(env.UNIT_TALK_EXECUTION_EPOCH_ID, 'epoch-1');
     assert.equal(env.UNIT_TALK_EXECUTION_ATTEMPT, '2');
     assert.equal(env.UNIT_TALK_EXECUTION_MINIMUM_REVISION, '7');
+    assert.equal(env.UNIT_TALK_EXECUTION_CHECKPOINT_DIR, checkpointDir);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -1280,6 +1282,7 @@ test('operator cancellation is honoured before any codex process is spawned', ()
 const TSX_BIN = path.join(ROOT, 'node_modules', '.bin', 'tsx');
 
 interface LaneRoot {
+  tempRoot: string;
   /** Repo root for the run; also the git repository whose cleanliness is asserted. */
   root: string;
   /** PATH entry holding stub executor CLIs. Kept outside `root` so it is not untracked content. */
@@ -1408,7 +1411,7 @@ function buildLaneRoot(issueId: string, executor: 'claude' | 'codex-cli'): LaneR
     spawnSync('git', args, { cwd: root, stdio: 'pipe' });
   }
 
-  return { root, bin: stubExecutorClis(dir), objective, syncPath };
+  return { tempRoot: dir, root, bin: stubExecutorClis(dir), objective, syncPath };
 }
 
 function runExecutor(
@@ -1444,6 +1447,7 @@ function parseLeadingJson(out: string): Record<string, unknown> {
 test('codex-exec --dry-run executes to a rendered packet carrying the captured contract', () => {
   const issueId = 'UTV2-999901';
   const lane = buildLaneRoot(issueId, 'codex-cli');
+  try {
   const run = runExecutor('codex-exec.ts', lane, ['--issue', issueId, '--dry-run']);
 
   assert.equal(
@@ -1478,11 +1482,15 @@ test('codex-exec --dry-run executes to a rendered packet carrying the captured c
     run.stdout.includes('(would run)'),
     'dry run must describe the invocation rather than perform it',
   );
+  } finally {
+    fs.rmSync(lane.tempRoot, { recursive: true, force: true });
+  }
 });
 
 test('codex-exec --dry-run leaves the lane root byte-identical', () => {
   const issueId = 'UTV2-999902';
   const lane = buildLaneRoot(issueId, 'codex-cli');
+  try {
   assert.equal(laneRootChanges(lane), '', 'fixture must start clean');
 
   const run = runExecutor('codex-exec.ts', lane, ['--issue', issueId, '--dry-run']);
@@ -1496,11 +1504,15 @@ test('codex-exec --dry-run leaves the lane root byte-identical', () => {
     '',
     'dry run must leave no tracked or untracked change in the lane root',
   );
+  } finally {
+    fs.rmSync(lane.tempRoot, { recursive: true, force: true });
+  }
 });
 
 test('codex-exec --dry-run refuses a lane with no captured contract instead of fetching one', () => {
   const issueId = 'UTV2-999903';
   const lane = buildLaneRoot(issueId, 'codex-cli');
+  try {
   fs.rmSync(lane.syncPath);
 
   const run = runExecutor('codex-exec.ts', lane, ['--issue', issueId, '--dry-run']);
@@ -1515,6 +1527,9 @@ test('codex-exec --dry-run refuses a lane with no captured contract instead of f
     false,
     'a dry run must never capture a contract, which would require a live Linear call',
   );
+  } finally {
+    fs.rmSync(lane.tempRoot, { recursive: true, force: true });
+  }
 });
 
 test('executor modules resolve every imported symbol (narrow compile smoke)', () => {
@@ -1602,16 +1617,20 @@ function writeRollout(
 }
 
 function rolloutFixture() {
-  const sessionsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'work-2026110203-sessions-'));
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'work-2026110203-lane-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'work-2026110203-rollout-'));
+  const sessionsRoot = path.join(root, 'sessions');
+  const cwd = path.join(root, 'lane');
+  fs.mkdirSync(sessionsRoot);
+  fs.mkdirSync(cwd);
   const startedAtMs = Date.now() - 60_000;
   const endedAtMs = Date.now();
   const inWindow = new Date(startedAtMs + 1_000);
-  return { sessionsRoot, cwd, startedAtMs, endedAtMs, inWindow };
+  return { root, sessionsRoot, cwd, startedAtMs, endedAtMs, inWindow };
 }
 
 test('observed routing comes from the single rollout of this worktree and attempt', () => {
   const f = rolloutFixture();
+  try {
   const mine = writeRollout(
     f.sessionsRoot,
     f.inWindow,
@@ -1639,10 +1658,14 @@ test('observed routing comes from the single rollout of this worktree and attemp
     unavailable_fields: [],
     mismatched_fields: [],
   });
+  } finally {
+    fs.rmSync(f.root, { recursive: true, force: true });
+  }
 });
 
 test('no rollout or several rollouts is unavailable, and no declared value is copied into an observed field', () => {
   const f = rolloutFixture();
+  try {
   const none = observeModelRouting({ declared: DECLARED, rollouts: findCodexRollouts(f) });
   assert.equal(none.status, 'unavailable');
   assert.match(none.reason ?? '', /no Codex rollout/);
@@ -1658,20 +1681,29 @@ test('no rollout or several rollouts is unavailable, and no declared value is co
   assert.equal(ambiguous.status, 'unavailable');
   assert.match(ambiguous.reason ?? '', /2 Codex rollouts/);
   assert.equal(ambiguous.model, null);
+  } finally {
+    fs.rmSync(f.root, { recursive: true, force: true });
+  }
 });
 
 test('a field the rollout does not carry is null and listed, while the rest are observed', () => {
   const f = rolloutFixture();
+  try {
   writeRollout(f.sessionsRoot, f.inWindow, { id: 'sess-2', cwd: f.cwd, originator: 'codex_exec' }, [{ model: 'gpt-6.1-sol' }]);
   const observation = observeModelRouting({ declared: DECLARED, rollouts: findCodexRollouts(f) });
   assert.equal(observation.status, 'observed');
   assert.equal(observation.model, 'gpt-6.1-sol');
   assert.equal(observation.reasoning_effort, null);
   assert.deepEqual(observation.unavailable_fields, ['reasoning_effort', 'cli_version', 'token_usage']);
+  } finally {
+    fs.rmSync(f.root, { recursive: true, force: true });
+  }
 });
 
 test('any turn whose model or effort differs from the declared routing is a mismatch', () => {
   const f = rolloutFixture();
+  let g: ReturnType<typeof rolloutFixture> | undefined;
+  try {
   writeRollout(
     f.sessionsRoot,
     f.inWindow,
@@ -1682,9 +1714,13 @@ test('any turn whose model or effort differs from the declared routing is a mism
   assert.equal(observation.status, 'mismatch');
   assert.deepEqual(observation.mismatched_fields, ['reasoning_effort']);
 
-  const g = rolloutFixture();
+  g = rolloutFixture();
   writeRollout(g.sessionsRoot, g.inWindow, { id: 'sess-4', cwd: g.cwd, originator: 'codex_exec' }, [{ model: 'gpt-6.1-luna', effort: 'medium' }]);
   assert.deepEqual(observeModelRouting({ declared: DECLARED, rollouts: findCodexRollouts(g) }).mismatched_fields, ['model']);
+  } finally {
+    fs.rmSync(f.root, { recursive: true, force: true });
+    if (g) fs.rmSync(g.root, { recursive: true, force: true });
+  }
 });
 
 test('evidence labels its routing fields as declared and defaults the observation to unavailable', () => {
@@ -1726,47 +1762,32 @@ test('a routing mismatch is reported after evidence persists and before SUCCESS 
   assert.ok(successIndex > mismatchIndex, 'a mismatch must be refused before SUCCESS is reachable');
 });
 
-test('checkpointRootMismatch flags a lane worktree whose repository root is not the launch root', () => {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'work-2026110203-roots-')));
+test('phase-complete from a separate lane repository writes into the launch checkpoint directory', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'work-2026110204-cross-repo-'));
   try {
-    const repo = path.join(dir, 'repo');
-    fs.mkdirSync(path.join(repo, 'sub'), { recursive: true });
-    fs.writeFileSync(path.join(repo, 'sub', 'README.md'), 'fixture\n');
-    for (const args of [
-      ['init', '--initial-branch=main'],
-      ['config', 'user.email', 'test@example.com'],
-      ['config', 'user.name', 'Test'],
-      ['add', '-A'],
-      ['commit', '-m', 'base'],
-      ['worktree', 'add', '-b', 'lane', path.join(dir, 'lane-wt')],
-    ]) {
-      assert.equal(spawnSync('git', args, { cwd: repo, stdio: 'pipe' }).status, 0, `git ${args.join(' ')}`);
+    const launchRoot = path.join(dir, 'launch-root');
+    const laneRoot = path.join(dir, 'lane-worktree');
+    const checkpointDir = path.join(launchRoot, '.out', 'ops', 'execution-checkpoints');
+    fs.mkdirSync(launchRoot, { recursive: true });
+    fs.mkdirSync(laneRoot, { recursive: true });
+    for (const repo of [launchRoot, laneRoot]) {
+      assert.equal(spawnSync('git', ['init', '--initial-branch=main'], { cwd: repo, stdio: 'pipe' }).status, 0);
     }
-    assert.equal(checkpointRootMismatch(repo, path.join(repo, 'sub')), null, 'a plain subdirectory shares the root');
-    assert.equal(checkpointRootMismatch(path.join(dir, 'lane-wt'), path.join(dir, 'lane-wt')), null, 'launching from the worktree agrees');
-    assert.deepEqual(checkpointRootMismatch(repo, path.join(dir, 'lane-wt')), {
-      launchRoot: repo,
-      worktreeRoot: path.join(dir, 'lane-wt'),
+    const issueId = 'WORK-2026110204';
+    const started = beginAttempt({
+      kind: 'fresh', issueId, currentHeadSha: '1'.repeat(40),
+      objectiveIdentity: `issue:${issueId}`, authority: 'test',
+      timeoutPolicy: resolveExecutionTimeout({ tier: 'T2', reasoningEffort: 'medium', phase: 'implement' }),
+      dir: checkpointDir,
     });
+    const env = buildCodexChildEnv(laneRoot, started.identity, checkpointDir);
+    const run = spawnSync(TSX_BIN, [path.join(ROOT, 'scripts', 'ops', 'execution-checkpoint.ts'),
+      'phase-complete', '--issue', issueId, '--phase', 'orient', '--summary', 'cross repository phase',
+    ], { cwd: laneRoot, env, encoding: 'utf8', timeout: 60_000 });
+    assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+    assert.equal(readCheckpoint(issueId, checkpointDir)?.completed_phases[0]?.phase, 'orient');
+    assert.equal(fs.existsSync(path.join(laneRoot, '.out', 'ops', 'execution-checkpoints', `${issueId}.json`)), false);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
-});
-
-test('codex-exec refuses before spawning when launched outside the lane worktree root', () => {
-  const issueId = 'UTV2-999904';
-  const lane = buildLaneRoot(issueId, 'codex-cli');
-  const wt = path.join(lane.root, 'wt');
-  fs.rmSync(wt, { recursive: true });
-  spawnSync('git', ['rm', '-q', '-r', '--cached', 'wt'], { cwd: lane.root, stdio: 'pipe' });
-  spawnSync('git', ['commit', '-q', '-m', 'drop wt'], { cwd: lane.root, stdio: 'pipe' });
-  assert.equal(spawnSync('git', ['worktree', 'add', '-q', '-b', 'lane', wt], { cwd: lane.root, stdio: 'pipe' }).status, 0);
-
-  const run = runExecutor('codex-exec.ts', lane, ['--issue', issueId, '--dry-run']);
-  assert.equal(run.status, 2, `expected a precondition refusal; stderr: ${run.stderr}`);
-  const parsed = parseLeadingJson(run.stdout);
-  assert.equal(parsed['code'], 'PRECONDITION_FAILED');
-  assert.match(String(parsed['message']), /INCOMPLETE_PHASE_PROGRESSION/u);
-  assert.match(String(parsed['message']), new RegExp(`cd ${wt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} && pnpm ops:codex-exec --issue ${issueId}`, 'u'));
-  assert.ok(!run.stdout.includes('(would run)'), 'no invocation may be planned past the refusal');
 });
