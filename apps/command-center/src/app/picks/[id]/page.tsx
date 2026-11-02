@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { isMemberVisibleDeliveryAudience } from '@unit-talk/contracts';
 import { RecapStatusPanel } from '@/components/RecapStatusPanel';
 import { Card } from '@/components/ui/Card';
 import { DegradedState } from '@/components/ui';
@@ -47,6 +48,7 @@ interface PromotionHistoryRow {
 }
 
 interface OutboxRow {
+  payload?: unknown;
   id: string;
   target: string;
   status: string;
@@ -310,6 +312,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
     <div className="flex flex-col gap-6">
       <GovernedPickTruth
         metadata={pick.metadata}
+        outboxPayloads={detail.outboxRows.map((row) => row.payload)}
         hasEventLink={rawEventId !== null}
         voided={pick.status === 'voided'}
         deliveryStage={deliveryStage}
@@ -393,6 +396,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           <SettlementForm
             pickId={pickId}
             isAlreadySettled={alreadySettled}
+            memberVisible={isMemberVisibleDeliveryAudience(pick.metadata, detail.outboxRows.map((row) => row.payload))}
             eventName={pick.matchup}
             market={pick.market}
             selection={pick.selection}

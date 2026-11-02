@@ -112,3 +112,46 @@ test('a lost recap response never claims members were not told', () => {
   assert.match(verdict.detail, /may already have received/);
   assert.doesNotMatch(verdict.headline, /NOT posted|members were not told/);
 });
+
+test('member and legacy recap copy stays byte-identical', () => {
+  assert.deepEqual(describeRecapOutcome({ posted: true }, true), {
+    kind: 'posted', headline: 'Recap posted — members were told.',
+  });
+  assert.deepEqual(describeRecapOutcome({ posted: false, reason: 'no-sent-delivery' }, true), {
+    kind: 'suppressed',
+    headline: 'Recap NOT posted — members were not told.',
+    detail: 'This pick has no confirmed delivery, so there is no audience to recap to. A pick that never reached members correctly gets no recap.',
+    reason: 'no-sent-delivery',
+  });
+});
+
+test('canary and fail-closed audiences name the private staff destination for every recap outcome', async () => {
+  const { isMemberVisibleDeliveryAudience } = await import('@unit-talk/contracts');
+  const payload = (audience: unknown) => ({ deliveryDestination: { audience } });
+  const pick = (audience: unknown) => ({ deliveryAuthorization: { audience } });
+  const cases = [
+    { metadata: pick('staff-canary'), payloads: [] },
+    { metadata: {}, payloads: [payload('staff-canary')] },
+    { metadata: pick('staff-canary'), payloads: [payload('staff-canary')] },
+    { metadata: pick('unknown'), payloads: [] },
+    { metadata: {}, payloads: [payload(42)] },
+    { metadata: pick('members'), payloads: [payload('staff-canary')] },
+    { metadata: pick('staff-canary'), payloads: [payload('members')] },
+  ];
+  for (const { metadata, payloads } of cases) {
+    const memberVisible = isMemberVisibleDeliveryAudience(metadata, payloads);
+    assert.equal(memberVisible, false);
+    for (const recap of [
+      { posted: true },
+      { posted: false, reason: 'no-sent-delivery' },
+      { posted: false, reason: 'kill-switch-engaged' },
+      { posted: false, reason: 'recap_request_outcome_unknown' },
+      { posted: false, reason: 'unknown-refusal' },
+    ]) {
+      const verdict = describeRecapOutcome(recap, memberVisible);
+      assert.match(JSON.stringify(verdict), /the private staff destination/);
+      assert.doesNotMatch(JSON.stringify(verdict), /members/);
+    }
+    assert.deepEqual(describeRecapOutcome(null, memberVisible), { kind: 'not-applicable' });
+  }
+});

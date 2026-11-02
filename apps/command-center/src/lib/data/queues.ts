@@ -117,6 +117,7 @@ export interface PromotionHistoryRow {
 }
 
 export interface OutboxRow {
+  payload?: unknown;
   id: string;
   target: string;
   status: string;
@@ -836,7 +837,7 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
 
       client
         .from('distribution_outbox')
-        .select('id, pick_id, target, status, attempt_count, last_error, claimed_at, created_at, updated_at')
+        .select('id, pick_id, target, status, attempt_count, last_error, claimed_at, created_at, updated_at, payload')
         .eq('pick_id', pickId)
         .order('created_at', { ascending: false }),
 
@@ -990,6 +991,7 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
     // ── Map outbox ────────────────────────────────────────────────────────────
 
     const outbox: OutboxRow[] = outboxRows.map((row) => ({
+      payload: row['payload'],
       id: asString(row['id']),
       target: asString(row['target']),
       status: asString(row['status']),
