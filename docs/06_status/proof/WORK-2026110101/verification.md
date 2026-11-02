@@ -44,3 +44,9 @@ Run on `86bc6c88b6869bbdf1e05f8728a303a881237741`:
 - [x] `npx eslint scripts/ci/staging-fixture-reap.ts scripts/ci/staging-path-enforcement.test.ts`: exit 0.
 - [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: `Verdict: PASS`, no rules matched.
 - [ ] `pnpm verify` and `pnpm test:db` run in protected CI on the PR head; the staging DB receipt is produced there. `pnpm verify` cannot exit 0 locally, because `ci:assert-staging` requires the CI environment.
+
+## Merge SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1817
+Execution SHA: 86bc6c88b6869bbdf1e05f8728a303a881237741
