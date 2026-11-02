@@ -1,0 +1,505 @@
+{
+  "label": "revalidation of stored headshots \u2014 uniquely resolved URL differences",
+  "sourceSha": "d7d2683699a9974da79e6d082d6e3d0d3889f131",
+  "rowCount": 55,
+  "rows": [
+    {
+      "participantId": "01886705-d5af-40af-9a04-9a0d1b9a972d",
+      "displayName": "Logan Stankoven",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8474122.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8482702.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "06147401-c544-4992-b366-dd8664f5248e",
+      "displayName": "Tommy Novak",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8444919.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478438.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "0a060360-5a8c-411d-889e-fe6a25868858",
+      "displayName": "V\u00edt Krejci",
+      "sport": "NBA",
+      "storedUrl": null,
+      "newMatcherUrl": "https://cdn.nba.com/headshots/nba/latest/1040x760/1630249.png",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "0d7ae567-fa22-471b-8977-61dc952ffc52",
+      "displayName": "Ilya Solovyov",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8482792.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8482470.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "0f9aa0ab-2dfd-4dac-9ca4-6abe46699be8",
+      "displayName": "Jeffrey Viel",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8459714.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8479705.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "1264d5ae-0055-4aba-ad50-4db712821b00",
+      "displayName": "Samuel Helenius",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8485632.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8482726.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "13250b17-897c-4521-8832-96058820ce4f",
+      "displayName": "Pavel Mintyukov",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8481113.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8483490.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "177aeb7d-5ec4-454a-b6bc-4997b92baaac",
+      "displayName": "Oliver Kapanen",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8484627.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8482775.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "1a1fb83f-c1bf-45e9-961c-fd5f271638cc",
+      "displayName": "Rodolfo Duran",
+      "sport": "MLB",
+      "storedUrl": null,
+      "newMatcherUrl": "https://img.mlbstatic.com/mlb-photos/image/upload/w_213,d_people:generic:headshot:silo:current.png,q_auto:best,f_auto/v1/people/660710/headshot/67/current",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "254a4583-4f02-471d-aeec-4a1b8656251d",
+      "displayName": "Ivan Herrera",
+      "sport": "MLB",
+      "storedUrl": null,
+      "newMatcherUrl": "https://img.mlbstatic.com/mlb-photos/image/upload/w_213,d_people:generic:headshot:silo:current.png,q_auto:best,f_auto/v1/people/671056/headshot/67/current",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "284be757-10f0-4a52-9c16-333c580353dc",
+      "displayName": "Anton Forsberg",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8467441.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8476341.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "337ee4b8-72e5-481a-bd10-c7b0206a8d72",
+      "displayName": "Brandon Tanev",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8481499.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8479293.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "3823396c-6d43-40b8-ab0b-722ea83dcd8a",
+      "displayName": "Christian Dvorak",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8483470.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8477989.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "3c5cd255-5492-45aa-b842-aa5208345325",
+      "displayName": "Ivan Demidov",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8483930.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8484984.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "3cfa6de5-9fd4-4abe-a728-960557663925",
+      "displayName": "Trevor Zegras",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8459846.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8481533.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "3ecb7fc8-9e13-4cfd-9938-9304106cfbeb",
+      "displayName": "Casey Mittelstadt",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8479585.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8479999.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "48307856-94f6-4225-91bc-33d11810e737",
+      "displayName": "Mats Zuccarello",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8449796.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8475692.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "4c1c43c6-d23f-4aed-8f7a-2b7389c1fba5",
+      "displayName": "Andres Chaparro",
+      "sport": "MLB",
+      "storedUrl": null,
+      "newMatcherUrl": "https://img.mlbstatic.com/mlb-photos/image/upload/w_213,d_people:generic:headshot:silo:current.png,q_auto:best,f_auto/v1/people/665953/headshot/67/current",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "53cff967-35c6-4452-a397-e2c1881530ed",
+      "displayName": "NaeQwan Tomlin",
+      "sport": "NBA",
+      "storedUrl": null,
+      "newMatcherUrl": "https://cdn.nba.com/headshots/nba/latest/1040x760/1641772.png",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "548960cb-d267-456c-a747-783e9ffe54f5",
+      "displayName": "Alexandre Texier",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478149.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8480074.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "5cbd4e07-374d-4558-bacf-93df37b0afd6",
+      "displayName": "Pedro Ramirez",
+      "sport": "MLB",
+      "storedUrl": null,
+      "newMatcherUrl": "https://img.mlbstatic.com/mlb-photos/image/upload/w_213,d_people:generic:headshot:silo:current.png,q_auto:best,f_auto/v1/people/699393/headshot/67/current",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "5d143dd7-a0bc-4cf4-827f-041e7c32934e",
+      "displayName": "Parker Kelly",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8457614.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8480448.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "62bd8158-22c2-4d84-8546-62775017951b",
+      "displayName": "Liam O'Brien",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8486167.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8477070.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "641b790a-7924-47c9-9f22-8d2efc1c37a3",
+      "displayName": "Lukas Dostal",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8481710.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8480843.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "6589d209-24b4-4eb3-9225-2b6f283e3d9f",
+      "displayName": "Drew Doughty",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8470778.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8474563.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "6e33b6cf-bde5-4770-a45a-2af9d2fc81b2",
+      "displayName": "Kevin Stenlund",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8484864.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478831.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "6e968d8b-66f5-42fd-a6af-1180c9f6fcf9",
+      "displayName": "Travis Sanheim",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8481937.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8477948.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "716648aa-6287-470c-b3f0-bf0ca71fc710",
+      "displayName": "Brandon Bussi",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8476438.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8483548.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "731aa5c2-f23b-4163-9e6b-3990dc6c99ab",
+      "displayName": "Tomas Hertl",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8470500.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8476881.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "79289021-b6fe-45d6-b916-0eaeae446912",
+      "displayName": "Trevor Moore",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8459846.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8479675.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "8bdd7161-7b57-470c-82b1-b88e33514d53",
+      "displayName": "Pavel Dorofeyev",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8481113.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8481604.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "9dfea675-9ae5-46f4-9dd2-f0c359b1acc4",
+      "displayName": "Andrei Kuzmenko",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8481642.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8483808.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "a1687715-cd16-414e-bcde-ed77c51c082d",
+      "displayName": "Ivan Barbashev",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8483930.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8477964.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "a4238889-3f92-4840-b227-1c99fba53e1d",
+      "displayName": "Andrei Svechnikov",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8481642.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8480830.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "a67495b1-f960-4f9c-bb91-686839d6af2c",
+      "displayName": "Vladimir Tarasenko",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8462136.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8475765.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "a6dbc24a-0b4b-4b05-abfd-294b13ade544",
+      "displayName": "Blake Lizotte",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8480816.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8481481.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "a7b8ed9d-b0e1-45d2-9e51-3dac07f876f4",
+      "displayName": "Colton Sissons",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8477029.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8476925.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "b02ed8bc-adfa-4a5c-afd2-685ce3d8dee2",
+      "displayName": "Kevin Alcantara",
+      "sport": "MLB",
+      "storedUrl": null,
+      "newMatcherUrl": "https://img.mlbstatic.com/mlb-photos/image/upload/w_213,d_people:generic:headshot:silo:current.png,q_auto:best,f_auto/v1/people/682634/headshot/67/current",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "b1d37df5-ba43-4a86-b723-af083f9da4e9",
+      "displayName": "Darren Raddysh",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8460291.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478178.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "b2a515d9-ffb7-4c74-8e9d-4a84cb070e19",
+      "displayName": "Jonathan Hern\u00e1ndez",
+      "sport": "MLB",
+      "storedUrl": "https://img.mlbstatic.com/mlb-photos/image/upload/w_213,d_people:generic:headshot:silo:current.png,q_auto:best,f_auto/v1/people/606192/headshot/67/current",
+      "newMatcherUrl": "https://img.mlbstatic.com/mlb-photos/image/upload/w_213,d_people:generic:headshot:silo:current.png,q_auto:best,f_auto/v1/people/642546/headshot/67/current",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "b4aa6cba-3980-4b46-a5f2-875674c50252",
+      "displayName": "Andrei Vasilevskiy",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8481642.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8476883.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "b4d53c56-6546-48ed-ae8d-d1d43ea76215",
+      "displayName": "Nikita Zadorov",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8483733.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8477507.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "b55d110f-1561-4653-bf6d-d924aaabf646",
+      "displayName": "Colin Blackwell",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8476358.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8476278.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "c1086dd1-041e-43a8-b2bc-928865371401",
+      "displayName": "Mitch Marner",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8477871.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478483.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "c27325e0-e97b-45da-874a-6b4ad2a4e219",
+      "displayName": "Rasmus Dahlin",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478162.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8480839.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "d26f34d2-6ee4-4fdd-909e-4e211ada26e7",
+      "displayName": "Taylor Ward",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8475606.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8483406.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "da9c6ad9-ad47-405d-a140-dc738f9fc11d",
+      "displayName": "Cesar Prieto",
+      "sport": "MLB",
+      "storedUrl": null,
+      "newMatcherUrl": "https://img.mlbstatic.com/mlb-photos/image/upload/w_213,d_people:generic:headshot:silo:current.png,q_auto:best,f_auto/v1/people/693409/headshot/67/current",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "e03a2bcb-deb9-4587-bc6a-657749d79a1a",
+      "displayName": "Max Crozier",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8479015.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8481719.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "e4717cc8-d617-428b-83f5-585a3b8ee68f",
+      "displayName": "Rasmus Ristolainen",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478162.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8477499.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "ebf60e3b-338d-4522-aa7e-707bb7b6f520",
+      "displayName": "Mason McTavish",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8447633.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8482745.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "eef49aec-5009-47c4-a9e9-b6bb64099ba4",
+      "displayName": "Quinn Hughes",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8485909.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8480800.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "efa15f05-00ac-4df7-a544-f42466d75927",
+      "displayName": "Alexander Petrovic",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8468734.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8475755.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "f667c6bd-dafb-49f4-af5c-6091f8fd5af9",
+      "displayName": "Shane Pinto",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478169.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8481596.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "fc75677e-e385-495e-a330-049641548324",
+      "displayName": "Travis Konecny",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8481937.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478439.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    },
+    {
+      "participantId": "fec6f9b4-1502-4050-a583-fa342320ce98",
+      "displayName": "Ian Moore",
+      "sport": "NHL",
+      "storedUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8476550.jpg",
+      "newMatcherUrl": "https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8482178.jpg",
+      "verdict": "mismatch",
+      "reason": "unique identity resolves to a different URL"
+    }
+  ],
+  "productionWriteAuthorized": false,
+  "nonNullStoredUrlCount": 47,
+  "nullStoredUrlCount": 8
+}

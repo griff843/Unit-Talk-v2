@@ -9,7 +9,7 @@
 | apps/smart-form/test/participant-media.test.ts | Ensures even approved-host legacy player photos cannot bypass fallback. |
 | docs/06_status/proof/WORK-2026110205/* | Measured regression/mutation outputs, live provider raw responses, browser evidence and pending gates. |
 
-Implementation source: `d3464409b` (full SHA in evidence.json).
+Rework implementation source: `d7d268369` (full SHA in evidence.json).
 
 The current read endpoint has no identity-verification contract. All player headshots therefore remain on the emblem, including stored URLs that might later be confirmed by revalidation. This deliberately avoids displaying stored wrong-person photos without adding a write or widening endpoint scope. Team logos retain the existing approved-host/participant checks.
 
@@ -22,6 +22,10 @@ No submission, distribution, outbox, worker, schema, contract, domain or approve
 Merge SHA: pending merge; only the authorized post-merge path may bind it.
 PR: pending; Production Claude opens it when the staging slot is free.
 
-## Resumed read-only proof
+## Authorized rework and read-only proof
 
-Added revalidation of 1497 supplied rows and 320 raw HTTP 200 provider responses. Nine rows confirmed and 1488 refused. Newly observed canonical/provider team namespace mismatch and incorrect NBA column indices are recorded as acceptance blockers; refusals do not establish that all photos depict the wrong person. No runtime code changed in this resumed attempt.
+Production Claude authorized the two discovered repairs in `.out/media-0205/REWORK-DIRECTIONS.md`: compare canonical team keys by full provider names/nicknames, compare numeric provider IDs only within their namespace, and resolve NBA columns by header names. Added regressions for canonical matches, Sox distinction, LA Clippers, numeric conflicts, reordered headers and the six-Jakes shared-photo case. Rework baseline: 14 pass / 3 fail. Repaired focused suite: 24/24.
+
+Revalidation of stored headshots covers 1497 rows with 320 HTTP 200 responses: 1260 confirmed stored URLs, 229 mismatches, 8 ambiguous, 0 unresolved. The separate URL-differences file lists all 55 unique resolutions to different URLs (MLB 7, NBA 2, NHL 46). Of the 55 differences, 47 replace a non-null stored URL and eight would fill a null URL; null URLs are not wrong-photo cases. Refusals do not establish wrong-person photos. Missing comparable provider team names contribute no identity evidence; a unique normalized full name and all comparable available team/league checks still govern.
+
+Evidence now uses schema_version 2 under explicit outer-authority direction, resolving the packet-v1/pre-merge-validator conflict. Staging proof, CI and approvals remain pending. No push or PR in this rework.

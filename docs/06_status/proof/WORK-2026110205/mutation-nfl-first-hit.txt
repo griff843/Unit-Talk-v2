@@ -2,81 +2,81 @@ TAP version 13
 # Subtest: resolveHeadshotUrl returns null for null sport
 ok 1 - resolveHeadshotUrl returns null for null sport
   ---
-  duration_ms: 1.315471
+  duration_ms: 1.934007
   type: 'test'
   ...
 # Subtest: resolveHeadshotUrl returns null for unknown sport
 ok 2 - resolveHeadshotUrl returns null for unknown sport
   ---
-  duration_ms: 0.189825
+  duration_ms: 0.350902
   type: 'test'
   ...
 # Subtest: runPlayerEnrichmentPass skips players with existing headshot_url
 ok 3 - runPlayerEnrichmentPass skips players with existing headshot_url
   ---
-  duration_ms: 0.483677
+  duration_ms: 0.628854
   type: 'test'
   ...
 # Subtest: runPlayerEnrichmentPass reports skipped for players with null sport
 ok 4 - runPlayerEnrichmentPass reports skipped for players with null sport
   ---
-  duration_ms: 0.17145
+  duration_ms: 0.261759
   type: 'test'
   ...
 # Subtest: runPlayerEnrichmentPass handles empty participant list
 ok 5 - runPlayerEnrichmentPass handles empty participant list
   ---
-  duration_ms: 0.14992
+  duration_ms: 0.243984
   type: 'test'
   ...
 # Subtest: runPlayerEnrichmentPass writes system_runs record with correct details
 ok 6 - runPlayerEnrichmentPass writes system_runs record with correct details
   ---
-  duration_ms: 0.160416
+  duration_ms: 0.226279
   type: 'test'
   ...
 # Subtest: NHL unrelated player is refused
 ok 7 - NHL unrelated player is refused
   ---
-  duration_ms: 40.210597
+  duration_ms: 53.788905
   type: 'test'
   ...
 # Subtest: NHL ambiguous name is refused
 ok 8 - NHL ambiguous name is refused
   ---
-  duration_ms: 0.798364
+  duration_ms: 1.028615
   type: 'test'
   ...
 # Subtest: NFL unrelated first result is refused
 not ok 9 - NFL unrelated first result is refused
   ---
-  duration_ms: 4.387153
+  duration_ms: 5.20247
   type: 'test'
-  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:1:4219'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:5787'
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
     + actual - expected
-    
+
     + 'https://a.espncdn.com/wrong.png'
     - null
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: ~
   actual: 'https://a.espncdn.com/wrong.png'
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:178:10)
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:178:10)
     async Test.run (node:internal/test_runner/test:1054:7)
     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
   ...
 # Subtest: all sports require a unique normalized full identity, including symmetric suffixes
 not ok 10 - all sports require a unique normalized full identity, including symmetric suffixes
   ---
-  duration_ms: 13.350602
+  duration_ms: 89.344236
   type: 'test'
-  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:1:4496'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:6139'
   failureType: 'testCodeFailure'
   error: 'NFL'
   code: 'ERR_ASSERTION'
@@ -85,76 +85,94 @@ not ok 10 - all sports require a unique normalized full identity, including symm
   actual: false
   operator: '=='
   stack: |-
-    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:203:12)
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:203:12)
     async Test.run (node:internal/test_runner/test:1054:7)
     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
   ...
 # Subtest: NFL selects the unique identity after an unrelated first hit and refuses duplicate exact hits
 not ok 11 - NFL selects the unique identity after an unrelated first hit and refuses duplicate exact hits
   ---
-  duration_ms: 2.386731
+  duration_ms: 2.653464
   type: 'test'
-  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:1:6967'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:9342'
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
     + actual - expected
-    
+
     + 'https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/2.png&w=350&h=254'
     - null
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: ~
   actual: 'https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/2.png&w=350&h=254'
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:222:10)
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:222:10)
     async Test.run (node:internal/test_runner/test:1054:7)
     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
   ...
 # Subtest: NHL checks candidate league and team and does not resolve ambiguity using an image
 ok 12 - NHL checks candidate league and team and does not resolve ambiguity using an image
   ---
-  duration_ms: 0.98866
+  duration_ms: 0.98281
   type: 'test'
   ...
 # Subtest: enrichment records refusal reasons and leaves stored images untouched
 ok 13 - enrichment records refusal reasons and leaves stored images untouched
   ---
-  duration_ms: 2.080095
+  duration_ms: 2.273404
   type: 'test'
   ...
 # Subtest: NFL checks real ESPN teamRelationships and leagueRelationships identities
 not ok 14 - NFL checks real ESPN teamRelationships and leagueRelationships identities
   ---
-  duration_ms: 0.783892
+  duration_ms: 0.920672
   type: 'test'
-  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:1:8793'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:11576'
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
     + actual - expected
-    
+
     + 'https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/3918298.png&w=350&h=254'
     - null
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: ~
   actual: 'https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/3918298.png&w=350&h=254'
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:259:10)
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:259:10)
     async Test.run (node:internal/test_runner/test:1054:7)
     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
   ...
-1..14
-# tests 14
+# Subtest: canonical team keys correlate by full team name and preserve Red Sox versus White Sox
+ok 15 - canonical team keys correlate by full team name and preserve Red Sox versus White Sox
+  ---
+  duration_ms: 4.139699
+  type: 'test'
+  ...
+# Subtest: NBA resolves provider columns by headers and correlates LA Clippers with canonical Los Angeles
+ok 16 - NBA resolves provider columns by headers and correlates LA Clippers with canonical Los Angeles
+  ---
+  duration_ms: 2.259537
+  type: 'test'
+  ...
+# Subtest: NHL six Jakes sharing a stored URL never confirms an unrelated Jake
+ok 17 - NHL six Jakes sharing a stored URL never confirms an unrelated Jake
+  ---
+  duration_ms: 2.783811
+  type: 'test'
+  ...
+1..17
+# tests 17
 # suites 0
-# pass 10
+# pass 13
 # fail 4
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 603.092148
+# duration_ms 814.42389

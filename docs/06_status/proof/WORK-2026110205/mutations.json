@@ -1,13 +1,15 @@
 [
   {
     "mutation": "nhl-data0",
-    "sourceSha": "d3464409bb161bcc4ffee4d460db4e21ce5f9ada",
+    "sourceSha": "d7d2683699a9974da79e6d082d6e3d0d3889f131",
+    "execution": "isolated copies of exact committed source and test; working-tree source never mutated",
     "exitCode": 1,
     "killed": true
   },
   {
     "mutation": "nfl-first-hit",
-    "sourceSha": "d3464409bb161bcc4ffee4d460db4e21ce5f9ada",
+    "sourceSha": "d7d2683699a9974da79e6d082d6e3d0d3889f131",
+    "execution": "isolated copies of exact committed source and test; working-tree source never mutated",
     "exitCode": 1,
     "killed": true
   }

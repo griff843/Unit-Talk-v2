@@ -1,5 +1,6 @@
 {
   "label": "Live provider probes; not stored-headshot revalidation",
+  "sourceSha": "d7d2683699a9974da79e6d082d6e3d0d3889f131",
   "results": [
     {
       "sport": "MLB",
@@ -29,25 +30,25 @@
   "requests": [
     {
       "url": "https://statsapi.mlb.com/api/v1/sports/1/players?season=2026",
-      "at": "2026-11-02T18:36:26.905Z",
+      "at": "2026-11-02T19:17:28.346Z",
       "status": 200,
       "raw": "docs/06_status/proof/WORK-2026110205/provider-raw/1.txt"
     },
     {
       "url": "https://stats.nba.com/stats/commonallplayers?IsOnlyCurrentSeason=1&LeagueID=00&Season=2026-27",
-      "at": "2026-11-02T18:36:27.169Z",
+      "at": "2026-11-02T19:17:28.610Z",
       "status": 200,
       "raw": "docs/06_status/proof/WORK-2026110205/provider-raw/2.txt"
     },
     {
       "url": "https://site.api.espn.com/apis/common/v3/search?query=Josh%20Allen&limit=5&type=player&sport=football&league=nfl",
-      "at": "2026-11-02T18:36:27.285Z",
+      "at": "2026-11-02T19:17:28.716Z",
       "status": 200,
       "raw": "docs/06_status/proof/WORK-2026110205/provider-raw/3.txt"
     },
     {
       "url": "https://search.d3.nhle.com/api/v1/search/player?culture=en-us&limit=5&q=Jake%20Evans",
-      "at": "2026-11-02T18:36:27.452Z",
+      "at": "2026-11-02T19:17:28.848Z",
       "status": 200,
       "raw": "docs/06_status/proof/WORK-2026110205/provider-raw/4.txt"
     }
