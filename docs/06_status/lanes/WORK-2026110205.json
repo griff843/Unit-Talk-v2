@@ -8,7 +8,7 @@
   "branch": "codex/work-2026110205-participant-artwork-matching",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1822",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/player-enrichment-service.test.ts",
@@ -23,9 +23,9 @@
     "docs/06_status/proof/WORK-2026110205/verification.md",
     "docs/06_status/proof/WORK-2026110205/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-11-02T18:13:51.896Z",
-  "heartbeat_at": "2026-11-02T18:13:51.896Z",
+  "heartbeat_at": "2026-11-02T19:26:23.708Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026110205-participant-artwork-matching.json",
