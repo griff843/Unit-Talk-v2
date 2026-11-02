@@ -1,6 +1,6 @@
 # WORK-2026110201 Diff Summary
 
-MERGE_SHA: pending merge
+MERGE_SHA: e95027e79e96604a0e285a8c13acdd7be6628831
 
 The member `/help` embed now shows only `/stats`, `/leaderboard`, and `/trial-status`, using the packet's exact descriptions and support links. `/trial-status` now uses the prepared copy for Free, Trial, VIP, VIP+, and Black Label; Capper guidance points to the Smart Form. Tier resolution, role guards, command registration, and private response behavior are unchanged.
 
