@@ -33,7 +33,7 @@ export interface PlayerIdentity {
   league?: string | null;
 }
 export type HeadshotResolution = { url: string | null; reason: 'confirmed' | 'ambiguous' | 'identity-mismatch' | 'unresolved' };
-interface Candidate extends PlayerIdentity { name: string; url: string | null }
+interface Candidate extends PlayerIdentity { name: string; url: string | null; identities?: PlayerIdentity[] }
 
 /** Punctuation joins initials/apostrophes; suffixes remain part of the identity.
  * Jr/Junior and Sr/Senior are equivalent on BOTH sides. Missing/different
@@ -46,8 +46,9 @@ export function normalizePlayerName(name: string): string {
 function uniqueMatch(name: string, identity: PlayerIdentity, candidates: Candidate[]): HeadshotResolution {
   const expected = normalizePlayerName(name);
   const matches = candidates.filter(candidate => expected && normalizePlayerName(candidate.name) === expected &&
-    (['teamId', 'teamAbbrev', 'league'] as const).every(key =>
-      !identity[key] || !candidate[key] || normalizePlayerName(identity[key]) === normalizePlayerName(candidate[key])));
+    [candidate, ...(candidate.identities ?? [])].every(actual =>
+      (['teamId', 'teamAbbrev', 'league'] as const).every(key =>
+        !identity[key] || !actual[key] || normalizePlayerName(identity[key]) === normalizePlayerName(actual[key]))));
   if (matches.length > 1) return { url: null, reason: 'ambiguous' };
   if (!matches.length) return { url: null, reason: 'identity-mismatch' };
   return matches[0]!.url ? { url: matches[0]!.url, reason: 'confirmed' } : { url: null, reason: 'unresolved' };
@@ -172,11 +173,17 @@ async function resolveNFLHeadshot(displayName: string, identity: PlayerIdentity)
   const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
   if (!res.ok) return { url: null, reason: 'unresolved' };
   const data = await res.json() as { items?: Array<{ id?: string; displayName?: string;
-    headshot?: string | { href?: string }; team?: { id?: string; abbreviation?: string }; league?: string }> };
+    headshot?: string | { href?: string }; team?: { id?: string; abbreviation?: string }; league?: string;
+    teamRelationships?: Array<{ core?: { id?: string; abbreviation?: string } }>;
+    leagueRelationships?: Array<{ core?: { abbreviation?: string; slug?: string } }> }> };
   if (!Array.isArray(data.items)) return { url: null, reason: 'unresolved' };
   return uniqueMatch(displayName, identity, data.items.map(item => ({
     name: item.displayName ?? '', teamId: item.team?.id ?? null, teamAbbrev: item.team?.abbreviation ?? null,
     league: item.league ?? 'NFL',
+    identities: [
+      ...(item.teamRelationships ?? []).map(rel => ({ teamId: rel.core?.id ?? null, teamAbbrev: rel.core?.abbreviation ?? null })),
+      ...(item.leagueRelationships ?? []).map(rel => ({ league: rel.core?.abbreviation ?? rel.core?.slug ?? null })),
+    ],
     url: (typeof item.headshot === 'string' ? item.headshot : item.headshot?.href) ??
       (item.id ? `https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/${item.id}.png&w=350&h=254` : null),
   })));

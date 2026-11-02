@@ -190,6 +190,7 @@ test('all sports require a unique normalized full identity, including symmetric 
       { id: '102', name: 'Gary Trent Jr.' },
       { id: '103', name: 'John Smith' }, { id: '104', name: 'John Smith' },
       { id: '105', name: 'John Smithson' },
+      { id: '106', name: 'Robert Jones Senior' }, { id: '107', name: 'Walter Jones II' },
     ];
     t.mock.method(globalThis, 'fetch', async () => Response.json(
       sport === 'MLB' ? { people: entries.map(p => ({ id: Number(p.id), fullName: p.name, currentTeam: { id: 7 } })) } :
@@ -200,6 +201,8 @@ test('all sports require a unique normalized full identity, including symmetric 
     assert.ok((await resolveHeadshotUrl('JOSE ONeal Jr', sport, null))?.includes('101'), sport);
     assert.ok((await resolveHeadshotUrl('José O’Neal Junior.', sport, null))?.includes('101'), sport);
     assert.ok((await resolveHeadshotUrl('Gary Trent Junior', sport, null))?.includes('102'), sport);
+    assert.ok((await resolveHeadshotUrl('Robert Jones Sr.', sport, null))?.includes('106'), sport);
+    assert.ok((await resolveHeadshotUrl('Walter Jones II', sport, null))?.includes('107'), sport);
     for (const name of ['Gary Trent', 'John', 'Smith', 'Nobody Else', 'Gary Trent Sr.', 'Gary Trent II']) {
       assert.equal(await resolveHeadshotUrl(name, sport, null), null, `${sport}: ${name}`);
     }
@@ -245,4 +248,17 @@ test('enrichment records refusal reasons and leaves stored images untouched', as
   assert.deepEqual(result.refusals, { ambiguous: 1, 'identity-mismatch': 1 });
   assert.deepEqual((runs.getRuns()[0]!['details'] as Record<string, unknown>)['refusals'], result.refusals);
   assert.deepEqual(participants.getStore().get('3')?.['metadata'], { headshot_url: 'stored' });
+});
+
+test('NFL checks real ESPN teamRelationships and leagueRelationships identities', async (t) => {
+  let item = { id: '3918298', displayName: 'Josh Allen',
+    teamRelationships: [{ core: { id: '2', abbreviation: 'BUF' } }],
+    leagueRelationships: [{ core: { abbreviation: 'NFL' } }],
+  };
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ items: [item] }));
+  assert.equal(await resolveHeadshotUrl('Josh Allen', 'NFL', null, { teamId: '3' }), null);
+  assert.equal(await resolveHeadshotUrl('Josh Allen', 'NFL', null, { teamAbbrev: 'MIA' }), null);
+  assert.ok(await resolveHeadshotUrl('Josh Allen', 'NFL', null, { teamId: '2', teamAbbrev: 'BUF' }));
+  item = { ...item, leagueRelationships: [{ core: { abbreviation: 'CFL' } }] };
+  assert.equal(await resolveHeadshotUrl('Josh Allen', 'NFL', null), null);
 });
