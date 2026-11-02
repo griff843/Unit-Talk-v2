@@ -62,4 +62,4 @@ The lane packet says not to open a pull request. Production Claude opens it when
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1818

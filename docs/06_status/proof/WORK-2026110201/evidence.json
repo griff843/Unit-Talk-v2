@@ -56,7 +56,7 @@
     "status": "BLOCKED_DEFERRED",
     "detail": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials."
   },
-  "pr": "Do not open a pull request. Production Claude opens it when the staging slot is free.",
+  "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1818",
   "executor_attestation": "Not published by child executor; outer wrapper owns provenance and READY_FOR_REVIEW publication.",
   "sha_binding": {
     "merge_sha": null,
