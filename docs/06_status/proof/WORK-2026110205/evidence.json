@@ -7,7 +7,7 @@
     "identity": "Codex child executor; actual model gpt-6.1-sol, effort medium; see model-routing.json"
   },
   "source_sha": "d3464409bb161bcc4ffee4d460db4e21ce5f9ada",
-  "status": "incomplete-pending-snapshot-and-staging-ci",
+  "status": "incomplete-runtime-defects-and-staging-ci",
   "sha_binding": {
     "verified_source_sha": "d3464409bb161bcc4ffee4d460db4e21ce5f9ada",
     "merge_sha": null,
@@ -48,11 +48,27 @@
   "runtime_proof": {
     "provider_probes": "live-provider-probes.json; all four existing endpoints returned HTTP 200; raw responses in provider-raw",
     "stored_headshots_revalidation": {
-      "status": "pending-supplied-snapshot",
+      "status": "completed-with-runtime-defects",
       "input": ".out/media-0205/stored-headshots-snapshot.json",
-      "observed_row_count": null,
-      "sql_reported_row_count": 1497,
-      "note": "SQL comment supplied by Production Claude; not an independently counted snapshot. The required revalidation file has not been fabricated."
+      "observed_row_count": 1497,
+      "non_null_urls": 1488,
+      "null_urls": 9,
+      "verdicts": {
+        "confirmed": 9,
+        "mismatch": 1488,
+        "ambiguous": 0,
+        "unresolved": 0
+      },
+      "requests": 320,
+      "http_200": 320,
+      "artifact": "stored-headshots-revalidated.json",
+      "raw_responses": "stored-provider-raw/",
+      "limitations": [
+        "Snapshot team_external_id values (for example NEW_YORK_YANKEES_MLB) are canonical keys, whereas live provider team IDs are numeric strings. The current matcher compares them directly and refuses otherwise matching candidates. These mismatch verdicts do not prove wrong-person photos.",
+        "Live NBA result headers identify TEAM_ID at index 8 and TEAM_ABBREVIATION at index 11; the current parser reads indices 7 and 10. Newly observed runtime defect; no runtime edits made under the packet stop rule.",
+        "Snapshot includes nine null URLs; all 1497 supplied rows were revalidated, including those nine. NFL has no stored rows; its separate live probe remains in live-provider-probes.json.",
+        "All player artwork remains on the branded fallback regardless of this report; no stored metadata is rewritten."
+      ]
     },
     "writable_db": {
       "status": "blocked-deferred",
@@ -73,7 +89,7 @@
     "No submission, delivery, worker, schema, provider or approved-host change"
   ],
   "pending": [
-    "Supply snapshot and revalidate every row with raw provider responses",
+    "Reconcile discovered team namespace and NBA column defects; rerun focused tests, stored-headshot revalidation and exact-head gates after repair",
     "Production Claude opens PR when staging capacity is free; no child PR opening",
     "Exact-head staging CI green",
     "Outer wrapper executor-result/v1 publication after truth/provenance checks",

@@ -15,7 +15,7 @@ Implementation source: `d3464409b` (full SHA in evidence.json).
 - PASS: Refusal reasons appear in run details, and an existing stored image is never rewritten.
 - PASS: Unverified legacy player artwork stays on the approved Smart Form emblem. The current media response carries no evidence that the pictured person was verified, so no player photo is displayed. The endpoint/approved host list is unchanged. Form submission code is unchanged.
 - PASS: Isolated production React components were exercised in Chromium with mocked media responses. Unverified URL, mismatched selection response and load failure all produce an accessible emblem and no broken img. This is component browser evidence, not a deployed form or end-to-end submission proof.
-- PENDING: revalidation of stored headshots. The supplied snapshot JSON is absent. No rows were invented and no production connection was made.
+- MEASURED, WITH DEFECTS: revalidation of all 1497 supplied rows completed, with 320 real provider HTTP 200 responses. Nine confirmed, 1488 refused as identity-mismatch. Newly observed team-namespace and NBA-column defects prevent acceptance; these refusals do not prove 1488 wrong-person photos. No production connection was made.
 - BLOCKED: the packet requests evidence bundle v1, while `validateEvidenceBundleContract` rejects schema_version=1 at the pre-merge authoring gate (`legacy_v1_not_allowed_pre_merge`). `evidence-contract-validation.json` records the measured failure. The requested v1 bundle is retained; the outer authority must reconcile this format conflict without weakening the guard.
 - DEFERRED: writable DB proof, exact-head CI, independent Claude review, Griff's exact-head T1 verdict, governed merge, and merge-SHA binding.
 
@@ -47,11 +47,17 @@ Implementation source: `d3464409b` (full SHA in evidence.json).
 | MLB/NBA two normalized John Smith identities | first matching photo | null, ambiguous |
 | Any sport Gary Trent vs Gary Trent Jr. | token/substring resolvers could bind a relative | null, identity-mismatch |
 
-### Revalidation of stored headshots — pending input
+### Revalidation of stored headshots
 
-Production Claude's `.out/media-0205/snapshot-query.sql` reports **1497 rows** (MLB 951 including 6 null URLs; NBA 228 including 3 null; NHL 318). This is the SQL comment's supplied count, not an independently counted snapshot. `.out/media-0205/stored-headshots-snapshot.json` was not delivered during this run. Consequently the required `stored-headshots-revalidated.json` has not been fabricated, and acceptance remains incomplete.
+Production Claude delivered `.out/media-0205/stored-headshots-snapshot.json` after the first attempt. Independently counted: **1497 unique participant rows**, MLB 951, NBA 228, NHL 318; 1488 non-null URLs and nine null URLs. Sorted full-ID MD5 `55ed0cd422c311e89672da80b5868d4e` matches the supplied integrity record. SQL and source provenance remain in the supplied `.out/media-0205/snapshot-query.sql`.
 
-A read-only replay is prepared at `.out/media-0205/revalidate.ts`: `pnpm exec tsx .out/media-0205/revalidate.ts`. It requires full participant IDs, names, sports and metadata.headshot_url (not abbreviated id8/provider-only rows), saves raw provider responses, and emits the required participant-by-participant verdict file. It imports no DB client and makes no stored-data writes. Supply the snapshot and rerun this proof before review acceptance. Any later production rewrite requires Griff's separate approval against that file.
+`stored-headshots-revalidated.json` records every supplied participant, stored URL, new-matcher URL, verdict and reason. All 320 real provider requests returned HTTP 200; bodies are saved in `stored-provider-raw/`. MLB/NBA rosters were cached by the actual matcher; NHL used 318 individual searches. NFL has no stored rows and is covered by the separate live four-sport probes.
+
+Measured results: **9 confirmed, 1488 mismatch, 0 ambiguous, 0 unresolved**. All nine null stored URLs were refused. The six Jake participants sharing stored NHL URL 8484554 were all refused.
+
+**New runtime defects — acceptance blocked:** supplied `team_external_id` values are canonical strings (for example `NEW_YORK_YANKEES_MLB`), whereas live provider team IDs are numeric. The matcher compares these different namespaces directly. Also the real NBA response headers place `TEAM_ID` at index 8 and `TEAM_ABBREVIATION` at 11, while the parser reads 7 and 10. These findings explain conservative refusals and mean the 1488 mismatch verdicts cannot be treated as 1488 wrong-person photos. Raw responses 1.txt, 2.txt and 3.txt expose the identity shapes/headers. Under the scoped stop rule for newly discovered runtime bugs, no further runtime edits were made. The outer executor must reconcile the repair before acceptance and rerun this report afterward.
+
+This is **revalidation of stored headshots**. No production connection, metadata rewrite or DB write occurred. All player artwork remains on the branded fallback. Any later production rewrite requires Griff's separate approval against this file.
 
 ### DB and scope limits
 

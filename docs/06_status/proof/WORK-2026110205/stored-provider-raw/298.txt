@@ -1,0 +1,1 @@
+[{"playerId":"8480829","name":"Jesperi Kotkaniemi","positionCode":"C","teamId":"12","teamAbbrev":"CAR","lastTeamId":"12","lastTeamAbbrev":"CAR","lastSeasonId":"20262027","sweaterNumber":82,"active":true,"height":"6'3\"","heightInInches":75,"heightInCentimeters":191,"weightInPounds":212,"weightInKilograms":95,"birthCity":"Pori","birthStateProvince":null,"birthCountry":"FIN"}]

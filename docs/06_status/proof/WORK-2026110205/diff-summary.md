@@ -21,3 +21,7 @@ No submission, distribution, outbox, worker, schema, contract, domain or approve
 
 Merge SHA: pending merge; only the authorized post-merge path may bind it.
 PR: pending; Production Claude opens it when the staging slot is free.
+
+## Resumed read-only proof
+
+Added revalidation of 1497 supplied rows and 320 raw HTTP 200 provider responses. Nine rows confirmed and 1488 refused. Newly observed canonical/provider team namespace mismatch and incorrect NBA column indices are recorded as acceptance blockers; refusals do not establish that all photos depict the wrong person. No runtime code changed in this resumed attempt.

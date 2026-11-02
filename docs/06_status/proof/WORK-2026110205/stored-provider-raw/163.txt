@@ -1,0 +1,1 @@
+[{"playerId":"8479977","name":"Kailer Yamamoto","positionCode":"R","teamId":"68","teamAbbrev":"UTA","lastTeamId":"68","lastTeamAbbrev":"UTA","lastSeasonId":"20262027","sweaterNumber":56,"active":true,"height":"5'9\"","heightInInches":69,"heightInCentimeters":175,"weightInPounds":178,"weightInKilograms":80,"birthCity":"Spokane","birthStateProvince":"WA","birthCountry":"USA"}]

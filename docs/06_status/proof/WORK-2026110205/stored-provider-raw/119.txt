@@ -1,0 +1,1 @@
+[{"playerId":"8482177","name":"Marat Khusnutdinov","positionCode":"C","teamId":"6","teamAbbrev":"BOS","lastTeamId":"6","lastTeamAbbrev":"BOS","lastSeasonId":"20262027","sweaterNumber":92,"active":true,"height":"5'10\"","heightInInches":70,"heightInCentimeters":178,"weightInPounds":189,"weightInKilograms":85,"birthCity":"Moscow","birthStateProvince":null,"birthCountry":"RUS"}]
