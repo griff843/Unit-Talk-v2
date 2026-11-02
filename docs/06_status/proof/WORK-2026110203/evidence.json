@@ -7,7 +7,7 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "642f9a2e17479d311872d5c19bb0c741578fecf4",
+    "verified_source_sha": "0ed9dc5f0d2e8df7a5e0ef9d81939a875a1390c8",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -15,18 +15,18 @@
     "status": "pass",
     "command": "pnpm test",
     "conclusion": "success",
-    "verified_source_sha": "642f9a2e17479d311872d5c19bb0c741578fecf4",
+    "verified_source_sha": "0ed9dc5f0d2e8df7a5e0ef9d81939a875a1390c8",
     "full_suite": {
       "command": "pnpm test",
-      "tests": 7770,
-      "pass": 7757,
+      "tests": 7772,
+      "pass": 7759,
       "fail": 0,
       "skipped": 13
     },
     "focused_tests": {
       "command": "npx tsx --test scripts/ops/codex-exec.test.ts",
-      "tests": 53,
-      "pass": 53,
+      "tests": 55,
+      "pass": 55,
       "fail": 0,
       "skipped": 0
     },
@@ -36,10 +36,10 @@
       "pass": 203,
       "fail": 0
     },
-    "type_check": "no new errors (direct tsc of the two changed scripts/ops files; the same 4 exactOptionalPropertyTypes errors exist on origin/main 0c064e586)",
+    "type_check": "no new errors (direct tsc of the two changed scripts/ops files; the same 4 exactOptionalPropertyTypes errors exist on origin/main 0c064e586, on lines this lane did not change)",
     "r_level": "PASS",
-    "mutation_checks": "5 of 5 caught on 642f9a2e1",
-    "live_rollout_check": "observeModelRouting on the real WORK-2026103006 codex exec rollout 01a19881-002d-75e2-afea-6fa3cf13c82d: observed gpt-6.1-sol/medium, matching declared codex-sol-medium",
-    "note": "Measured on 642f9a2e17479d311872d5c19bb0c741578fecf4. No Codex job was launched by this lane."
+    "mutation_checks": "8 of 8 caught on 0ed9dc5f0",
+    "live_rollout_check": "observeModelRouting on two real codex exec rollouts: WORK-2026103006 (01a19881-002d-75e2-afea-6fa3cf13c82d) observed gpt-6.1-sol/medium and WORK-2026110201 (01a19bab-6cd9-7252-90a7-a6bbc29ed0ad) observed gpt-6-luna/medium, each matching its declared routing, with token_usage recorded verbatim",
+    "note": "Measured on 0ed9dc5f0d2e8df7a5e0ef9d81939a875a1390c8. No Codex job was launched by this lane."
   }
 }
