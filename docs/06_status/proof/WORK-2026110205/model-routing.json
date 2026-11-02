@@ -1,9 +1,37 @@
 {
   "issue_id": "WORK-2026110205",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-medium",
   "model": "gpt-6.1-sol",
   "reasoning_effort": "medium",
-  "observation": "Actual turn_context payload: model=gpt-6.1-sol, effort=medium. Not inferred from profile, config defaults or timeout policy.",
-  "source": "/home/griff843/.codex/sessions/2026/11/02/rollout-2026-11-02T13-14-51-01a19d78-a166-7490-adf2-fec7d9403eac.jsonl",
-  "thread_id": "01a19d78-a166-7490-adf2-fec7d9403eac",
-  "subagents": []
+  "policy_version": "3.0.0",
+  "codex_cli_version": "codex-cli 0.162.1",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": 0,
+  "prompt_bytes": 21187,
+  "estimated_prompt_tokens": 5297,
+  "wall_time_ms": 1786517,
+  "generated_at": "2026-11-02T18:44:36.922Z",
+  "routing_source": "declared",
+  "observation": {
+    "status": "observed",
+    "reason": null,
+    "session_id": "01a19d78-a166-7490-adf2-fec7d9403eac",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "medium",
+    "cli_version": "0.162.1",
+    "turns": 1,
+    "token_usage": {
+      "input_tokens": 9248209,
+      "cached_input_tokens": 9110016,
+      "cache_write_input_tokens": 0,
+      "output_tokens": 45026,
+      "reasoning_output_tokens": 17643,
+      "total_tokens": 9293235
+    },
+    "unavailable_fields": [],
+    "mismatched_fields": []
+  }
 }
