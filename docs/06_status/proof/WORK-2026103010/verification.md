@@ -1,6 +1,6 @@
 # PROOF: WORK-2026103010
 
-MERGE_SHA: pending merge
+MERGE_SHA: 3ab0e13884bd92522c27f0f8bff79934a9b6e742
 
 Issue: WORK-2026103010
 Tier: T1
@@ -58,6 +58,6 @@ Runtime: these are operator CLIs with no deployed surface. The CLI runs above ar
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 3ab0e13884bd92522c27f0f8bff79934a9b6e742
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1814
 Execution SHA: 3adab53724f885bd0dcea946bc2caec4e5686619

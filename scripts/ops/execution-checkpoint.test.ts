@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import {
   DEFAULT_SILENCE_WINDOW_MS,
   EXECUTION_CHECKPOINT_SCHEMA_VERSION,
@@ -38,6 +39,7 @@ import {
   type ExecutionStateIdentity,
   type FinishAttemptInput,
 } from './execution-checkpoint.js';
+import { ROOT } from './shared.js';
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1594-checkpoint-'));
@@ -120,6 +122,76 @@ function beginNext(input: {
         authority: 'test',
       });
 }
+
+function runCheckpointCli(args: string[], cwd: string, env: NodeJS.ProcessEnv) {
+  return spawnSync(path.join(ROOT, 'node_modules', '.bin', 'tsx'), [
+    path.join(ROOT, 'scripts', 'ops', 'execution-checkpoint.ts'), ...args,
+  ], { cwd, env, encoding: 'utf8', timeout: 60_000 });
+}
+
+test('execution-checkpoint CLI uses environment directory when --dir is absent', () => {
+  const root = tmpDir();
+  try {
+    assert.equal(spawnSync('git', ['init', '--initial-branch=main'], { cwd: root, stdio: 'pipe' }).status, 0);
+    const envDir = path.join(root, 'env-checkpoints');
+    const started = beginNext({ issueId: 'UTV2-20991', timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir: envDir });
+    const result = runCheckpointCli([
+      'phase-complete', '--issue', 'UTV2-20991', '--phase', 'orient', '--summary', 'from environment',
+    ], root, {
+      ...process.env,
+      UNIT_TALK_EXECUTION_CHECKPOINT_DIR: envDir,
+      UNIT_TALK_EXECUTION_EPOCH_ID: started.identity.epoch_id,
+      UNIT_TALK_EXECUTION_ATTEMPT: String(started.identity.attempt),
+      UNIT_TALK_EXECUTION_MINIMUM_REVISION: String(started.identity.minimum_revision),
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.deepEqual(readCheckpoint('UTV2-20991', envDir)?.completed_phases.map((phase) => phase.phase), ['orient']);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('execution-checkpoint CLI gives --dir precedence over its environment directory', () => {
+  const root = tmpDir();
+  try {
+    assert.equal(spawnSync('git', ['init', '--initial-branch=main'], { cwd: root, stdio: 'pipe' }).status, 0);
+    const envDir = path.join(root, 'env-checkpoints');
+    const flagDir = path.join(root, 'flag-checkpoints');
+    beginNext({ issueId: 'UTV2-20992', timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir: envDir });
+    const flagStarted = beginNext({ issueId: 'UTV2-20992', timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir: flagDir });
+    const result = runCheckpointCli([
+      'phase-complete', '--issue', 'UTV2-20992', '--phase', 'orient', '--summary', 'from explicit dir', '--dir', flagDir,
+    ], root, {
+      ...process.env,
+      UNIT_TALK_EXECUTION_CHECKPOINT_DIR: envDir,
+      UNIT_TALK_EXECUTION_EPOCH_ID: flagStarted.identity.epoch_id,
+      UNIT_TALK_EXECUTION_ATTEMPT: String(flagStarted.identity.attempt),
+      UNIT_TALK_EXECUTION_MINIMUM_REVISION: String(flagStarted.identity.minimum_revision),
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.deepEqual(readCheckpoint('UTV2-20992', flagDir)?.completed_phases.map((phase) => phase.phase), ['orient']);
+    assert.deepEqual(readCheckpoint('UTV2-20992', envDir)?.completed_phases, []);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('execution-checkpoint CLI retains repository default when neither directory override is set', () => {
+  const root = tmpDir();
+  try {
+    assert.equal(spawnSync('git', ['init', '--initial-branch=main'], { cwd: root, stdio: 'pipe' }).status, 0);
+    const result = runCheckpointCli(['status', '--issue', 'UTV2-9999'], root, {
+      ...process.env,
+      UNIT_TALK_EXECUTION_CHECKPOINT_DIR: '',
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    const output = JSON.parse(result.stdout) as { checkpoint: unknown };
+    assert.equal(output.checkpoint, null);
+    assert.equal(fs.existsSync(path.join(root, '.out')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 
 // ── timeout policy ──────────────────────────────────────────────────────────
 
