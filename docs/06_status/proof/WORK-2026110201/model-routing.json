@@ -1,0 +1,7 @@
+{
+  "issue_id": "WORK-2026110201",
+  "observed": false,
+  "model": null,
+  "reasoning_effort": null,
+  "note": "The current execution context does not expose routed model or reasoning-effort metadata. Values are left null rather than inferred."
+}

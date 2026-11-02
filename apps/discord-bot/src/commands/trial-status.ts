@@ -38,8 +38,7 @@ export function buildTrialStatusEmbed(context: MemberTierContext) {
   if (context.isCapper) {
     embed.addFields({
       name: 'Capper Role',
-      value:
-        'You also hold the Capper contributor role. Use /pick to submit picks.',
+      value: 'Use the [Unit Talk pick form](https://picks.unit-talk.com/submit).',
       inline: false,
     });
   }
@@ -66,16 +65,16 @@ function formatTierDisplay(tier: MemberTierContext['tier']) {
 function resolveTierDescription(tier: MemberTierContext['tier']) {
   switch (tier) {
     case 'trial':
-      return "You're on a trial. You have temporary VIP-level access. Upgrade before your trial ends to keep it.";
+      return 'Your trial includes access to the VIP channels. For help with your trial or access, open a private ticket in <#1285609124050108436>.';
     case 'vip':
-      return "You're a VIP member. You have access to official capper picks, recaps, results, and the capper board.";
+      return 'Your access includes the VIP channels. For help finding your way around, visit <#1559933414281322586>.';
     case 'vip-plus':
-      return "You're VIP+. You have access to everything in VIP. VIP+ market-intelligence features are not live yet.";
+      return 'Your access includes the VIP and VIP+ channels. For help finding your way around, visit <#1559933414281322586>.';
     case 'black-label':
-      return "You're on a reserved tier.";
+      return 'For help with your access, open a private ticket in <#1285609124050108436>.';
     case 'free':
     default:
-      return 'Your settled results and recaps remain available. VIP adds active official picks and VIP community access.';
+      return 'Welcome to Unit Talk. Join the conversation in our public channels. For help with your access, open a private ticket in <#1285609124050108436>.';
   }
 }
 

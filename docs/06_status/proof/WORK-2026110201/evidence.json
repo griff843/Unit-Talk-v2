@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "issue_id": "WORK-2026110201",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "status": "local_review_candidate",
+  "implementation_files": [
+    "apps/discord-bot/src/commands/help.ts",
+    "apps/discord-bot/src/commands/trial-status.ts",
+    "apps/discord-bot/src/discord-bot-foundation.test.ts"
+  ],
+  "assertions": {
+    "exact_member_help_entries_and_support_links": "PASS",
+    "member_help_excludes_pick_operator_and_deferred_tools": "PASS",
+    "exact_tier_copy_free_trial_vip_vip_plus_reserved": "PASS",
+    "capper_copy_uses_smart_form": "PASS",
+    "tier_resolution_guards_registration_and_private_visibility_unchanged": "PASS"
+  },
+  "focused_test": {
+    "command": "pnpm exec tsx --test apps/discord-bot/src/discord-bot-foundation.test.ts",
+    "exit_code": 0,
+    "tests": 115,
+    "pass": 115,
+    "fail": 0
+  },
+  "type_check": {
+    "command": "pnpm type-check",
+    "exit_code": 0
+  },
+  "test": {
+    "command": "pnpm test",
+    "exit_code": 0
+  },
+  "verify_static": {
+    "command": "pnpm verify:static",
+    "exit_code": 0,
+    "status": "PASS",
+    "detail": "Static verification completed successfully; command manifest verified 14 definitions and 138 migration files passed migration lint. Smart Form browser E2E was not requested by the static gate."
+  },
+  "r_level": {
+    "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "verdict": "PASS",
+    "detail": "No R-level rules matched the measured diff."
+  },
+  "writable_live_db": {
+    "status": "BLOCKED_DEFERRED",
+    "detail": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials."
+  },
+  "pr": "Do not open a pull request. Production Claude opens it when the staging slot is free.",
+  "executor_attestation": "Not published by child executor; outer wrapper owns provenance and READY_FOR_REVIEW publication."
+}
