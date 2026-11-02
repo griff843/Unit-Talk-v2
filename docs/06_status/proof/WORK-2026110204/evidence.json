@@ -4,25 +4,70 @@
   "tier": "T2",
   "lane_type": "governance",
   "proof_profile": "static",
-  "status": "pre_merge",
+  "status": "merged",
   "sha_binding": {
     "verified_source_sha": "dc2c2d384e3b7f467b93e3b7e29eb7b2fcd08206",
     "evidence_commit_sha": null,
     "current_pr_head_sha": null,
-    "merge_sha": null
+    "merge_sha": "62ddc909df16dc572c66a8f0454ee9427f435c66",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-11-02T14:53:52.001Z"
   },
   "static_proof": {
-    "focused_tests": { "command": "npx tsx --test scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.test.ts", "tests": 89, "pass": 89, "fail": 0, "skipped": 0 },
-    "full_test": { "command": "pnpm test", "exit": 0, "tap_blocks": 118, "tests": 7779, "pass": 7766, "fail": 0, "skipped": 13 },
+    "focused_tests": {
+      "command": "npx tsx --test scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.test.ts",
+      "tests": 89,
+      "pass": 89,
+      "fail": 0,
+      "skipped": 0
+    },
+    "full_test": {
+      "command": "pnpm test",
+      "exit": 0,
+      "tap_blocks": 118,
+      "tests": 7779,
+      "pass": 7766,
+      "fail": 0,
+      "skipped": 13
+    },
     "build": "exit 0",
     "eslint": "exit 0",
     "type_check": "direct tsc on the two changed scripts/ops sources: 36 errors on merge base d764e0976 and on dc2c2d384, identical sets apart from line numbers",
-    "r_level": { "base": "d764e0976e23c577f58e21d5150c6dbb6f751951", "head": "dc2c2d384", "verdict": "PASS", "changed_files": 10, "rules_matched": [] },
+    "r_level": {
+      "base": "d764e0976e23c577f58e21d5150c6dbb6f751951",
+      "head": "dc2c2d384",
+      "verdict": "PASS",
+      "changed_files": 10,
+      "rules_matched": []
+    },
     "model_routing": "model-routing.json written by codex-exec after the child exited: routing_source declared codex-luna-medium/gpt-6-luna/medium; observation observed (session 01a19c68-d55a-7dd0-8d98-a48f159acd20, gpt-6-luna, medium, cli 0.162.1, 1 turn), no mismatched or unavailable fields",
     "mutation_checks": [
-      { "mutation": "M1 buildCodexChildEnv omits UNIT_TALK_EXECUTION_CHECKPOINT_DIR", "failing_tests": [15, 54], "pass": 87, "fail": 2 },
-      { "mutation": "M2 runCli ignores UNIT_TALK_EXECUTION_CHECKPOINT_DIR", "failing_tests": [54, 55], "pass": 87, "fail": 2 },
-      { "mutation": "M3 environment directory wins over --dir", "failing_tests": [56], "pass": 88, "fail": 1 }
+      {
+        "mutation": "M1 buildCodexChildEnv omits UNIT_TALK_EXECUTION_CHECKPOINT_DIR",
+        "failing_tests": [
+          15,
+          54
+        ],
+        "pass": 87,
+        "fail": 2
+      },
+      {
+        "mutation": "M2 runCli ignores UNIT_TALK_EXECUTION_CHECKPOINT_DIR",
+        "failing_tests": [
+          54,
+          55
+        ],
+        "pass": 87,
+        "fail": 2
+      },
+      {
+        "mutation": "M3 environment directory wins over --dir",
+        "failing_tests": [
+          56
+        ],
+        "pass": 88,
+        "fail": 1
+      }
     ],
     "full_pnpm_verify": "runs in protected CI on the PR head; locally ci:assert-staging refuses host=127.0.0.1"
   },

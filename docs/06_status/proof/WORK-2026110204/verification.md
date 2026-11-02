@@ -1,6 +1,6 @@
 # PROOF: WORK-2026110204
 
-MERGE_SHA: pending merge
+MERGE_SHA: 62ddc909df16dc572c66a8f0454ee9427f435c66
 
 Issue: WORK-2026110204
 Tier: T2
@@ -50,6 +50,6 @@ Not done: no Codex Desktop registration, no change to the packet's default hando
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 62ddc909df16dc572c66a8f0454ee9427f435c66
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1821
 Execution SHA: dc2c2d384e3b7f467b93e3b7e29eb7b2fcd08206
