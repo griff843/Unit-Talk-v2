@@ -1,7 +1,17 @@
 {
   "issue_id": "WORK-2026110201",
-  "observed": false,
-  "model": null,
-  "reasoning_effort": null,
-  "note": "The current execution context does not expose routed model or reasoning-effort metadata. Values are left null rather than inferred."
+  "manifest_schema_version": 2,
+  "model_profile": "codex-luna-medium",
+  "model": "gpt-6-luna",
+  "reasoning_effort": "medium",
+  "policy_version": "3.0.0",
+  "codex_cli_version": "codex-cli 0.162.1",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": 0,
+  "prompt_bytes": 10570,
+  "estimated_prompt_tokens": 2643,
+  "wall_time_ms": 772849,
+  "generated_at": "2026-11-02T10:03:57.453Z"
 }
