@@ -51,5 +51,5 @@ Not done: no Codex Desktop registration, no change to the packet's default hando
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1821
 Execution SHA: dc2c2d384e3b7f467b93e3b7e29eb7b2fcd08206
