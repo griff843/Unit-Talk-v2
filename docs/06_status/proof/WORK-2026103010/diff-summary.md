@@ -23,5 +23,5 @@ Implementation files, from `git diff --stat origin/main...3adab5372 -- scripts .
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 3ab0e13884bd92522c27f0f8bff79934a9b6e742
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1814
