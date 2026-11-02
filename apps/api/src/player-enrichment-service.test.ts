@@ -352,3 +352,38 @@ for (const sport of ['NHL', 'NFL']) {
     assert.equal((await resolveHeadshot('Jake Evans', sport, { teamId: `MONTREAL_CANADIENS_${sport}` })).reason, 'ambiguous');
   });
 }
+
+// Production caller supplies only a catalog key, without team_abbrev.
+test('MLB refuses an unknown provider team ID for a catalog team', async (t) => {
+  const { resolveHeadshot } = await import('./player-enrichment-service.js');
+  t.mock.method(Date, 'now', () => 50_000_000_000_000);
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ people: [
+    { id: 1, fullName: 'Test Player', currentTeam: { id: 431 } },
+  ] }));
+  assert.deepEqual(await resolveHeadshot('Test Player', 'MLB', { teamId: 'CHICAGO_WHITE_SOX_MLB' }),
+    { url: null, reason: 'identity-mismatch' });
+});
+
+test('NHL refuses an unknown provider team abbreviation for a catalog team', async (t) => {
+  const { resolveHeadshot } = await import('./player-enrichment-service.js');
+  t.mock.method(globalThis, 'fetch', async () => Response.json([
+    { playerId: '1', name: 'Jake Evans', teamAbbrev: 'XYZ' },
+  ]));
+  assert.deepEqual(await resolveHeadshot('Jake Evans', 'NHL', { teamId: 'MONTREAL_CANADIENS_NHL' }),
+    { url: null, reason: 'identity-mismatch' });
+});
+
+for (const sport of ['NHL', 'NFL']) {
+  test(`${sport} refuses a full search window even with one matching identity`, async (t) => {
+    const { resolveHeadshot } = await import('./player-enrichment-service.js');
+    t.mock.method(globalThis, 'fetch', async (input: Parameters<typeof fetch>[0]) => {
+      const limit = Number(new URL(String(input)).searchParams.get('limit'));
+      assert.equal(limit, 100);
+      const names = Array.from({ length: limit }, (_, index) => index === 0 ? 'Jake Evans' : `Unrelated Player ${index}`);
+      return Response.json(sport === 'NHL' ? names.map((name, index) => ({ name, playerId: String(index + 1), teamAbbrev: 'MTL' })) :
+        { items: names.map((displayName, index) => ({ displayName, id: String(index + 1), team: { displayName: 'Montreal Canadiens' } })) });
+    });
+    assert.deepEqual(await resolveHeadshot('Jake Evans', sport, { teamId: `MONTREAL_CANADIENS_${sport}` }),
+      { url: null, reason: 'ambiguous' });
+  });
+}

@@ -278,6 +278,8 @@ async function resolveNFLHeadshot(displayName: string, identity: PlayerIdentity)
     teamRelationships?: Array<{ core?: { id?: string; abbreviation?: string; displayName?: string; name?: string } }>;
     leagueRelationships?: Array<{ core?: { abbreviation?: string; slug?: string } }> }> };
   if (!Array.isArray(data.items)) return { url: null, reason: 'unresolved' };
+  // A full search window may omit another credible namesake.
+  if (data.items.length >= 100) return { url: null, reason: 'ambiguous' };
   return uniqueMatch(displayName, identity, data.items.map(item => ({
     name: item.displayName ?? '', teamId: item.team?.id ?? null, teamAbbrev: item.team?.abbreviation ?? null,
     teamName: item.team?.displayName ?? null, teamNickname: item.team?.name ?? null, league: item.league ?? 'NFL',
@@ -297,6 +299,8 @@ async function resolveNHLHeadshot(displayName: string, identity: PlayerIdentity)
   const data = await res.json() as Array<{ playerId?: string; name?: string; teamId?: string;
     teamAbbrev?: string; teamName?: string; league?: string }>;
   if (!Array.isArray(data)) return { url: null, reason: 'unresolved' };
+  // A full search window cannot establish uniqueness across provider results.
+  if (data.length >= 100) return { url: null, reason: 'ambiguous' };
   return uniqueMatch(displayName, identity, data.map(item => ({
     name: item.name ?? '', teamId: item.teamId ?? null, teamAbbrev: item.teamAbbrev ?? null, teamName: item.teamName ?? (item.teamAbbrev ? NHL_TEAM_NAMES[item.teamAbbrev.toUpperCase()] : null) ?? null, league: item.league ?? 'NHL',
     url: item.playerId ? `https://cms.nhl.bamgrid.com/images/headshots/current/168x168/${item.playerId}.jpg` : null,
