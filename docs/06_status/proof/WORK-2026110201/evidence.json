@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "issue_id": "WORK-2026110201",
   "tier": "T2",
   "lane_type": "delivery-ui",
@@ -21,7 +21,13 @@
     "exit_code": 0,
     "tests": 115,
     "pass": 115,
-    "fail": 0
+    "fail": 0,
+    "rerun_after_review_correction": {
+      "sha": "eece61514d6409c747daa2b047fa5d2cd450d90c",
+      "tests": 115,
+      "pass": 115,
+      "fail": 0
+    }
   },
   "type_check": {
     "command": "pnpm type-check",
@@ -41,7 +47,9 @@
     "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
     "verdict": "PASS",
     "changed_files": 9,
-    "rules_matched": ["discord-delivery"],
+    "rules_matched": [
+      "discord-delivery"
+    ],
     "detail": "Discord delivery rule matched; its required R1 verification is satisfied by pnpm verify:static. No R-level artifact requirements were configured for the rule."
   },
   "writable_live_db": {
@@ -49,5 +57,12 @@
     "detail": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials."
   },
   "pr": "Do not open a pull request. Production Claude opens it when the staging slot is free.",
-  "executor_attestation": "Not published by child executor; outer wrapper owns provenance and READY_FOR_REVIEW publication."
+  "executor_attestation": "Not published by child executor; outer wrapper owns provenance and READY_FOR_REVIEW publication.",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "eece61514d6409c747daa2b047fa5d2cd450d90c",
+    "sha_type": "branch_head",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  }
 }
