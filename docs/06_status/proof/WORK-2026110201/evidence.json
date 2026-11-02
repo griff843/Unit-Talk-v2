@@ -40,7 +40,9 @@
   "r_level": {
     "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
     "verdict": "PASS",
-    "detail": "No R-level rules matched the measured diff."
+    "changed_files": 9,
+    "rules_matched": ["discord-delivery"],
+    "detail": "Discord delivery rule matched; its required R1 verification is satisfied by pnpm verify:static. No R-level artifact requirements were configured for the rule."
   },
   "writable_live_db": {
     "status": "BLOCKED_DEFERRED",

@@ -19,7 +19,7 @@ The suite covers the exact `/help` entries and support links, absence of `/pick`
 
 Command: `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`
 
-Result: PASS; no R-level rules matched the measured diff.
+Result: PASS; 9 changed files matched the `discord-delivery` rule. Its required R1 static verification passed; the rule defines no separate R-level artifacts.
 
 ## Writable live DB
 
