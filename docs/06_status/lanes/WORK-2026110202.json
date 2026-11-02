@@ -23,9 +23,9 @@
     "docs/06_status/proof/WORK-2026110202/verification.md",
     "docs/06_status/proof/WORK-2026110202/model-routing.json"
   ],
-  "status": "started",
+  "status": "superseded",
   "started_at": "2026-11-02T10:07:44.973Z",
-  "heartbeat_at": "2026-11-02T10:07:44.973Z",
+  "heartbeat_at": "2026-11-02T17:58:17.441Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026110202-participant-artwork-matching.json",
