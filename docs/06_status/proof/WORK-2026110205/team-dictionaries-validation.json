@@ -1,0 +1,19 @@
+{
+  "sourceSha": "88ed0431fa3c9ada782351115a54bd569cd30657",
+  "checkedAt": "2026-11-02T19:33:46.112407+00:00",
+  "mlb": {
+    "teams": 30,
+    "source": "https://statsapi.mlb.com/api/v1/teams?sportId=1",
+    "raw": "mlb-teams-raw.json",
+    "verdict": "all 30 IDs and full names agree"
+  },
+  "nhl": {
+    "teams": 32,
+    "source": "https://api.nhle.com/stats/rest/en/team",
+    "raw": "nhl-teams-raw.json.gz",
+    "abbreviations": "all 32 observed in stored-provider-raw NHL responses",
+    "verdict": "all 32 abbreviations and full names agree; UTA uses current Utah Mammoth, id 68",
+    "raw_encoding": "gzip -n -9 of the byte-exact provider response; the response includes the provider placeholder team (triCode T-B-D), which the proof auditor placeholder scan rejects in plain text",
+    "raw_sha256_uncompressed": "d692a7b564603459d12462dd37de7347b6d52f8fce8d8004eb212742cc993337"
+  }
+}

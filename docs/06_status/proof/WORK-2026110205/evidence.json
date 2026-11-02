@@ -1,0 +1,177 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110205",
+  "tier": "T1",
+  "generated_at": "2026-11-02T19:43:22.377568+00:00",
+  "source_sha": "36483d1b993082c13e7dd16e9647d757950618c2",
+  "status": "narrow-review-repair-staging-proof-pending",
+  "sha_binding": {
+    "verified_source_sha": "36483d1b993082c13e7dd16e9647d757950618c2",
+    "merge_sha": null,
+    "sha_type": "source_sha",
+    "note": "No merge occurred. Authorized post-merge path must bind the actual merge SHA. No exact-head CI success is claimed.",
+    "evidence_commit_sha": "CI_RESOLVED",
+    "current_pr_head_sha": "CI_RESOLVED"
+  },
+  "source_file_sha256": {
+    "apps/api/src/player-enrichment-service.ts": "003616ac0044088c899f792a1c3029c8446aaf8cbb8744f6baefa0f4d05583ea",
+    "apps/api/src/player-enrichment-service.test.ts": "58f3375c7ffc69e7035499a70afca4f8d9e11b6a61bb0447310d207a310f11e1",
+    "apps/smart-form/app/submit/components/ParticipantArtwork.tsx": "792f4b4ec92e1cd3bb8ae92e89a341ba35dcc2146ff1fa0602b90fe83d93a815",
+    "apps/smart-form/lib/participant-media.ts": "93824cf0ea8500fff1d149fd39ac32fe68a4ac314b0e6f2db55a68c7903beaa8",
+    "apps/smart-form/test/participant-media.test.ts": "f5c7773af17df43e79827a4b31608be134c4ecde9296c80a4a5be06bc980adce"
+  },
+  "static_proof": {
+    "type_check": "PASS within pnpm verify at source 36483d1b9; .out/media-0205/verify-narrow.txt",
+    "focused_tests": {
+      "pass": 35,
+      "fail": 0,
+      "output": "narrow-regressions-after.txt"
+    },
+    "regression_first": {
+      "pass": 6,
+      "fail": 3,
+      "output": "regression-before.txt",
+      "service_matches_origin_main": "fddc405696098800209f634e471607b2400eec43"
+    },
+    "mutations": "all three killed at 36483d1b993082c13e7dd16e9647d757950618c2 in isolated source/test copies; mutations.json",
+    "verify_static": "PASS: all verify:static gates passed at 36483d1b9 within pnpm verify",
+    "verify": "exit 1 at 36483d1b9 after all static gates passed; staging identity guard refused unidentified 127.0.0.1 before DB suites; no exact-final-head green claim",
+    "r_level": "PASS at 36483d1b993082c13e7dd16e9647d757950618c2; .out/media-0205/r-level-narrow.txt; prior QA coverage caveat remains",
+    "browser_component_proof": "pass; browser-proof.json",
+    "general_qa": "SKIP, local service preflight unavailable; qa-experience.json",
+    "espn_relationships_regression": {
+      "before": "13 pass, 1 fail; espn-relationships-before.txt",
+      "after": "21 focused tests pass; checks real teamRelationships and leagueRelationships fields"
+    },
+    "rework_regression_first": {
+      "pass": 14,
+      "fail": 3,
+      "output": "rework-regression-before.txt",
+      "baseline_source_sha": "1ac76bdfe284838953f1eab72de94864976453ef"
+    },
+    "independent_review_regression_first": {
+      "pass": 19,
+      "fail": 5,
+      "output": "review-regressions-before.txt",
+      "baseline_source_sha": "7eb3d980a",
+      "note": "Seven new tests: five expose unsafe acceptance/search-window failures; two matching-team controls already pass on baseline."
+    },
+    "submission_regression": {
+      "pass": 98,
+      "fail": 0,
+      "output": ".out/media-0205/submission-service-review.txt"
+    },
+    "narrow_regression_first": {
+      "baseline_source_sha": "213644a732c308a8ade430e237458d95b51169fa",
+      "pass": 33,
+      "fail": 2,
+      "output": "narrow-regressions-before.txt",
+      "note": "Unknown-team controls pass; two saturated-search tests fail first."
+    }
+  },
+  "runtime_proof": {
+    "provider_probes": "live-provider-probes.json; all four existing endpoints returned HTTP 200; raw responses in provider-raw",
+    "stored_headshots_revalidation": {
+      "status": "completed-after-narrow-review-repair",
+      "input": ".out/media-0205/stored-headshots-snapshot.json",
+      "observed_row_count": 1497,
+      "non_null_urls": 1488,
+      "null_urls": 9,
+      "verdicts": {
+        "confirmed": 1052,
+        "mismatch": 364,
+        "ambiguous": 81
+      },
+      "requests": 320,
+      "http_200": 320,
+      "artifact": "stored-headshots-revalidated.json",
+      "raw_responses": "stored-provider-raw/",
+      "limitations": [
+        "Read-only supplied snapshot; no production connection or stored URL rewrite.",
+        "Current provider identity correlation does not visually authenticate image content.",
+        "Unknown or incomparable provider teams are refused when both sides carry teams.",
+        "Nine supplied rows have null stored URLs. NFL has no stored rows and is exercised by the separate live provider probe.",
+        "All legacy player URLs remain on the branded fallback because the read endpoint carries no identity-verification evidence."
+      ],
+      "source_sha": "36483d1b993082c13e7dd16e9647d757950618c2",
+      "per_sport": {
+        "MLB": {
+          "confirmed": 766,
+          "mismatch": 185
+        },
+        "NBA": {
+          "confirmed": 145,
+          "mismatch": 83
+        },
+        "NHL": {
+          "confirmed": 141,
+          "mismatch": 96,
+          "ambiguous": 81
+        }
+      },
+      "unique_url_differences": 53,
+      "url_differences_artifact": "stored-headshots-url-differences.json",
+      "unique_different_non_null_stored_urls": 47,
+      "unique_resolution_for_null_stored_urls": 6
+    },
+    "writable_db": {
+      "status": "blocked-deferred",
+      "observed_host": "127.0.0.1",
+      "expected_staging_project": "xskgrzbteyqdufktjrjx",
+      "evidence": "narrow-test-db.txt",
+      "next": "CI Writable DB proof (staging only), pnpm test:db and T1 live suites at exact PR head"
+    },
+    "production_connections": 0,
+    "production_writes": 0,
+    "live_db_enrichment_proof_claimed": false,
+    "queries": [
+      {
+        "type": "supplied read-only snapshot; executor did not query production",
+        "sql": ".out/media-0205/snapshot-query.sql",
+        "input": ".out/media-0205/stored-headshots-snapshot.json"
+      },
+      {
+        "type": "live existing provider HTTP endpoints",
+        "requests": "stored-headshots-revalidated.json#requests",
+        "four_sport_probe": "live-provider-probes.json"
+      }
+    ],
+    "row_counts": [
+      {
+        "sport": "MLB",
+        "rows": 951
+      },
+      {
+        "sport": "NBA",
+        "rows": 228
+      },
+      {
+        "sport": "NHL",
+        "rows": 318
+      }
+    ]
+  },
+  "scope_notes": [
+    "updateMetadata write unchanged; existing string headshot URLs skipped",
+    "package.json is a singleton held by WORK-2026103022 and is out of scope",
+    "No new live DB test added",
+    "All legacy player media stays on branded fallback because the read endpoint has no identity-verification evidence",
+    "No submission, delivery, worker, schema, provider or approved-host change"
+  ],
+  "pending": [
+    "PR #1822 already open; wrapper owns push after Production Claude staging-slot coordination",
+    "Exact-head staging CI green",
+    "Outer wrapper executor-result/v1 publication after truth/provenance checks",
+    "Independent Claude review",
+    "Griff t1-approved and pm-verdict/v1 APPROVED at exact head",
+    "Governed merge and actual merge-SHA binding"
+  ],
+  "proof_format_conflict": {
+    "packet_requires": "evidence bundle v1",
+    "pre_merge_validator": "rejects schema_version=1 as historical read-only",
+    "code": "legacy_v1_not_allowed_pre_merge",
+    "evidence": "evidence-contract-validation.json",
+    "resolution": "Resolved by explicit Production Claude REWORK-DIRECTIONS: use schema_version 2. No guard changes."
+  },
+  "proof_profile": "app-runtime"
+}

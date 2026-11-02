@@ -6,7 +6,7 @@ const player = { participantId: 'player-1', participantType: 'player', displayNa
   headshotUrl: 'https://cdn.nba.com/headshots/nba/latest/1040x760/1630162.png', logoUrl: null };
 
 test('media only belongs to the exact selected participant, type and sport', () => {
-  assert.deepEqual(parseParticipantMedia(player, 'player-1', 'player', 'NBA'), player);
+  assert.deepEqual(parseParticipantMedia(player, 'player-1', 'player', 'NBA'), { ...player, headshotUrl: null });
   assert.equal(parseParticipantMedia(player, 'player-2', 'player', 'NBA'), null);
   assert.equal(parseParticipantMedia(player, 'player-1', 'team', 'NBA'), null);
   assert.equal(parseParticipantMedia(player, 'player-1', 'player', 'NHL'), null);
@@ -54,4 +54,11 @@ test('media maps legacy team keys to exact participant IDs without name matching
   assert.equal(mediaTeamParticipantId('canonical-participant', teams), 'canonical-participant');
   assert.equal(mediaTeamParticipantId('structured-team', []), 'structured-team');
   assert.equal(mediaTeamParticipantId(null, teams), null);
+});
+
+
+test('legacy player images stay on branded fallback even on approved hosts', () => {
+  for (const headshotUrl of [player.headshotUrl, null, 'https://a.espncdn.com/wrong-person.png']) {
+    assert.equal(parseParticipantMedia({ ...player, headshotUrl }, 'player-1', 'player', 'NBA')?.headshotUrl, null);
+  }
 });

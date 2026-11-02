@@ -39,7 +39,10 @@ export function parseParticipantMedia(
       typeof data.displayName !== 'string') return null;
   return {
     participantId, participantType, displayName: data.displayName, sport: data.sport,
-    headshotUrl: participantType === 'player' ? approvedMediaUrl(data.headshotUrl) : null,
+    // The current endpoint returns legacy stored URLs with no matcher evidence.
+    // An approved host and participant envelope cannot verify the person pictured.
+    // Keep all such player images on the emblem until a verified read contract exists.
+    headshotUrl: null,
     logoUrl: participantType === 'team' ? approvedMediaUrl(data.logoUrl) : null,
   };
 }

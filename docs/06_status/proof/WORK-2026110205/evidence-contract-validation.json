@@ -1,0 +1,19 @@
+{
+  "valid": true,
+  "contract": {
+    "valid": true,
+    "schemaVersion": 2,
+    "profile": "app-runtime",
+    "failures": []
+  },
+  "identity": {
+    "mode": "schema-v2",
+    "phase": "pre-merge",
+    "failures": [],
+    "provenanceAnchorSha": "36483d1b993082c13e7dd16e9647d757950618c2"
+  },
+  "routing": {
+    "valid": true,
+    "violations": []
+  }
+}
