@@ -6,7 +6,7 @@ Tier: T1. Implementation source: `36483d1b993082c13e7dd16e9647d757950618c2`. Ind
 
 ## Verification
 
-### ASSERTIONS
+### ASSERTIONS:
 
 - All four resolvers require exactly one normalized full-name candidate. No positional, substring or token-subset player selection remains. Case, diacritics, punctuation and whitespace normalize; Jr/Junior and Sr/Senior normalize symmetrically, while absent/different suffixes and II/III remain distinct.
 - Available team and league identities must agree. A production catalog team key is translated to a full name; provider numeric IDs compare only with numeric IDs. When both sides carry teams but cannot be correlated, the matcher refuses the candidate. NHL abbreviations use a verified 32-team dictionary; MLB IDs use a verified 30-team dictionary. NBA columns are read by header; ESPN relationship identities are checked.
@@ -16,7 +16,7 @@ Tier: T1. Implementation source: `36483d1b993082c13e7dd16e9647d757950618c2`. Ind
 - No submission, distribution, outbox, worker, schema, domain or contract path changed. No production connection, production write, deploy or provider activation occurred.
 - The packet requests bundle v1; Production Claude explicitly authorized schema_version 2 in `.out/media-0205/REWORK-DIRECTIONS.md` because the pre-merge validator rejects v1. Merge SHA remains null, CI-resolved sentinels remain, and no verifier identity is authored here.
 
-### EVIDENCE
+### EVIDENCE:
 
 | Check | Observed result |
 |---|---|
@@ -77,7 +77,7 @@ The narrow-review rerun found 77 NHL responses filling the 100-result window; al
 
 ### Team dictionary choice and provenance
 
-An in-file MLB dictionary avoids adding a request, cache or new runtime provider dependency. Its 30 IDs/full names were fetched from `https://statsapi.mlb.com/api/v1/teams?sportId=1`; `mlb-teams-raw.json` saves the response. NHL's 32 abbreviations were checked against the saved search payloads, and names checked against `https://api.nhle.com/stats/rest/en/team`; `nhl-teams-raw.json` saves that response (UTA id 68, Utah Mammoth). These evidence-only provider calls do not change runtime endpoints or populate reference data. Unknown teams fail closed.
+An in-file MLB dictionary avoids adding a request, cache or new runtime provider dependency. Its 30 IDs/full names were fetched from `https://statsapi.mlb.com/api/v1/teams?sportId=1`; `mlb-teams-raw.json` saves the response. NHL's 32 abbreviations were checked against the saved search payloads, and names checked against `https://api.nhle.com/stats/rest/en/team`; `nhl-teams-raw.json.gz` saves that response (UTA id 68, Utah Mammoth). These evidence-only provider calls do not change runtime endpoints or populate reference data. Unknown teams fail closed.
 
 ### Deferred acceptance and publication
 
