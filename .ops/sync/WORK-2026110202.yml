@@ -1,0 +1,259 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026110202
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026110202
+  objective: "WORK-2026110202 — Participant artwork: unique-match headshots and
+    branded fallback"
+  acceptance_criteria:
+    - "PM minimum (2026-11-02), each with a test:"
+    - "**NHL:** an unrelated player is never bound. The resolver checks the
+      candidate's name, team and league before accepting it, so `data[0]` alone
+      is never accepted. An ambiguous name (more than one credible candidate)
+      returns null."
+    - "**NFL:** the first search result is never selected by position. Selection
+      requires exactly one candidate with a credible identity match, else null."
+    - "**Credible identity correlation for every sport resolver (MLB, NBA, NFL,
+      NHL).** A headshot is bound only to exactly one candidate whose normalized
+      full name matches the participant's normalized display name. Normalization
+      covers case, diacritics, punctuation and whitespace. Suffixes such as Jr.,
+      Sr. and II are handled explicitly and symmetrically. Where both sides
+      carry a team or league identity, the two must agree. No substring or
+      token-subset matching remains. Zero or more than one match returns null.
+      Refusals are counted in the run details (for example `ambiguous` or
+      `identity-mismatch`), not silently dropped."
+    - "**Regression tests first.** The three failing regression cases that
+      motivated this repair are the minimum acceptance: NHL unrelated player,
+      NHL ambiguous name, NFL unrelated first result. Write them in
+      `apps/api/src/player-enrichment-service.test.ts` and show each one failing
+      on unmodified main. Record the failing output in the proof, then make them
+      pass. If the prepared tests already exist in a Codex worktree or session,
+      reuse them verbatim and cite their source. A mutation that restores the
+      old NHL `data[0]` or NFL first-hit selection fails a test."
+    - "**Branded fallback for unverified assets.** When no approved,
+      identity-verified image is available, or the image fails to load, Smart
+      Form renders the approved Smart Form emblem. Use the same geometry as
+      `apps/smart-form/app/submit/components/BrandLogo.tsx`, with no app-to-app
+      import, and the participant's name as accessible text. The approved-host
+      and identity checks in `apps/smart-form/lib/participant-media.ts` stay at
+      least as strict as today."
+    - "**Revalidate the 258 proposed artwork corrections, read-only.** Re-run
+      every proposed correction through the new matcher. Produce
+      `docs/06_status/proof/WORK-2026110202/artwork-corrections-revalidated.jso\
+      n`, which lists participant id, stored URL, proposed URL, new-matcher
+      verdict and reason. Applying any correction is a data write to production
+      participant metadata. It is not authorized by this lane. It needs Griff's
+      separate approval against the revalidated list. Existing stored
+      `headshot_url` values are not rewritten by code in this lane."
+    - "**No change to canonical pick submission or delivery behavior.** No file
+      in `apps/api/src/submission-*`, `handlers/submit-pick.ts`, distribution,
+      outbox or worker paths is touched."
+    - "**T1 verification:**"
+    - "`pnpm verify` green at the exact head;"
+    - the CI `Writable DB proof (staging only)` job (`pnpm test:db` and the T1
+      live suites) green at the exact head;
+    - "runtime proof of the matcher against live provider data: the read-only
+      revalidation of the 258 proposed corrections above, run against the real
+      MLB, NBA, NFL and NHL provider endpoints, with the raw responses saved;"
+    - an evidence bundle v1 tied to the merge SHA.
+    - The enrichment pass's database write (`updateMetadata`) is unchanged, so
+      no new live DB test is added. `package.json` is a singleton path held by
+      WORK-2026103022 and is out of scope. Say this plainly in the proof, and
+      never claim a live DB enrichment proof.
+    - Merge requires Griff's `t1-approved` label and a `pm-verdict/v1` APPROVED
+      comment at the exact head.
+  guardrails:
+    - No schema change, no new provider, no ingestion unpark, and no write path
+      other than the existing `updateMetadata` call.
+    - Approved media hosts in `apps/api/src/handlers/participant-media.ts` are
+      unchanged.
+    - Form validity never depends on artwork.
+    - Staging only for any DB write, through CI. Never write to production.
+  non_goals:
+    - Applying the corrections in production (Griff's separate decision).
+    - Discord shared-artwork presentation. It depends on this lane's verified
+      sources, and it needs protected-path approval for the worker and domain
+      delivery adapters.
+  required_evidence:
+    - Failing-then-passing output for the three regression tests, the mutation
+      record, a before/after table for the ambiguous cases and the revalidated
+      corrections file.
+    - "T1 evidence bundle: `verification.md` (`## Verification` with
+      ASSERTIONS/EVIDENCE), `evidence.json`, `diff-summary.md` and an observed
+      `model-routing.json` (model and effort as observed, never inferred)."
+  exit_criteria:
+    - Exact-head CI green, `executor-result/v1` posted for that head,
+      independent Claude review, then Griff's T1 verdict.
+  unmapped_sections:
+    - >-
+      WORK-2026110202 — Participant artwork: unique-match headshots and branded
+      fallback
+
+      Tier: T1
+
+      Lane type: data-canonical
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05).
+      Admitted by Production Claude under Griff's 2026-11-02 PM product-repair
+      admission decision, item 1 ("Smart Form media — T1"). Old #1794
+      (WORK-2026102704, merged) is not an authorization for this lane. Product
+      authority: `docs/03_product/smart-form/intent.md`. No production data
+      write, deploy or provider change is authorized. Reference-data population
+      is never the fix.
+
+
+      ## Defect (read at main 0c064e586)
+
+
+      `apps/api/src/player-enrichment-service.ts` attaches a headshot by name
+      with unsafe matching:
+
+      - MLB: `find()` accepts the first roster entry whose name *contains* every
+      token of the display name, so a shorter or shared name can bind to a
+      different player.
+
+      - NBA: `fullName.includes(nameLower)` or every token contained — substring
+      matching, first hit wins.
+
+      - NHL: takes `data[0]` of a fuzzy search with no name check at all.
+
+      - NFL: exact displayName match but first hit wins, with no ambiguity
+      check.
+
+      A wrong person's photo is worse than no photo. Smart Form then shows it as
+      verified artwork.
+
+
+      When artwork is missing,
+      `apps/smart-form/app/submit/components/ParticipantArtwork.tsx` renders
+      initials, not the Unit Talk brand.
+
+
+      ## File Scope
+
+
+      - apps/api/src/player-enrichment-service.ts
+
+      - apps/api/src/player-enrichment-service.test.ts
+
+      - apps/smart-form/app/submit/components/ParticipantArtwork.tsx
+
+      - apps/smart-form/lib/participant-media.ts
+
+      - apps/smart-form/test/participant-media.test.ts
+
+
+      ## PR opening is sequenced (overrides any generic "open a draft PR" step)
+
+
+      Every pull request, including a draft, runs the shared `staging-ci-db`
+      job. That job holds one running and one pending slot, and a third arrival
+      cancels the pending proof of another lane. So:
+
+
+      - Commit and push the lane branch as normal.
+
+      - **Do not open a pull request.** When implementation and local
+      verification are complete, write `.out/ops/ready-for-pr/<this issue
+      id>.md` in the lane worktree. List the head SHA, the focused test commands
+      and their results, and the observed model and effort.
+
+      - Production Claude opens the PR when the staging slot is free, then
+      reports the PR number back. After that, ask Production Claude before every
+      push to the open PR.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026110202.md
+    title: "WORK-2026110202 — Participant artwork: unique-match headshots and
+      branded fallback"
+    description: |-
+      # WORK-2026110202 — Participant artwork: unique-match headshots and branded fallback
+
+      Tier: T1
+      Lane type: data-canonical
+      Executor: codex-cli
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). Admitted by Production Claude under Griff's 2026-11-02 PM product-repair admission decision, item 1 ("Smart Form media — T1"). Old #1794 (WORK-2026102704, merged) is not an authorization for this lane. Product authority: `docs/03_product/smart-form/intent.md`. No production data write, deploy or provider change is authorized. Reference-data population is never the fix.
+
+      ## Defect (read at main 0c064e586)
+
+      `apps/api/src/player-enrichment-service.ts` attaches a headshot by name with unsafe matching:
+      - MLB: `find()` accepts the first roster entry whose name *contains* every token of the display name, so a shorter or shared name can bind to a different player.
+      - NBA: `fullName.includes(nameLower)` or every token contained — substring matching, first hit wins.
+      - NHL: takes `data[0]` of a fuzzy search with no name check at all.
+      - NFL: exact displayName match but first hit wins, with no ambiguity check.
+      A wrong person's photo is worse than no photo. Smart Form then shows it as verified artwork.
+
+      When artwork is missing, `apps/smart-form/app/submit/components/ParticipantArtwork.tsx` renders initials, not the Unit Talk brand.
+
+      ## Acceptance Criteria
+
+      PM minimum (2026-11-02), each with a test:
+
+      - **NHL:** an unrelated player is never bound. The resolver checks the candidate's name, team and league before accepting it, so `data[0]` alone is never accepted. An ambiguous name (more than one credible candidate) returns null.
+      - **NFL:** the first search result is never selected by position. Selection requires exactly one candidate with a credible identity match, else null.
+      - **Credible identity correlation for every sport resolver (MLB, NBA, NFL, NHL).** A headshot is bound only to exactly one candidate whose normalized full name matches the participant's normalized display name. Normalization covers case, diacritics, punctuation and whitespace. Suffixes such as Jr., Sr. and II are handled explicitly and symmetrically. Where both sides carry a team or league identity, the two must agree. No substring or token-subset matching remains. Zero or more than one match returns null. Refusals are counted in the run details (for example `ambiguous` or `identity-mismatch`), not silently dropped.
+      - **Regression tests first.** The three failing regression cases that motivated this repair are the minimum acceptance: NHL unrelated player, NHL ambiguous name, NFL unrelated first result. Write them in `apps/api/src/player-enrichment-service.test.ts` and show each one failing on unmodified main. Record the failing output in the proof, then make them pass. If the prepared tests already exist in a Codex worktree or session, reuse them verbatim and cite their source. A mutation that restores the old NHL `data[0]` or NFL first-hit selection fails a test.
+      - **Branded fallback for unverified assets.** When no approved, identity-verified image is available, or the image fails to load, Smart Form renders the approved Smart Form emblem. Use the same geometry as `apps/smart-form/app/submit/components/BrandLogo.tsx`, with no app-to-app import, and the participant's name as accessible text. The approved-host and identity checks in `apps/smart-form/lib/participant-media.ts` stay at least as strict as today.
+      - **Revalidate the 258 proposed artwork corrections, read-only.** Re-run every proposed correction through the new matcher. Produce `docs/06_status/proof/WORK-2026110202/artwork-corrections-revalidated.json`, which lists participant id, stored URL, proposed URL, new-matcher verdict and reason. Applying any correction is a data write to production participant metadata. It is not authorized by this lane. It needs Griff's separate approval against the revalidated list. Existing stored `headshot_url` values are not rewritten by code in this lane.
+      - **No change to canonical pick submission or delivery behavior.** No file in `apps/api/src/submission-*`, `handlers/submit-pick.ts`, distribution, outbox or worker paths is touched.
+      - **T1 verification:**
+        - `pnpm verify` green at the exact head;
+        - the CI `Writable DB proof (staging only)` job (`pnpm test:db` and the T1 live suites) green at the exact head;
+        - runtime proof of the matcher against live provider data: the read-only revalidation of the 258 proposed corrections above, run against the real MLB, NBA, NFL and NHL provider endpoints, with the raw responses saved;
+        - an evidence bundle v1 tied to the merge SHA.
+
+        The enrichment pass's database write (`updateMetadata`) is unchanged, so no new live DB test is added. `package.json` is a singleton path held by WORK-2026103022 and is out of scope. Say this plainly in the proof, and never claim a live DB enrichment proof.
+
+      Merge requires Griff's `t1-approved` label and a `pm-verdict/v1` APPROVED comment at the exact head.
+
+      ## Guardrails
+
+      - No schema change, no new provider, no ingestion unpark, and no write path other than the existing `updateMetadata` call.
+      - Approved media hosts in `apps/api/src/handlers/participant-media.ts` are unchanged.
+      - Form validity never depends on artwork.
+      - Staging only for any DB write, through CI. Never write to production.
+
+      ## Non-goals
+
+      - Applying the corrections in production (Griff's separate decision).
+      - Discord shared-artwork presentation. It depends on this lane's verified sources, and it needs protected-path approval for the worker and domain delivery adapters.
+
+      ## Required Evidence
+
+      - Failing-then-passing output for the three regression tests, the mutation record, a before/after table for the ambiguous cases and the revalidated corrections file.
+      - T1 evidence bundle: `verification.md` (`## Verification` with ASSERTIONS/EVIDENCE), `evidence.json`, `diff-summary.md` and an observed `model-routing.json` (model and effort as observed, never inferred).
+
+      ## Exit Criteria
+
+      - Exact-head CI green, `executor-result/v1` posted for that head, independent Claude review, then Griff's T1 verdict.
+
+      ## File Scope
+
+      - apps/api/src/player-enrichment-service.ts
+      - apps/api/src/player-enrichment-service.test.ts
+      - apps/smart-form/app/submit/components/ParticipantArtwork.tsx
+      - apps/smart-form/lib/participant-media.ts
+      - apps/smart-form/test/participant-media.test.ts
+
+      ## PR opening is sequenced (overrides any generic "open a draft PR" step)
+
+      Every pull request, including a draft, runs the shared `staging-ci-db` job. That job holds one running and one pending slot, and a third arrival cancels the pending proof of another lane. So:
+
+      - Commit and push the lane branch as normal.
+      - **Do not open a pull request.** When implementation and local verification are complete, write `.out/ops/ready-for-pr/<this issue id>.md` in the lane worktree. List the head SHA, the focused test commands and their results, and the observed model and effort.
+      - Production Claude opens the PR when the staging slot is free, then reports the PR number back. After that, ask Production Claude before every push to the open PR.
+    captured_at: 2026-11-02T10:07:36.456Z
+    description_sha256: 60363a2b35c15358dab4167f8ddab4839e302084efa5baa6dcaeab0f926f0f90
+  contract_hash: 0dfd33f2f7b341531e7e1a64656eacb4948e06587d486b7a10765bc467ef8081
