@@ -74,5 +74,5 @@ Not done:
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: set when the PR opens
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1820
 Execution SHA: 0ed9dc5f0d2e8df7a5e0ef9d81939a875a1390c8
