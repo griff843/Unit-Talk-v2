@@ -30,6 +30,8 @@ export interface EnrichmentResult {
 export interface PlayerIdentity {
   teamId?: string | null;
   teamAbbrev?: string | null;
+  teamName?: string | null;
+  teamNickname?: string | null;
   league?: string | null;
 }
 export type HeadshotResolution = { url: string | null; reason: 'confirmed' | 'ambiguous' | 'identity-mismatch' | 'unresolved' };
@@ -43,11 +45,29 @@ export function normalizePlayerName(name: string): string {
     .replace(/[‐‑‒–—-]/g, ' ').replace(/[.'’ʼ]/g, '').replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .trim().replace(/\s+/g, ' ').replace(/\bjunior$/, 'jr').replace(/\bsenior$/, 'sr');
 }
+/** Canonical catalog keys and provider numeric IDs are separate namespaces. */
+function teamAgrees(expected: PlayerIdentity, actual: PlayerIdentity): boolean {
+  const canonical = expected.teamId?.match(/^(.+)_(MLB|NBA|NFL|NHL)$/i);
+  if (canonical) {
+    if (actual.league && normalizePlayerName(canonical[2]!) !== normalizePlayerName(actual.league)) return false;
+    const fullName = normalizePlayerName(canonical[1]!.replace(/_/g, ' '));
+    const providerName = actual.teamName && normalizePlayerName(actual.teamName);
+    const nickname = actual.teamNickname && normalizePlayerName(actual.teamNickname);
+    // Absent comparable team names cannot disambiguate a player. uniqueMatch
+    // still requires exactly one full player name and checks available abbrevs.
+    if (!providerName && !nickname) return true;
+    return providerName === fullName || Boolean(nickname && (fullName === nickname || fullName.endsWith(` ${nickname}`)));
+  }
+  if (expected.teamId && actual.teamId && /^\d+$/.test(expected.teamId) && /^\d+$/.test(actual.teamId)) {
+    return expected.teamId === actual.teamId;
+  }
+  return true;
+}
 function uniqueMatch(name: string, identity: PlayerIdentity, candidates: Candidate[]): HeadshotResolution {
   const expected = normalizePlayerName(name);
   const matches = candidates.filter(candidate => expected && normalizePlayerName(candidate.name) === expected &&
     [candidate, ...(candidate.identities ?? [])].every(actual =>
-      (['teamId', 'teamAbbrev', 'league'] as const).every(key =>
+      teamAgrees(identity, actual) && (['teamAbbrev', 'league'] as const).every(key =>
         !identity[key] || !actual[key] || normalizePlayerName(identity[key]) === normalizePlayerName(actual[key]))));
   if (matches.length > 1) return { url: null, reason: 'ambiguous' };
   if (!matches.length) return { url: null, reason: 'identity-mismatch' };
@@ -81,13 +101,13 @@ export async function resolveHeadshotUrl(
 // statsapi.mlb.com rate-limits sequential per-player search requests, causing most
 // MLB players to get skipped on the enrichment pass without this.
 interface MlbRosterCache {
-  players: Array<{ id: number; fullName: string; currentTeam?: { id?: number }; league?: string }>;
+  players: Array<{ id: number; fullName: string; currentTeam?: { id?: number; name?: string; teamName?: string }; league?: string }>;
   fetchedAt: number;
 }
 let mlbRosterCache: MlbRosterCache | null = null;
 const MLB_ROSTER_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
 
-async function fetchMlbRoster(): Promise<Array<{ id: number; fullName: string; currentTeam?: { id?: number }; league?: string }> | null> {
+async function fetchMlbRoster(): Promise<Array<{ id: number; fullName: string; currentTeam?: { id?: number; name?: string; teamName?: string }; league?: string }> | null> {
   const now = Date.now();
   if (mlbRosterCache && now - mlbRosterCache.fetchedAt < MLB_ROSTER_CACHE_TTL_MS) {
     return mlbRosterCache.players;
@@ -99,7 +119,7 @@ async function fetchMlbRoster(): Promise<Array<{ id: number; fullName: string; c
   const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
   if (!res.ok) return null;
 
-  const data = (await res.json()) as { people?: Array<{ id: number; fullName: string; currentTeam?: { id?: number }; league?: string }> };
+  const data = (await res.json()) as { people?: Array<{ id: number; fullName: string; currentTeam?: { id?: number; name?: string; teamName?: string }; league?: string }> };
   const players = data.people;
   if (!players?.length) return null;
 
@@ -111,7 +131,8 @@ async function resolveMLBHeadshot(displayName: string, identity: PlayerIdentity)
   const players = await fetchMlbRoster();
   if (!players) return { url: null, reason: 'unresolved' };
   return uniqueMatch(displayName, identity, players.map(p => ({
-    name: p.fullName, teamId: p.currentTeam?.id?.toString() ?? null, league: p.league ?? 'MLB',
+    name: p.fullName, teamId: p.currentTeam?.id?.toString() ?? null,
+    teamName: p.currentTeam?.name ?? null, teamNickname: p.currentTeam?.teamName ?? null, league: p.league ?? 'MLB',
     url: p.id ? `https://img.mlbstatic.com/mlb-photos/image/upload/w_213,d_people:generic:headshot:silo:current.png,q_auto:best,f_auto/v1/people/${p.id}/headshot/67/current` : null,
   })));
 }
@@ -122,15 +143,16 @@ async function resolveMLBHeadshot(displayName: string, identity: PlayerIdentity)
 // players to get skipped on the enrichment pass without this.
 interface NbaRosterCache {
   rows: Array<Array<string | number>>;
+  headers: string[];
   fetchedAt: number;
 }
 let nbaRosterCache: NbaRosterCache | null = null;
 const NBA_ROSTER_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
 
-async function fetchNbaRoster(): Promise<Array<Array<string | number>> | null> {
+async function fetchNbaRoster(): Promise<NbaRosterCache | null> {
   const now = Date.now();
   if (nbaRosterCache && now - nbaRosterCache.fetchedAt < NBA_ROSTER_CACHE_TTL_MS) {
-    return nbaRosterCache.rows;
+    return nbaRosterCache;
   }
 
   const seasonStartYear = new Date().getMonth() >= 9 ? new Date().getFullYear() : new Date().getFullYear() - 1;
@@ -146,25 +168,30 @@ async function fetchNbaRoster(): Promise<Array<Array<string | number>> | null> {
   if (!res.ok) return null;
 
   const data = (await res.json()) as {
-    resultSets?: Array<{ rowSet?: Array<Array<string | number>> }>;
+    resultSets?: Array<{ headers?: string[]; rowSet?: Array<Array<string | number>> }>;
   };
   const rows = data.resultSets?.[0]?.rowSet;
-  if (!rows) return null;
+  const headers = data.resultSets?.[0]?.headers;
+  if (!rows || !headers?.includes('PERSON_ID') || !headers.includes('DISPLAY_FIRST_LAST')) return null;
 
-  nbaRosterCache = { rows, fetchedAt: now };
-  return rows;
+  nbaRosterCache = { rows, headers, fetchedAt: now };
+  return nbaRosterCache;
 }
 
 async function resolveNBAHeadshot(displayName: string, identity: PlayerIdentity): Promise<HeadshotResolution> {
-  const rows = await fetchNbaRoster();
-  if (!rows) return { url: null, reason: 'unresolved' };
-  return uniqueMatch(displayName, identity, rows.map(row => {
-    // commonallplayers: PERSON_ID, DISPLAY_LAST_COMMA_FIRST, DISPLAY_FIRST_LAST,
-    // ... TEAM_ID (7), TEAM_ABBREVIATION (10). Prefer the full display name.
-    const reversed = String(row[1] ?? '').split(',').map(part => part.trim());
-    return { name: String(row[2] || (reversed.length === 2 ? `${reversed[1]} ${reversed[0]}` : row[1]) || ''),
-      teamId: row[7] ? String(row[7]) : null, teamAbbrev: row[10] ? String(row[10]) : null, league: 'NBA',
-      url: row[0] ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${row[0]}.png` : null };
+  const roster = await fetchNbaRoster();
+  if (!roster) return { url: null, reason: 'unresolved' };
+  return uniqueMatch(displayName, identity, roster.rows.map(row => {
+    const column = (name: string) => row[roster.headers.indexOf(name)];
+    const reversed = String(column('DISPLAY_LAST_COMMA_FIRST') ?? '').split(',').map(part => part.trim());
+    const teamCity = column('TEAM_CITY');
+    const teamNickname = column('TEAM_NAME');
+    return { name: String(column('DISPLAY_FIRST_LAST') || (reversed.length === 2 ? `${reversed[1]} ${reversed[0]}` : '') || ''),
+      teamId: column('TEAM_ID') ? String(column('TEAM_ID')) : null,
+      teamName: teamCity && teamNickname ? `${teamCity} ${teamNickname}` : null,
+      teamNickname: teamNickname ? String(teamNickname) : null,
+      teamAbbrev: column('TEAM_ABBREVIATION') ? String(column('TEAM_ABBREVIATION')) : null, league: 'NBA',
+      url: column('PERSON_ID') ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${column('PERSON_ID')}.png` : null };
   }));
 }
 
@@ -173,15 +200,15 @@ async function resolveNFLHeadshot(displayName: string, identity: PlayerIdentity)
   const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
   if (!res.ok) return { url: null, reason: 'unresolved' };
   const data = await res.json() as { items?: Array<{ id?: string; displayName?: string;
-    headshot?: string | { href?: string }; team?: { id?: string; abbreviation?: string }; league?: string;
-    teamRelationships?: Array<{ core?: { id?: string; abbreviation?: string } }>;
+    headshot?: string | { href?: string }; team?: { id?: string; abbreviation?: string; displayName?: string; name?: string }; league?: string;
+    teamRelationships?: Array<{ core?: { id?: string; abbreviation?: string; displayName?: string; name?: string } }>;
     leagueRelationships?: Array<{ core?: { abbreviation?: string; slug?: string } }> }> };
   if (!Array.isArray(data.items)) return { url: null, reason: 'unresolved' };
   return uniqueMatch(displayName, identity, data.items.map(item => ({
     name: item.displayName ?? '', teamId: item.team?.id ?? null, teamAbbrev: item.team?.abbreviation ?? null,
-    league: item.league ?? 'NFL',
+    teamName: item.team?.displayName ?? null, teamNickname: item.team?.name ?? null, league: item.league ?? 'NFL',
     identities: [
-      ...(item.teamRelationships ?? []).map(rel => ({ teamId: rel.core?.id ?? null, teamAbbrev: rel.core?.abbreviation ?? null })),
+      ...(item.teamRelationships ?? []).map(rel => ({ teamId: rel.core?.id ?? null, teamAbbrev: rel.core?.abbreviation ?? null, teamName: rel.core?.displayName ?? null, teamNickname: rel.core?.name ?? null })),
       ...(item.leagueRelationships ?? []).map(rel => ({ league: rel.core?.abbreviation ?? rel.core?.slug ?? null })),
     ],
     url: (typeof item.headshot === 'string' ? item.headshot : item.headshot?.href) ??
@@ -194,10 +221,10 @@ async function resolveNHLHeadshot(displayName: string, identity: PlayerIdentity)
   const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
   if (!res.ok) return { url: null, reason: 'unresolved' };
   const data = await res.json() as Array<{ playerId?: string; name?: string; teamId?: string;
-    teamAbbrev?: string; league?: string }>;
+    teamAbbrev?: string; teamName?: string; league?: string }>;
   if (!Array.isArray(data)) return { url: null, reason: 'unresolved' };
   return uniqueMatch(displayName, identity, data.map(item => ({
-    name: item.name ?? '', teamId: item.teamId ?? null, teamAbbrev: item.teamAbbrev ?? null, league: item.league ?? 'NHL',
+    name: item.name ?? '', teamId: item.teamId ?? null, teamAbbrev: item.teamAbbrev ?? null, teamName: item.teamName ?? null, league: item.league ?? 'NHL',
     url: item.playerId ? `https://cms.nhl.bamgrid.com/images/headshots/current/168x168/${item.playerId}.jpg` : null,
   })));
 }

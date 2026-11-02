@@ -194,7 +194,7 @@ test('all sports require a unique normalized full identity, including symmetric 
     ];
     t.mock.method(globalThis, 'fetch', async () => Response.json(
       sport === 'MLB' ? { people: entries.map(p => ({ id: Number(p.id), fullName: p.name, currentTeam: { id: 7 } })) } :
-      sport === 'NBA' ? { resultSets: [{ rowSet: entries.map(p => [p.id, p.name, p.name, 1, '', '', '', 7, '', '', 'ABC']) }] } :
+      sport === 'NBA' ? { resultSets: [{ headers: ['PERSON_ID', 'DISPLAY_LAST_COMMA_FIRST', 'DISPLAY_FIRST_LAST', 'ROSTERSTATUS', 'FROM_YEAR', 'TO_YEAR', 'PLAYERCODE', 'TEAM_ID', 'TEAM_CITY', 'TEAM_NAME', 'TEAM_ABBREVIATION'], rowSet: entries.map(p => [p.id, p.name, p.name, 1, '', '', '', 7, '', '', 'ABC']) }] } :
       sport === 'NFL' ? { items: entries.map(p => ({ id: p.id, displayName: p.name, team: { id: '7', abbreviation: 'ABC' }, league: 'NFL' })) } :
       entries.map(p => ({ playerId: p.id, name: p.name, teamId: '7', teamAbbrev: 'ABC', league: 'NHL' })),
     ));
@@ -261,4 +261,53 @@ test('NFL checks real ESPN teamRelationships and leagueRelationships identities'
   assert.ok(await resolveHeadshotUrl('Josh Allen', 'NFL', null, { teamId: '2', teamAbbrev: 'BUF' }));
   item = { ...item, leagueRelationships: [{ core: { abbreviation: 'CFL' } }] };
   assert.equal(await resolveHeadshotUrl('Josh Allen', 'NFL', null), null);
+});
+
+// Rework regressions: captured before the namespace/header repairs.
+test('canonical team keys correlate by full team name and preserve Red Sox versus White Sox', async (t) => {
+  const { resolveHeadshot } = await import('./player-enrichment-service.js');
+  t.mock.method(Date, 'now', () => 10_000_000_000_000);
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ people: [
+    { id: 1, fullName: 'Test Player', currentTeam: { id: 145, name: 'Chicago White Sox', teamName: 'White Sox' } },
+  ] }));
+  assert.equal((await resolveHeadshot('Test Player', 'MLB', { teamId: 'CHICAGO_WHITE_SOX_MLB' })).reason, 'confirmed');
+  assert.equal((await resolveHeadshot('Test Player', 'MLB', { teamId: 'BOSTON_RED_SOX_MLB' })).reason, 'identity-mismatch');
+  assert.equal((await resolveHeadshot('Test Player', 'MLB', { teamId: 'CHICAGO_CUBS_MLB' })).reason, 'identity-mismatch');
+  assert.equal((await resolveHeadshot('Test Player', 'MLB', { teamId: '145' })).reason, 'confirmed');
+  assert.equal((await resolveHeadshot('Test Player', 'MLB', { teamId: '111' })).reason, 'identity-mismatch');
+});
+
+test('NBA resolves provider columns by headers and correlates LA Clippers with canonical Los Angeles', async (t) => {
+  const { resolveHeadshot } = await import('./player-enrichment-service.js');
+  let now = 20_000_000_000_000;
+  t.mock.method(Date, 'now', () => now);
+  const headers = ['PERSON_ID', 'DISPLAY_LAST_COMMA_FIRST', 'DISPLAY_FIRST_LAST', 'ROSTERSTATUS', 'FROM_YEAR', 'TO_YEAR',
+    'PLAYERCODE', 'PLAYER_SLUG', 'TEAM_ID', 'TEAM_CITY', 'TEAM_NAME', 'TEAM_ABBREVIATION'];
+  const row = [1, 'Player, Test', 'Test Player', 1, '2020', '2026', 'test', 'test_slug', 1610612746, 'LA', 'Clippers', 'LAC'];
+  let reverse = false;
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ resultSets: [{
+    headers: reverse ? [...headers].reverse() : headers, rowSet: [reverse ? [...row].reverse() : row],
+  }] }));
+  for (const reorder of [false, true]) {
+    reverse = reorder; now += 8_000_000;
+    assert.equal((await resolveHeadshot('Test Player', 'NBA', { teamId: 'LOS_ANGELES_CLIPPERS_NBA', teamAbbrev: 'LAC' })).reason, 'confirmed');
+    assert.equal((await resolveHeadshot('Test Player', 'NBA', { teamId: '1610612746' })).reason, 'confirmed');
+    assert.equal((await resolveHeadshot('Test Player', 'NBA', { teamId: '1610612747' })).reason, 'identity-mismatch');
+    assert.equal((await resolveHeadshot('Test Player', 'NBA', { teamId: 'LOS_ANGELES_LAKERS_NBA' })).reason, 'identity-mismatch');
+  }
+});
+
+test('NHL six Jakes sharing a stored URL never confirms an unrelated Jake', async (t) => {
+  const { resolveHeadshot } = await import('./player-enrichment-service.js');
+  t.mock.method(globalThis, 'fetch', async () => Response.json([
+    { playerId: '8484554', name: 'Jake Johnson', teamId: '5', teamAbbrev: 'PIT' },
+    { playerId: '8474100', name: 'Jake Evans', teamId: '8', teamAbbrev: 'MTL' },
+  ]));
+  for (const name of ['Jake Walman', 'Jake Sanderson', 'Jake Middleton', 'Jake Oettinger', 'Jake Guentzel']) {
+    assert.equal((await resolveHeadshot(name, 'NHL')).url, null, name);
+  }
+  const evans = await resolveHeadshot('Jake Evans', 'NHL', { teamId: 'MONTREAL_CANADIENS_NHL' });
+  assert.equal(evans.reason, 'confirmed');
+  assert.match(evans.url!, /\/8474100.jpg$/);
+  assert.doesNotMatch(evans.url!, /8484554/);
 });
