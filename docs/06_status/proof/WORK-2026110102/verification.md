@@ -1,6 +1,6 @@
 # PROOF: WORK-2026110102
 
-MERGE_SHA: pending merge
+MERGE_SHA: 477f0dcaa3230c87e8ec9914fed5c0076e550e1a
 Execution SHA: 4856c23593c326059d920bcddb09b469c1fa1b63
 
 Issue: WORK-2026110102
@@ -115,5 +115,5 @@ No PR is opened, per the packet's staging-slot sequencing override. The handoff 
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `477f0dcaa3230c87e8ec9914fed5c0076e550e1a`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1819

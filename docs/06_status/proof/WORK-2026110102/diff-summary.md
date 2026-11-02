@@ -23,5 +23,5 @@ No production writes, authorization change, query filter/order change, list popu
 ## SHA Binding
 
 Verified source SHA: 4856c23593c326059d920bcddb09b469c1fa1b63
-Merge SHA: pending merge
+Merge SHA: 477f0dcaa3230c87e8ec9914fed5c0076e550e1a
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1819
