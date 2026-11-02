@@ -11,6 +11,9 @@ import {
   buildModelRoutingEvidence,
   commitAndPushEvidence,
   evaluateExecutionTruth,
+  findCodexRollouts,
+  observeModelRouting,
+  observePullRequest,
   resolveCodexExecutionPacket,
   resolveExecModelRouting,
 } from './codex-exec.js';
@@ -1565,4 +1568,159 @@ test('executor modules resolve every imported symbol (narrow compile smoke)', ()
     .filter((line) => /error TS2304|error TS2305/u.test(line));
   assert.deepEqual(unresolved, [],
     `executor entrypoints have unresolved imports:\n${unresolved.join('\n')}`);
+});
+
+// WORK-2026110203: observed model routing from the Codex rollout file.
+
+const DECLARED = { model: 'gpt-6.1-sol', reasoning_effort: 'medium' };
+
+function writeRollout(
+  sessionsRoot: string,
+  startedAt: Date,
+  meta: Record<string, unknown>,
+  turns: Array<Record<string, unknown>>,
+  totalTokens?: number,
+): string {
+  const day = path.join(
+    sessionsRoot,
+    String(startedAt.getFullYear()),
+    String(startedAt.getMonth() + 1).padStart(2, '0'),
+    String(startedAt.getDate()).padStart(2, '0'),
+  );
+  fs.mkdirSync(day, { recursive: true });
+  const filePath = path.join(day, `rollout-${startedAt.getTime()}-${Math.random().toString(16).slice(2)}.jsonl`);
+  const lines = [
+    { type: 'session_meta', payload: { timestamp: startedAt.toISOString(), ...meta } },
+    ...turns.map((payload) => ({ type: 'turn_context', payload })),
+    ...(totalTokens === undefined
+      ? []
+      : [{ type: 'event_msg', payload: { type: 'token_count', info: { total_token_usage: { total_tokens: totalTokens } } } }]),
+  ];
+  fs.writeFileSync(filePath, lines.map((line) => JSON.stringify(line)).join('\n') + '\n');
+  return filePath;
+}
+
+function rolloutFixture() {
+  const sessionsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'work-2026110203-sessions-'));
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'work-2026110203-lane-'));
+  const startedAtMs = Date.now() - 60_000;
+  const endedAtMs = Date.now();
+  const inWindow = new Date(startedAtMs + 1_000);
+  return { sessionsRoot, cwd, startedAtMs, endedAtMs, inWindow };
+}
+
+test('observed routing comes from the single rollout of this worktree and attempt', () => {
+  const f = rolloutFixture();
+  const mine = writeRollout(
+    f.sessionsRoot,
+    f.inWindow,
+    { id: 'sess-1', cwd: f.cwd, originator: 'codex_exec', cli_version: '0.162.1' },
+    [{ model: 'gpt-6.1-sol', effort: 'medium' }, { model: 'gpt-6.1-sol', effort: 'medium' }],
+    4321,
+  );
+  // Not this attempt: another worktree, an interactive originator, a session before the window.
+  writeRollout(f.sessionsRoot, f.inWindow, { id: 'other-cwd', cwd: os.tmpdir(), originator: 'codex_exec' }, []);
+  writeRollout(f.sessionsRoot, f.inWindow, { id: 'desktop', cwd: f.cwd, originator: 'codex_desktop' }, []);
+  writeRollout(f.sessionsRoot, new Date(f.startedAtMs - 5_000), { id: 'earlier', cwd: f.cwd, originator: 'codex_exec' }, []);
+
+  const rollouts = findCodexRollouts(f);
+  assert.deepEqual(rollouts, [mine]);
+  const observation = observeModelRouting({ declared: DECLARED, rollouts });
+  assert.deepEqual(observation, {
+    status: 'observed',
+    reason: null,
+    session_id: 'sess-1',
+    model: 'gpt-6.1-sol',
+    reasoning_effort: 'medium',
+    cli_version: '0.162.1',
+    turns: 2,
+    total_tokens: 4321,
+    unavailable_fields: [],
+    mismatched_fields: [],
+  });
+});
+
+test('no rollout or several rollouts is unavailable, and no declared value is copied into an observed field', () => {
+  const f = rolloutFixture();
+  const none = observeModelRouting({ declared: DECLARED, rollouts: findCodexRollouts(f) });
+  assert.equal(none.status, 'unavailable');
+  assert.match(none.reason ?? '', /no Codex rollout/);
+  for (const field of ['session_id', 'model', 'reasoning_effort', 'cli_version', 'turns', 'total_tokens'] as const) {
+    assert.equal(none[field], null, `${field} must be null, not a declared value`);
+    assert.ok(none.unavailable_fields.includes(field), `${field} must be listed as unavailable`);
+  }
+
+  for (const id of ['a', 'b']) {
+    writeRollout(f.sessionsRoot, f.inWindow, { id, cwd: f.cwd, originator: 'codex_exec' }, [{ model: 'gpt-6.1-sol', effort: 'medium' }]);
+  }
+  const ambiguous = observeModelRouting({ declared: DECLARED, rollouts: findCodexRollouts(f) });
+  assert.equal(ambiguous.status, 'unavailable');
+  assert.match(ambiguous.reason ?? '', /2 Codex rollouts/);
+  assert.equal(ambiguous.model, null);
+});
+
+test('a field the rollout does not carry is null and listed, while the rest are observed', () => {
+  const f = rolloutFixture();
+  writeRollout(f.sessionsRoot, f.inWindow, { id: 'sess-2', cwd: f.cwd, originator: 'codex_exec' }, [{ model: 'gpt-6.1-sol' }]);
+  const observation = observeModelRouting({ declared: DECLARED, rollouts: findCodexRollouts(f) });
+  assert.equal(observation.status, 'observed');
+  assert.equal(observation.model, 'gpt-6.1-sol');
+  assert.equal(observation.reasoning_effort, null);
+  assert.deepEqual(observation.unavailable_fields, ['reasoning_effort', 'cli_version', 'total_tokens']);
+});
+
+test('any turn whose model or effort differs from the declared routing is a mismatch', () => {
+  const f = rolloutFixture();
+  writeRollout(
+    f.sessionsRoot,
+    f.inWindow,
+    { id: 'sess-3', cwd: f.cwd, originator: 'codex_exec', cli_version: '0.162.1' },
+    [{ model: 'gpt-6.1-sol', effort: 'medium' }, { model: 'gpt-6.1-sol', effort: 'high' }],
+  );
+  const observation = observeModelRouting({ declared: DECLARED, rollouts: findCodexRollouts(f) });
+  assert.equal(observation.status, 'mismatch');
+  assert.deepEqual(observation.mismatched_fields, ['reasoning_effort']);
+
+  const g = rolloutFixture();
+  writeRollout(g.sessionsRoot, g.inWindow, { id: 'sess-4', cwd: g.cwd, originator: 'codex_exec' }, [{ model: 'gpt-6.1-luna', effort: 'medium' }]);
+  assert.deepEqual(observeModelRouting({ declared: DECLARED, rollouts: findCodexRollouts(g) }).mismatched_fields, ['model']);
+});
+
+test('evidence labels its routing fields as declared and defaults the observation to unavailable', () => {
+  const evidence = buildModelRoutingEvidence({
+    issueId: 'WORK-2026110203',
+    manifestSchemaVersion: 2,
+    modelRouting: { profile: 'codex-sol-medium', model: 'gpt-6.1-sol', reasoning_effort: 'medium', selected_by: 'three-brain', policy_version: '3.0.0' },
+    legacyCompatibilityUsed: false,
+    codexCliVersion: 'codex-cli 0.162.1',
+    codexExitCode: 0,
+  });
+  assert.equal(evidence.routing_source, 'declared');
+  assert.equal(evidence.observation.status, 'unavailable');
+  assert.equal(evidence.observation.model, null);
+});
+
+test('observePullRequest reports the lane PR read-only, and null with a reason when there is none', () => {
+  const calls: string[] = [];
+  const found = observePullRequest('/lane', 'claude/work-x', (cmd, args) => {
+    calls.push(`${cmd} ${args.join(' ')}`);
+    return cmd === 'gh'
+      ? { status: 0, stdout: JSON.stringify({ number: 1820, headRefOid: 'abc123' }) }
+      : { status: 0, stdout: 'abc123\n' };
+  });
+  assert.deepEqual(found, { number: 1820, head_sha: 'abc123', head_matches_local: true, reason: null });
+  assert.ok(calls.every((call) => call.startsWith('gh pr view') || call.startsWith('git rev-parse')), 'read-only calls only');
+
+  const missing = observePullRequest('/lane', 'claude/work-x', () => ({ status: 1, stdout: '' }));
+  assert.equal(missing.number, null);
+  assert.match(missing.reason ?? '', /no PR found/);
+});
+
+test('a routing mismatch is reported after evidence persists and before SUCCESS can be emitted', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'codex-exec.ts'), 'utf8');
+  const persistenceIndex = source.indexOf('const persistence = commitAndPushEvidence(');
+  const mismatchIndex = source.indexOf("code: 'ROUTING_MISMATCH'", persistenceIndex);
+  const successIndex = source.indexOf("code: 'SUCCESS'", persistenceIndex);
+  assert.ok(persistenceIndex >= 0 && mismatchIndex > persistenceIndex, 'mismatch evidence must be persisted first');
+  assert.ok(successIndex > mismatchIndex, 'a mismatch must be refused before SUCCESS is reachable');
 });
