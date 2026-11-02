@@ -24,41 +24,55 @@ export interface EnrichmentResult {
   failed: number;
   skipped: number;
   errors: string[];
+  refusals: Record<string, number>;
 }
 
-/**
- * Resolves a headshot URL for a player by sport.
- * Returns null if the player cannot be found or the API is unreachable.
- */
-export async function resolveHeadshotUrl(
-  displayName: string,
-  sport: string | null,
-  _externalId: string | null,
-): Promise<string | null> {
-  if (!sport) return null;
+export interface PlayerIdentity {
+  teamId?: string | null;
+  teamAbbrev?: string | null;
+  league?: string | null;
+}
+export type HeadshotResolution = { url: string | null; reason: 'confirmed' | 'ambiguous' | 'identity-mismatch' | 'unresolved' };
+interface Candidate extends PlayerIdentity { name: string; url: string | null }
 
-  const normalized = sport.toUpperCase();
+/** Punctuation joins initials/apostrophes; suffixes remain part of the identity.
+ * Jr/Junior and Sr/Senior are equivalent on BOTH sides. Missing/different
+ * suffixes are refused rather than guessing a family member's identity. */
+export function normalizePlayerName(name: string): string {
+  return name.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
+    .replace(/[‐‑‒–—-]/g, ' ').replace(/[.'’ʼ]/g, '').replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .trim().replace(/\s+/g, ' ').replace(/\bjunior$/, 'jr').replace(/\bsenior$/, 'sr');
+}
+function uniqueMatch(name: string, identity: PlayerIdentity, candidates: Candidate[]): HeadshotResolution {
+  const expected = normalizePlayerName(name);
+  const matches = candidates.filter(candidate => expected && normalizePlayerName(candidate.name) === expected &&
+    (['teamId', 'teamAbbrev', 'league'] as const).every(key =>
+      !identity[key] || !candidate[key] || normalizePlayerName(identity[key]) === normalizePlayerName(candidate[key])));
+  if (matches.length > 1) return { url: null, reason: 'ambiguous' };
+  if (!matches.length) return { url: null, reason: 'identity-mismatch' };
+  return matches[0]!.url ? { url: matches[0]!.url, reason: 'confirmed' } : { url: null, reason: 'unresolved' };
+}
 
+export async function resolveHeadshot(
+  displayName: string, sport: string | null, identity: PlayerIdentity = {},
+): Promise<HeadshotResolution> {
+  const league = ({ BASEBALL: 'MLB', BASKETBALL: 'NBA', FOOTBALL: 'NFL', HOCKEY: 'NHL' } as Record<string, string>)[sport?.toUpperCase() ?? ''] ?? sport?.toUpperCase();
+  if (!league || !['MLB', 'NBA', 'NFL', 'NHL'].includes(league)) return { url: null, reason: 'unresolved' };
   try {
-    switch (normalized) {
-      case 'MLB':
-      case 'BASEBALL':
-        return await resolveMLBHeadshot(displayName);
-      case 'NBA':
-      case 'BASKETBALL':
-        return await resolveNBAHeadshot(displayName);
-      case 'NFL':
-      case 'FOOTBALL':
-        return await resolveNFLHeadshot(displayName);
-      case 'NHL':
-      case 'HOCKEY':
-        return await resolveNHLHeadshot(displayName);
-      default:
-        return null;
+    const expected = { ...identity, league: identity.league ?? league };
+    switch (league) {
+      case 'MLB': return await resolveMLBHeadshot(displayName, expected);
+      case 'NBA': return await resolveNBAHeadshot(displayName, expected);
+      case 'NFL': return await resolveNFLHeadshot(displayName, expected);
+      case 'NHL': return await resolveNHLHeadshot(displayName, expected);
     }
-  } catch {
-    return null;
-  }
+  } catch { /* Optional artwork: provider failure must never block intake. */ }
+  return { url: null, reason: 'unresolved' };
+}
+export async function resolveHeadshotUrl(
+  displayName: string, sport: string | null, _externalId: string | null, identity: PlayerIdentity = {},
+): Promise<string | null> {
+  return (await resolveHeadshot(displayName, sport, identity)).url;
 }
 
 // ── MLB ────────────────────────────────────────────────────────────
@@ -66,13 +80,13 @@ export async function resolveHeadshotUrl(
 // statsapi.mlb.com rate-limits sequential per-player search requests, causing most
 // MLB players to get skipped on the enrichment pass without this.
 interface MlbRosterCache {
-  players: Array<{ id: number; fullName: string }>;
+  players: Array<{ id: number; fullName: string; currentTeam?: { id?: number }; league?: string }>;
   fetchedAt: number;
 }
 let mlbRosterCache: MlbRosterCache | null = null;
 const MLB_ROSTER_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
 
-async function fetchMlbRoster(): Promise<Array<{ id: number; fullName: string }> | null> {
+async function fetchMlbRoster(): Promise<Array<{ id: number; fullName: string; currentTeam?: { id?: number }; league?: string }> | null> {
   const now = Date.now();
   if (mlbRosterCache && now - mlbRosterCache.fetchedAt < MLB_ROSTER_CACHE_TTL_MS) {
     return mlbRosterCache.players;
@@ -84,7 +98,7 @@ async function fetchMlbRoster(): Promise<Array<{ id: number; fullName: string }>
   const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
   if (!res.ok) return null;
 
-  const data = (await res.json()) as { people?: Array<{ id: number; fullName: string }> };
+  const data = (await res.json()) as { people?: Array<{ id: number; fullName: string; currentTeam?: { id?: number }; league?: string }> };
   const players = data.people;
   if (!players?.length) return null;
 
@@ -92,20 +106,13 @@ async function fetchMlbRoster(): Promise<Array<{ id: number; fullName: string }>
   return players;
 }
 
-async function resolveMLBHeadshot(displayName: string): Promise<string | null> {
+async function resolveMLBHeadshot(displayName: string, identity: PlayerIdentity): Promise<HeadshotResolution> {
   const players = await fetchMlbRoster();
-  if (!players) return null;
-
-  const nameLower = displayName.toLowerCase();
-  const match = players.find((p) => {
-    const fullNameLower = p.fullName.toLowerCase();
-    // Exact match first, then all name parts present (handles "Bobby Witt Jr." etc.)
-    return fullNameLower === nameLower ||
-      nameLower.split(' ').filter(Boolean).every((part) => fullNameLower.includes(part));
-  });
-
-  if (!match) return null;
-  return `https://img.mlbstatic.com/mlb-photos/image/upload/w_213,d_people:generic:headshot:silo:current.png,q_auto:best,f_auto/v1/people/${match.id}/headshot/67/current`;
+  if (!players) return { url: null, reason: 'unresolved' };
+  return uniqueMatch(displayName, identity, players.map(p => ({
+    name: p.fullName, teamId: p.currentTeam?.id?.toString() ?? null, league: p.league ?? 'MLB',
+    url: p.id ? `https://img.mlbstatic.com/mlb-photos/image/upload/w_213,d_people:generic:headshot:silo:current.png,q_auto:best,f_auto/v1/people/${p.id}/headshot/67/current` : null,
+  })));
 }
 
 // ── NBA ────────────────────────────────────────────────────────────
@@ -147,72 +154,45 @@ async function fetchNbaRoster(): Promise<Array<Array<string | number>> | null> {
   return rows;
 }
 
-async function resolveNBAHeadshot(displayName: string): Promise<string | null> {
+async function resolveNBAHeadshot(displayName: string, identity: PlayerIdentity): Promise<HeadshotResolution> {
   const rows = await fetchNbaRoster();
-  if (!rows) return null;
-
-  const nameLower = displayName.toLowerCase();
-  // rowSet columns: [PERSON_ID, DISPLAY_LAST_COMMA_FIRST, ...]
-  const match = rows.find((row) => {
-    const fullName = String(row[1] ?? '').toLowerCase();
-    // "Last, First" format — also try direct match
-    return fullName.includes(nameLower) || nameLower.split(' ').every((part) => fullName.includes(part));
-  });
-
-  if (!match) return null;
-  const playerId = match[0];
-  return `https://cdn.nba.com/headshots/nba/latest/1040x760/${playerId}.png`;
+  if (!rows) return { url: null, reason: 'unresolved' };
+  return uniqueMatch(displayName, identity, rows.map(row => {
+    // commonallplayers: PERSON_ID, DISPLAY_LAST_COMMA_FIRST, DISPLAY_FIRST_LAST,
+    // ... TEAM_ID (7), TEAM_ABBREVIATION (10). Prefer the full display name.
+    const reversed = String(row[1] ?? '').split(',').map(part => part.trim());
+    return { name: String(row[2] || (reversed.length === 2 ? `${reversed[1]} ${reversed[0]}` : row[1]) || ''),
+      teamId: row[7] ? String(row[7]) : null, teamAbbrev: row[10] ? String(row[10]) : null, league: 'NBA',
+      url: row[0] ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${row[0]}.png` : null };
+  }));
 }
 
-// ── NFL ────────────────────────────────────────────────────────────
-async function resolveNFLHeadshot(displayName: string): Promise<string | null> {
-  // Use ESPN search API as NFL doesn't have a public people-search
+async function resolveNFLHeadshot(displayName: string, identity: PlayerIdentity): Promise<HeadshotResolution> {
   const url = `https://site.api.espn.com/apis/common/v3/search?query=${encodeURIComponent(displayName)}&limit=5&type=player&sport=football&league=nfl`;
   const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-  if (!res.ok) return null;
-
-  // ESPN returns headshot as either a plain URL string OR an object {alt, href}
-  const data = (await res.json()) as {
-    items?: Array<{
-      id?: string;
-      headshot?: string | { href?: string; alt?: string };
-      displayName?: string;
-    }>;
-  };
-  if (!data.items?.length) return null;
-
-  // ESPN items sometimes include headshot directly
-  const match = data.items.find((item) =>
-    item.displayName?.toLowerCase() === displayName.toLowerCase(),
-  ) ?? data.items[0];
-
-  if (match?.headshot) {
-    // headshot may be an object {href, alt} or a plain URL string
-    if (typeof match.headshot === 'string') return match.headshot;
-    if (typeof match.headshot === 'object' && match.headshot.href) return match.headshot.href;
-  }
-
-  // Fallback: construct ESPN headshot URL from athlete ID
-  if (match?.id) {
-    return `https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/${match.id}.png&w=350&h=254`;
-  }
-
-  return null;
+  if (!res.ok) return { url: null, reason: 'unresolved' };
+  const data = await res.json() as { items?: Array<{ id?: string; displayName?: string;
+    headshot?: string | { href?: string }; team?: { id?: string; abbreviation?: string }; league?: string }> };
+  if (!Array.isArray(data.items)) return { url: null, reason: 'unresolved' };
+  return uniqueMatch(displayName, identity, data.items.map(item => ({
+    name: item.displayName ?? '', teamId: item.team?.id ?? null, teamAbbrev: item.team?.abbreviation ?? null,
+    league: item.league ?? 'NFL',
+    url: (typeof item.headshot === 'string' ? item.headshot : item.headshot?.href) ??
+      (item.id ? `https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/${item.id}.png&w=350&h=254` : null),
+  })));
 }
 
-// ── NHL ────────────────────────────────────────────────────────────
-async function resolveNHLHeadshot(displayName: string): Promise<string | null> {
+async function resolveNHLHeadshot(displayName: string, identity: PlayerIdentity): Promise<HeadshotResolution> {
   const url = `https://search.d3.nhle.com/api/v1/search/player?culture=en-us&limit=5&q=${encodeURIComponent(displayName)}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-  if (!res.ok) return null;
-
-  const data = (await res.json()) as Array<{ playerId?: string; name?: string }>;
-  if (!Array.isArray(data) || data.length === 0) return null;
-
-  const playerId = data[0]!.playerId;
-  if (!playerId) return null;
-
-  return `https://cms.nhl.bamgrid.com/images/headshots/current/168x168/${playerId}.jpg`;
+  if (!res.ok) return { url: null, reason: 'unresolved' };
+  const data = await res.json() as Array<{ playerId?: string; name?: string; teamId?: string;
+    teamAbbrev?: string; league?: string }>;
+  if (!Array.isArray(data)) return { url: null, reason: 'unresolved' };
+  return uniqueMatch(displayName, identity, data.map(item => ({
+    name: item.name ?? '', teamId: item.teamId ?? null, teamAbbrev: item.teamAbbrev ?? null, league: item.league ?? 'NHL',
+    url: item.playerId ? `https://cms.nhl.bamgrid.com/images/headshots/current/168x168/${item.playerId}.jpg` : null,
+  })));
 }
 
 // ── Enrichment Pass ────────────────────────────────────────────────
@@ -232,6 +212,7 @@ export async function runPlayerEnrichmentPass(
     failed: 0,
     skipped: 0,
     errors: [],
+    refusals: {},
   };
 
   // Start run record before processing so started_at reflects actual start time
@@ -255,16 +236,18 @@ export async function runPlayerEnrichmentPass(
     }
 
     try {
-      const headshotUrl = await resolveHeadshotUrl(
-        player.display_name,
-        player.sport,
-        player.external_id,
-      );
+      const resolution = await resolveHeadshot(player.display_name, player.sport, {
+        teamId: typeof metadata['team_external_id'] === 'string' ? metadata['team_external_id'] : null,
+        teamAbbrev: typeof metadata['team_abbrev'] === 'string' ? metadata['team_abbrev'] : null,
+        league: typeof metadata['league'] === 'string' ? metadata['league'] : null,
+      });
+      const headshotUrl = resolution.url;
 
       if (headshotUrl) {
         await deps.participants.updateMetadata(player.id, { headshot_url: headshotUrl });
         result.enriched++;
       } else {
+        result.refusals[resolution.reason] = (result.refusals[resolution.reason] ?? 0) + 1;
         result.skipped++;
       }
     } catch (err) {
@@ -281,6 +264,7 @@ export async function runPlayerEnrichmentPass(
       enriched: result.enriched,
       failed: result.failed,
       skipped: result.skipped,
+      refusals: result.refusals,
     },
   });
 
