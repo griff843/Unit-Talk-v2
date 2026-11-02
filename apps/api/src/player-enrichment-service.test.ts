@@ -343,7 +343,7 @@ test('non-catalog caller team refuses incomparable provider team', async (t) => 
 for (const sport of ['NHL', 'NFL']) {
   test(`${sport} namesake outside old top five is ambiguous`, async (t) => {
     const { resolveHeadshot } = await import('./player-enrichment-service.js');
-    t.mock.method(globalThis, 'fetch', async (input) => {
+    t.mock.method(globalThis, 'fetch', async (input: Parameters<typeof fetch>[0]) => {
       const limit = Number(new URL(String(input)).searchParams.get('limit'));
       const names = ['Jake Evans', 'Unrelated A', 'Unrelated B', 'Unrelated C', 'Unrelated D', 'Jake Evans'];
       return Response.json(sport === 'NHL' ? names.slice(0, limit).map((name, i) => ({ name, playerId: String(i + 1), teamAbbrev: 'MTL' })) :
