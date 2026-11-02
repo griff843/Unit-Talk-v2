@@ -1,129 +1,55 @@
 # PROOF: WORK-2026110204
 
+MERGE_SHA: pending merge
+
 Issue: WORK-2026110204
-
 Tier: T2
+Lane type: governance
+Executor: codex-cli, launched by Production Claude through `pnpm ops:codex-exec --issue WORK-2026110204`
+result: local_static_pass
 
-Execution SHA: `0907b0400fae61aa9031d5a0da18cf05429aec4b` (attempt start SHA recorded by `ops:exec-checkpoint status`).
+## ASSERTIONS:
 
-## ASSERTIONS
+- [x] `buildCodexChildEnv` sets `UNIT_TALK_EXECUTION_CHECKPOINT_DIR` to the directory it is given. `main()` passes `path.dirname(attemptStart.path)`, the directory holding the checkpoint file that `beginAttempt` just wrote (`Codex child environment carries the checkpoint directory and originating identity`).
+- [x] `phase-complete` run from inside a separate lane repository, with the environment `buildCodexChildEnv` produced, lands in the launch root's checkpoint directory and not in the lane repository's (`phase-complete from a separate lane repository writes into the launch checkpoint directory`).
+- [x] The `execution-checkpoint` CLI resolves `--dir`, then a non-empty `UNIT_TALK_EXECUTION_CHECKPOINT_DIR`, then `EXECUTION_CHECKPOINT_DIR`. Each case is tested by running the real CLI as a child process (`... uses environment directory when --dir is absent`, `... gives --dir precedence over its environment directory`, `... retains repository default when neither directory override is set`).
+- [x] The launch-root refusal and `checkpointRootMismatch` are removed. `grep -rn checkpointRootMismatch scripts/` returns nothing.
+- [x] Every temporary directory the changed tests allocate is released in a `finally` block.
 
-- `buildCodexChildEnv` passes through the parent checkpoint directory; the unit assertion and cross-repository subprocess test cover omission of the variable (M1).
-- The real checkpoint CLI writes `phase-complete` under the environment directory when `--dir` is absent (M2).
-- `--dir` takes precedence over the environment directory (M3).
-- With neither override present, the CLI continues to read the repository default.
-- The refusal and `checkpointRootMismatch` implementation/tests are removed.
-- Every test-created temporary workspace in the touched test files is removed in `finally`.
+## EVIDENCE:
+
+Source under test is `dc2c2d384e3b7f467b93e3b7e29eb7b2fcd08206`. `git diff --quiet dc2c2d384 HEAD -- scripts/` is clean. The later commits touch only `docs/06_status/proof/WORK-2026110204/`.
+
+Mutation checks were run by Production Claude on `dc2c2d384e3b7f467b93e3b7e29eb7b2fcd08206`. Each was applied alone, then `npx tsx --test scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.test.ts` was run, then the file was restored from a copy. `git status --short scripts/` was clean afterwards.
+
+```text
+M1 buildCodexChildEnv omits the variable     -> not ok 15, not ok 54   # pass 87 # fail 2
+M2 runCli ignores the environment variable   -> not ok 54, not ok 55   # pass 87 # fail 2
+M3 environment variable wins over --dir      -> not ok 56              # pass 88 # fail 1
+```
+
+Model routing: `model-routing.json` was written and pushed by `codex-exec` after the Codex child exited. It records:
+- `routing_source: "declared"`, `codex-luna-medium` / `gpt-6-luna` / `medium`;
+- `observation.status: "observed"`, from a single rollout: session `01a19c68-d55a-7dd0-8d98-a48f159acd20`, model `gpt-6-luna`, effort `medium`, CLI `0.162.1`, 1 turn;
+- `mismatched_fields: []` and `unavailable_fields: []`.
+
+The wrapper's JSON result reported `observation_status: "observed"`. Correction: the first version of this file was written by the Codex child during its run. It said the rollout was unavailable, and that was wrong. The observation is made by the parent after the child exits, so the child cannot see it. `model-routing.json` is the record.
 
 ## Verification
 
-### Focused tests
+Run by Production Claude on `dc2c2d384e3b7f467b93e3b7e29eb7b2fcd08206`:
 
-Command: `npx tsx --test scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.test.ts`
+- [x] `npx tsx --test scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.test.ts`: `# tests 89`, `# pass 89`, `# fail 0`, `# skipped 0`.
+- [x] `pnpm test`: exit 0, after `pnpm build` (exit 0). Summed over the 118 node:test blocks: `# tests 7779`, `# pass 7766`, `# fail 0`, `# skipped 13`. No line began with `not ok`.
+- [x] `npx eslint scripts/ops/codex-exec.ts scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.ts scripts/ops/execution-checkpoint.test.ts`: exit 0.
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base d764e0976e23c577f58e21d5150c6dbb6f751951 --head dc2c2d384`: `Verdict: PASS`, `Changed files: 10`, `Rules matched: (none)`. The base is the merge base. Comparing two-dot against the newer origin/main also counts files from another merged PR.
+- [x] Type-check: `pnpm type-check` does not cover `scripts/`. A direct `npx tsc -p <tsconfig extending tsconfig.base.json, files: the two changed scripts/ops sources>` reports 36 errors both on the merge base `d764e0976` and on `dc2c2d384`. The error sets are identical apart from line numbers, so there are no new errors.
+- [ ] `pnpm verify` runs in protected CI on the PR head. It cannot exit 0 locally, because `ci:assert-staging` refuses a non-staging target (`[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx`).
 
-```text
-1..89
-# tests 89
-# suites 0
-# pass 89
-# fail 0
-# cancelled 0
-# skipped 0
-# todo 0
-# duration_ms 11191.271931
-FOCUSED_EXIT=0
-```
-
-### ESLint
-
-Command: `npx eslint scripts/ops/codex-exec.ts scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.ts scripts/ops/execution-checkpoint.test.ts`
-
-```text
-ESLINT_EXIT=0
-```
-
-### Build and type-check
-
-Commands: `pnpm build`; `pnpm type-check`
-
-```text
-Both commands exited 0 with no output.
-```
-
-### Full test suite
-
-Command: `pnpm test` (run after `pnpm build`)
-
-```text
-1..8
-# tests 8
-# suites 0
-# pass 7
-# fail 0
-# cancelled 0
-# skipped 1
-# todo 0
-# duration_ms 2883.200079
-PNPM_TEST_EXIT=0
-```
-
-The pasted TAP block is the final block emitted by the repository command; the complete captured log contained no `not ok` or non-zero `# fail` entries.
-
-### Static verification and R-level check
-
-Commands: `pnpm verify:static`; `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`
-
-```text
-[db-client-boundary] OK: every site is classified and none is reachable from `pnpm test`
-[system-alignment] verdict=PASS fail=0 warn=0
-[automation-coverage] verdict=PASS fail=0 warn=137 classified=15
-[executable-wiring] verdict=PASS required_roots=verify
-Environment files passed validation.
-```
-
-The test-bearing static verification output also included:
-
-```text
-# tests 226
-# pass 226
-# fail 0
-# skipped 0
-```
-
-```text
-Verdict: PASS
-Changed files: 25
-Rules matched: operator-ui
-```
-
-The R-level check required no additional artifacts.
-
-The `model-routing.json` file was built with `buildModelRoutingEvidence` and `unavailableObservation` from `scripts/ops/codex-exec.ts`. The declared lane route is `codex-luna-medium`; the matching rollout was unavailable, and no observed model, effort, CLI version, turn count, or token usage was copied into observed fields.
-
-### Required full verification and live-DB deferral
-
-Command: `pnpm verify`
-
-```text
-[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
-[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
-PNPM_VERIFY_EXIT=1
-```
-
-Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials. The command output above records the local resolver's observed host as `127.0.0.1`; no writable DB proof is claimed.
-
-### Mutation checks
-
-Each mutation was applied temporarily, the targeted real test process was run, and the source was restored before the next check.
-
-| Mutation | Command result | Failing TAP test numbers |
-|---|---|---|
-| M1: omit `UNIT_TALK_EXECUTION_CHECKPOINT_DIR` from `buildCodexChildEnv` | 2 tests failed, as required | 1, 2 |
-| M2: ignore `UNIT_TALK_EXECUTION_CHECKPOINT_DIR` in `runCli()` | 1 test failed, as required | 1 |
-| M3: let the environment directory override explicit `--dir` | 1 test failed, as required | 1 |
+Not done: no Codex Desktop registration, no change to the packet's default handoff, and no automatic review or merge. All are out of scope per the work order.
 
 ## Merge SHA Binding
 
-Merge SHA: pending.
-
-PR: pending; Production Claude opens the PR when the staging slot is free.
+Merge SHA: pending merge
+PR: pending
+Execution SHA: dc2c2d384e3b7f467b93e3b7e29eb7b2fcd08206

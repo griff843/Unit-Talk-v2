@@ -15,8 +15,10 @@ Branch: codex/work-2026110204-checkpoint-dir-env
 
 ## SHA Binding
 
-Execution SHA: `0907b0400fae61aa9031d5a0da18cf05429aec4b` (attempt start SHA from the execution checkpoint).
+Execution SHA: dc2c2d384e3b7f467b93e3b7e29eb7b2fcd08206
 
-Merge SHA: pending.
+`git diff --numstat d764e0976 dc2c2d384 -- scripts/`: 4 files, 147 insertions, 81 deletions.
 
-PR: pending; Production Claude opens it when the staging slot is free.
+Merge SHA: pending merge
+
+PR: pending
