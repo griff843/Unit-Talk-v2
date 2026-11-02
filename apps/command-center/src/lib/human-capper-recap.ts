@@ -46,6 +46,7 @@ const REASON_DETAIL: Record<string, string> = {
 
 export function describeRecapOutcome(
   recap: HumanCapperRecapResult | undefined | null,
+  memberVisible = true,
 ): RecapVerdict {
   // Absent means the API did not treat this pick as a human-capper delivery at
   // all — a Track Only pick, or one carrying no server authorization. That is
@@ -54,19 +55,27 @@ export function describeRecapOutcome(
     return { kind: 'not-applicable' };
   }
 
+  const audience = memberVisible ? 'members' : 'the private staff destination';
+
   if (recap.posted) {
-    return { kind: 'posted', headline: 'Recap posted — members were told.' };
+    return { kind: 'posted', headline: `Recap posted — ${audience} ${memberVisible ? 'were' : 'was'} told.` };
   }
 
   const reason = recap.reason?.trim() ? recap.reason.trim() : 'unspecified';
   if (reason === 'recap_request_outcome_unknown') return {
     kind: 'unresolved', headline: 'Recap outcome unresolved',
-    detail: 'The request lost its confirmed outcome. Check Discord before retrying; members may already have received the recap.', reason,
+    detail: `The request lost its confirmed outcome. Check Discord before retrying; ${audience} may already have received the recap.`, reason,
   };
   return {
     kind: 'suppressed',
-    headline: 'Recap NOT posted — members were not told.',
-    detail: REASON_DETAIL[reason] ?? `The API refused the recap with: ${reason}`,
+    headline: `Recap NOT posted — ${audience} ${memberVisible ? 'were' : 'was'} not told.`,
+    detail: memberVisible
+      ? REASON_DETAIL[reason] ?? `The API refused the recap with: ${reason}`
+      : reason === 'kill-switch-engaged'
+        ? 'The official-picks kill switch is engaged, so no recap was posted to the private staff destination. Releasing that switch is a reserved delivery decision.'
+        : reason === 'no-sent-delivery'
+          ? 'This pick has no confirmed delivery, so there is no audience to recap to. A pick that never reached the private staff destination correctly gets no recap.'
+          : `The API refused the recap with: ${reason}`,
     reason,
   };
 }

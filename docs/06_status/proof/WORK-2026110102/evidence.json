@@ -1,0 +1,169 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110102",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "status": "local_static_pass_full_verify_blocked_on_staging_db_exact_head_ci_pending",
+  "verified_source_sha": "4856c23593c326059d920bcddb09b469c1fa1b63",
+  "focused_tests": {
+    "command": "pnpm exec tsx --test apps/command-center/src/lib/delivery-audience-label.test.ts apps/command-center/src/lib/human-capper-recap.test.ts apps/command-center/src/lib/data/queues-governed-population.test.ts apps/operator-web/src/server.test.ts apps/command-center/src/lib/server-api.test.ts",
+    "tests": 38,
+    "passed": 38,
+    "failed": 0
+  },
+  "command_center_suite": {
+    "command": "pnpm --filter @unit-talk/command-center test",
+    "tests": 749,
+    "passed": 749,
+    "failed": 0,
+    "note": "Final repository verification included the additional query test."
+  },
+  "type_check": {
+    "command": "pnpm type-check",
+    "status": "PASS"
+  },
+  "member_render": {
+    "synthetic": true,
+    "byte_identical": true,
+    "markup_comparisons": 18,
+    "recap_comparisons": 18,
+    "baseline_source": "03ce05cbf",
+    "harness": ".out/ops/WORK-2026110102/member-render.tsx",
+    "recap_harness": ".out/ops/WORK-2026110102/member-recap.ts"
+  },
+  "mutation_check": {
+    "status": "PASS",
+    "mutation": "Replace return STAFF_CANARY_LABEL with return null",
+    "command": "pnpm exec tsx --test apps/command-center/src/lib/delivery-audience-label.test.ts",
+    "mutant_exit_code": 1,
+    "failing_test": "staff-canary on the pick only, outbox only, and both gets the canary label",
+    "expected": "Staff canary: private staff destination, hidden from members",
+    "actual": null,
+    "restored_tests": "PASS",
+    "log": ".out/ops/WORK-2026110102/mutation.log"
+  },
+  "browser": {
+    "synthetic": true,
+    "deployedAcceptance": false,
+    "status": "passed",
+    "checks": [
+      {
+        "kind": "members",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "capture": ".out/ops/WORK-2026110102/synthetic-members-1440.png",
+        "labelAccessible": true,
+        "noHorizontalOverflow": true,
+        "capture_sha256": "47cf430f37334e8b1373770842111c0669ceb35e43b8da6943c63f826ac7ae4e",
+        "delivery_receipt_visible": true
+      },
+      {
+        "kind": "staff-canary",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "capture": ".out/ops/WORK-2026110102/synthetic-staff-canary-1440.png",
+        "labelAccessible": true,
+        "noHorizontalOverflow": true,
+        "capture_sha256": "08c8614376c77271b3caa820178df58f5c2f30d726a0a8f1fbdbf3994e83036e",
+        "delivery_receipt_visible": true
+      },
+      {
+        "kind": "mismatch",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "capture": ".out/ops/WORK-2026110102/synthetic-mismatch-1440.png",
+        "labelAccessible": true,
+        "noHorizontalOverflow": true,
+        "capture_sha256": "945bcb58f9774afe326633005d4cdc9d3ff1d74434f796f07679e7a415e50fa4",
+        "delivery_receipt_visible": true
+      },
+      {
+        "kind": "members",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "capture": ".out/ops/WORK-2026110102/synthetic-members-390.png",
+        "labelAccessible": true,
+        "noHorizontalOverflow": true,
+        "capture_sha256": "d28e18208a76d08b1c82f520d17a7b921a2dc8ae5f5e15c3f7e9373a2feac757",
+        "delivery_receipt_visible": true
+      },
+      {
+        "kind": "staff-canary",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "capture": ".out/ops/WORK-2026110102/synthetic-staff-canary-390.png",
+        "labelAccessible": true,
+        "noHorizontalOverflow": true,
+        "capture_sha256": "f746e8a8ad26d9d68da85da8197840d1e1d1658fb3e2e8404435a5f6168bd8fc",
+        "delivery_receipt_visible": true
+      },
+      {
+        "kind": "mismatch",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "capture": ".out/ops/WORK-2026110102/synthetic-mismatch-390.png",
+        "labelAccessible": true,
+        "noHorizontalOverflow": true,
+        "capture_sha256": "7769e83ffa5b094a375d509f61c50e70bda3b70e97fa1002d261bd62272a6cfa",
+        "delivery_receipt_visible": true
+      }
+    ],
+    "fixture_requests": {
+      "requests": 108,
+      "all_get": true,
+      "writes": 0
+    }
+  },
+  "r_level": {
+    "status": "PASS",
+    "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "rule": "operator-ui",
+    "note": "The checker matches a pre-existing QA artifact; fresh issue-specific browser proof is recorded in this evidence independently, not attributed to that historical artifact."
+  },
+  "writable_live_db": {
+    "status": "BLOCKED_DEFERRED",
+    "reason": "Packet deferral: target identity unresolved (host=unparseable). Actual local verify refusal: loopback host=127.0.0.1, ref=unidentified. Requires staging-ci GitHub environment with CI_SUPABASE_* credentials.",
+    "required_project_ref": "xskgrzbteyqdufktjrjx",
+    "observed_local_guard": "host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx; REFUSED target identity could not be resolved"
+  },
+  "exact_head_ci": {
+    "status": "PENDING",
+    "reason": "No PR opened per staging-slot sequencing instruction."
+  },
+  "production_mutations": false,
+  "deployment_acceptance": false,
+  "checkpoint_dir": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110102/.out/ops/execution-checkpoints",
+  "local_verify": {
+    "command": "pnpm verify",
+    "static_command": "pnpm verify:static (invoked by pnpm verify)",
+    "static_status": "PASS",
+    "full_exit_code": 1,
+    "full_status": "BLOCKED_STAGING_DB_GUARD",
+    "log": ".out/ops/WORK-2026110102/verify.log",
+    "note": "All static stages completed. No failed test assertions. The first run encountered generated next-env.d.ts lint drift from next dev; that generated change was restored before the final run."
+  },
+  "app_type_check": {
+    "command": "pnpm --filter @unit-talk/command-center type-check",
+    "status": "PASS"
+  },
+  "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1819",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "4856c23593c326059d920bcddb09b469c1fa1b63",
+    "sha_type": "branch_head",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  }
+}
