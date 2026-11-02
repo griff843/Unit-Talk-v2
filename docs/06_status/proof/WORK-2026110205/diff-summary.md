@@ -21,7 +21,7 @@ Evidence uses schema_version 2 under explicit Production Claude direction, resol
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 449b28f790ae5a0cba071f8fb3c7caee2ee53372
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1822
 
 The wrapper owns publication after Production Claude coordinates the staging slot. This executor commits locally and opens no PR, pushes no branch and publishes no READY_FOR_REVIEW attestation.

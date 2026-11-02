@@ -33,5 +33,11 @@
     },
     "unavailable_fields": [],
     "mismatched_fields": []
+  },
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": "449b28f790ae5a0cba071f8fb3c7caee2ee53372",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1822",
+    "bound_at": "2026-11-02T22:39:03.707Z"
   }
 }

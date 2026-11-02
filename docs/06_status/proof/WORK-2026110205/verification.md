@@ -1,6 +1,6 @@
 # PROOF: WORK-2026110205
 
-MERGE_SHA: pending merge
+MERGE_SHA: 449b28f790ae5a0cba071f8fb3c7caee2ee53372
 
 Tier: T1. Implementation source: `36483d1b993082c13e7dd16e9647d757950618c2`. Independent-review repair complete locally; staging acceptance remains pending.
 
@@ -100,5 +100,5 @@ PR #1822 already exists. The rework direction requires local commits and wrapper
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `449b28f790ae5a0cba071f8fb3c7caee2ee53372`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1822

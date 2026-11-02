@@ -7,11 +7,12 @@
   "status": "narrow-review-repair-staging-proof-pending",
   "sha_binding": {
     "verified_source_sha": "36483d1b993082c13e7dd16e9647d757950618c2",
-    "merge_sha": null,
-    "sha_type": "source_sha",
+    "merge_sha": "449b28f790ae5a0cba071f8fb3c7caee2ee53372",
+    "sha_type": "merge_sha",
     "note": "No merge occurred. Authorized post-merge path must bind the actual merge SHA. No exact-head CI success is claimed.",
     "evidence_commit_sha": "CI_RESOLVED",
-    "current_pr_head_sha": "CI_RESOLVED"
+    "current_pr_head_sha": "CI_RESOLVED",
+    "bound_at": "2026-11-02T22:39:02.294Z"
   },
   "source_file_sha256": {
     "apps/api/src/player-enrichment-service.ts": "003616ac0044088c899f792a1c3029c8446aaf8cbb8744f6baefa0f4d05583ea",
