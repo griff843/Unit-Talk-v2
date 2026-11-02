@@ -59,10 +59,130 @@
   "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1818",
   "executor_attestation": "Not published by child executor; outer wrapper owns provenance and READY_FOR_REVIEW publication.",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "e95027e79e96604a0e285a8c13acdd7be6628831",
     "verified_source_sha": "eece61514d6409c747daa2b047fa5d2cd450d90c",
-    "sha_type": "branch_head",
+    "sha_type": "merge_sha",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "bound_at": "2026-11-02T11:48:35.922Z"
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 9,
+    "pass": 9,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "ingestor health check canonical freshness SELECT executes against staging (ok 1, 1317.93ms)"
+      },
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "ingestor supervisor canonical freshness SELECT executes against staging (ok 2, 1312.30ms)"
+      },
+      {
+        "table": "picks,submissions",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 3, 7498.70ms)"
+      },
+      {
+        "table": "pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 4, 3158.57ms)"
+      },
+      {
+        "table": "audit_log,distribution_outbox,distribution_receipts,pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 5, 3558.16ms)"
+      },
+      {
+        "table": "audit_log,pick_lifecycle,picks,settlement_records,submissions",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 6, 3647.66ms)"
+      },
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 7, 152.46ms)"
+      },
+      {
+        "table": "picks,settlement_records,submissions",
+        "description": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows (ok 8, 4094.11ms)"
+      },
+      {
+        "table": "audit_log,picks,settlement_records,submissions",
+        "description": "UTV2-996: correction chain is additive — original settlement row is not mutated (ok 9, 3871.89ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 13,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 10,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (synthetic reference rows)"
+      }
+    ],
+    "row_counts_captured_at": "2026-11-02T11:31:31.995Z",
+    "row_counts_note": "Harvested automatically by ops:proof-generate's CI-DB-proof auto-harvest (UTV2-1641) from the \"Seed synthetic staging fixtures\" step's log of CI job \"Writable DB proof (staging only)\" (run 41436611125, job 125247831780), which ran immediately before the smoke-test step in the same job, on head e95027e79e96604a0e285a8c13acdd7be6628831. Not re-run locally -- this host has no credential to staging xskgrzbteyqdufktjrjx.",
+    "ci_run": {
+      "workflow": "CI",
+      "job": "Writable DB proof (staging only)",
+      "run_id": 41436611125,
+      "run_attempt": 1,
+      "job_id": 125247831780,
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/41436611125/job/125247831780",
+      "target_head_sha": "e95027e79e96604a0e285a8c13acdd7be6628831",
+      "target_merge_sha": "e95027e79e96604a0e285a8c13acdd7be6628831",
+      "conclusion": "success",
+      "identity_source": "merge_sha_run"
+    }
+  },
+  "static_proof": {
+    "command": "pnpm verify",
+    "conclusion": "success",
+    "workflow": "CI",
+    "job": "verify",
+    "run_id": 41436611125,
+    "job_id": 125255298185,
+    "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/41436611125",
+    "merge_sha": "e95027e79e96604a0e285a8c13acdd7be6628831",
+    "test_run_logs": [
+      {
+        "path": "https://github.com/griff843/Unit-Talk-v2/actions/runs/41436611125/job/125255298185",
+        "merge_sha": "e95027e79e96604a0e285a8c13acdd7be6628831"
+      }
+    ],
+    "note": "Harvested automatically by ops:proof-generate (UTV2-1683) from the \"verify\" job (run 41436611125, job 125255298185) of the CI run triggered by merge commit e95027e79e96604a0e285a8c13acdd7be6628831 itself. Not re-run locally -- the recorded conclusion is GitHub's, not this host's."
   }
 }

@@ -1,6 +1,6 @@
 # PROOF: WORK-2026110201
 
-MERGE_SHA: pending merge
+MERGE_SHA: e95027e79e96604a0e285a8c13acdd7be6628831
 Execution SHA: eece61514d6409c747daa2b047fa5d2cd450d90c
 
 Issue: WORK-2026110201
@@ -61,5 +61,5 @@ The lane packet says not to open a pull request. Production Claude opens it when
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `e95027e79e96604a0e285a8c13acdd7be6628831`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1818
