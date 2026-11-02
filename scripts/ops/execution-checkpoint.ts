@@ -1212,7 +1212,8 @@ function requireMutationIdentity(flags: Map<string, string[]>): ExecutionStateId
 function runCli(): void {
   const { positionals, flags } = parseArgs(process.argv.slice(2));
   const command = positionals[0] ?? 'status';
-  const dir = getFlag(flags, 'dir') ?? EXECUTION_CHECKPOINT_DIR;
+  const envDir = process.env.UNIT_TALK_EXECUTION_CHECKPOINT_DIR;
+  const dir = getFlag(flags, 'dir') ?? (envDir ? envDir : EXECUTION_CHECKPOINT_DIR);
 
   try {
     const issueId = requireIssueId(getFlag(flags, 'issue') ?? '');
