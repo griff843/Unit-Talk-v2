@@ -45,24 +45,98 @@ export function normalizePlayerName(name: string): string {
     .replace(/[‐‑‒–—-]/g, ' ').replace(/[.'’ʼ]/g, '').replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .trim().replace(/\s+/g, ' ').replace(/\bjunior$/, 'jr').replace(/\bsenior$/, 'sr');
 }
+// Team identity dictionaries, verified 2026-11-02. MLB IDs/full names:
+// https://statsapi.mlb.com/api/v1/teams?sportId=1 (mlb-teams-raw.json in lane proof).
+// NHL abbreviations: all 32 observed in stored-provider-raw/*.txt; full names:
+// https://api.nhle.com/stats/rest/en/team (UTA id 68 is Utah Mammoth).
+// These are identity translations, never participant/reference-data writes.
+const MLB_TEAM_NAMES: Readonly<Record<string, string>> = {
+  "133": "Athletics",
+  "134": "Pittsburgh Pirates",
+  "135": "San Diego Padres",
+  "136": "Seattle Mariners",
+  "137": "San Francisco Giants",
+  "138": "St. Louis Cardinals",
+  "139": "Tampa Bay Rays",
+  "140": "Texas Rangers",
+  "141": "Toronto Blue Jays",
+  "142": "Minnesota Twins",
+  "143": "Philadelphia Phillies",
+  "144": "Atlanta Braves",
+  "145": "Chicago White Sox",
+  "146": "Miami Marlins",
+  "147": "New York Yankees",
+  "158": "Milwaukee Brewers",
+  "108": "Los Angeles Angels",
+  "109": "Arizona Diamondbacks",
+  "110": "Baltimore Orioles",
+  "111": "Boston Red Sox",
+  "112": "Chicago Cubs",
+  "113": "Cincinnati Reds",
+  "114": "Cleveland Guardians",
+  "115": "Colorado Rockies",
+  "116": "Detroit Tigers",
+  "117": "Houston Astros",
+  "118": "Kansas City Royals",
+  "119": "Los Angeles Dodgers",
+  "120": "Washington Nationals",
+  "121": "New York Mets"
+};
+const NHL_TEAM_NAMES: Readonly<Record<string, string>> = {
+  "ANA": "Anaheim Ducks",
+  "BOS": "Boston Bruins",
+  "BUF": "Buffalo Sabres",
+  "CAR": "Carolina Hurricanes",
+  "CBJ": "Columbus Blue Jackets",
+  "CGY": "Calgary Flames",
+  "CHI": "Chicago Blackhawks",
+  "COL": "Colorado Avalanche",
+  "DAL": "Dallas Stars",
+  "DET": "Detroit Red Wings",
+  "EDM": "Edmonton Oilers",
+  "FLA": "Florida Panthers",
+  "LAK": "Los Angeles Kings",
+  "MIN": "Minnesota Wild",
+  "MTL": "Montreal Canadiens",
+  "NJD": "New Jersey Devils",
+  "NSH": "Nashville Predators",
+  "NYI": "New York Islanders",
+  "NYR": "New York Rangers",
+  "OTT": "Ottawa Senators",
+  "PHI": "Philadelphia Flyers",
+  "PIT": "Pittsburgh Penguins",
+  "SEA": "Seattle Kraken",
+  "SJS": "San Jose Sharks",
+  "STL": "St. Louis Blues",
+  "TBL": "Tampa Bay Lightning",
+  "TOR": "Toronto Maple Leafs",
+  "UTA": "Utah Mammoth",
+  "VAN": "Vancouver Canucks",
+  "VGK": "Vegas Golden Knights",
+  "WPG": "Winnipeg Jets",
+  "WSH": "Washington Capitals"
+};
+
 /** Canonical catalog keys and provider numeric IDs are separate namespaces. */
 function teamAgrees(expected: PlayerIdentity, actual: PlayerIdentity): boolean {
-  const canonical = expected.teamId?.match(/^(.+)_(MLB|NBA|NFL|NHL)$/i);
+  const actualHasTeam = Boolean(actual.teamId || actual.teamName || actual.teamNickname || actual.teamAbbrev);
+  if (!expected.teamId || !actualHasTeam) return true;
+  const canonical = expected.teamId.match(/^(.+)_(MLB|NBA|NFL|NHL)$/i);
   if (canonical) {
     if (actual.league && normalizePlayerName(canonical[2]!) !== normalizePlayerName(actual.league)) return false;
     const fullName = normalizePlayerName(canonical[1]!.replace(/_/g, ' '));
     const providerName = actual.teamName && normalizePlayerName(actual.teamName);
     const nickname = actual.teamNickname && normalizePlayerName(actual.teamNickname);
-    // Absent comparable team names cannot disambiguate a player. uniqueMatch
-    // still requires exactly one full player name and checks available abbrevs.
-    if (!providerName && !nickname) return true;
+    if (!providerName && !nickname) return false;
     return providerName === fullName || Boolean(nickname && (fullName === nickname || fullName.endsWith(` ${nickname}`)));
   }
-  if (expected.teamId && actual.teamId && /^\d+$/.test(expected.teamId) && /^\d+$/.test(actual.teamId)) {
+  if (actual.teamId && /^\d+$/.test(expected.teamId) && /^\d+$/.test(actual.teamId)) {
     return expected.teamId === actual.teamId;
   }
-  return true;
+  // Both sides carry teams but their namespaces cannot be correlated.
+  return false;
 }
+
 function uniqueMatch(name: string, identity: PlayerIdentity, candidates: Candidate[]): HeadshotResolution {
   const expected = normalizePlayerName(name);
   const matches = candidates.filter(candidate => expected && normalizePlayerName(candidate.name) === expected &&
@@ -132,7 +206,7 @@ async function resolveMLBHeadshot(displayName: string, identity: PlayerIdentity)
   if (!players) return { url: null, reason: 'unresolved' };
   return uniqueMatch(displayName, identity, players.map(p => ({
     name: p.fullName, teamId: p.currentTeam?.id?.toString() ?? null,
-    teamName: p.currentTeam?.name ?? null, teamNickname: p.currentTeam?.teamName ?? null, league: p.league ?? 'MLB',
+    teamName: p.currentTeam?.name ?? (p.currentTeam?.id ? MLB_TEAM_NAMES[String(p.currentTeam.id)] : null) ?? null, teamNickname: p.currentTeam?.teamName ?? null, league: p.league ?? 'MLB',
     url: p.id ? `https://img.mlbstatic.com/mlb-photos/image/upload/w_213,d_people:generic:headshot:silo:current.png,q_auto:best,f_auto/v1/people/${p.id}/headshot/67/current` : null,
   })));
 }
@@ -196,7 +270,7 @@ async function resolveNBAHeadshot(displayName: string, identity: PlayerIdentity)
 }
 
 async function resolveNFLHeadshot(displayName: string, identity: PlayerIdentity): Promise<HeadshotResolution> {
-  const url = `https://site.api.espn.com/apis/common/v3/search?query=${encodeURIComponent(displayName)}&limit=5&type=player&sport=football&league=nfl`;
+  const url = `https://site.api.espn.com/apis/common/v3/search?query=${encodeURIComponent(displayName)}&limit=100&type=player&sport=football&league=nfl`;
   const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
   if (!res.ok) return { url: null, reason: 'unresolved' };
   const data = await res.json() as { items?: Array<{ id?: string; displayName?: string;
@@ -217,14 +291,14 @@ async function resolveNFLHeadshot(displayName: string, identity: PlayerIdentity)
 }
 
 async function resolveNHLHeadshot(displayName: string, identity: PlayerIdentity): Promise<HeadshotResolution> {
-  const url = `https://search.d3.nhle.com/api/v1/search/player?culture=en-us&limit=5&q=${encodeURIComponent(displayName)}`;
+  const url = `https://search.d3.nhle.com/api/v1/search/player?culture=en-us&limit=100&q=${encodeURIComponent(displayName)}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
   if (!res.ok) return { url: null, reason: 'unresolved' };
   const data = await res.json() as Array<{ playerId?: string; name?: string; teamId?: string;
     teamAbbrev?: string; teamName?: string; league?: string }>;
   if (!Array.isArray(data)) return { url: null, reason: 'unresolved' };
   return uniqueMatch(displayName, identity, data.map(item => ({
-    name: item.name ?? '', teamId: item.teamId ?? null, teamAbbrev: item.teamAbbrev ?? null, teamName: item.teamName ?? null, league: item.league ?? 'NHL',
+    name: item.name ?? '', teamId: item.teamId ?? null, teamAbbrev: item.teamAbbrev ?? null, teamName: item.teamName ?? (item.teamAbbrev ? NHL_TEAM_NAMES[item.teamAbbrev.toUpperCase()] : null) ?? null, league: item.league ?? 'NHL',
     url: item.playerId ? `https://cms.nhl.bamgrid.com/images/headshots/current/168x168/${item.playerId}.jpg` : null,
   })));
 }

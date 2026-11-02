@@ -311,3 +311,44 @@ test('NHL six Jakes sharing a stored URL never confirms an unrelated Jake', asyn
   assert.match(evans.url!, /\/8474100.jpg$/);
   assert.doesNotMatch(evans.url!, /8484554/);
 });
+
+// Independent-review regressions: production supplies catalog teamId, no teamAbbrev.
+test('NHL production catalog key refuses conflicting provider abbreviation', async (t) => {
+  const { resolveHeadshot } = await import('./player-enrichment-service.js');
+  t.mock.method(globalThis, 'fetch', async () => Response.json([{ playerId: '1', name: 'Jake Evans', teamId: '5', teamAbbrev: 'PIT' }]));
+  assert.equal((await resolveHeadshot('Jake Evans', 'NHL', { teamId: 'MONTREAL_CANADIENS_NHL' })).reason, 'identity-mismatch');
+});
+test('NHL production catalog key accepts matching provider abbreviation', async (t) => {
+  const { resolveHeadshot } = await import('./player-enrichment-service.js');
+  t.mock.method(globalThis, 'fetch', async () => Response.json([{ playerId: '1', name: 'Jake Evans', teamId: '8', teamAbbrev: 'MTL' }]));
+  assert.equal((await resolveHeadshot('Jake Evans', 'NHL', { teamId: 'MONTREAL_CANADIENS_NHL' })).reason, 'confirmed');
+});
+test('MLB production catalog key refuses conflicting numeric provider team', async (t) => {
+  const { resolveHeadshot } = await import('./player-enrichment-service.js');
+  t.mock.method(Date, 'now', () => 30_000_000_000_000);
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ people: [{ id: 1, fullName: 'Test Player', currentTeam: { id: 145 } }] }));
+  assert.equal((await resolveHeadshot('Test Player', 'MLB', { teamId: 'BOSTON_RED_SOX_MLB' })).reason, 'identity-mismatch');
+});
+test('MLB production catalog key accepts matching numeric provider team', async (t) => {
+  const { resolveHeadshot } = await import('./player-enrichment-service.js');
+  t.mock.method(Date, 'now', () => 40_000_000_000_000);
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ people: [{ id: 1, fullName: 'Test Player', currentTeam: { id: 145 } }] }));
+  assert.equal((await resolveHeadshot('Test Player', 'MLB', { teamId: 'CHICAGO_WHITE_SOX_MLB' })).reason, 'confirmed');
+});
+test('non-catalog caller team refuses incomparable provider team', async (t) => {
+  const { resolveHeadshot } = await import('./player-enrichment-service.js');
+  t.mock.method(globalThis, 'fetch', async () => Response.json([{ playerId: '1', name: 'Jake Evans', teamId: '8', teamAbbrev: 'MTL' }]));
+  assert.equal((await resolveHeadshot('Jake Evans', 'NHL', { teamId: 'BOS' })).reason, 'identity-mismatch');
+});
+for (const sport of ['NHL', 'NFL']) {
+  test(`${sport} namesake outside old top five is ambiguous`, async (t) => {
+    const { resolveHeadshot } = await import('./player-enrichment-service.js');
+    t.mock.method(globalThis, 'fetch', async (input) => {
+      const limit = Number(new URL(String(input)).searchParams.get('limit'));
+      const names = ['Jake Evans', 'Unrelated A', 'Unrelated B', 'Unrelated C', 'Unrelated D', 'Jake Evans'];
+      return Response.json(sport === 'NHL' ? names.slice(0, limit).map((name, i) => ({ name, playerId: String(i + 1), teamAbbrev: 'MTL' })) :
+        { items: names.slice(0, limit).map((displayName, i) => ({ displayName, id: String(i + 1), team: { displayName: 'Montreal Canadiens' } })) });
+    });
+    assert.equal((await resolveHeadshot('Jake Evans', sport, { teamId: `MONTREAL_CANADIENS_${sport}` })).reason, 'ambiguous');
+  });
+}
