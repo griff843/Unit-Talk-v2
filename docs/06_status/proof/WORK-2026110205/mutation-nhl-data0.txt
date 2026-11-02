@@ -2,43 +2,43 @@ TAP version 13
 # Subtest: resolveHeadshotUrl returns null for null sport
 ok 1 - resolveHeadshotUrl returns null for null sport
   ---
-  duration_ms: 1.583988
+  duration_ms: 1.326481
   type: 'test'
   ...
 # Subtest: resolveHeadshotUrl returns null for unknown sport
 ok 2 - resolveHeadshotUrl returns null for unknown sport
   ---
-  duration_ms: 0.294439
+  duration_ms: 0.186287
   type: 'test'
   ...
 # Subtest: runPlayerEnrichmentPass skips players with existing headshot_url
 ok 3 - runPlayerEnrichmentPass skips players with existing headshot_url
   ---
-  duration_ms: 0.618818
+  duration_ms: 0.543563
   type: 'test'
   ...
 # Subtest: runPlayerEnrichmentPass reports skipped for players with null sport
 ok 4 - runPlayerEnrichmentPass reports skipped for players with null sport
   ---
-  duration_ms: 0.209232
+  duration_ms: 0.169287
   type: 'test'
   ...
 # Subtest: runPlayerEnrichmentPass handles empty participant list
 ok 5 - runPlayerEnrichmentPass handles empty participant list
   ---
-  duration_ms: 0.188148
+  duration_ms: 0.147984
   type: 'test'
   ...
 # Subtest: runPlayerEnrichmentPass writes system_runs record with correct details
 ok 6 - runPlayerEnrichmentPass writes system_runs record with correct details
   ---
-  duration_ms: 0.213472
+  duration_ms: 0.222369
   type: 'test'
   ...
 # Subtest: NHL unrelated player is refused
 not ok 7 - NHL unrelated player is refused
   ---
-  duration_ms: 56.877921
+  duration_ms: 40.958825
   type: 'test'
   location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:1:3660'
   failureType: 'testCodeFailure'
@@ -62,7 +62,7 @@ not ok 7 - NHL unrelated player is refused
 # Subtest: NHL ambiguous name is refused
 not ok 8 - NHL ambiguous name is refused
   ---
-  duration_ms: 1.293252
+  duration_ms: 0.923947
   type: 'test'
   location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:1:3915'
   failureType: 'testCodeFailure'
@@ -86,13 +86,13 @@ not ok 8 - NHL ambiguous name is refused
 # Subtest: NFL unrelated first result is refused
 ok 9 - NFL unrelated first result is refused
   ---
-  duration_ms: 2.152923
+  duration_ms: 1.795864
   type: 'test'
   ...
 # Subtest: all sports require a unique normalized full identity, including symmetric suffixes
 not ok 10 - all sports require a unique normalized full identity, including symmetric suffixes
   ---
-  duration_ms: 18.327223
+  duration_ms: 16.325163
   type: 'test'
   location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:1:4496'
   failureType: 'testCodeFailure'
@@ -103,22 +103,22 @@ not ok 10 - all sports require a unique normalized full identity, including symm
   actual: false
   operator: '=='
   stack: |-
-    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:202:12)
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:203:12)
     async Test.run (node:internal/test_runner/test:1054:7)
     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
   ...
 # Subtest: NFL selects the unique identity after an unrelated first hit and refuses duplicate exact hits
 ok 11 - NFL selects the unique identity after an unrelated first hit and refuses duplicate exact hits
   ---
-  duration_ms: 1.152135
+  duration_ms: 0.854886
   type: 'test'
   ...
 # Subtest: NHL checks candidate league and team and does not resolve ambiguity using an image
 not ok 12 - NHL checks candidate league and team and does not resolve ambiguity using an image
   ---
-  duration_ms: 0.790046
+  duration_ms: 0.630101
   type: 'test'
-  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:1:7172'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:1:7427'
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
@@ -133,16 +133,16 @@ not ok 12 - NHL checks candidate league and team and does not resolve ambiguity 
   actual: 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/1.jpg'
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:225:10)
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:228:10)
     async Test.run (node:internal/test_runner/test:1054:7)
     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
   ...
 # Subtest: enrichment records refusal reasons and leaves stored images untouched
 not ok 13 - enrichment records refusal reasons and leaves stored images untouched
   ---
-  duration_ms: 3.655979
+  duration_ms: 3.274716
   type: 'test'
-  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:1:7750'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:1:8005'
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly deep-equal:
@@ -162,16 +162,22 @@ not ok 13 - enrichment records refusal reasons and leaves stored images untouche
   actual:
   operator: 'deepStrictEqual'
   stack: |-
-    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:245:10)
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/apps/api/src/player-enrichment-service.test.ts:248:10)
     async Test.run (node:internal/test_runner/test:1054:7)
     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
   ...
-1..13
-# tests 13
+# Subtest: NFL checks real ESPN teamRelationships and leagueRelationships identities
+ok 14 - NFL checks real ESPN teamRelationships and leagueRelationships identities
+  ---
+  duration_ms: 0.914278
+  type: 'test'
+  ...
+1..14
+# tests 14
 # suites 0
-# pass 8
+# pass 9
 # fail 5
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 732.682304
+# duration_ms 596.424169

@@ -1,4 +1,4 @@
 R-level check report written to docs/06_status/proof/WORK-2026110205/r-level.json
 Verdict: PASS
-Changed files: 9
+Changed files: 29
 Rules matched: operator-ui

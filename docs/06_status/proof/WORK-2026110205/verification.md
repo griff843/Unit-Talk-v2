@@ -3,7 +3,7 @@
 MERGE_SHA: pending merge
 
 Tier: T1. State: implementation candidate, incomplete acceptance evidence.
-Implementation source: `1ec1af6b6` (full SHA in evidence.json).
+Implementation source: `d3464409b` (full SHA in evidence.json).
 
 ## Verification
 
@@ -24,7 +24,8 @@ Implementation source: `1ec1af6b6` (full SHA in evidence.json).
 | Check | Measured evidence |
 |---|---|
 | Regression-first | `regression-before.txt`: 9 tests, 6 pass, 3 fail; failures return unrelated NHL 8484554, ambiguous NHL id 1, unrelated ESPN URL. |
-| Focused final source | `pnpm exec tsx --test apps/api/src/player-enrichment-service.test.ts apps/smart-form/test/participant-media.test.ts`; `focused-after.txt`: 20 tests, 20 pass, 0 fail. Existing tests retained; API 6 → 13, media 6 → 7. |
+| Focused final source | `pnpm exec tsx --test apps/api/src/player-enrichment-service.test.ts apps/smart-form/test/participant-media.test.ts`; `focused-after.txt`: 21 tests, 21 pass, 0 fail. Existing tests retained; API 6 → 14, media 6 → 7. |
+| Real ESPN payload regression | `espn-relationships-before.txt`: 13 pass, 1 fail before the relationship parser repair; final focused 21/21 includes teamRelationships and leagueRelationships checks. |
 | Mutations | `mutations.json`, `mutation-nhl-data0.txt`, `mutation-nfl-first-hit.txt`: both exit 1, killed. |
 | Live provider probes | `live-provider-probes.json` and `provider-raw/1.txt` through `4.txt`: real existing MLB/NBA/NFL/NHL endpoints, all HTTP 200. MLB Aaron Judge and NBA LeBron James confirmed; NFL Josh Allen ambiguous; NHL Jake Evans identity-mismatch. These are probes, not stored-image revalidation. |
 | Rendered fallback | `browser-proof.json`, `emblem-browser.png`; replay script in lane `.out/media-0205/browser-proof.cjs`. |

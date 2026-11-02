@@ -2,129 +2,135 @@ TAP version 13
 # Subtest: resolveHeadshotUrl returns null for null sport
 ok 1 - resolveHeadshotUrl returns null for null sport
   ---
-  duration_ms: 1.757024
+  duration_ms: 1.580361
   type: 'test'
   ...
 # Subtest: resolveHeadshotUrl returns null for unknown sport
 ok 2 - resolveHeadshotUrl returns null for unknown sport
   ---
-  duration_ms: 0.295831
+  duration_ms: 0.261034
   type: 'test'
   ...
 # Subtest: runPlayerEnrichmentPass skips players with existing headshot_url
 ok 3 - runPlayerEnrichmentPass skips players with existing headshot_url
   ---
-  duration_ms: 0.694233
+  duration_ms: 0.779947
   type: 'test'
   ...
 # Subtest: runPlayerEnrichmentPass reports skipped for players with null sport
 ok 4 - runPlayerEnrichmentPass reports skipped for players with null sport
   ---
-  duration_ms: 0.242413
+  duration_ms: 0.179794
   type: 'test'
   ...
 # Subtest: runPlayerEnrichmentPass handles empty participant list
 ok 5 - runPlayerEnrichmentPass handles empty participant list
   ---
-  duration_ms: 0.212179
+  duration_ms: 0.151125
   type: 'test'
   ...
 # Subtest: runPlayerEnrichmentPass writes system_runs record with correct details
 ok 6 - runPlayerEnrichmentPass writes system_runs record with correct details
   ---
-  duration_ms: 0.227128
+  duration_ms: 0.215302
   type: 'test'
   ...
 # Subtest: NHL unrelated player is refused
 ok 7 - NHL unrelated player is refused
   ---
-  duration_ms: 48.507472
+  duration_ms: 45.269459
   type: 'test'
   ...
 # Subtest: NHL ambiguous name is refused
 ok 8 - NHL ambiguous name is refused
   ---
-  duration_ms: 0.924817
+  duration_ms: 1.419209
   type: 'test'
   ...
 # Subtest: NFL unrelated first result is refused
 ok 9 - NFL unrelated first result is refused
   ---
-  duration_ms: 0.957655
+  duration_ms: 1.312926
   type: 'test'
   ...
 # Subtest: all sports require a unique normalized full identity, including symmetric suffixes
 ok 10 - all sports require a unique normalized full identity, including symmetric suffixes
   ---
-  duration_ms: 29.55939
+  duration_ms: 23.849722
   type: 'test'
   ...
 # Subtest: NFL selects the unique identity after an unrelated first hit and refuses duplicate exact hits
 ok 11 - NFL selects the unique identity after an unrelated first hit and refuses duplicate exact hits
   ---
-  duration_ms: 1.009501
+  duration_ms: 0.981224
   type: 'test'
   ...
 # Subtest: NHL checks candidate league and team and does not resolve ambiguity using an image
 ok 12 - NHL checks candidate league and team and does not resolve ambiguity using an image
   ---
-  duration_ms: 0.912059
+  duration_ms: 0.878831
   type: 'test'
   ...
 # Subtest: enrichment records refusal reasons and leaves stored images untouched
 ok 13 - enrichment records refusal reasons and leaves stored images untouched
   ---
-  duration_ms: 2.25018
+  duration_ms: 1.744731
+  type: 'test'
+  ...
+# Subtest: NFL checks real ESPN teamRelationships and leagueRelationships identities
+ok 14 - NFL checks real ESPN teamRelationships and leagueRelationships identities
+  ---
+  duration_ms: 0.925772
   type: 'test'
   ...
 # Subtest: media only belongs to the exact selected participant, type and sport
-ok 14 - media only belongs to the exact selected participant, type and sport
+ok 15 - media only belongs to the exact selected participant, type and sport
   ---
-  duration_ms: 3.44818
+  duration_ms: 2.488365
   type: 'test'
   ...
 # Subtest: unapproved media never becomes an image source
-ok 15 - unapproved media never becomes an image source
+ok 16 - unapproved media never becomes an image source
   ---
-  duration_ms: 0.687986
+  duration_ms: 0.394151
   type: 'test'
   ...
 # Subtest: missing identities, rejected lookups and network errors yield optional empty media
-ok 16 - missing identities, rejected lookups and network errors yield optional empty media
+ok 17 - missing identities, rejected lookups and network errors yield optional empty media
   ---
-  duration_ms: 46.498998
+  duration_ms: 36.778943
   type: 'test'
   ...
 # Subtest: lookup encodes exact identity and rejects mismatched server data
-ok 17 - lookup encodes exact identity and rejects mismatched server data
+ok 18 - lookup encodes exact identity and rejects mismatched server data
   ---
-  duration_ms: 2.744282
+  duration_ms: 2.235719
   type: 'test'
   ...
 # Subtest: initials fallback handles empty and long participant names
-ok 18 - initials fallback handles empty and long participant names
+ok 19 - initials fallback handles empty and long participant names
   ---
-  duration_ms: 0.321566
+  duration_ms: 0.247426
   type: 'test'
   ...
 # Subtest: media maps legacy team keys to exact participant IDs without name matching
-ok 19 - media maps legacy team keys to exact participant IDs without name matching
+ok 20 - media maps legacy team keys to exact participant IDs without name matching
   ---
-  duration_ms: 0.22391
+  duration_ms: 0.161733
   type: 'test'
   ...
 # Subtest: legacy player images stay on branded fallback even on approved hosts
-ok 20 - legacy player images stay on branded fallback even on approved hosts
+ok 21 - legacy player images stay on branded fallback even on approved hosts
   ---
-  duration_ms: 0.295948
+  duration_ms: 0.512768
   type: 'test'
   ...
-1..20
-# tests 20
+1..21
+# tests 21
 # suites 0
-# pass 20
+# pass 21
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 833.964485
+# duration_ms 648.098399

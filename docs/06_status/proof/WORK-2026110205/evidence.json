@@ -2,21 +2,21 @@
   "schema_version": 1,
   "issue_id": "WORK-2026110205",
   "tier": "T1",
-  "generated_at": "2026-11-02T18:25:56.538701+00:00",
+  "generated_at": "2026-11-02T18:36:47.287776+00:00",
   "verifier": {
     "identity": "Codex child executor; actual model gpt-6.1-sol, effort medium; see model-routing.json"
   },
-  "source_sha": "1ec1af6b6ab0835219b96a462e78e968222091bd",
+  "source_sha": "d3464409bb161bcc4ffee4d460db4e21ce5f9ada",
   "status": "incomplete-pending-snapshot-and-staging-ci",
   "sha_binding": {
-    "verified_source_sha": "1ec1af6b6ab0835219b96a462e78e968222091bd",
+    "verified_source_sha": "d3464409bb161bcc4ffee4d460db4e21ce5f9ada",
     "merge_sha": null,
     "sha_type": "source_sha",
     "note": "No merge occurred. Authorized post-merge path must bind the actual merge SHA. No exact-head CI success is claimed."
   },
   "source_file_sha256": {
-    "apps/api/src/player-enrichment-service.ts": "c86c1bbde947de6debc304c947829e1946aaa9921d5c8971128a8f0e27b9997f",
-    "apps/api/src/player-enrichment-service.test.ts": "7c7d34ccf983744516bfbd400ee3abbe19e1429eaa535f2d4c377b343219b29b",
+    "apps/api/src/player-enrichment-service.ts": "a1100daaecdc9df759702d9c93903af2d5029461c097758c8bcfe01f3ad45aad",
+    "apps/api/src/player-enrichment-service.test.ts": "93ce38c217b12fcaa0b0444ab3912a2db074cbfe09f34e5f6f57ecf3cd624bb2",
     "apps/smart-form/app/submit/components/ParticipantArtwork.tsx": "792f4b4ec92e1cd3bb8ae92e89a341ba35dcc2146ff1fa0602b90fe83d93a815",
     "apps/smart-form/lib/participant-media.ts": "93824cf0ea8500fff1d149fd39ac32fe68a4ac314b0e6f2db55a68c7903beaa8",
     "apps/smart-form/test/participant-media.test.ts": "f5c7773af17df43e79827a4b31608be134c4ecde9296c80a4a5be06bc980adce"
@@ -24,7 +24,7 @@
   "static_proof": {
     "type_check": "pass, exit 0",
     "focused_tests": {
-      "pass": 20,
+      "pass": 21,
       "fail": 0,
       "output": "focused-after.txt"
     },
@@ -39,7 +39,11 @@
     "verify": "FAIL at staging identity guard, exit 1; no DB tests executed",
     "r_level": "PASS on implementation source; final exact-head rerun recorded in ready-for-pr handoff",
     "browser_component_proof": "pass; browser-proof.json",
-    "general_qa": "SKIP, local service preflight unavailable; qa-experience.json"
+    "general_qa": "SKIP, local service preflight unavailable; qa-experience.json",
+    "espn_relationships_regression": {
+      "before": "13 pass, 1 fail; espn-relationships-before.txt",
+      "after": "21 focused tests pass; checks real teamRelationships and leagueRelationships fields"
+    }
   },
   "runtime_proof": {
     "provider_probes": "live-provider-probes.json; all four existing endpoints returned HTTP 200; raw responses in provider-raw",
@@ -78,7 +82,7 @@
     "Governed merge and actual merge-SHA binding",
     "Reconcile requested v1 evidence format with pre-merge validator requiring v2"
   ],
-  "mergeSha": "1ec1af6b6ab0835219b96a462e78e968222091bd",
+  "mergeSha": "d3464409bb161bcc4ffee4d460db4e21ce5f9ada",
   "mergeSha_binding_kind": "Pre-merge source-ancestor binding required by bundle-sha-check; NOT an actual merge SHA. sha_binding.merge_sha remains null pending governed merge.",
   "proof_format_conflict": {
     "packet_requires": "evidence bundle v1",
