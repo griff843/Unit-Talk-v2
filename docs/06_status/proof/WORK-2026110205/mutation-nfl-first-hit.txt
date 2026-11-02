@@ -2,55 +2,55 @@ TAP version 13
 # Subtest: resolveHeadshotUrl returns null for null sport
 ok 1 - resolveHeadshotUrl returns null for null sport
   ---
-  duration_ms: 1.934007
+  duration_ms: 1.476923
   type: 'test'
   ...
 # Subtest: resolveHeadshotUrl returns null for unknown sport
 ok 2 - resolveHeadshotUrl returns null for unknown sport
   ---
-  duration_ms: 0.350902
+  duration_ms: 0.213752
   type: 'test'
   ...
 # Subtest: runPlayerEnrichmentPass skips players with existing headshot_url
 ok 3 - runPlayerEnrichmentPass skips players with existing headshot_url
   ---
-  duration_ms: 0.628854
+  duration_ms: 0.962093
   type: 'test'
   ...
 # Subtest: runPlayerEnrichmentPass reports skipped for players with null sport
 ok 4 - runPlayerEnrichmentPass reports skipped for players with null sport
   ---
-  duration_ms: 0.261759
+  duration_ms: 0.386045
   type: 'test'
   ...
 # Subtest: runPlayerEnrichmentPass handles empty participant list
 ok 5 - runPlayerEnrichmentPass handles empty participant list
   ---
-  duration_ms: 0.243984
+  duration_ms: 0.247101
   type: 'test'
   ...
 # Subtest: runPlayerEnrichmentPass writes system_runs record with correct details
 ok 6 - runPlayerEnrichmentPass writes system_runs record with correct details
   ---
-  duration_ms: 0.226279
+  duration_ms: 0.250416
   type: 'test'
   ...
 # Subtest: NHL unrelated player is refused
 ok 7 - NHL unrelated player is refused
   ---
-  duration_ms: 53.788905
+  duration_ms: 46.541728
   type: 'test'
   ...
 # Subtest: NHL ambiguous name is refused
 ok 8 - NHL ambiguous name is refused
   ---
-  duration_ms: 1.028615
+  duration_ms: 0.914436
   type: 'test'
   ...
 # Subtest: NFL unrelated first result is refused
 not ok 9 - NFL unrelated first result is refused
   ---
-  duration_ms: 5.20247
+  duration_ms: 5.391999
   type: 'test'
   location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:5787'
   failureType: 'testCodeFailure'
@@ -74,7 +74,7 @@ not ok 9 - NFL unrelated first result is refused
 # Subtest: all sports require a unique normalized full identity, including symmetric suffixes
 not ok 10 - all sports require a unique normalized full identity, including symmetric suffixes
   ---
-  duration_ms: 89.344236
+  duration_ms: 23.313918
   type: 'test'
   location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:6139'
   failureType: 'testCodeFailure'
@@ -92,7 +92,7 @@ not ok 10 - all sports require a unique normalized full identity, including symm
 # Subtest: NFL selects the unique identity after an unrelated first hit and refuses duplicate exact hits
 not ok 11 - NFL selects the unique identity after an unrelated first hit and refuses duplicate exact hits
   ---
-  duration_ms: 2.653464
+  duration_ms: 3.594289
   type: 'test'
   location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:9342'
   failureType: 'testCodeFailure'
@@ -116,19 +116,19 @@ not ok 11 - NFL selects the unique identity after an unrelated first hit and ref
 # Subtest: NHL checks candidate league and team and does not resolve ambiguity using an image
 ok 12 - NHL checks candidate league and team and does not resolve ambiguity using an image
   ---
-  duration_ms: 0.98281
+  duration_ms: 1.049765
   type: 'test'
   ...
 # Subtest: enrichment records refusal reasons and leaves stored images untouched
 ok 13 - enrichment records refusal reasons and leaves stored images untouched
   ---
-  duration_ms: 2.273404
+  duration_ms: 2.548786
   type: 'test'
   ...
 # Subtest: NFL checks real ESPN teamRelationships and leagueRelationships identities
 not ok 14 - NFL checks real ESPN teamRelationships and leagueRelationships identities
   ---
-  duration_ms: 0.920672
+  duration_ms: 0.937475
   type: 'test'
   location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:11576'
   failureType: 'testCodeFailure'
@@ -152,27 +152,87 @@ not ok 14 - NFL checks real ESPN teamRelationships and leagueRelationships ident
 # Subtest: canonical team keys correlate by full team name and preserve Red Sox versus White Sox
 ok 15 - canonical team keys correlate by full team name and preserve Red Sox versus White Sox
   ---
-  duration_ms: 4.139699
+  duration_ms: 3.815106
   type: 'test'
   ...
 # Subtest: NBA resolves provider columns by headers and correlates LA Clippers with canonical Los Angeles
 ok 16 - NBA resolves provider columns by headers and correlates LA Clippers with canonical Los Angeles
   ---
-  duration_ms: 2.259537
+  duration_ms: 2.726595
   type: 'test'
   ...
 # Subtest: NHL six Jakes sharing a stored URL never confirms an unrelated Jake
 ok 17 - NHL six Jakes sharing a stored URL never confirms an unrelated Jake
   ---
-  duration_ms: 2.783811
+  duration_ms: 2.555873
   type: 'test'
   ...
-1..17
-# tests 17
+# Subtest: NHL production catalog key refuses conflicting provider abbreviation
+ok 18 - NHL production catalog key refuses conflicting provider abbreviation
+  ---
+  duration_ms: 1.655641
+  type: 'test'
+  ...
+# Subtest: NHL production catalog key accepts matching provider abbreviation
+ok 19 - NHL production catalog key accepts matching provider abbreviation
+  ---
+  duration_ms: 1.496806
+  type: 'test'
+  ...
+# Subtest: MLB production catalog key refuses conflicting numeric provider team
+ok 20 - MLB production catalog key refuses conflicting numeric provider team
+  ---
+  duration_ms: 1.889792
+  type: 'test'
+  ...
+# Subtest: MLB production catalog key accepts matching numeric provider team
+ok 21 - MLB production catalog key accepts matching numeric provider team
+  ---
+  duration_ms: 1.821606
+  type: 'test'
+  ...
+# Subtest: non-catalog caller team refuses incomparable provider team
+ok 22 - non-catalog caller team refuses incomparable provider team
+  ---
+  duration_ms: 1.341088
+  type: 'test'
+  ...
+# Subtest: NHL namesake outside old top five is ambiguous
+ok 23 - NHL namesake outside old top five is ambiguous
+  ---
+  duration_ms: 2.282846
+  type: 'test'
+  ...
+# Subtest: NFL namesake outside old top five is ambiguous
+not ok 24 - NFL namesake outside old top five is ambiguous
+  ---
+  duration_ms: 1.693774
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:18627'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + 'confirmed'
+    - 'ambiguous'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'ambiguous'
+  actual: 'confirmed'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:352:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..24
+# tests 24
 # suites 0
-# pass 13
-# fail 4
+# pass 19
+# fail 5
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 814.42389
+# duration_ms 662.67684

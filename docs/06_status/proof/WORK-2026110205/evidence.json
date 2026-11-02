@@ -2,11 +2,11 @@
   "schema_version": 2,
   "issue_id": "WORK-2026110205",
   "tier": "T1",
-  "generated_at": "2026-11-02T19:18:31.178328+00:00",
-  "source_sha": "d7d2683699a9974da79e6d082d6e3d0d3889f131",
-  "status": "implementation-repaired-staging-proof-pending",
+  "generated_at": "2026-11-02T19:33:46.111585+00:00",
+  "source_sha": "88ed0431fa3c9ada782351115a54bd569cd30657",
+  "status": "independent-review-repaired-staging-proof-pending",
   "sha_binding": {
-    "verified_source_sha": "d7d2683699a9974da79e6d082d6e3d0d3889f131",
+    "verified_source_sha": "88ed0431fa3c9ada782351115a54bd569cd30657",
     "merge_sha": null,
     "sha_type": "source_sha",
     "note": "No merge occurred. Authorized post-merge path must bind the actual merge SHA. No exact-head CI success is claimed.",
@@ -14,18 +14,18 @@
     "current_pr_head_sha": "CI_RESOLVED"
   },
   "source_file_sha256": {
-    "apps/api/src/player-enrichment-service.ts": "c891498a6026ed7b58987565e82710de2959ef172aa7e9c1b535321091e7f492",
-    "apps/api/src/player-enrichment-service.test.ts": "83eb723ed0ceaae513c858757b22a0a446f227982c8e578d45b399a4467b6191",
+    "apps/api/src/player-enrichment-service.ts": "0f59000a58ffda7e0ad3773f8d29217cef9cad0e0afda7cad9430bd887909391",
+    "apps/api/src/player-enrichment-service.test.ts": "30ed6dee7fd3caa685774f1967b49c471ed11d4e8995baab9a640768800d5eb3",
     "apps/smart-form/app/submit/components/ParticipantArtwork.tsx": "792f4b4ec92e1cd3bb8ae92e89a341ba35dcc2146ff1fa0602b90fe83d93a815",
     "apps/smart-form/lib/participant-media.ts": "93824cf0ea8500fff1d149fd39ac32fe68a4ac314b0e6f2db55a68c7903beaa8",
     "apps/smart-form/test/participant-media.test.ts": "f5c7773af17df43e79827a4b31608be134c4ecde9296c80a4a5be06bc980adce"
   },
   "static_proof": {
-    "type_check": "pass in current pnpm verify:static run",
+    "type_check": "PASS after explicit fetch-input type annotation; .out/media-0205/type-check-review.txt",
     "focused_tests": {
-      "pass": 24,
+      "pass": 31,
       "fail": 0,
-      "output": "rework-focused-after.txt"
+      "output": "review-focused-after.txt"
     },
     "regression_first": {
       "pass": 6,
@@ -33,10 +33,10 @@
       "output": "regression-before.txt",
       "service_matches_origin_main": "fddc405696098800209f634e471607b2400eec43"
     },
-    "mutations": "both killed again at d7d268369 using isolated exact source/test copies; see mutations.json",
-    "verify_static": "PASS in pnpm verify, repaired source tree exactly matching d7d268369; .out/media-0205/verify-rework.txt",
-    "verify": "exit 1 after all static gates passed; staging identity guard refused 127.0.0.1 before any DB suite. Source committed as d7d268369 while command ran; no exact-final-head full-green claim.",
-    "r_level": "PASS at implementation commit d7d268369; exact evidence-head result in .out/ops/ready-for-pr/WORK-2026110205.md",
+    "mutations": "both killed at 88ed0431fa3c9ada782351115a54bd569cd30657 using isolated exact source/test copies; mutations.json",
+    "verify_static": "PASS: every verify:static gate succeeded within pnpm verify at source head 88ed0431fa3c9ada782351115a54bd569cd30657; lint/type-check/build/root tests/Smart Form verify/command checks",
+    "verify": "exit 1 at 88ed0431fa3c9ada782351115a54bd569cd30657 after all static gates passed; live DB guard refused 127.0.0.1 / unidentified before suites. No exact-final-head green verification claimed.",
+    "r_level": "PASS at 88ed0431fa3c9ada782351115a54bd569cd30657; .out/media-0205/r-level-review.txt; prior caveat about unrelated QA artifact selection remains",
     "browser_component_proof": "pass; browser-proof.json",
     "general_qa": "SKIP, local service preflight unavailable; qa-experience.json",
     "espn_relationships_regression": {
@@ -48,58 +48,70 @@
       "fail": 3,
       "output": "rework-regression-before.txt",
       "baseline_source_sha": "1ac76bdfe284838953f1eab72de94864976453ef"
+    },
+    "independent_review_regression_first": {
+      "pass": 19,
+      "fail": 5,
+      "output": "review-regressions-before.txt",
+      "baseline_source_sha": "7eb3d980a",
+      "note": "Seven new tests: five expose unsafe acceptance/search-window failures; two matching-team controls already pass on baseline."
+    },
+    "submission_regression": {
+      "pass": 98,
+      "fail": 0,
+      "output": ".out/media-0205/submission-service-review.txt"
     }
   },
   "runtime_proof": {
     "provider_probes": "live-provider-probes.json; all four existing endpoints returned HTTP 200; raw responses in provider-raw",
     "stored_headshots_revalidation": {
-      "status": "completed-after-authorized-repair",
+      "status": "completed-after-independent-review-repair",
       "input": ".out/media-0205/stored-headshots-snapshot.json",
       "observed_row_count": 1497,
       "non_null_urls": 1488,
       "null_urls": 9,
       "verdicts": {
-        "confirmed": 1260,
-        "mismatch": 229,
-        "ambiguous": 8
+        "confirmed": 1103,
+        "mismatch": 388,
+        "ambiguous": 6
       },
       "requests": 320,
       "http_200": 320,
       "artifact": "stored-headshots-revalidated.json",
       "raw_responses": "stored-provider-raw/",
       "limitations": [
-        "Provider full team names may be absent (especially MLB/NHL). Canonical keys are never compared to provider numeric IDs; a unique normalized full player name remains mandatory and all comparable available team/league fields must agree.",
-        "The 174 mismatches without a new URL are refusals, not proof of wrong-person photos.",
-        "Nine supplied rows have null stored URLs; all 1497 supplied rows were included. NFL has no stored rows and is exercised separately.",
-        "Every player image remains on the branded fallback; no stored URL is rewritten."
+        "Read-only supplied snapshot; no production connection or stored URL rewrite.",
+        "Current provider identity correlation does not visually authenticate image content.",
+        "Unknown or incomparable provider teams are refused when both sides carry teams.",
+        "Nine supplied rows have null stored URLs. NFL has no stored rows and is exercised by the separate live provider probe.",
+        "All legacy player URLs remain on the branded fallback because the read endpoint carries no identity-verification evidence."
       ],
-      "source_sha": "d7d2683699a9974da79e6d082d6e3d0d3889f131",
+      "source_sha": "88ed0431fa3c9ada782351115a54bd569cd30657",
       "per_sport": {
         "MLB": {
-          "confirmed": 869,
-          "mismatch": 80,
-          "ambiguous": 2
+          "confirmed": 766,
+          "mismatch": 185
         },
         "NBA": {
           "confirmed": 145,
           "mismatch": 83
         },
         "NHL": {
-          "confirmed": 246,
-          "mismatch": 66,
+          "confirmed": 192,
+          "mismatch": 120,
           "ambiguous": 6
         }
       },
-      "unique_url_differences": 55,
+      "unique_url_differences": 57,
       "url_differences_artifact": "stored-headshots-url-differences.json",
-      "unique_different_non_null_stored_urls": 47,
-      "unique_resolution_for_null_stored_urls": 8
+      "unique_different_non_null_stored_urls": 51,
+      "unique_resolution_for_null_stored_urls": 6
     },
     "writable_db": {
       "status": "blocked-deferred",
       "observed_host": "127.0.0.1",
       "expected_staging_project": "xskgrzbteyqdufktjrjx",
-      "evidence": "rework-test-db.txt",
+      "evidence": "review-test-db.txt",
       "next": "CI Writable DB proof (staging only), pnpm test:db and T1 live suites at exact PR head"
     },
     "production_connections": 0,
@@ -140,7 +152,7 @@
     "No submission, delivery, worker, schema, provider or approved-host change"
   ],
   "pending": [
-    "Production Claude opens PR when staging capacity is free; no child PR opening",
+    "PR #1822 already open; wrapper owns push after Production Claude staging-slot coordination",
     "Exact-head staging CI green",
     "Outer wrapper executor-result/v1 publication after truth/provenance checks",
     "Independent Claude review",
