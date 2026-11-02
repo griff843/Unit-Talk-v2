@@ -618,12 +618,13 @@ export interface ModelRoutingObservation {
   reasoning_effort: string | null;
   cli_version: string | null;
   turns: number | null;
-  total_tokens: number | null;
+  /** Codex's cumulative `total_token_usage`, verbatim. Its total_tokens includes cached input. */
+  token_usage: Record<string, number> | null;
   unavailable_fields: string[];
   mismatched_fields: string[];
 }
 
-const OBSERVED_FIELDS = ['session_id', 'model', 'reasoning_effort', 'cli_version', 'turns', 'total_tokens'] as const;
+const OBSERVED_FIELDS = ['session_id', 'model', 'reasoning_effort', 'cli_version', 'turns', 'token_usage'] as const;
 
 export function unavailableObservation(reason: string): ModelRoutingObservation {
   return {
@@ -634,7 +635,7 @@ export function unavailableObservation(reason: string): ModelRoutingObservation 
     reasoning_effort: null,
     cli_version: null,
     turns: null,
-    total_tokens: null,
+    token_usage: null,
     unavailable_fields: [...OBSERVED_FIELDS],
     mismatched_fields: [],
   };
@@ -747,9 +748,12 @@ export function observeModelRouting(input: {
   const turnEfforts = turns.map((t) => asString(t['effort']));
   const lastUsage = payloads('event_msg')
     .filter((p) => p['type'] === 'token_count')
-    .map((p) => asRecord(asRecord(p['info'])?.['total_token_usage'])?.['total_tokens'])
-    .filter((v): v is number => typeof v === 'number')
+    .map((p) => asRecord(asRecord(p['info'])?.['total_token_usage']))
+    .filter((usage): usage is Record<string, unknown> => usage !== null)
     .at(-1);
+  const tokenUsage = lastUsage
+    ? Object.fromEntries(Object.entries(lastUsage).filter((entry): entry is [string, number] => typeof entry[1] === 'number'))
+    : null;
 
   const observed = {
     session_id: asString(meta['id']),
@@ -757,7 +761,7 @@ export function observeModelRouting(input: {
     reasoning_effort: turnEfforts.find((e) => e !== null) ?? null,
     cli_version: asString(meta['cli_version']),
     turns: turns.length > 0 ? turns.length : null,
-    total_tokens: lastUsage ?? null,
+    token_usage: tokenUsage && Object.keys(tokenUsage).length > 0 ? tokenUsage : null,
   };
   const mismatched: string[] = [];
   if (turnModels.some((m) => m !== null && m !== input.declared.model)) mismatched.push('model');
@@ -770,6 +774,23 @@ export function observeModelRouting(input: {
     unavailable_fields: OBSERVED_FIELDS.filter((field) => observed[field] === null),
     mismatched_fields: mismatched,
   };
+}
+
+/**
+ * WORK-2026110203: the execution checkpoint lives under the launch checkout's repository
+ * root, but Codex records phases from inside the lane worktree, under that worktree's own
+ * root. When the two differ, every phase record is refused. Returns the conflict, or null
+ * when the roots agree or the worktree root cannot be read.
+ */
+export function checkpointRootMismatch(
+  launchRoot: string,
+  worktreeCwd: string,
+): { launchRoot: string; worktreeRoot: string } | null {
+  const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: worktreeCwd, stdio: 'pipe', encoding: 'utf8' });
+  if (top.status !== 0) return null;
+  const worktreeRoot = fs.realpathSync(top.stdout.trim());
+  const resolvedLaunchRoot = fs.realpathSync(launchRoot);
+  return worktreeRoot === resolvedLaunchRoot ? null : { launchRoot: resolvedLaunchRoot, worktreeRoot };
 }
 
 export interface PullRequestObservation {
@@ -1127,6 +1148,22 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       issue_id: issueId,
       branch: manifest.branch,
       message: `Worktree CWD does not exist: ${resolvedCwd}. Run pnpm ops:lane-start to set up the worktree.`,
+    } satisfies CodexExecResult);
+    process.exit(2);
+  }
+
+  const checkpointRootConflict = checkpointRootMismatch(ROOT, resolvedCwd);
+  if (checkpointRootConflict) {
+    emitJson({
+      ok: false,
+      code: 'PRECONDITION_FAILED',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message:
+        `codex-exec was launched from ${checkpointRootConflict.launchRoot}, but the lane worktree's repository root is ` +
+        `${checkpointRootConflict.worktreeRoot}. The execution checkpoint lives under the launch root, while Codex records ` +
+        'its phases with `pnpm ops:exec-checkpoint` under the worktree root, so every phase record would be refused and the ' +
+        `run would end INCOMPLETE_PHASE_PROGRESSION. Launch from the worktree instead: cd ${resolvedCwd} && pnpm ops:codex-exec --issue ${issueId}`,
     } satisfies CodexExecResult);
     process.exit(2);
   }

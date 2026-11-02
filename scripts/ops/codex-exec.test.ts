@@ -9,6 +9,7 @@ import {
   buildCodexChildEnv,
   buildCodexPrompt,
   buildModelRoutingEvidence,
+  checkpointRootMismatch,
   commitAndPushEvidence,
   evaluateExecutionTruth,
   findCodexRollouts,
@@ -1594,7 +1595,7 @@ function writeRollout(
     ...turns.map((payload) => ({ type: 'turn_context', payload })),
     ...(totalTokens === undefined
       ? []
-      : [{ type: 'event_msg', payload: { type: 'token_count', info: { total_token_usage: { total_tokens: totalTokens } } } }]),
+      : [{ type: 'event_msg', payload: { type: 'token_count', info: { total_token_usage: { input_tokens: totalTokens - 21, cached_input_tokens: totalTokens - 100, output_tokens: 21, total_tokens: totalTokens } } } }]),
   ];
   fs.writeFileSync(filePath, lines.map((line) => JSON.stringify(line)).join('\n') + '\n');
   return filePath;
@@ -1634,7 +1635,7 @@ test('observed routing comes from the single rollout of this worktree and attemp
     reasoning_effort: 'medium',
     cli_version: '0.162.1',
     turns: 2,
-    total_tokens: 4321,
+    token_usage: { input_tokens: 4300, cached_input_tokens: 4221, output_tokens: 21, total_tokens: 4321 },
     unavailable_fields: [],
     mismatched_fields: [],
   });
@@ -1645,7 +1646,7 @@ test('no rollout or several rollouts is unavailable, and no declared value is co
   const none = observeModelRouting({ declared: DECLARED, rollouts: findCodexRollouts(f) });
   assert.equal(none.status, 'unavailable');
   assert.match(none.reason ?? '', /no Codex rollout/);
-  for (const field of ['session_id', 'model', 'reasoning_effort', 'cli_version', 'turns', 'total_tokens'] as const) {
+  for (const field of ['session_id', 'model', 'reasoning_effort', 'cli_version', 'turns', 'token_usage'] as const) {
     assert.equal(none[field], null, `${field} must be null, not a declared value`);
     assert.ok(none.unavailable_fields.includes(field), `${field} must be listed as unavailable`);
   }
@@ -1666,7 +1667,7 @@ test('a field the rollout does not carry is null and listed, while the rest are 
   assert.equal(observation.status, 'observed');
   assert.equal(observation.model, 'gpt-6.1-sol');
   assert.equal(observation.reasoning_effort, null);
-  assert.deepEqual(observation.unavailable_fields, ['reasoning_effort', 'cli_version', 'total_tokens']);
+  assert.deepEqual(observation.unavailable_fields, ['reasoning_effort', 'cli_version', 'token_usage']);
 });
 
 test('any turn whose model or effort differs from the declared routing is a mismatch', () => {
@@ -1723,4 +1724,45 @@ test('a routing mismatch is reported after evidence persists and before SUCCESS 
   const successIndex = source.indexOf("code: 'SUCCESS'", persistenceIndex);
   assert.ok(persistenceIndex >= 0 && mismatchIndex > persistenceIndex, 'mismatch evidence must be persisted first');
   assert.ok(successIndex > mismatchIndex, 'a mismatch must be refused before SUCCESS is reachable');
+});
+
+test('checkpointRootMismatch flags a lane worktree whose repository root is not the launch root', () => {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'work-2026110203-roots-')));
+  const repo = path.join(dir, 'repo');
+  fs.mkdirSync(path.join(repo, 'sub'), { recursive: true });
+  fs.writeFileSync(path.join(repo, 'sub', 'README.md'), 'fixture\n');
+  for (const args of [
+    ['init', '--initial-branch=main'],
+    ['config', 'user.email', 'test@example.com'],
+    ['config', 'user.name', 'Test'],
+    ['add', '-A'],
+    ['commit', '-m', 'base'],
+    ['worktree', 'add', '-b', 'lane', path.join(dir, 'lane-wt')],
+  ]) {
+    assert.equal(spawnSync('git', args, { cwd: repo, stdio: 'pipe' }).status, 0, `git ${args.join(' ')}`);
+  }
+  assert.equal(checkpointRootMismatch(repo, path.join(repo, 'sub')), null, 'a plain subdirectory shares the root');
+  assert.equal(checkpointRootMismatch(path.join(dir, 'lane-wt'), path.join(dir, 'lane-wt')), null, 'launching from the worktree agrees');
+  assert.deepEqual(checkpointRootMismatch(repo, path.join(dir, 'lane-wt')), {
+    launchRoot: repo,
+    worktreeRoot: path.join(dir, 'lane-wt'),
+  });
+});
+
+test('codex-exec refuses before spawning when launched outside the lane worktree root', () => {
+  const issueId = 'UTV2-999904';
+  const lane = buildLaneRoot(issueId, 'codex-cli');
+  const wt = path.join(lane.root, 'wt');
+  fs.rmSync(wt, { recursive: true });
+  spawnSync('git', ['rm', '-q', '-r', '--cached', 'wt'], { cwd: lane.root, stdio: 'pipe' });
+  spawnSync('git', ['commit', '-q', '-m', 'drop wt'], { cwd: lane.root, stdio: 'pipe' });
+  assert.equal(spawnSync('git', ['worktree', 'add', '-q', '-b', 'lane', wt], { cwd: lane.root, stdio: 'pipe' }).status, 0);
+
+  const run = runExecutor('codex-exec.ts', lane, ['--issue', issueId, '--dry-run']);
+  assert.equal(run.status, 2, `expected a precondition refusal; stderr: ${run.stderr}`);
+  const parsed = parseLeadingJson(run.stdout);
+  assert.equal(parsed['code'], 'PRECONDITION_FAILED');
+  assert.match(String(parsed['message']), /INCOMPLETE_PHASE_PROGRESSION/u);
+  assert.match(String(parsed['message']), new RegExp(`cd ${wt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} && pnpm ops:codex-exec --issue ${issueId}`, 'u'));
+  assert.ok(!run.stdout.includes('(would run)'), 'no invocation may be planned past the refusal');
 });
