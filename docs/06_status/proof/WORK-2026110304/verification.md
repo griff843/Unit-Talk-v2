@@ -41,6 +41,12 @@ EVIDENCE:
 - `pnpm verify`: static stage passes; the command exits 1 only at the writable DB guard, which refuses a non-staging local target before any write.
 - The exact-head PR CI run is the authority for green status; this file does not claim it.
 
+```text
+focused: queues-count-relation.test.ts + describe-error.test.ts -> 39/39 pass at f4c34cb62
+baseline 11f88bde1 (unmodified rework baseline) -> 36/39 (regression first)
+operator-surface server tests -> 20/20 pass
+```
+
 ## Verification boundary
 
 | Link | Status |
@@ -54,3 +60,8 @@ EVIDENCE:
 A green run is not a readiness claim. Known cosmetic gap: the Picks page still wraps the invalid-date guidance in its existing critical "Active picks unavailable" banner; `page.tsx` is outside this lane's file scope.
 
 Proof restructured into the gate format by Production Claude (orchestrator); no source or test file changed.
+
+## Merge SHA Binding
+
+Merge SHA: pending merge
+PR: #1828
