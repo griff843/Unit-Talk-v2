@@ -26,8 +26,12 @@ export function describeThrown(error: unknown): string {
   return String(error);
 }
 
+/** Trusted input guidance authored by the application, never by a data service. */
+export class OperatorInputError extends Error {}
+
 /** Operator-facing failure text. Raw diagnostics remain available through describeThrown. */
 export function describeOperatorFailure(error: unknown, fallback = 'Data source unavailable'): string {
+  if (error instanceof OperatorInputError) return error.message;
   const record = error !== null && typeof error === 'object'
     ? error as Record<string, unknown>
     : null;

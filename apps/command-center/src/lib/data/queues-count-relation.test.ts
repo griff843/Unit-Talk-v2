@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { describeOperatorFailure } from '../describe-error.js';
 import { withRequestContext } from '../test-support/request-context';
 import { withLoopbackSupabaseTarget, withWorkspaceEnvDefaults } from '../test-support/workspace-env';
 import { SEARCH_PICKS_FILTER_COLUMNS, SEARCH_PICKS_RESULT_FILTER_COLUMNS, VIEW_DERIVED_COLUMNS } from './queues';
@@ -291,7 +292,13 @@ for (const param of ['dateFrom', 'dateTo']) {
   test(`invalid calendar ${param} fails explicitly without querying an unfiltered population`, async () => {
     await withDateSearch(async (search, requests) => {
       for (const value of ['2026-02-30', '2026-13-01', '2026-00-10', '2026-02-29']) {
-        await assert.rejects(search({ [param]: value }), /Use a valid calendar date for pick filters/);
+        await assert.rejects(search({ [param]: value }), (error: unknown) => {
+          assert.equal(
+            describeOperatorFailure(error, 'Canonical pick state could not be loaded.'),
+            'Use a valid calendar date for pick filters.',
+          );
+          return true;
+        });
       }
       assert.equal(requests.length, 0);
     });
@@ -300,7 +307,13 @@ for (const param of ['dateFrom', 'dateTo']) {
 
 test('invalid date cannot silently succeed when a result filter has no matching picks', async () => {
   await withDateSearch(async (search, requests) => {
-    await assert.rejects(search({ dateTo: '2026-02-30', result: 'win' }), /Use a valid calendar date for pick filters/);
+    await assert.rejects(search({ dateTo: '2026-02-30', result: 'win' }), (error: unknown) => {
+      assert.equal(
+        describeOperatorFailure(error, 'Canonical pick state could not be loaded.'),
+        'Use a valid calendar date for pick filters.',
+      );
+      return true;
+    });
     assert.equal(requests.length, 0);
   });
 });

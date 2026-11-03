@@ -5,6 +5,7 @@ import { applyPickPopulation, applyOperatorPickPopulation, readPickPopulation } 
 import { pickIdPrefixRange } from '../command-palette-model';
 import { readEffectiveSettlementTruth } from './results-ops';
 import { mapPickIdentityRead } from './pick-identity';
+import { OperatorInputError } from '../describe-error';
 
 // ── Shared internal type ─────────────────────────────────────────────────────
 
@@ -591,7 +592,7 @@ export async function searchPicks(
       if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return [{ ...filter, value }];
       const midnight = new Date(`${value}T00:00:00.000Z`);
       if (!Number.isFinite(midnight.getTime()) || midnight.toISOString().slice(0, 10) !== value) {
-        throw new Error('Use a valid calendar date for pick filters.');
+        throw new OperatorInputError('Use a valid calendar date for pick filters.');
       }
       if (filter.op === 'gte') return [{ ...filter, value: midnight.toISOString() }];
       // Exclusive next midnight includes the entire UTC day, including DB microseconds.

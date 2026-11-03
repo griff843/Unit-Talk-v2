@@ -61,3 +61,13 @@ test('operator failure never returns raw message, code, details or stack', () =>
   assert.equal(describeOperatorFailure({}, 'Canonical pick state could not be loaded.'),
     'Canonical pick state could not be loaded. Retry; if it continues, contact support.');
 });
+
+test('ordinary errors cannot pass through text that resembles operator input guidance', () => {
+  const message = 'Use a valid calendar date for pick filters.';
+  for (const error of [new Error(message), { message, code: 'XX999' }, message]) {
+    assert.equal(
+      describeOperatorFailure(error, 'Canonical pick state could not be loaded.'),
+      'Canonical pick state could not be loaded. Retry; if it continues, contact support.',
+    );
+  }
+});
