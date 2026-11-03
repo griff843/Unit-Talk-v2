@@ -1,6 +1,6 @@
 # Diff summary: WORK-2026103006
 
-MERGE_SHA: pending merge
+MERGE_SHA: 0c0e2042f764ea1d9e27aef293f1fd9d6cf74362
 
 A missing kill-switch repository now stops every non-canary Discord target before a claim, with a distinct result and structured skip log. Thrown or rejected reads also stop delivery. `discord:canary` remains exempt.
 

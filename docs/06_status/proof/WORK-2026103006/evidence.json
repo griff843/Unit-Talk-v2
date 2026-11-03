@@ -6,11 +6,12 @@
   "proof_profile": "app-runtime",
   "status": "local_static_pass_db_deferred",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "0c0e2042f764ea1d9e27aef293f1fd9d6cf74362",
     "verified_source_sha": "ea13cf2b4db1662f772f2304d08c20043aa3cad7",
-    "sha_type": "branch_head",
+    "sha_type": "merge_sha",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "bound_at": "2026-11-03T15:21:18.265Z"
   },
   "static_proof": {
     "status": "pass",

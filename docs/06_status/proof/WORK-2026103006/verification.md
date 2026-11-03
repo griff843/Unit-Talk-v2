@@ -1,6 +1,6 @@
 # PROOF: WORK-2026103006
 
-MERGE_SHA: pending merge
+MERGE_SHA: 0c0e2042f764ea1d9e27aef293f1fd9d6cf74362
 Execution SHA: ea13cf2b4db1662f772f2304d08c20043aa3cad7
 
 Issue: WORK-2026103006
@@ -55,9 +55,8 @@ EVIDENCE:
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `0c0e2042f764ea1d9e27aef293f1fd9d6cf74362`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1816
-
 ## Pending authority
 
 PM approval (`t1-approved` plus `pm-verdict/v1`), the executor-result attestation at the exact head and the governed merge remain pending. After merge, lane-finalize and closeout run.
