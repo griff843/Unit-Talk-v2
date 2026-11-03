@@ -20,14 +20,24 @@
     "docs/06_status/proof/WORK-2026110101/evidence.json",
     "docs/06_status/proof/WORK-2026110101/verification.md"
   ],
-  "status": "in_review",
+  "status": "blocked",
   "started_at": "2026-11-01T19:32:14.818Z",
   "heartbeat_at": "2026-11-01T20:17:40.721Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026110101-reap-keep-status-settled.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-11-03T13:05:42.645Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 40.8h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    }
+  ],
   "reopen_history": [],
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {
