@@ -1,0 +1,22 @@
+{
+  "issue_id": "WORK-2026110304",
+  "source_sha": "43471d7b44505212b5a251e8484346312b76d0ae",
+  "generated_at": "2026-11-03T14:34:43.910091+00:00",
+  "observed_lane_configuration": {
+    "profile": "codex-sol-medium",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "3.0.0"
+  },
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "medium",
+  "observation_source": "docs/06_status/lanes/WORK-2026110304.json",
+  "runtime_model_independently_verified": false,
+  "note": "Lane manifest and observed Codex executor launch agree on gpt-6.1-sol with medium effort. Backend model identity is not independently exposed.",
+  "observed_cli_launch": {
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "medium",
+    "source": "active executor process arguments"
+  }
+}
