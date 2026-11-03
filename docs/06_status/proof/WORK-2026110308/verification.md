@@ -54,7 +54,22 @@ Run on `e13612ce77a11210d5f93ba957b9b2d92c34214a`:
 
 ## Runtime Verification
 
-This lane changes only the runner image of four jobs. Its runtime proof is qa-fast on the PR head reaching and passing the `playwright install chromium --with-deps` step on `ubuntu-24.04`. That run is cited by workflow file and run ID in the executor result. It is not claimed here, because it does not exist at `e13612ce77a11210d5f93ba957b9b2d92c34214a`.
+This lane changes only the runner image of four jobs. None of the four can run on this PR's head:
+
+- `qa-fast.yml` and `qa-experience-regression.yml` trigger only on `pull_request` paths under `apps/command-center/**`, `apps/smart-form/**`, `apps/qa-agent/**` or `apps/operator-web/**`, and this PR touches none of them.
+- `post-merge-qa-gate.yml` runs on push to `main`.
+- `staging-db-proof.yml` is `workflow_dispatch`-only.
+
+So no run of the pinned jobs exists before merge, and none is claimed.
+
+The evidence that `ubuntu-24.04` with this Playwright works comes from the last green qa-fast runs, from `gh run view <id> --log`:
+
+- Run 41518733002 at `1ce1103d6` (2026-11-02): `Image: ubuntu-24.04`, `Version: 20261021.618`; step `pnpm --filter @unit-talk/qa-agent exec playwright install chromium --with-deps` logged `Chrome for Testing 145.0.7632.6 (playwright chromium v1208) downloaded`.
+- Run 41515869243 at `c0a35a0bf` (2026-11-02): same image, same step, same download line.
+
+At `1ce1103d6`, `package.json:218` is `"playwright": "1.58.2"` and `apps/qa-agent/package.json:13` is `"playwright": "^1.50.0"`, the same as on this branch. Those runs are on an older commit, not this head.
+
+The first run of a pinned job after merge (the next PR touching those app paths, or the next push to `main` for `post-merge-qa-gate.yml`) is the direct proof. It is not proven by this PR.
 
 `staging-db-proof.yml` is `workflow_dispatch`-only. Its job is also named "Writable DB proof (staging only)", like the job in `ci.yml`, so any run of it is cited by workflow file and run ID, never by job name. It was not dispatched for this lane.
 

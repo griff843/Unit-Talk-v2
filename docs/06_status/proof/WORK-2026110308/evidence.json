@@ -32,7 +32,7 @@
     },
     "build": "pnpm build exit 0",
     "r_level": "PASS",
-    "note": "Measured on e13612ce77a11210d5f93ba957b9b2d92c34214a after pnpm build. The diff is four runs-on lines; the runtime proof is qa-fast on the PR head passing Playwright install on ubuntu-24.04, cited by run ID in the executor result."
+    "note": "Measured on e13612ce77a11210d5f93ba957b9b2d92c34214a after pnpm build. The diff is four runs-on lines. None of the four pinned jobs triggers on this PR (path filters, push-to-main, workflow_dispatch), so no pre-merge run of them exists. Evidence for ubuntu-24.04 with playwright 1.58.2: qa-fast runs 41518733002 and 41515869243 (2026-11-02, Image ubuntu-24.04, chromium downloaded). Direct proof is the first post-merge run of a pinned job."
   },
   "db_verification": {
     "command": "pnpm test:db",
