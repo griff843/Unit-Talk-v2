@@ -1,0 +1,271 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026110304
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026110304
+  objective: 'WORK-2026110304 — Command Center: inclusive calendar "To" date and
+    operator-language errors'
+  acceptance_criteria:
+    - "**Regression tests first.** For each defect, show a test failing on
+      unmodified main, then passing."
+    - '**Date "From"** (`YYYY-MM-DD`): `gte` at `YYYY-MM-DDT00:00:00.000Z`.'
+    - "**Date \"To\"** (`YYYY-MM-DD`): `lt` at the next UTC day's midnight, so
+      the whole day is included, down to microsecond timestamps."
+    - "**Invalid calendar date** (e.g. `2026-02-30`): fails with
+      operator-language text. Never silently widen or drop the filter."
+    - "**Full timestamp values** keep their current exact `gte`/`lte` behaviour
+      for existing callers."
+    - "**The count honesty of §8.1 holds.** The displayed total and the rows use
+      the same filtered population. Add a test if any count path shares this
+      filter."
+    - "**Errors:** `describeOperatorFailure` returns operator language with an
+      action for each case:"
+    - permission refused (`42501` or HTTP 403);
+    - session not verified (HTTP 401 or `PGRST301`);
+    - timeout (`57014` or timeout text);
+    - unreachable service (fetch or network failure);
+    - a generic fallback.
+    - "**No raw database message, code or stack ever appears in the returned
+      text.** A test asserts this."
+    - "**Raw diagnostics stay available** to server logs through
+      `describeThrown`. Do not remove or change `describeThrown`."
+    - "**No silent success.** An error result still renders as an error, and
+      degraded sections (§18.3) still render the rest of the page. Verify each
+      `describeOperatorFailure` caller still shows an error state. Change no
+      caller beyond what the new text needs."
+    - "**Starting points.** The prepared candidates are in the main checkout:
+      `.out/cc-picks-date-window.patch` and
+      `.out/cc-operator-error-candidate.patch`. Treat them as starting points,
+      not as accepted code. Copy any evidence you cite into this lane's proof."
+    - "**T2 verification:** `pnpm verify` static gates green at the exact head,
+      focused tests, a diff summary and a verification log."
+  guardrails:
+    - Only the files in scope. No UI component, route, layout or styling change
+      (Command Center UI/UX belongs to the browser-enabled Codex terminal).
+    - No schema, migration or data write. No production access.
+    - Browser acceptance is not claimed by this lane.
+  non_goals:
+    - Result filter and correction-confirmation UI gaps (Codex terminal).
+    - Any delivery, kill switch or Discord behaviour.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026110304 — Command Center: inclusive calendar "To" date and
+      operator-language errors
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05).
+      Admitted by Production Claude on 2026-11-03 as single product dispatcher
+      under Griff's direction to "Incorporate outstanding Codex Desktop findings
+      into canonical work orders; do not duplicate completed implementation."
+      The findings come from the Codex Desktop canary handoff, which asked for
+      "bounded supported ownership for (1) inclusive calendar To-date filtering
+      and (2) operator-safe error wording". Staff-canary labels are already
+      merged in PR #1819 and are not repeated here.
+
+
+      Product authority: `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md`.
+      Read §8.1 and §18 before editing.
+
+
+      ## Defect 1 — calendar "To" date excludes most of the selected day
+
+
+      `apps/command-center/src/lib/data/queues.ts`, `SEARCH_PICKS_RANGE_FILTERS`
+      loop (~:650): the filter passes the raw value to `lte`. For a calendar
+      date `YYYY-MM-DD`, Postgres compares against `YYYY-MM-DDT00:00:00`, so
+      every pick after midnight on the "To" day is dropped. §8.1 lists date
+      range as a launch discovery property and requires results to state their
+      own total honestly.
+
+
+      ## Defect 2 — operator surfaces render raw engine text
+
+
+      `apps/command-center/src/lib/describe-error.ts` `describeOperatorFailure`
+      renders the database or transport message and code, truncated to 180
+      characters. §18.6: "Errors are shown in operator language with the action
+      available, not as raw engine text. A rendered database error message is a
+      failure of this section."
+
+
+      ## File Scope
+
+
+      - apps/command-center/src/lib/data/queues.ts
+
+      - apps/command-center/src/lib/describe-error.ts
+
+      - apps/command-center/src/lib/describe-error.test.ts
+
+      - apps/command-center/src/lib/data/queues-count-relation.test.ts
+
+
+      ## PR opening is sequenced (overrides any generic "open a draft PR" step)
+
+
+      Every pull request runs the shared `staging-ci-db` job. Commit and push
+      the lane branch, but **do not open a pull request**. When implementation
+      and local verification are complete, write `.out/ops/ready-for-pr/<this
+      issue id>.md` in the lane worktree. List the head SHA, the focused test
+      commands and their results, and the observed model and effort. Production
+      Claude opens the PR when the staging slot is free.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026110304.md
+    title: 'WORK-2026110304 — Command Center: inclusive calendar "To" date and
+      operator-language errors'
+    description: >-
+      # WORK-2026110304 — Command Center: inclusive calendar "To" date and
+      operator-language errors
+
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05).
+      Admitted by Production Claude on 2026-11-03 as single product dispatcher
+      under Griff's direction to "Incorporate outstanding Codex Desktop findings
+      into canonical work orders; do not duplicate completed implementation."
+      The findings come from the Codex Desktop canary handoff, which asked for
+      "bounded supported ownership for (1) inclusive calendar To-date filtering
+      and (2) operator-safe error wording". Staff-canary labels are already
+      merged in PR #1819 and are not repeated here.
+
+
+      Product authority: `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md`.
+      Read §8.1 and §18 before editing.
+
+
+      ## Defect 1 — calendar "To" date excludes most of the selected day
+
+
+      `apps/command-center/src/lib/data/queues.ts`, `SEARCH_PICKS_RANGE_FILTERS`
+      loop (~:650): the filter passes the raw value to `lte`. For a calendar
+      date `YYYY-MM-DD`, Postgres compares against `YYYY-MM-DDT00:00:00`, so
+      every pick after midnight on the "To" day is dropped. §8.1 lists date
+      range as a launch discovery property and requires results to state their
+      own total honestly.
+
+
+      ## Defect 2 — operator surfaces render raw engine text
+
+
+      `apps/command-center/src/lib/describe-error.ts` `describeOperatorFailure`
+      renders the database or transport message and code, truncated to 180
+      characters. §18.6: "Errors are shown in operator language with the action
+      available, not as raw engine text. A rendered database error message is a
+      failure of this section."
+
+
+      ## Acceptance Criteria
+
+
+      - **Regression tests first.** For each defect, show a test failing on
+      unmodified main, then passing.
+
+      - **Date "From"** (`YYYY-MM-DD`): `gte` at `YYYY-MM-DDT00:00:00.000Z`.
+
+      - **Date "To"** (`YYYY-MM-DD`): `lt` at the next UTC day's midnight, so
+      the whole day is included, down to microsecond timestamps.
+
+      - **Invalid calendar date** (e.g. `2026-02-30`): fails with
+      operator-language text. Never silently widen or drop the filter.
+
+      - **Full timestamp values** keep their current exact `gte`/`lte` behaviour
+      for existing callers.
+
+      - **The count honesty of §8.1 holds.** The displayed total and the rows
+      use the same filtered population. Add a test if any count path shares this
+      filter.
+
+      - **Errors:** `describeOperatorFailure` returns operator language with an
+      action for each case:
+        - permission refused (`42501` or HTTP 403);
+        - session not verified (HTTP 401 or `PGRST301`);
+        - timeout (`57014` or timeout text);
+        - unreachable service (fetch or network failure);
+        - a generic fallback.
+      - **No raw database message, code or stack ever appears in the returned
+      text.** A test asserts this.
+
+      - **Raw diagnostics stay available** to server logs through
+      `describeThrown`. Do not remove or change `describeThrown`.
+
+      - **No silent success.** An error result still renders as an error, and
+      degraded sections (§18.3) still render the rest of the page. Verify each
+      `describeOperatorFailure` caller still shows an error state. Change no
+      caller beyond what the new text needs.
+
+      - **Starting points.** The prepared candidates are in the main checkout:
+      `.out/cc-picks-date-window.patch` and
+      `.out/cc-operator-error-candidate.patch`. Treat them as starting points,
+      not as accepted code. Copy any evidence you cite into this lane's proof.
+
+      - **T2 verification:** `pnpm verify` static gates green at the exact head,
+      focused tests, a diff summary and a verification log.
+
+
+      ## Guardrails
+
+
+      - Only the files in scope. No UI component, route, layout or styling
+      change (Command Center UI/UX belongs to the browser-enabled Codex
+      terminal).
+
+      - No schema, migration or data write. No production access.
+
+      - Browser acceptance is not claimed by this lane.
+
+
+      ## Non-goals
+
+
+      - Result filter and correction-confirmation UI gaps (Codex terminal).
+
+      - Any delivery, kill switch or Discord behaviour.
+
+
+      ## File Scope
+
+
+      - apps/command-center/src/lib/data/queues.ts
+
+      - apps/command-center/src/lib/describe-error.ts
+
+      - apps/command-center/src/lib/describe-error.test.ts
+
+      - apps/command-center/src/lib/data/queues-count-relation.test.ts
+
+
+      ## PR opening is sequenced (overrides any generic "open a draft PR" step)
+
+
+      Every pull request runs the shared `staging-ci-db` job. Commit and push
+      the lane branch, but **do not open a pull request**. When implementation
+      and local verification are complete, write `.out/ops/ready-for-pr/<this
+      issue id>.md` in the lane worktree. List the head SHA, the focused test
+      commands and their results, and the observed model and effort. Production
+      Claude opens the PR when the staging slot is free.
+    captured_at: 2026-11-03T14:23:36.490Z
+    description_sha256: 769882945f28b6a65d61feff9723193e621a57fdb7c1ddafa39abfd2bec82153
+  contract_hash: 345239034536805bff226485667fe7ab6b02e244371940f275fa46d039f2910c

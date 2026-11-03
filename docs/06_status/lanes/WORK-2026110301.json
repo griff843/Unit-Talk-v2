@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110301/.out/worktrees/codex__work-2026110301-nhl-asset-host",
   "branch": "codex/work-2026110301-nhl-asset-host",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "bb1947e317679d573e00f3b1d2fcd350873b4345",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1824",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,14 +20,22 @@
     "docs/06_status/proof/WORK-2026110301/verification.md",
     "docs/06_status/proof/WORK-2026110301/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-11-03T12:55:18.654Z",
-  "heartbeat_at": "2026-11-03T14:23:18.687Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-11-03T18:18:24.510Z",
+  "closed_at": "2026-11-03T18:18:24.510Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026110301-nhl-asset-host.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-11-03T18:18:20.557Z",
+      "verdict": "pass",
+      "merge_sha": "bb1947e317679d573e00f3b1d2fcd350873b4345",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-medium",
