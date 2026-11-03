@@ -1,43 +1,25 @@
 # WORK-2026110304 verification
 
 Issue: WORK-2026110304 — Tier T2
-Source SHA: 43471d7b44505212b5a251e8484346312b76d0ae
+Source SHA: f4c34cb62541883c8be560b320a7a528cd4199aa
 MERGE_SHA: pending merge
-Result: static gates pass; writable DB deferred; browser acceptance not claimed.
+Result: static gates pass; writable live DB deferred; browser acceptance not claimed.
 
-Regression tests were written before implementation. Both original implementation blobs matched origin/main exactly (hashes and complete failing log copied in evidence.json). After building missing TypeScript reference outputs, the unchanged implementation produced 37 tests: 20 passed, 17 failed. Fixed code produces 38 passed, zero failed; the extra test checks validation before an empty result-filter return. Initial prerequisite bootstrap also caught and led to correction of test-helper return typing; an intermediate flatMap inference error was corrected with an explicit bound type.
-
-Measured commands:
+Rework baseline: 11f88bde1c700cf5841b8fa2e88f73c106d0303a. New assertions ran before implementation: 39 tests, 36 passing and 3 failing because the page formatter hid the invalid-date guidance. With OperatorInputError, all 39 pass. Ordinary Error, database-shaped object and string with identical text still receive generic wording. Original main regression-first evidence and prepared candidates are retained in evidence.json as historical inputs, not new-epoch phase validity.
 
 | Command | Result |
 |---|---|
-| `pnpm type-check` | PASS, exit 0 |
-| `pnpm exec tsx --test apps/command-center/src/lib/data/queues-count-relation.test.ts apps/command-center/src/lib/describe-error.test.ts` | PASS, 38/38 |
-| `pnpm exec tsx --test apps/operator-web/src/server.test.ts apps/command-center/src/lib/server-api.test.ts` | PASS, 20/20 |
-| `pnpm verify` | Static gates PASS; exit 1 only at writable staging guard |
-| `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS, operator-ui |
+| Focused queues-count-relation and describe-error tests (`pnpm exec tsx --test`) | 39/39 PASS |
+| Operator-surface server tests (`pnpm exec tsx --test apps/operator-web/src/server.test.ts apps/command-center/src/lib/server-api.test.ts`) | 20/20 PASS |
+| `pnpm verify` (includes `pnpm verify:static`, type-check and full test suite) | Static PASS; full command exit 1 at deferred writable DB guard |
+| `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS; artifact presence only |
 
-Verification log excerpt (full local log: `.out/ops/WORK-2026110304/verify.log`; its digest is recorded in evidence.json):
+Full source verification log and focused regression logs are copied into evidence.json. Final proof-head results and log digests belong in `.out/ops/ready-for-pr/WORK-2026110304.md`.
 
-```text
-# skipped 0
-# todo 0
-# duration_ms 3021.000058
-smart-form e2e: not run (UNIT_TALK_SMART_FORM_E2E is not set).
-Set UNIT_TALK_SMART_FORM_E2E=1 to run it. It requires a Playwright browser:
-  pnpm exec playwright install chromium --with-deps
-[command-manifest] Verified 14 command definition(s) against /home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110304/.out/worktrees/codex__work-2026110304-cc-date-and-error-language/apps/discord-bot/command-manifest.json
-[check-migration-versions] 139 migration file(s) verified — no duplicate versions.
-[lint-migrations] Skipping schema baseline replay-root 00000000000000_baseline_live_schema.sql (snapshot, not a forward migration; fidelity verified by Live Schema Parity).
-[lint-migrations] 138 migration file(s) checked — no findings.
-[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
-[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
-```
+Writable live-DB proof is blocked/deferred. The packet reports host=unparseable; local guard reports host=127.0.0.1/ref=unidentified. Writable DB verification requires xskgrzbteyqdufktjrjx through staging-ci with CI_SUPABASE_* credentials. No writable DB proof or production access occurred. Full verify is not green.
 
-The packet's captured DB blocker was `host=unparseable`; the observed local guard reports `host=127.0.0.1`. Both refuse an unidentified target. Writable live-DB proof is blocked/deferred. It requires project xskgrzbteyqdufktjrjx through the staging-ci GitHub environment with CI_SUPABASE_* credentials. No writable DB proof ran.
+Every describeOperatorFailure caller was reviewed again. Picks and Review retain critical DegradedState branches. API Health retains its unavailable runtime panel and independently loaded provider section. Exceptions keeps fulfilled sources via Promise.allSettled, renders loadErrors, and suppresses empty success while errors exist. No caller changed. describeThrown remains byte-for-byte unchanged from main; raw diagnostics remain available to server logs. This is source review, not browser acceptance.
 
-Every describeOperatorFailure caller was inspected: Picks and Review retain critical DegradedState branches; API Health retains its unavailable panel; Exceptions retains fulfilled sections via Promise.allSettled and displays loadErrors, suppressing empty success when errors exist. No caller changed. describeThrown is unchanged. This is source review, not browser acceptance.
+R-level PASS checks existing artifacts, including a historical browser FAIL. origin/main advanced; its two-dot comparison also includes unrelated mainline work and matches lifecycle-fsm. The three-dot lane diff remains bounded. No branch refresh or unrelated fix was attempted.
 
-R-level PASS uses an existing historical QA artifact, which records FAIL at head f51a5bf1. The checker verifies artifact presence; it does not establish current browser acceptance. No browser claim is made by this lane.
-
-The first full verification ran against the exact source contents committed above. After committing these proof artifacts, rerun `pnpm verify` (which invokes `pnpm verify:static`) and the focused/R-level commands at the final head. Record the exact head and measured results in `.out/ops/ready-for-pr/WORK-2026110304.md`; do not open a PR. Live-DB remains deferred, not green. PM approval, merge, lane finalization and post-merge reconciliation remain pending.
+PM approval, staging DB proof, PR opening/labeling, merge, lane finalization and post-merge reconciliation remain for the authorized outer path. No READY_FOR_REVIEW attestation published.

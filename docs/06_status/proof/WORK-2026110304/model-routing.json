@@ -33,5 +33,12 @@
       "token_usage"
     ],
     "mismatched_fields": []
+  },
+  "rework_source_sha": "f4c34cb62541883c8be560b320a7a528cd4199aa",
+  "rework_observation": {
+    "observed_model": "gpt-6.1-sol",
+    "observed_effort": "medium",
+    "reason": "Observed live executor CLI process 3233303: codex exec --model gpt-6.1-sol -c model_reasoning_effort=medium. This verifies launch configuration; backend runtime identity is not independently exposed.",
+    "generated_at": "2026-11-03T17:04:38.316543+00:00"
   }
 }
