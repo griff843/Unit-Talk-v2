@@ -1,0 +1,62 @@
+{
+  "verdict": "PASS",
+  "changedFiles": [
+    ".ops/sync/WORK-2026110205.yml",
+    "apps/api/src/player-enrichment-service.test.ts",
+    "apps/api/src/player-enrichment-service.ts",
+    "apps/smart-form/app/submit/components/ParticipantArtwork.tsx",
+    "apps/smart-form/lib/participant-media.ts",
+    "apps/smart-form/test/participant-media.test.ts",
+    "docs/06_status/lanes/WORK-2026110205.json",
+    "docs/06_status/proof/WORK-2026110205/browser-proof.json",
+    "docs/06_status/proof/WORK-2026110205/diff-summary.md",
+    "docs/06_status/proof/WORK-2026110205/emblem-browser.png",
+    "docs/06_status/proof/WORK-2026110205/evidence-contract-validation.json",
+    "docs/06_status/proof/WORK-2026110205/evidence.json",
+    "docs/06_status/proof/WORK-2026110205/focused-after.txt",
+    "docs/06_status/proof/WORK-2026110205/gate-results.txt",
+    "docs/06_status/proof/WORK-2026110205/live-provider-probes.json",
+    "docs/06_status/proof/WORK-2026110205/model-routing.json",
+    "docs/06_status/proof/WORK-2026110205/mutation-nfl-first-hit.txt",
+    "docs/06_status/proof/WORK-2026110205/mutation-nhl-data0.txt",
+    "docs/06_status/proof/WORK-2026110205/mutations.json",
+    "docs/06_status/proof/WORK-2026110205/provider-raw/1.txt",
+    "docs/06_status/proof/WORK-2026110205/provider-raw/2.txt",
+    "docs/06_status/proof/WORK-2026110205/provider-raw/3.txt",
+    "docs/06_status/proof/WORK-2026110205/provider-raw/4.txt",
+    "docs/06_status/proof/WORK-2026110205/qa-experience.json",
+    "docs/06_status/proof/WORK-2026110205/r-level.json",
+    "docs/06_status/proof/WORK-2026110205/r-level.txt",
+    "docs/06_status/proof/WORK-2026110205/regression-before.txt",
+    "docs/06_status/proof/WORK-2026110205/test-db.txt",
+    "docs/06_status/proof/WORK-2026110205/verification.md"
+  ],
+  "rulesMatched": [
+    {
+      "id": "operator-ui",
+      "required": [
+        "qa-experience"
+      ],
+      "advisory": [],
+      "pmGated": []
+    }
+  ],
+  "required": [
+    "qa-experience"
+  ],
+  "advisory": [],
+  "pmGated": [],
+  "artifacts": {
+    "qa-experience-report": {
+      "required": true,
+      "pmGated": false,
+      "found": true,
+      "path": "apps/qa-agent/artifacts/unit-talk-command_center-daily_ops-operator/2026-11-02T18-19-28-gcoayu/qa_result.json"
+    }
+  },
+  "missingArtifacts": [],
+  "advisoryMissing": [],
+  "nextActions": [],
+  "annotation_applied": false,
+  "annotation_type": null
+}

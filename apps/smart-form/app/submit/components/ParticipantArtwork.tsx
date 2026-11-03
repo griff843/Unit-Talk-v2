@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { fetchParticipantMedia, participantInitials, type ParticipantMedia } from '@/lib/participant-media';
+import { fetchParticipantMedia, type ParticipantMedia } from '@/lib/participant-media';
 
 export interface ParticipantArtworkProps {
   playerParticipantId?: string | null;
@@ -13,7 +13,16 @@ export interface ParticipantArtworkProps {
   sport?: string;
 }
 
-function ArtworkImage({ src, alt, className, fallback }: {
+/** Same approved emblem geometry as BrandLogo; artwork remains optional. */
+export function ParticipantEmblem({ name, className }: { name: string; className?: string }) {
+  return <svg role="img" aria-label={name || 'Selected participant'} className={className}
+    width="100%" height="100%" viewBox="0 0 740 500" fill="none">
+    <path fill="currentColor" d="M18 20h42c57 0 92 39 92 95v176c0 45 23 70 63 70h84V210h86v272H202C85 482 18 412 18 299V20Z" />
+    <path fill="currentColor" d="M241 20h481v126H585v210c0 79-54 126-139 126V146H241V20Z" />
+  </svg>;
+}
+
+export function ArtworkImage({ src, alt, className, fallback }: {
   src: string | null; alt: string; className: string; fallback: React.ReactNode;
 }) {
   const [failed, setFailed] = useState(false);
@@ -60,21 +69,21 @@ export function ParticipantArtwork({
     <section className="participant-artwork" aria-label="Selected participant" data-testid="participant-artwork"
       data-player-id={playerParticipantId ?? undefined} data-team-id={teamParticipantId ?? undefined}>
       <div className="participant-artwork-stage">
-        <span className="participant-artwork-watermark" aria-hidden="true">{participantInitials(label)}</span>
+        <div className="participant-artwork-watermark" aria-hidden="true"><ParticipantEmblem name={name || label} /></div>
         {secondaryTeamParticipantId ? <div className="participant-matchup-logos">
           <ArtworkImage key={`${identity}|away|${logo}`} src={logo} alt={`${label} logo`} className="participant-matchup-logo"
-            fallback={<span className="participant-matchup-initials" aria-hidden="true">{participantInitials(label)}</span>} />
+            fallback={<ParticipantEmblem className="participant-matchup-initials" name={label} />} />
           <span className="participant-matchup-at" aria-hidden="true">@</span>
           <ArtworkImage key={`${identity}|home|${secondaryLogo}`} src={secondaryLogo} alt={`${secondaryLabel} logo`} className="participant-matchup-logo"
-            fallback={<span className="participant-matchup-initials" aria-hidden="true">{participantInitials(secondaryLabel)}</span>} />
+            fallback={<ParticipantEmblem className="participant-matchup-initials" name={secondaryLabel} />} />
         </div> : playerParticipantId ? <ArtworkImage key={`${identity}|${headshot}`} src={headshot}
           alt={`${name || 'Selected player'} headshot`} className="participant-headshot"
-          fallback={<span className="participant-initials" aria-hidden="true">{participantInitials(name || '') || 'UT'}</span>} />
+          fallback={<ParticipantEmblem className="participant-initials" name={name || label} />} />
           : <ArtworkImage key={`${identity}|${logo}`} src={logo} alt={`${label} logo`}
-            className="participant-primary-logo" fallback={<span className="participant-initials" aria-hidden="true">{participantInitials(label)}</span>} />}
+            className="participant-primary-logo" fallback={<ParticipantEmblem className="participant-initials" name={name || label} />} />}
         {playerParticipantId && <ArtworkImage key={`${identity}|crest|${logo}`} src={logo}
           alt={`${label} logo`} className="participant-team-crest"
-          fallback={<span className="participant-team-monogram" aria-hidden="true">{participantInitials(label)}</span>} />}
+          fallback={<ParticipantEmblem className="participant-team-monogram" name={name || label} />} />}
       </div>
       <div className="participant-artwork-caption">
         <p>{secondaryTeamParticipantId ? sport : `${label}${label !== sport ? ` · ${sport}` : ''}`}</p>

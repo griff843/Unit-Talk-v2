@@ -1,0 +1,23 @@
+[
+  {
+    "mutation": "unknown-provider-team",
+    "sourceSha": "36483d1b993082c13e7dd16e9647d757950618c2",
+    "execution": "isolated copies of exact committed source and test; working-tree source never mutated",
+    "exitCode": 1,
+    "killed": true
+  },
+  {
+    "mutation": "nhl-data0",
+    "sourceSha": "36483d1b993082c13e7dd16e9647d757950618c2",
+    "execution": "isolated copies of exact committed source and test; working-tree source never mutated",
+    "exitCode": 1,
+    "killed": true
+  },
+  {
+    "mutation": "nfl-first-hit",
+    "sourceSha": "36483d1b993082c13e7dd16e9647d757950618c2",
+    "execution": "isolated copies of exact committed source and test; working-tree source never mutated",
+    "exitCode": 1,
+    "killed": true
+  }
+]

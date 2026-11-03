@@ -1,0 +1,9 @@
+{
+  "status": "passed",
+  "scope": "Isolated production React components with mocked media; no submission or DB writes",
+  "checks": [
+    "Stored approved-host image without identity evidence renders accessible emblem, never a photo or initials",
+    "Selection change and mismatched response keep current participant name on fallback",
+    "Image load error replaces img with accessible emblem"
+  ]
+}
