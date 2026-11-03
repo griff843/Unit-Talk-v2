@@ -1,0 +1,58 @@
+{
+  "schema": "experience-qa/v1",
+  "runId": "2026-11-02T18-19-28-4z39lq",
+  "product": "unit-talk",
+  "surface": "smart_form",
+  "persona": "operator",
+  "flow": "submit_pick",
+  "environment": "local",
+  "headSha": "1422ea237",
+  "timestamp": "2026-11-02T18:19:28.971Z",
+  "mode": "fast",
+  "status": "SKIP",
+  "verdictReason": "Required preflight failed: smart_form_route_reachable, nextauth_session_no_500.",
+  "preflightResults": [
+    {
+      "id": "smart_form_route_reachable",
+      "status": "failed",
+      "required": true,
+      "message": "Smart Form /submit unavailable: fetch failed.",
+      "evidence": {
+        "url": "http://localhost:4100/submit",
+        "status": 0,
+        "error": "fetch failed"
+      }
+    },
+    {
+      "id": "nextauth_session_no_500",
+      "status": "failed",
+      "required": true,
+      "message": "Smart Form /api/auth/session unavailable: fetch failed. Check AUTH_SECRET / NEXTAUTH_SECRET in local.env and NextAuth config.",
+      "evidence": {
+        "url": "http://localhost:4100/api/auth/session",
+        "status": 0,
+        "error": "fetch failed"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "step": "browser automation",
+      "status": "skip",
+      "detail": "Skipped after required preflight failure. Use --force to continue into browser steps.",
+      "timestamp": "2026-11-02T18:19:28.982Z",
+      "durationMs": 0
+    }
+  ],
+  "expectationResults": [],
+  "observations": [
+    "Browser steps skipped because a required preflight failed."
+  ],
+  "selectorResults": [],
+  "screenshots": [],
+  "consoleErrors": [],
+  "networkErrors": [],
+  "networkObservations": [],
+  "uxFriction": [],
+  "durationMs": 11
+}

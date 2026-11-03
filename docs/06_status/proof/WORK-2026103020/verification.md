@@ -1,6 +1,6 @@
 # PROOF: WORK-2026103020
 
-MERGE_SHA: pending merge
+MERGE_SHA: e24a79a34f6378b36af91b90fa3f300aad2626b9
 
 ASSERTIONS:
 
@@ -52,9 +52,8 @@ Actual Next page from this source ran on loopback port 14320, authenticated norm
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `e24a79a34f6378b36af91b90fa3f300aad2626b9`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1812
-
 ## Provenance
 
 Session-reported gpt-6.1-sol; reasoning effort unavailable, external session unverified. No routing override or PM approval is claimed. Claude owns CI queue coordination, main refresh, review/integration, merge and closeout.

@@ -1,0 +1,196 @@
+TAP version 13
+# Subtest: resolveHeadshotUrl returns null for null sport
+ok 1 - resolveHeadshotUrl returns null for null sport
+  ---
+  duration_ms: 1.462176
+  type: 'test'
+  ...
+# Subtest: resolveHeadshotUrl returns null for unknown sport
+ok 2 - resolveHeadshotUrl returns null for unknown sport
+  ---
+  duration_ms: 0.210785
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass skips players with existing headshot_url
+ok 3 - runPlayerEnrichmentPass skips players with existing headshot_url
+  ---
+  duration_ms: 0.584707
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass reports skipped for players with null sport
+ok 4 - runPlayerEnrichmentPass reports skipped for players with null sport
+  ---
+  duration_ms: 0.197423
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass handles empty participant list
+ok 5 - runPlayerEnrichmentPass handles empty participant list
+  ---
+  duration_ms: 0.171404
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass writes system_runs record with correct details
+ok 6 - runPlayerEnrichmentPass writes system_runs record with correct details
+  ---
+  duration_ms: 0.205699
+  type: 'test'
+  ...
+# Subtest: NHL unrelated player is refused
+ok 7 - NHL unrelated player is refused
+  ---
+  duration_ms: 52.532747
+  type: 'test'
+  ...
+# Subtest: NHL ambiguous name is refused
+ok 8 - NHL ambiguous name is refused
+  ---
+  duration_ms: 0.790413
+  type: 'test'
+  ...
+# Subtest: NFL unrelated first result is refused
+ok 9 - NFL unrelated first result is refused
+  ---
+  duration_ms: 0.789985
+  type: 'test'
+  ...
+# Subtest: all sports require a unique normalized full identity, including symmetric suffixes
+ok 10 - all sports require a unique normalized full identity, including symmetric suffixes
+  ---
+  duration_ms: 20.801258
+  type: 'test'
+  ...
+# Subtest: NFL selects the unique identity after an unrelated first hit and refuses duplicate exact hits
+ok 11 - NFL selects the unique identity after an unrelated first hit and refuses duplicate exact hits
+  ---
+  duration_ms: 0.826586
+  type: 'test'
+  ...
+# Subtest: NHL checks candidate league and team and does not resolve ambiguity using an image
+ok 12 - NHL checks candidate league and team and does not resolve ambiguity using an image
+  ---
+  duration_ms: 0.76952
+  type: 'test'
+  ...
+# Subtest: enrichment records refusal reasons and leaves stored images untouched
+ok 13 - enrichment records refusal reasons and leaves stored images untouched
+  ---
+  duration_ms: 1.741352
+  type: 'test'
+  ...
+# Subtest: NFL checks real ESPN teamRelationships and leagueRelationships identities
+ok 14 - NFL checks real ESPN teamRelationships and leagueRelationships identities
+  ---
+  duration_ms: 1.293386
+  type: 'test'
+  ...
+# Subtest: canonical team keys correlate by full team name and preserve Red Sox versus White Sox
+ok 15 - canonical team keys correlate by full team name and preserve Red Sox versus White Sox
+  ---
+  duration_ms: 8.00729
+  type: 'test'
+  ...
+# Subtest: NBA resolves provider columns by headers and correlates LA Clippers with canonical Los Angeles
+ok 16 - NBA resolves provider columns by headers and correlates LA Clippers with canonical Los Angeles
+  ---
+  duration_ms: 2.415295
+  type: 'test'
+  ...
+# Subtest: NHL six Jakes sharing a stored URL never confirms an unrelated Jake
+ok 17 - NHL six Jakes sharing a stored URL never confirms an unrelated Jake
+  ---
+  duration_ms: 1.741251
+  type: 'test'
+  ...
+# Subtest: NHL production catalog key refuses conflicting provider abbreviation
+ok 18 - NHL production catalog key refuses conflicting provider abbreviation
+  ---
+  duration_ms: 1.049078
+  type: 'test'
+  ...
+# Subtest: NHL production catalog key accepts matching provider abbreviation
+ok 19 - NHL production catalog key accepts matching provider abbreviation
+  ---
+  duration_ms: 0.894772
+  type: 'test'
+  ...
+# Subtest: MLB production catalog key refuses conflicting numeric provider team
+ok 20 - MLB production catalog key refuses conflicting numeric provider team
+  ---
+  duration_ms: 1.654066
+  type: 'test'
+  ...
+# Subtest: MLB production catalog key accepts matching numeric provider team
+ok 21 - MLB production catalog key accepts matching numeric provider team
+  ---
+  duration_ms: 1.671083
+  type: 'test'
+  ...
+# Subtest: non-catalog caller team refuses incomparable provider team
+ok 22 - non-catalog caller team refuses incomparable provider team
+  ---
+  duration_ms: 1.708784
+  type: 'test'
+  ...
+# Subtest: NHL namesake outside old top five is ambiguous
+ok 23 - NHL namesake outside old top five is ambiguous
+  ---
+  duration_ms: 1.985594
+  type: 'test'
+  ...
+# Subtest: NFL namesake outside old top five is ambiguous
+ok 24 - NFL namesake outside old top five is ambiguous
+  ---
+  duration_ms: 1.181057
+  type: 'test'
+  ...
+# Subtest: media only belongs to the exact selected participant, type and sport
+ok 25 - media only belongs to the exact selected participant, type and sport
+  ---
+  duration_ms: 3.622788
+  type: 'test'
+  ...
+# Subtest: unapproved media never becomes an image source
+ok 26 - unapproved media never becomes an image source
+  ---
+  duration_ms: 0.579682
+  type: 'test'
+  ...
+# Subtest: missing identities, rejected lookups and network errors yield optional empty media
+ok 27 - missing identities, rejected lookups and network errors yield optional empty media
+  ---
+  duration_ms: 43.794421
+  type: 'test'
+  ...
+# Subtest: lookup encodes exact identity and rejects mismatched server data
+ok 28 - lookup encodes exact identity and rejects mismatched server data
+  ---
+  duration_ms: 2.070509
+  type: 'test'
+  ...
+# Subtest: initials fallback handles empty and long participant names
+ok 29 - initials fallback handles empty and long participant names
+  ---
+  duration_ms: 0.251196
+  type: 'test'
+  ...
+# Subtest: media maps legacy team keys to exact participant IDs without name matching
+ok 30 - media maps legacy team keys to exact participant IDs without name matching
+  ---
+  duration_ms: 0.16519
+  type: 'test'
+  ...
+# Subtest: legacy player images stay on branded fallback even on approved hosts
+ok 31 - legacy player images stay on branded fallback even on approved hosts
+  ---
+  duration_ms: 0.231008
+  type: 'test'
+  ...
+1..31
+# tests 31
+# suites 0
+# pass 31
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 751.771661

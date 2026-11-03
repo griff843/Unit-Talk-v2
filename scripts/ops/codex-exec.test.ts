@@ -11,6 +11,9 @@ import {
   buildModelRoutingEvidence,
   commitAndPushEvidence,
   evaluateExecutionTruth,
+  findCodexRollouts,
+  observeModelRouting,
+  observePullRequest,
   resolveCodexExecutionPacket,
   resolveExecModelRouting,
 } from './codex-exec.js';
@@ -20,6 +23,7 @@ import {
   checkpointRecoveryPath,
   finishAttempt,
   recordPhaseComplete,
+  readCheckpoint,
   resolveExecutionTimeout,
   type ExecutionStateIdentity,
 } from './execution-checkpoint.js';
@@ -633,13 +637,15 @@ test('execution truth rejects an epoch baseline that is not an ancestor of HEAD'
   }
 });
 
-test('Codex child environment carries the originating checkpoint identity', () => {
+test('Codex child environment carries the checkpoint directory and originating identity', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1711-child-env-'));
   try {
-    const env = buildCodexChildEnv(dir, { epoch_id: 'epoch-1', attempt: 2, minimum_revision: 7 });
+    const checkpointDir = path.join(dir, 'parent-checkpoints');
+    const env = buildCodexChildEnv(dir, { epoch_id: 'epoch-1', attempt: 2, minimum_revision: 7 }, checkpointDir);
     assert.equal(env.UNIT_TALK_EXECUTION_EPOCH_ID, 'epoch-1');
     assert.equal(env.UNIT_TALK_EXECUTION_ATTEMPT, '2');
     assert.equal(env.UNIT_TALK_EXECUTION_MINIMUM_REVISION, '7');
+    assert.equal(env.UNIT_TALK_EXECUTION_CHECKPOINT_DIR, checkpointDir);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -1276,6 +1282,7 @@ test('operator cancellation is honoured before any codex process is spawned', ()
 const TSX_BIN = path.join(ROOT, 'node_modules', '.bin', 'tsx');
 
 interface LaneRoot {
+  tempRoot: string;
   /** Repo root for the run; also the git repository whose cleanliness is asserted. */
   root: string;
   /** PATH entry holding stub executor CLIs. Kept outside `root` so it is not untracked content. */
@@ -1404,7 +1411,7 @@ function buildLaneRoot(issueId: string, executor: 'claude' | 'codex-cli'): LaneR
     spawnSync('git', args, { cwd: root, stdio: 'pipe' });
   }
 
-  return { root, bin: stubExecutorClis(dir), objective, syncPath };
+  return { tempRoot: dir, root, bin: stubExecutorClis(dir), objective, syncPath };
 }
 
 function runExecutor(
@@ -1440,6 +1447,7 @@ function parseLeadingJson(out: string): Record<string, unknown> {
 test('codex-exec --dry-run executes to a rendered packet carrying the captured contract', () => {
   const issueId = 'UTV2-999901';
   const lane = buildLaneRoot(issueId, 'codex-cli');
+  try {
   const run = runExecutor('codex-exec.ts', lane, ['--issue', issueId, '--dry-run']);
 
   assert.equal(
@@ -1474,11 +1482,15 @@ test('codex-exec --dry-run executes to a rendered packet carrying the captured c
     run.stdout.includes('(would run)'),
     'dry run must describe the invocation rather than perform it',
   );
+  } finally {
+    fs.rmSync(lane.tempRoot, { recursive: true, force: true });
+  }
 });
 
 test('codex-exec --dry-run leaves the lane root byte-identical', () => {
   const issueId = 'UTV2-999902';
   const lane = buildLaneRoot(issueId, 'codex-cli');
+  try {
   assert.equal(laneRootChanges(lane), '', 'fixture must start clean');
 
   const run = runExecutor('codex-exec.ts', lane, ['--issue', issueId, '--dry-run']);
@@ -1492,11 +1504,15 @@ test('codex-exec --dry-run leaves the lane root byte-identical', () => {
     '',
     'dry run must leave no tracked or untracked change in the lane root',
   );
+  } finally {
+    fs.rmSync(lane.tempRoot, { recursive: true, force: true });
+  }
 });
 
 test('codex-exec --dry-run refuses a lane with no captured contract instead of fetching one', () => {
   const issueId = 'UTV2-999903';
   const lane = buildLaneRoot(issueId, 'codex-cli');
+  try {
   fs.rmSync(lane.syncPath);
 
   const run = runExecutor('codex-exec.ts', lane, ['--issue', issueId, '--dry-run']);
@@ -1511,6 +1527,9 @@ test('codex-exec --dry-run refuses a lane with no captured contract instead of f
     false,
     'a dry run must never capture a contract, which would require a live Linear call',
   );
+  } finally {
+    fs.rmSync(lane.tempRoot, { recursive: true, force: true });
+  }
 });
 
 test('executor modules resolve every imported symbol (narrow compile smoke)', () => {
@@ -1565,4 +1584,210 @@ test('executor modules resolve every imported symbol (narrow compile smoke)', ()
     .filter((line) => /error TS2304|error TS2305/u.test(line));
   assert.deepEqual(unresolved, [],
     `executor entrypoints have unresolved imports:\n${unresolved.join('\n')}`);
+});
+
+// WORK-2026110203: observed model routing from the Codex rollout file.
+
+const DECLARED = { model: 'gpt-6.1-sol', reasoning_effort: 'medium' };
+
+function writeRollout(
+  sessionsRoot: string,
+  startedAt: Date,
+  meta: Record<string, unknown>,
+  turns: Array<Record<string, unknown>>,
+  totalTokens?: number,
+): string {
+  const day = path.join(
+    sessionsRoot,
+    String(startedAt.getFullYear()),
+    String(startedAt.getMonth() + 1).padStart(2, '0'),
+    String(startedAt.getDate()).padStart(2, '0'),
+  );
+  fs.mkdirSync(day, { recursive: true });
+  const filePath = path.join(day, `rollout-${startedAt.getTime()}-${Math.random().toString(16).slice(2)}.jsonl`);
+  const lines = [
+    { type: 'session_meta', payload: { timestamp: startedAt.toISOString(), ...meta } },
+    ...turns.map((payload) => ({ type: 'turn_context', payload })),
+    ...(totalTokens === undefined
+      ? []
+      : [{ type: 'event_msg', payload: { type: 'token_count', info: { total_token_usage: { input_tokens: totalTokens - 21, cached_input_tokens: totalTokens - 100, output_tokens: 21, total_tokens: totalTokens } } } }]),
+  ];
+  fs.writeFileSync(filePath, lines.map((line) => JSON.stringify(line)).join('\n') + '\n');
+  return filePath;
+}
+
+function rolloutFixture() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'work-2026110203-rollout-'));
+  const sessionsRoot = path.join(root, 'sessions');
+  const cwd = path.join(root, 'lane');
+  fs.mkdirSync(sessionsRoot);
+  fs.mkdirSync(cwd);
+  const startedAtMs = Date.now() - 60_000;
+  const endedAtMs = Date.now();
+  const inWindow = new Date(startedAtMs + 1_000);
+  return { root, sessionsRoot, cwd, startedAtMs, endedAtMs, inWindow };
+}
+
+test('observed routing comes from the single rollout of this worktree and attempt', () => {
+  const f = rolloutFixture();
+  try {
+  const mine = writeRollout(
+    f.sessionsRoot,
+    f.inWindow,
+    { id: 'sess-1', cwd: f.cwd, originator: 'codex_exec', cli_version: '0.162.1' },
+    [{ model: 'gpt-6.1-sol', effort: 'medium' }, { model: 'gpt-6.1-sol', effort: 'medium' }],
+    4321,
+  );
+  // Not this attempt: another worktree, an interactive originator, a session before the window.
+  writeRollout(f.sessionsRoot, f.inWindow, { id: 'other-cwd', cwd: os.tmpdir(), originator: 'codex_exec' }, []);
+  writeRollout(f.sessionsRoot, f.inWindow, { id: 'desktop', cwd: f.cwd, originator: 'codex_desktop' }, []);
+  writeRollout(f.sessionsRoot, new Date(f.startedAtMs - 5_000), { id: 'earlier', cwd: f.cwd, originator: 'codex_exec' }, []);
+
+  const rollouts = findCodexRollouts(f);
+  assert.deepEqual(rollouts, [mine]);
+  const observation = observeModelRouting({ declared: DECLARED, rollouts });
+  assert.deepEqual(observation, {
+    status: 'observed',
+    reason: null,
+    session_id: 'sess-1',
+    model: 'gpt-6.1-sol',
+    reasoning_effort: 'medium',
+    cli_version: '0.162.1',
+    turns: 2,
+    token_usage: { input_tokens: 4300, cached_input_tokens: 4221, output_tokens: 21, total_tokens: 4321 },
+    unavailable_fields: [],
+    mismatched_fields: [],
+  });
+  } finally {
+    fs.rmSync(f.root, { recursive: true, force: true });
+  }
+});
+
+test('no rollout or several rollouts is unavailable, and no declared value is copied into an observed field', () => {
+  const f = rolloutFixture();
+  try {
+  const none = observeModelRouting({ declared: DECLARED, rollouts: findCodexRollouts(f) });
+  assert.equal(none.status, 'unavailable');
+  assert.match(none.reason ?? '', /no Codex rollout/);
+  for (const field of ['session_id', 'model', 'reasoning_effort', 'cli_version', 'turns', 'token_usage'] as const) {
+    assert.equal(none[field], null, `${field} must be null, not a declared value`);
+    assert.ok(none.unavailable_fields.includes(field), `${field} must be listed as unavailable`);
+  }
+
+  for (const id of ['a', 'b']) {
+    writeRollout(f.sessionsRoot, f.inWindow, { id, cwd: f.cwd, originator: 'codex_exec' }, [{ model: 'gpt-6.1-sol', effort: 'medium' }]);
+  }
+  const ambiguous = observeModelRouting({ declared: DECLARED, rollouts: findCodexRollouts(f) });
+  assert.equal(ambiguous.status, 'unavailable');
+  assert.match(ambiguous.reason ?? '', /2 Codex rollouts/);
+  assert.equal(ambiguous.model, null);
+  } finally {
+    fs.rmSync(f.root, { recursive: true, force: true });
+  }
+});
+
+test('a field the rollout does not carry is null and listed, while the rest are observed', () => {
+  const f = rolloutFixture();
+  try {
+  writeRollout(f.sessionsRoot, f.inWindow, { id: 'sess-2', cwd: f.cwd, originator: 'codex_exec' }, [{ model: 'gpt-6.1-sol' }]);
+  const observation = observeModelRouting({ declared: DECLARED, rollouts: findCodexRollouts(f) });
+  assert.equal(observation.status, 'observed');
+  assert.equal(observation.model, 'gpt-6.1-sol');
+  assert.equal(observation.reasoning_effort, null);
+  assert.deepEqual(observation.unavailable_fields, ['reasoning_effort', 'cli_version', 'token_usage']);
+  } finally {
+    fs.rmSync(f.root, { recursive: true, force: true });
+  }
+});
+
+test('any turn whose model or effort differs from the declared routing is a mismatch', () => {
+  const f = rolloutFixture();
+  let g: ReturnType<typeof rolloutFixture> | undefined;
+  try {
+  writeRollout(
+    f.sessionsRoot,
+    f.inWindow,
+    { id: 'sess-3', cwd: f.cwd, originator: 'codex_exec', cli_version: '0.162.1' },
+    [{ model: 'gpt-6.1-sol', effort: 'medium' }, { model: 'gpt-6.1-sol', effort: 'high' }],
+  );
+  const observation = observeModelRouting({ declared: DECLARED, rollouts: findCodexRollouts(f) });
+  assert.equal(observation.status, 'mismatch');
+  assert.deepEqual(observation.mismatched_fields, ['reasoning_effort']);
+
+  g = rolloutFixture();
+  writeRollout(g.sessionsRoot, g.inWindow, { id: 'sess-4', cwd: g.cwd, originator: 'codex_exec' }, [{ model: 'gpt-6.1-luna', effort: 'medium' }]);
+  assert.deepEqual(observeModelRouting({ declared: DECLARED, rollouts: findCodexRollouts(g) }).mismatched_fields, ['model']);
+  } finally {
+    fs.rmSync(f.root, { recursive: true, force: true });
+    if (g) fs.rmSync(g.root, { recursive: true, force: true });
+  }
+});
+
+test('evidence labels its routing fields as declared and defaults the observation to unavailable', () => {
+  const evidence = buildModelRoutingEvidence({
+    issueId: 'WORK-2026110203',
+    manifestSchemaVersion: 2,
+    modelRouting: { profile: 'codex-sol-medium', model: 'gpt-6.1-sol', reasoning_effort: 'medium', selected_by: 'three-brain', policy_version: '3.0.0' },
+    legacyCompatibilityUsed: false,
+    codexCliVersion: 'codex-cli 0.162.1',
+    codexExitCode: 0,
+  });
+  assert.equal(evidence.routing_source, 'declared');
+  assert.equal(evidence.observation.status, 'unavailable');
+  assert.equal(evidence.observation.model, null);
+});
+
+test('observePullRequest reports the lane PR read-only, and null with a reason when there is none', () => {
+  const calls: string[] = [];
+  const found = observePullRequest('/lane', 'claude/work-x', (cmd, args) => {
+    calls.push(`${cmd} ${args.join(' ')}`);
+    return cmd === 'gh'
+      ? { status: 0, stdout: JSON.stringify({ number: 1820, headRefOid: 'abc123' }) }
+      : { status: 0, stdout: 'abc123\n' };
+  });
+  assert.deepEqual(found, { number: 1820, head_sha: 'abc123', head_matches_local: true, reason: null });
+  assert.ok(calls.every((call) => call.startsWith('gh pr view') || call.startsWith('git rev-parse')), 'read-only calls only');
+
+  const missing = observePullRequest('/lane', 'claude/work-x', () => ({ status: 1, stdout: '' }));
+  assert.equal(missing.number, null);
+  assert.match(missing.reason ?? '', /no PR found/);
+});
+
+test('a routing mismatch is reported after evidence persists and before SUCCESS can be emitted', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'codex-exec.ts'), 'utf8');
+  const persistenceIndex = source.indexOf('const persistence = commitAndPushEvidence(');
+  const mismatchIndex = source.indexOf("code: 'ROUTING_MISMATCH'", persistenceIndex);
+  const successIndex = source.indexOf("code: 'SUCCESS'", persistenceIndex);
+  assert.ok(persistenceIndex >= 0 && mismatchIndex > persistenceIndex, 'mismatch evidence must be persisted first');
+  assert.ok(successIndex > mismatchIndex, 'a mismatch must be refused before SUCCESS is reachable');
+});
+
+test('phase-complete from a separate lane repository writes into the launch checkpoint directory', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'work-2026110204-cross-repo-'));
+  try {
+    const launchRoot = path.join(dir, 'launch-root');
+    const laneRoot = path.join(dir, 'lane-worktree');
+    const checkpointDir = path.join(launchRoot, '.out', 'ops', 'execution-checkpoints');
+    fs.mkdirSync(launchRoot, { recursive: true });
+    fs.mkdirSync(laneRoot, { recursive: true });
+    for (const repo of [launchRoot, laneRoot]) {
+      assert.equal(spawnSync('git', ['init', '--initial-branch=main'], { cwd: repo, stdio: 'pipe' }).status, 0);
+    }
+    const issueId = 'WORK-2026110204';
+    const started = beginAttempt({
+      kind: 'fresh', issueId, currentHeadSha: '1'.repeat(40),
+      objectiveIdentity: `issue:${issueId}`, authority: 'test',
+      timeoutPolicy: resolveExecutionTimeout({ tier: 'T2', reasoningEffort: 'medium', phase: 'implement' }),
+      dir: checkpointDir,
+    });
+    const env = buildCodexChildEnv(laneRoot, started.identity, checkpointDir);
+    const run = spawnSync(TSX_BIN, [path.join(ROOT, 'scripts', 'ops', 'execution-checkpoint.ts'),
+      'phase-complete', '--issue', issueId, '--phase', 'orient', '--summary', 'cross repository phase',
+    ], { cwd: laneRoot, env, encoding: 'utf8', timeout: 60_000 });
+    assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+    assert.equal(readCheckpoint(issueId, checkpointDir)?.completed_phases[0]?.phase, 'orient');
+    assert.equal(fs.existsSync(path.join(laneRoot, '.out', 'ops', 'execution-checkpoints', `${issueId}.json`)), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

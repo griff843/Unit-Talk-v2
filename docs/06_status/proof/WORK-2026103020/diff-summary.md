@@ -1,6 +1,6 @@
 # WORK-2026103020 — effective settlement timestamp
 
-MERGE_SHA: pending merge
+MERGE_SHA: e24a79a34f6378b36af91b90fa3f300aad2626b9
 
 Source: `286ecb3bc20a1433bd3b7e353dbc69a359b82d07`.
 

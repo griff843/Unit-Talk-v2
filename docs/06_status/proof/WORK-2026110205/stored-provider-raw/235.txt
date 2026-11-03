@@ -1,0 +1,1 @@
+[{"playerId":"8482803","name":"Olen Zellweger","positionCode":"D","teamId":"7","teamAbbrev":"BUF","lastTeamId":"7","lastTeamAbbrev":"BUF","lastSeasonId":"20262027","sweaterNumber":8,"active":true,"height":"5'10\"","heightInInches":70,"heightInCentimeters":178,"weightInPounds":193,"weightInKilograms":87,"birthCity":"Calgary","birthStateProvince":"AB","birthCountry":"CAN"}]

@@ -92,10 +92,12 @@
     "P2 pagination reported and split to WORK-2026103023 by central comment 6533949804; required before canary expansion"
   ],
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "2c52ca206c2c8c1fc570ef23f2cb6760084ebf6a",
     "verified_source_sha": "54c0e74320949b8b589f2c969f250632ee1ff74c",
     "evidence_commit_sha": "54c0e74320949b8b589f2c969f250632ee1ff74c",
-    "current_pr_head_sha": "CI_RESOLVED"
+    "current_pr_head_sha": "CI_RESOLVED",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-11-01T19:25:29.625Z"
   },
   "previous_source_ci": {
     "run_id": "41133081686",

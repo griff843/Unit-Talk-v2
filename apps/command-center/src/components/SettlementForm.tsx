@@ -34,6 +34,7 @@ const RESULTS: {
 const CONFIDENCES: ConfidenceType[] = ['confirmed', 'estimated', 'pending'];
 
 interface SettlementFormProps {
+  memberVisible?: boolean;
   pickId: string;
   isAlreadySettled: boolean;
   eventName?: string | null;
@@ -47,6 +48,7 @@ interface SettlementFormProps {
 export function SettlementForm({
   pickId,
   isAlreadySettled,
+  memberVisible = true,
   eventName,
   market,
   selection,
@@ -152,7 +154,7 @@ export function SettlementForm({
     // one green panel for both is how canary 816a84c7's suppressed recap went
     // unnoticed. The recap gets its own panel, and a suppressed one is never
     // green.
-    const recapVerdict = describeRecapOutcome(outcome.recap);
+    const recapVerdict = describeRecapOutcome(outcome.recap, memberVisible);
     return (
       <div className="flex flex-col gap-3">
         <div className="rounded-md border border-emerald-700 bg-emerald-950 p-4">

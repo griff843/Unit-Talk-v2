@@ -1,6 +1,6 @@
 # PROOF: WORK-2026103009
 
-MERGE_SHA: pending merge
+MERGE_SHA: 21d4b26fd60bd6991d3e1e8c8b6fccfab83587e9
 
 Issue: WORK-2026103009
 Tier: T1
@@ -86,6 +86,6 @@ Runtime: no dispatch of the new workflow has been run. The first runtime evidenc
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 21d4b26fd60bd6991d3e1e8c8b6fccfab83587e9
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1813
 Execution SHA: a0d37b760db24646c36bea6515001150d4ce7292
