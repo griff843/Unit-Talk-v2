@@ -57,6 +57,7 @@ Run on `46bd6da75c3df62011b91ed7aff362e512385b60`:
   - That build (`tsc -b tsconfig.json`) references only `packages/*` and `apps/*`, not `scripts/`.
   - So the three changed files were also checked directly with `npx tsc --noEmit --strict --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck --types node`.
   - The only errors left are TS1470 (`import.meta` under the ad hoc module setting) and TS2307 (`@unit-talk/db/target-identity` path resolution). The same run reports both on files this lane does not modify (`scripts/ops/concurrency-config.ts`, `scripts/ops/execution-packet.ts`, `scripts/ci/required-db-smoke.ts`). No other error remains.
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: `Verdict: PASS`, `Rules matched: (none) — no R-level artifacts required for this diff`.
 - [ ] `pnpm verify` was not run locally. The required `verify` CI check on the PR head is the authority for it.
 
 ## Runtime Verification
