@@ -33,5 +33,14 @@
     },
     "unavailable_fields": [],
     "mismatched_fields": []
+  },
+  "current_attempt_observation": {
+    "status": "observed",
+    "source": "Codex session_meta and turn_context records",
+    "session_id": "01a1a18a-3dda-7e03-bac9-44caeee0ca58",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "medium",
+    "cli_version": "0.162.1",
+    "note": "Current attempt observed directly; top-level completed-run metrics preserved from prior attempt. Outer wrapper owns final execution provenance."
   }
 }

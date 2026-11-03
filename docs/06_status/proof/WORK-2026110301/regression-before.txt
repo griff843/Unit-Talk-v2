@@ -1,0 +1,223 @@
+TAP version 13
+# Subtest: resolveHeadshotUrl returns null for null sport
+ok 1 - resolveHeadshotUrl returns null for null sport
+  ---
+  duration_ms: 1.776725
+  type: 'test'
+  ...
+# Subtest: resolveHeadshotUrl returns null for unknown sport
+ok 2 - resolveHeadshotUrl returns null for unknown sport
+  ---
+  duration_ms: 0.28045
+  type: 'test'
+  ...
+# Subtest: NHL uniquely matched player uses the live asset host and provider playerId only
+not ok 3 - NHL uniquely matched player uses the live asset host and provider playerId only
+  ---
+  duration_ms: 52.917781
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110301/.out/worktrees/codex__work-2026110301-nhl-asset-host/apps/api/src/player-enrichment-service.test.ts:1:587'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478133.jpg'
+    - 'https://assets.nhle.com/mugs/nhl/latest/8478133.png'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'https://assets.nhle.com/mugs/nhl/latest/8478133.png'
+  actual: 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478133.jpg'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110301/.out/worktrees/codex__work-2026110301-nhl-asset-host/apps/api/src/player-enrichment-service.test.ts:25:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: NHL resolver never emits the dead bamgrid host
+not ok 4 - NHL resolver never emits the dead bamgrid host
+  ---
+  duration_ms: 1.251396
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110301/.out/worktrees/codex__work-2026110301-nhl-asset-host/apps/api/src/player-enrichment-service.test.ts:1:1041'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected "actual" to be strictly unequal to:
+    
+    'cms.nhl.bamgrid.com'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'cms.nhl.bamgrid.com'
+  actual: 'cms.nhl.bamgrid.com'
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110301/.out/worktrees/codex__work-2026110301-nhl-asset-host/apps/api/src/player-enrichment-service.test.ts:34:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: runPlayerEnrichmentPass skips players with existing headshot_url
+ok 5 - runPlayerEnrichmentPass skips players with existing headshot_url
+  ---
+  duration_ms: 0.771227
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass reports skipped for players with null sport
+ok 6 - runPlayerEnrichmentPass reports skipped for players with null sport
+  ---
+  duration_ms: 0.242802
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass handles empty participant list
+ok 7 - runPlayerEnrichmentPass handles empty participant list
+  ---
+  duration_ms: 0.230494
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass writes system_runs record with correct details
+ok 8 - runPlayerEnrichmentPass writes system_runs record with correct details
+  ---
+  duration_ms: 0.301237
+  type: 'test'
+  ...
+# Subtest: NHL unrelated player is refused
+ok 9 - NHL unrelated player is refused
+  ---
+  duration_ms: 1.062352
+  type: 'test'
+  ...
+# Subtest: NHL ambiguous name is refused
+ok 10 - NHL ambiguous name is refused
+  ---
+  duration_ms: 1.050086
+  type: 'test'
+  ...
+# Subtest: NFL unrelated first result is refused
+ok 11 - NFL unrelated first result is refused
+  ---
+  duration_ms: 1.0705
+  type: 'test'
+  ...
+# Subtest: all sports require a unique normalized full identity, including symmetric suffixes
+ok 12 - all sports require a unique normalized full identity, including symmetric suffixes
+  ---
+  duration_ms: 28.725142
+  type: 'test'
+  ...
+# Subtest: NFL selects the unique identity after an unrelated first hit and refuses duplicate exact hits
+ok 13 - NFL selects the unique identity after an unrelated first hit and refuses duplicate exact hits
+  ---
+  duration_ms: 1.408199
+  type: 'test'
+  ...
+# Subtest: NHL checks candidate league and team and does not resolve ambiguity using an image
+ok 14 - NHL checks candidate league and team and does not resolve ambiguity using an image
+  ---
+  duration_ms: 1.082366
+  type: 'test'
+  ...
+# Subtest: enrichment records refusal reasons and leaves stored images untouched
+ok 15 - enrichment records refusal reasons and leaves stored images untouched
+  ---
+  duration_ms: 2.941844
+  type: 'test'
+  ...
+# Subtest: NFL checks real ESPN teamRelationships and leagueRelationships identities
+ok 16 - NFL checks real ESPN teamRelationships and leagueRelationships identities
+  ---
+  duration_ms: 1.697979
+  type: 'test'
+  ...
+# Subtest: canonical team keys correlate by full team name and preserve Red Sox versus White Sox
+ok 17 - canonical team keys correlate by full team name and preserve Red Sox versus White Sox
+  ---
+  duration_ms: 3.364525
+  type: 'test'
+  ...
+# Subtest: NBA resolves provider columns by headers and correlates LA Clippers with canonical Los Angeles
+ok 18 - NBA resolves provider columns by headers and correlates LA Clippers with canonical Los Angeles
+  ---
+  duration_ms: 2.356867
+  type: 'test'
+  ...
+# Subtest: NHL six Jakes sharing a stored URL never confirms an unrelated Jake
+ok 19 - NHL six Jakes sharing a stored URL never confirms an unrelated Jake
+  ---
+  duration_ms: 2.741837
+  type: 'test'
+  ...
+# Subtest: NHL production catalog key refuses conflicting provider abbreviation
+ok 20 - NHL production catalog key refuses conflicting provider abbreviation
+  ---
+  duration_ms: 1.633735
+  type: 'test'
+  ...
+# Subtest: NHL production catalog key accepts matching provider abbreviation
+ok 21 - NHL production catalog key accepts matching provider abbreviation
+  ---
+  duration_ms: 1.461901
+  type: 'test'
+  ...
+# Subtest: MLB production catalog key refuses conflicting numeric provider team
+ok 22 - MLB production catalog key refuses conflicting numeric provider team
+  ---
+  duration_ms: 2.133972
+  type: 'test'
+  ...
+# Subtest: MLB production catalog key accepts matching numeric provider team
+ok 23 - MLB production catalog key accepts matching numeric provider team
+  ---
+  duration_ms: 1.315766
+  type: 'test'
+  ...
+# Subtest: non-catalog caller team refuses incomparable provider team
+ok 24 - non-catalog caller team refuses incomparable provider team
+  ---
+  duration_ms: 1.224002
+  type: 'test'
+  ...
+# Subtest: NHL namesake outside old top five is ambiguous
+ok 25 - NHL namesake outside old top five is ambiguous
+  ---
+  duration_ms: 1.648485
+  type: 'test'
+  ...
+# Subtest: NFL namesake outside old top five is ambiguous
+ok 26 - NFL namesake outside old top five is ambiguous
+  ---
+  duration_ms: 1.002064
+  type: 'test'
+  ...
+# Subtest: MLB refuses an unknown provider team ID for a catalog team
+ok 27 - MLB refuses an unknown provider team ID for a catalog team
+  ---
+  duration_ms: 1.22293
+  type: 'test'
+  ...
+# Subtest: NHL refuses an unknown provider team abbreviation for a catalog team
+ok 28 - NHL refuses an unknown provider team abbreviation for a catalog team
+  ---
+  duration_ms: 1.128386
+  type: 'test'
+  ...
+# Subtest: NHL refuses a full search window even with one matching identity
+ok 29 - NHL refuses a full search window even with one matching identity
+  ---
+  duration_ms: 1.681137
+  type: 'test'
+  ...
+# Subtest: NFL refuses a full search window even with one matching identity
+ok 30 - NFL refuses a full search window even with one matching identity
+  ---
+  duration_ms: 1.120291
+  type: 'test'
+  ...
+1..30
+# tests 30
+# suites 0
+# pass 28
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 839.699634

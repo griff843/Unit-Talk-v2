@@ -1,0 +1,72 @@
+{
+  "schema_version": 2,
+  "bundle_version": 1,
+  "issue_id": "WORK-2026110301",
+  "tier": "T1",
+  "lane_type": "data-canonical",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge_staging_proof_pending",
+  "generated_at": "2026-11-03T13:15:19.623178+00:00",
+  "sha_binding": {
+    "verified_source_sha": "ca37fd5281e3e7df42db34a66e7aa4eb2222c2a2",
+    "merge_sha": null,
+    "evidence_commit_sha": "CI_RESOLVED",
+    "current_pr_head_sha": "CI_RESOLVED"
+  },
+  "source_file_sha256": {
+    "apps/api/src/player-enrichment-service.ts": "a21411525d5e1d05fc0c716ffed54e7a2be3627d0145bfc2abe54c992257b0cb",
+    "apps/api/src/player-enrichment-service.test.ts": "409426d5ea71cb9cf8458afbd201ddd0ac20d6030d29c5964f3c287d359f1006"
+  },
+  "static_proof": {
+    "focused_tests": {
+      "pass": 30,
+      "fail": 0,
+      "output": "regression-after.txt"
+    },
+    "regression_first": {
+      "pass": 28,
+      "fail": 2,
+      "output": "regression-before.txt",
+      "note": "Service identical to origin/main; saved from first attempt."
+    },
+    "mutation": {
+      "pass": 26,
+      "fail": 4,
+      "output": "mutation-old-host.txt",
+      "description": "Restore only old NHL URL builder; regression and dead-host tests fail."
+    },
+    "verify": "running; final exact-head outcome recorded in ready-for-pr handoff",
+    "test_db": "REFUSED before DB access: target identity unresolved (host=127.0.0.1); staging CI pending",
+    "r_level": "PASS at implementation commit; no matching rules"
+  },
+  "runtime_proof": {
+    "queries": [
+      {
+        "kind": "public-provider-http-get",
+        "input": "docs/06_status/proof/WORK-2026110205/stored-headshots-revalidated.json",
+        "selection": "NHL confirmed or mismatch with unique matcher URL",
+        "redirects_followed": false,
+        "output": "nhl-asset-host-check.json"
+      }
+    ],
+    "row_counts": [
+      {
+        "selected_nhl_rows": 187,
+        "successful_png_responses": 187,
+        "nonexistent_control_status": 302,
+        "nonexistent_control_bytes": 0
+      }
+    ],
+    "database_access": false,
+    "updateMetadata": "unchanged; no new live DB test and no live DB enrichment proof"
+  },
+  "pending": [
+    "Exact-head pnpm verify green via approved staging CI",
+    "Writable DB proof (staging only) green at exact head",
+    "Outer wrapper executor-result/v1 publication",
+    "Independent Claude review",
+    "Griff t1-approved label and pm-verdict/v1 APPROVED at exact head",
+    "Governed merge and evidence binding to attested merge SHA"
+  ],
+  "model_routing": "model-routing.json; current_attempt_observation read from session_meta and turn_context"
+}
