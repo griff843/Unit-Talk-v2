@@ -8,4 +8,4 @@ Two regression tests require the exact URL and reject the dead host. Two existin
 
 Proof artifacts contain regression-first output, passing output, the killed old-host mutation, and saved read-only public-provider measurements. Production was not connected to.
 
-Merge SHA: pending merge
+Merge SHA: bb1947e317679d573e00f3b1d2fcd350873b4345

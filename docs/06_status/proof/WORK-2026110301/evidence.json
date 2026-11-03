@@ -9,9 +9,11 @@
   "generated_at": "2026-11-03T13:15:19.623178+00:00",
   "sha_binding": {
     "verified_source_sha": "ca37fd5281e3e7df42db34a66e7aa4eb2222c2a2",
-    "merge_sha": null,
+    "merge_sha": "bb1947e317679d573e00f3b1d2fcd350873b4345",
     "evidence_commit_sha": "CI_RESOLVED",
-    "current_pr_head_sha": "CI_RESOLVED"
+    "current_pr_head_sha": "CI_RESOLVED",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-11-03T18:18:20.553Z"
   },
   "source_file_sha256": {
     "apps/api/src/player-enrichment-service.ts": "a21411525d5e1d05fc0c716ffed54e7a2be3627d0145bfc2abe54c992257b0cb",
