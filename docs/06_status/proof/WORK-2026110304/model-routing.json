@@ -1,22 +1,37 @@
 {
   "issue_id": "WORK-2026110304",
-  "source_sha": "43471d7b44505212b5a251e8484346312b76d0ae",
-  "generated_at": "2026-11-03T14:34:43.910091+00:00",
-  "observed_lane_configuration": {
-    "profile": "codex-sol-medium",
-    "model": "gpt-6.1-sol",
-    "reasoning_effort": "medium",
-    "selected_by": "three-brain",
-    "policy_version": "3.0.0"
-  },
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-medium",
   "model": "gpt-6.1-sol",
   "reasoning_effort": "medium",
-  "observation_source": "docs/06_status/lanes/WORK-2026110304.json",
-  "runtime_model_independently_verified": false,
-  "note": "Lane manifest and observed Codex executor launch agree on gpt-6.1-sol with medium effort. Backend model identity is not independently exposed.",
-  "observed_cli_launch": {
+  "policy_version": "3.0.0",
+  "codex_cli_version": "codex-cli 0.162.1",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": 0,
+  "prompt_bytes": 10732,
+  "estimated_prompt_tokens": 2683,
+  "wall_time_ms": 1124196,
+  "generated_at": "2026-11-03T14:42:45.127Z",
+  "routing_source": "declared",
+  "observation": {
+    "status": "observed",
+    "reason": null,
+    "session_id": "01a1a1cb-abdb-75f3-a872-68fb15e0fbf2",
     "model": "gpt-6.1-sol",
     "reasoning_effort": "medium",
-    "source": "active executor process arguments"
+    "cli_version": "0.162.1",
+    "turns": 1,
+    "token_usage": {
+      "input_tokens": 4457651,
+      "cached_input_tokens": 4388352,
+      "cache_write_input_tokens": 0,
+      "output_tokens": 20005,
+      "reasoning_output_tokens": 5582,
+      "total_tokens": 4477656
+    },
+    "unavailable_fields": [],
+    "mismatched_fields": []
   }
 }
