@@ -20,3 +20,7 @@ The real-persistence assertions require the staging-ci environment and have not 
 Implementation SHA: c91ac116c024bf9029788fd0a8939cae5c6291c9
 Merge SHA: pending merge
 PR: deferred to Production Claude under the explicit staging-slot sequencing override.
+
+## Rework
+
+Implementation baf1164999da78df5c218733b8d0db8435d8b4ff isolates bet identity from the preceding live suite, reads back the seeded capper, adds primary-ID attribution diagnostics for both API picks, and passes the delivery pick ID through owned capper metadata to the worker. The local idempotency experiment reproduced the old collision and confirmed different corrected keys. No production code, target policy, switch ownership, adapter, or ledger behavior changed. Existing PR: #1826; corrected exact-head staging proof remains pending.

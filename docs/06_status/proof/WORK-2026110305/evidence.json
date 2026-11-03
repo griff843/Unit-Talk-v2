@@ -4,11 +4,11 @@
   "tier": "T1",
   "lane_type": "runtime",
   "proof_profile": "runtime",
-  "source_sha": "c91ac116c024bf9029788fd0a8939cae5c6291c9",
+  "source_sha": "baf1164999da78df5c218733b8d0db8435d8b4ff",
   "status": "pre_merge_live_proof_deferred",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "c91ac116c024bf9029788fd0a8939cae5c6291c9",
+    "verified_source_sha": "baf1164999da78df5c218733b8d0db8435d8b4ff",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -43,7 +43,7 @@
     "command": "pnpm test:db",
     "exit_code": 1,
     "reason": "Staging guard refuses local host=127.0.0.1, ref=unidentified. Requires staging-ci CI_SUPABASE_* credentials and xskgrzbteyqdufktjrjx. No DB writes performed locally.",
-    "ci_exact_head": "pending; Production Claude opens PR when staging slot is free"
+    "ci_exact_head": "pending corrected exact-head staging CI on existing PR #1826"
   },
   "mutation": {
     "status": "implemented_not_executed_live",
@@ -85,7 +85,7 @@
   },
   "model_routing": "model-routing.json (wrapper-owned observed model gpt-6.1-sol, effort medium)",
   "pr": {
-    "status": "withheld_by_explicit_sequencing_override",
+    "status": "existing PR #1826; no PR created by rework executor",
     "owner": "Production Claude",
     "title": "feat(ops): WORK-2026110305 human-capper delivery staging proof",
     "tier_label_required": "tier:T1"
@@ -102,5 +102,26 @@
     },
     "diff_check": "pass",
     "r_level": "PASS"
+  },
+  "rework": {
+    "baseline_sha": "313ae1e807e7a5aef9dca82bb285bddd128c2571",
+    "implementation_sha": "baf1164999da78df5c218733b8d0db8435d8b4ff",
+    "root_cause": "The preceding Track Only suite used identical bet identity fields under the shared CI run namespace; idempotency excludes capper identity, so this suite received that other capper's existing pick.",
+    "fix": "Prefix bet fields with WORK3007; verify fixture capper persistence; read both API picks and the worker pick by primary ID before comparing attribution; hand off the pick ID through owned capper metadata.",
+    "local_collision_experiment": "PASS: evaluated both source fixture body functions with the same namespace and real computeSubmissionIdempotencyKey; old keys equal, corrected keys differ. No DB access.",
+    "staging_previous_run": {
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/41671267309/job/126040614439",
+      "result": "API suite failed picks.length=0; worker suite not executed. This supersedes the prior deferred-only CI status."
+    },
+    "live_proof": "Pending corrected exact-head staging CI. Local live tests skip; no local DB writes.",
+    "verification": {
+      "pnpm_verify": "Exit 1: full verify:static PASS; live stage refused loopback target before writes",
+      "pnpm_type_check": "PASS after final test edits",
+      "focused_live_tests": "Exit 0: 2 skipped, 0 passed, 0 failed",
+      "pnpm_test_db": "Exit 1: staging guard refused loopback target",
+      "r_level": "PASS",
+      "diff_check": "PASS",
+      "logs": "/tmp/work-2026110305-rework-{verify,typecheck,focused,test-db}.log"
+    }
   }
 }
