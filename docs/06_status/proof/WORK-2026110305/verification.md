@@ -2,27 +2,49 @@
 
 MERGE_SHA: pending merge
 
-> Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command
-> actually executed and its real result before review. `post-merge-lane-close.yml`
-> binds the merge SHA; never write one here by hand.
-
 Issue: WORK-2026110305
 Tier: T1
-result: not_run
+Implementation SHA: c91ac116c024bf9029788fd0a8939cae5c6291c9
+Result: static verification passed; writable staging proof deferred. Acceptance criteria are not yet complete.
 
-## ASSERTIONS:
+## Assertions and proof boundaries
 
-- [ ] (state each behavior this lane proves, and the test that proves it)
+The API live suite seeds a run-namespaced capper and uses the real Database bundle and submission/release paths. It checks authorization, capper identity, pinned destination, validated/queued lifecycle and exactly one pending unclaimed official-picks outbox row before any fixture change. Track Only must persist no outbox. Removing the server allowlist must return 403 and persist no additional pick, preventing the step-2 outbox. That mutation is implemented but has not executed against staging locally.
 
-## EVIDENCE:
+The worker suite finds that persisted run-owned pick through capper_id, then uses its pick ID. The contract-author ruling permits a test-fixture retarget only after asserting the row is pending and unclaimed; PATCH filters include row ID, pick ID, pending status and both null claim fields. This is a fixture step, not a production delivery operation. The official-picks claim path is not exercised.
 
-(paste measured output here, in fenced blocks)
+Worker claim and confirm use the real database RPC path. The Discord adapter and its message ID are SIMULATED: no Discord API call or real Discord delivery is claimed. The suite asserts the owned switch blocks claiming, releases only that switch, then verifies one sent receipt with the pinned channel, queued-to-posted lifecycle, and an idle second cycle with adapter count still one and one receipt. Only the test-owned switch is cleaned up. No real target switch is touched.
+
+The real ungoverned-target contract requires zero distribution.dispatch_* audit rows for this pick. Governed-target dispatch-ledger behavior is not proven here. Existing in-memory ledger tests cover it, and the production canary must evidence it. No target is remapped onto a governed target and no ledger row is fabricated. The halves run in separate processes to respect the prohibition on app-to-app imports.
 
 ## Verification
 
-(record every verification command run on the final code commit, with its real result)
+| Command | Measured result |
+|---|---|
+| pnpm verify | Exit 1: complete static stage passed, then writable guard refused host=127.0.0.1 / ref=unidentified. |
+| pnpm verify:static, as invoked by pnpm verify | PASS: boundary, sync/alignment/automation checks, env, lint, type-check, build, full pnpm test, production migration tests, Smart Form verification and command verification. |
+| pnpm exec tsx --test apps/api/src/t1-proof-work-2026103007-human-capper-delivery-live.test.ts apps/worker/src/t1-proof-work-2026103007-human-capper-delivery-live.test.ts | Exit 0: 2 tests, 0 pass, 0 fail, 2 skipped. This verifies loading only, not live behavior. |
+| pnpm exec tsx --test apps/api/src/capper-delivery-authorization.test.ts apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts apps/worker/src/worker-runtime.test.ts | Exit 0: 162 tests passed; none skipped. Regression evidence only. |
+| pnpm test:db | Exit 1: refused before DB access because target is not approved staging. |
+| pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD | PASS; lifecycle-fsm matched. Mechanical check finds existing tracked WORK-2026100301 R2/R3/R4 artifacts; no new lane-specific shadow/fault execution is claimed. |
+| git diff --check | PASS. No tests removed and no new any casts. |
 
-## Merge SHA Binding
+Full static verification emitted existing expired wiring-baseline warnings. Optional Smart Form browser E2E did not run because UNIT_TALK_SMART_FORM_E2E is not set.
+
+Local command logs: /tmp/work-2026110305-verify.log, /tmp/work-2026110305-test-db.log, /tmp/work-2026110305-runtime.log. Structured results and limits are retained in evidence.json.
+
+## Deferred live proof and review sequencing
+
+Writable live-DB proof is blocked/deferred. The observed local guard reports host=127.0.0.1 (the packet's earlier preflight reported unparseable). Writable verification requires project xskgrzbteyqdufktjrjx and must run through staging-ci with CI_SUPABASE_* credentials. No local DB mutation occurred. Neither the live assertions nor the live mutation are claimed as executed.
+
+Production Claude opens the PR when the shared staging slot is free, per the explicit PR-opening override. Expected title: feat(ops): WORK-2026110305 human-capper delivery staging proof. Required label: tier:T1. Require green CI at the exact pushed head, including both new tests executed, not skipped, in Writable DB proof (staging only). No PR was opened by this executor. No READY_FOR_REVIEW attestation is published.
+
+## Model routing
+
+The wrapper's observed launch configuration is gpt-6.1-sol, effort medium; model-routing.json is wrapper-owned evidence and is preserved for wrapper refresh.
+
+## SHA binding
 
 Merge SHA: pending merge
-PR: pending
+PR: deferred to Production Claude
+PM approval, governed merge, finalization, and orchestration reconciliation remain pending.

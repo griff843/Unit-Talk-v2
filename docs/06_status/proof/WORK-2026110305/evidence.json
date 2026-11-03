@@ -1,0 +1,106 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110305",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "runtime",
+  "source_sha": "c91ac116c024bf9029788fd0a8939cae5c6291c9",
+  "status": "pre_merge_live_proof_deferred",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "c91ac116c024bf9029788fd0a8939cae5c6291c9",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm verify:static (executed as the first stage of pnpm verify)",
+    "type_check": "pass",
+    "lint": "pass",
+    "build": "pass",
+    "test": "pass",
+    "note": "All static stages completed before test:live-db reached the staging identity guard. Existing expired wiring-baseline warnings and optional Smart Form browser E2E not-run notice remain; no changes made to baseline."
+  },
+  "focused_live_tests": {
+    "command": "pnpm exec tsx --test apps/api/src/t1-proof-work-2026103007-human-capper-delivery-live.test.ts apps/worker/src/t1-proof-work-2026103007-human-capper-delivery-live.test.ts",
+    "exit_code": 0,
+    "tests": 2,
+    "passed": 0,
+    "skipped": 2,
+    "failed": 0,
+    "note": "Load/skip validation only; no live assertion executed locally."
+  },
+  "runtime_regression": {
+    "command": "pnpm exec tsx --test apps/api/src/capper-delivery-authorization.test.ts apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts apps/worker/src/worker-runtime.test.ts",
+    "exit_code": 0,
+    "tests": 162,
+    "passed": 162,
+    "skipped": 0,
+    "failed": 0
+  },
+  "runtime_proof": {
+    "status": "deferred",
+    "command": "pnpm test:db",
+    "exit_code": 1,
+    "reason": "Staging guard refuses local host=127.0.0.1, ref=unidentified. Requires staging-ci CI_SUPABASE_* credentials and xskgrzbteyqdufktjrjx. No DB writes performed locally.",
+    "ci_exact_head": "pending; Production Claude opens PR when staging slot is free"
+  },
+  "mutation": {
+    "status": "implemented_not_executed_live",
+    "change": "Remove server allowlist authorization for delivery-eligible request",
+    "assertions": [
+      "HTTP 403",
+      "No additional persisted pick and therefore no step-2 outbox"
+    ],
+    "live_result": "deferred to staging CI"
+  },
+  "proof_boundaries": {
+    "real_persistence_when_executed": [
+      "capper seed",
+      "processSubmissionAtomic submission and lifecycle",
+      "authorization metadata and pinned destination",
+      "enqueueDistributionAtomic outbox",
+      "fixture-only retarget of owned pending unclaimed row",
+      "owned target kill switch",
+      "claimNextAtomic / claim_next_outbox",
+      "confirmDeliveryAtomic / confirm_delivery_atomic",
+      "receipt and queued-to-posted lifecycle",
+      "second claim idle",
+      "zero distribution.dispatch_* audit rows"
+    ],
+    "simulated": [
+      "Discord adapter and message ID; no Discord API call"
+    ],
+    "fixture_retarget": "Contract-author ruling 2026-11-03 permits only this API-created row to move off official-picks after canonical pending assertions; filter id, pick_id, status=pending, claimed_at=null, claimed_by=null.",
+    "not_proven": [
+      "official-picks worker claim path",
+      "governed-target dispatch ledger; existing in-memory coverage and future production canary"
+    ]
+  },
+  "r_level": {
+    "verdict": "PASS",
+    "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "rule": "lifecycle-fsm",
+    "note": "Mechanical check finds tracked WORK-2026100301 R2/R3/R4 artifacts. No new shadow/fault run is claimed."
+  },
+  "model_routing": "model-routing.json (wrapper-owned observed model gpt-6.1-sol, effort medium)",
+  "pr": {
+    "status": "withheld_by_explicit_sequencing_override",
+    "owner": "Production Claude",
+    "title": "feat(ops): WORK-2026110305 human-capper delivery staging proof",
+    "tier_label_required": "tier:T1"
+  },
+  "verification": {
+    "pnpm_verify": {
+      "exit_code": 1,
+      "static_stage": "pass",
+      "live_stage": "blocked by staging identity guard"
+    },
+    "pnpm_test_db": {
+      "exit_code": 1,
+      "reason": "same staging identity refusal"
+    },
+    "diff_check": "pass",
+    "r_level": "PASS"
+  }
+}
