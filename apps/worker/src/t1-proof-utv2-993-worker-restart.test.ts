@@ -358,6 +358,11 @@ function makeBundle(
   const resolvedRuns = runs ?? new FakeSystemRunRepository();
   const audit = new FakeAuditLogRepository();
   const repositories: RepositoryBundle = {
+    killSwitch: {
+      isKilled: async () => false,
+      setKilled: async () => { throw new Error('Test stub does not support writes'); },
+      listAll: async () => [],
+    },
     submissions: {} as RepositoryBundle['submissions'],
     picks,
     outbox,
