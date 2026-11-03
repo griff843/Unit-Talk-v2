@@ -1,0 +1,108 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026103006",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "local_static_pass_db_deferred",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "ea13cf2b4db1662f772f2304d08c20043aa3cad7",
+    "sha_type": "branch_head",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm verify (runs pnpm verify:static, then pnpm test:live-db)",
+    "r_level_check": "PASS",
+    "r_level_artifacts": {
+      "r2-determinism": {
+        "required": true,
+        "pmGated": false,
+        "found": true,
+        "path": "artifacts/r2-determinism-WORK-2026100301.json"
+      },
+      "r3-shadow-report": {
+        "required": true,
+        "pmGated": false,
+        "found": true,
+        "path": "artifacts/shadow-report-WORK-2026100301.json"
+      },
+      "r4-fault-report": {
+        "required": false,
+        "pmGated": true,
+        "found": true,
+        "path": "artifacts/r4-fault-report-WORK-2026100301.json"
+      }
+    },
+    "r_level_artifact_note": "The checker found existing WORK-2026100301 artifacts. This lane does not claim them as new issue-specific runtime proof; its direct evidence is the worker tests and mutation.",
+    "full_command_exit_code": 1,
+    "scope": "verify:static completed; subsequent writable DB verification refused unidentified local target",
+    "node_test_suite_totals": {
+      "tests": 8012,
+      "pass": 7999,
+      "fail": 0,
+      "skipped": 13
+    },
+    "pre_merge_evidence_contract": "pass",
+    "model_routing_contract": "pass",
+    "ci_status": "pending_exact_head"
+  },
+  "runtime_proof": {
+    "status": "blocked_deferred_to_ci",
+    "environment": "local synthetic in-memory tests only; writable staging proof pending",
+    "queries": [
+      {
+        "environment": "synthetic in-memory fake; not live DB",
+        "source": "apps/worker/src/worker-runtime.test.ts",
+        "operation": "After each unwired cycle, repositories.outbox.claimNext(target, proof-claimable)",
+        "assertion": "Held pending row remains claimable for all five destinations."
+      }
+    ],
+    "row_counts": [
+      {
+        "environment": "synthetic in-memory fake; not live DB",
+        "scope": "Five independent unwired-target fixtures, asserted before proof claimNext",
+        "pending": 5,
+        "adapter_calls": 0,
+        "claim_calls": 0,
+        "attempt_count": 0
+      },
+      {
+        "environment": "synthetic in-memory fake; not live DB",
+        "scope": "Two independent read-error fixtures",
+        "pending": 2,
+        "adapter_calls": 0,
+        "claim_calls": 0
+      }
+    ],
+    "blocker": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (packet host=unparseable; observed host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.",
+    "runner_tests": {
+      "tests": 95,
+      "pass": 95,
+      "fail": 0
+    },
+    "exactly_once_tests": {
+      "tests": 23,
+      "pass": 23,
+      "fail": 0
+    },
+    "local_restart_tests": {
+      "tests": 2,
+      "pass": 2,
+      "fail": 0
+    },
+    "unfiltered_restart_suite": "25 passed, 3 live-DB reads failed with TypeError: fetch failed"
+  },
+  "mutation": {
+    "status": "detected",
+    "change": "Remove missing-repository refusal; restore && options.repositories.killSwitch skip",
+    "test": "WORK-2026103006: unwired kill switch holds discord:official-picks pending",
+    "exit_code": 1,
+    "observed": "dead_letter instead of kill-switch-unwired; original runner restored; 95/95 tests pass",
+    "log_sha256": "c74c594c9a710b9ca34ab0c92700efa5d73e0adc06d5ec2d1f28628cd98a0cc0"
+  },
+  "existing_tests": "No existing test deleted or assertion loosened; two fake-bundle helpers gained explicit released-switch stubs.",
+  "generated_at": "2026-11-01T19:10:56.282109+00:00"
+}
