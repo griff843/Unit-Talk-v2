@@ -14,6 +14,8 @@ Rework baseline: 11f88bde1c700cf5841b8fa2e88f73c106d0303a. New assertions ran be
 | Focused queues-count-relation and describe-error tests (`pnpm exec tsx --test`) | 39/39 PASS |
 | Operator-surface server tests (`pnpm exec tsx --test apps/operator-web/src/server.test.ts apps/command-center/src/lib/server-api.test.ts`) | 20/20 PASS |
 | `pnpm verify` (includes `pnpm verify:static`, type-check and full test suite) | Static PASS; full command exit 1 at deferred writable DB guard |
+| `pnpm type-check` (stage of `pnpm verify:static`, also run separately) | PASS |
+| `pnpm test` (stage of `pnpm verify:static`) | PASS |
 | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS; artifact presence only |
 
 Full source verification log and focused regression logs are copied into evidence.json. Final proof-head results and log digests belong in `.out/ops/ready-for-pr/WORK-2026110304.md`.
