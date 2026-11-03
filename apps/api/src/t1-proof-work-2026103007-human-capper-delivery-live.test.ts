@@ -101,10 +101,13 @@ test('WORK-2026103007 live staging: canonical authorization/release persists one
   assert.equal(picks[0]!.capper_id, capperId);
   assert.equal(picks[0]!.status, 'queued');
   assert.equal((picks[0]!.metadata['deliveryAuthorization'] as Record<string, unknown>)['decision'], 'authorized');
-  const rows = await readRows<{ id: string; target: string; payload: Record<string, unknown> }>(
-    `distribution_outbox?pick_id=eq.${pickId}&select=id,target,payload`);
+  const rows = await readRows<{ id: string; target: string; status: string; claimed_at: string | null; claimed_by: string | null; payload: Record<string, unknown> }>(
+    `distribution_outbox?pick_id=eq.${pickId}&select=id,target,status,claimed_at,claimed_by,payload`);
   assert.equal(rows.length, 1);
   assert.equal(rows[0]!.target, 'discord:official-picks');
+  assert.equal(rows[0]!.status, 'pending');
+  assert.equal(rows[0]!.claimed_at, null);
+  assert.equal(rows[0]!.claimed_by, null);
   const destination = rows[0]!.payload['deliveryDestination'] as Record<string, unknown>;
   assert.equal(destination['capperId'], capperId);
   assert.equal(destination['channelId'], channelId);

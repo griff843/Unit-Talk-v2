@@ -1,4 +1,9 @@
-/** WORK-2026103007 worker half: real staging claim/confirm, SIMULATED Discord. */
+/**
+ * WORK-2026110305 (carried WORK-2026103007) worker half: real staging
+ * claim/confirm with SIMULATED Discord. Retargeting the API row is a test-fixture
+ * step authorized by the contract author; the official-picks claim path and
+ * governed-target dispatch ledger are not exercised.
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadEnvironment } from '@unit-talk/config';
@@ -30,7 +35,7 @@ async function rest<T>(path: string, method = 'GET', body?: unknown): Promise<T[
   return await response.json() as T[];
 }
 
-test('WORK-2026103007 live staging: real atomic claim/confirm, exactly once and owned kill control with SIMULATED Discord adapter', { skip }, async () => {
+test('WORK-2026103007 live staging: test-fixture retarget, real atomic claim/confirm, exactly once and owned kill control with SIMULATED Discord adapter; no official-picks claim', { skip }, async () => {
   assert.equal(new URL(supabaseUrl).protocol, 'https:');
   assert.equal(host, stagingHost, 'refusing any other database before client construction');
   assert.ok(serviceRoleKey);
@@ -48,6 +53,8 @@ test('WORK-2026103007 live staging: real atomic claim/confirm, exactly once and 
   const original = outbox[0]!;
   assert.equal(original.target, 'discord:official-picks');
   assert.equal(original.status, 'pending');
+  assert.equal(original.claimed_at, null);
+  assert.equal(original.claimed_by, null);
   const destination = (original.payload as Record<string, unknown>)['deliveryDestination'] as Record<string, unknown>;
   assert.equal(destination['capperId'], capperId);
   assert.equal(destination['channelId'], '100000000000000002');
@@ -72,11 +79,13 @@ test('WORK-2026103007 live staging: real atomic claim/confirm, exactly once and 
 
   await repositories.killSwitch.setKilled({ target: targetKey, killed: true, actor, reason: 'WORK3007 fixture-owned switch' });
   try {
-    // Move only the pending API-created fixture row to a unique target. Its
-    // canonical payload/pin stays intact; no shared target switch is touched.
+    // Authorized test-fixture step, not a production delivery operation. Move
+    // only this unclaimed pending row away from official-picks. Never remap the
+    // namespaced target onto a governed target to manufacture ledger coverage.
     const moved = await rest<{ id: string }>(
-      `distribution_outbox?id=eq.${original.id}&pick_id=eq.${pick.id}&status=eq.pending`, 'PATCH', { target });
+      `distribution_outbox?id=eq.${original.id}&pick_id=eq.${pick.id}&status=eq.pending&claimed_at=is.null&claimed_by=is.null`, 'PATCH', { target });
     assert.equal(moved.length, 1);
+    assert.equal(moved[0]!.id, original.id);
     const killed = await cycle();
     assert.equal(killed[0]?.results[0]?.status, 'kill-switch-engaged');
     assert.equal(calls, 0);
@@ -99,8 +108,17 @@ test('WORK-2026103007 live staging: real atomic claim/confirm, exactly once and 
     const repeated = await cycle();
     assert.equal(repeated[0]?.results[0]?.status, 'idle');
     assert.equal(calls, 1, 'second real claim cycle must not invoke adapter again');
-    // Dispatch-ledger coverage is NOT claimed: real worker classifies this
-    // unique target as ungoverned. Central packet resolution is still required.
+    const lifecycle = await rest<{ from_state: string | null; to_state: string }>(
+      `pick_lifecycle?pick_id=eq.${pick.id}&select=from_state,to_state`);
+    assert.equal(lifecycle.filter((row) => row.from_state === 'queued' && row.to_state === 'posted').length, 1);
+    const finalReceipts = await rest<{ id: string }>(
+      `distribution_receipts?outbox_id=eq.${original.id}&select=id`);
+    assert.equal(finalReceipts.length, 1, 'second cycle must not create another receipt');
+    // The real ungoverned-target contract is zero dispatch-ledger entries.
+    // Governed-target coverage remains with in-memory tests and the canary.
+    const ledger = await rest<{ id: string }>(
+      `audit_log?entity_ref=eq.${pick.id}&action=like.distribution.dispatch_*&select=id`);
+    assert.equal(ledger.length, 0, 'namespaced target must not write governed dispatch ledger rows');
   } finally {
     const rows = await rest<{ actor: string | null }>(`delivery_kill_switch?target=eq.${targetKey}&select=actor`);
     assert.equal(rows.length, 1);
