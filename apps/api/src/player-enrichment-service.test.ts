@@ -246,7 +246,7 @@ test('NHL checks candidate league and team and does not resolve ambiguity using 
   assert.equal(await resolveHeadshotUrl('Jake Evans', 'NHL', null), null);
   candidates = [{ playerId: '1', name: 'Jake Evans', league: 'NHL', teamAbbrev: 'MTL' }];
   assert.equal(await resolveHeadshotUrl('Jake Evans', 'NHL', null, { teamAbbrev: 'BOS' }), null);
-  assert.equal((await resolveHeadshotUrl('Jake Evans', 'NHL', null, { teamAbbrev: 'MTL' }))!, 'https://assets.nhle.com/mugs/nhl/latest/1.png');
+  assert.match((await resolveHeadshotUrl('Jake Evans', 'NHL', null, { teamAbbrev: 'MTL' }))!, /^https:\/\/assets\.nhle\.com\/mugs\/nhl\/latest\/1\.png$/);
 });
 
 test('enrichment records refusal reasons and leaves stored images untouched', async (t) => {
@@ -326,7 +326,7 @@ test('NHL six Jakes sharing a stored URL never confirms an unrelated Jake', asyn
   }
   const evans = await resolveHeadshot('Jake Evans', 'NHL', { teamId: 'MONTREAL_CANADIENS_NHL' });
   assert.equal(evans.reason, 'confirmed');
-  assert.equal(evans.url!, 'https://assets.nhle.com/mugs/nhl/latest/8474100.png');
+  assert.match(evans.url!, /^https:\/\/assets\.nhle\.com\/mugs\/nhl\/latest\/8474100\.png$/);
   assert.doesNotMatch(evans.url!, /8484554/);
 });
 
