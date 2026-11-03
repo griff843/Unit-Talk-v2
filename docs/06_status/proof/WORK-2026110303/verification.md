@@ -67,4 +67,4 @@ This lane has no database or production runtime surface. It changes the local ex
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1825

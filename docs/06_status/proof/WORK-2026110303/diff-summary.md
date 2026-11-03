@@ -20,4 +20,4 @@ Scope of the figures below: implementation files and the work order only, exclud
 ## SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1825
