@@ -22,3 +22,4 @@ Scope of the figures below: workflow files and the work order only, excluding `d
 ## SHA Binding
 
 Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1829
