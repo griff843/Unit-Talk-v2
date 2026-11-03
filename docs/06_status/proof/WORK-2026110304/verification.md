@@ -2,7 +2,7 @@
 
 Issue: WORK-2026110304 — Tier T2
 Source SHA: f4c34cb62541883c8be560b320a7a528cd4199aa
-MERGE_SHA: pending merge
+MERGE_SHA: 6fab53992ea43b0d5153192fe045957896534d68
 Result: static gates pass; writable live DB deferred; browser acceptance not claimed.
 
 Rework baseline: 11f88bde1c700cf5841b8fa2e88f73c106d0303a. New assertions ran before implementation: 39 tests, 36 passing and 3 failing because the page formatter hid the invalid-date guidance. With OperatorInputError, all 39 pass. Ordinary Error, database-shaped object and string with identical text still receive generic wording. Original main regression-first evidence and prepared candidates are retained in evidence.json as historical inputs, not new-epoch phase validity.
@@ -63,5 +63,5 @@ Proof restructured into the gate format by Production Claude (orchestrator); no 
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
-PR: #1828
+Merge SHA: `6fab53992ea43b0d5153192fe045957896534d68`
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1828

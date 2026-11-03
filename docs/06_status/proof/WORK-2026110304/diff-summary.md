@@ -1,7 +1,7 @@
 # WORK-2026110304 diff summary
 
 Source SHA: f4c34cb62541883c8be560b320a7a528cd4199aa
-Merge SHA: pending merge
+Merge SHA: 6fab53992ea43b0d5153192fe045957896534d68
 
 The accepted calendar-window and operator-error implementation is preserved. Rework fixes the one rejected path: invalid calendar dates now reach the existing Picks error state with actionable date guidance.
 

@@ -7,9 +7,11 @@
   "status": "static_pass_live_db_deferred_browser_unclaimed",
   "sha_binding": {
     "verified_source_sha": "f4c34cb62541883c8be560b320a7a528cd4199aa",
-    "merge_sha": null,
+    "merge_sha": "6fab53992ea43b0d5153192fe045957896534d68",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-11-03T20:24:21.889Z"
   },
   "generated_at": "2026-11-03T17:04:38.316543+00:00",
   "static_proof": {
