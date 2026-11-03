@@ -1,4 +1,4 @@
-# WORK-2026110304 verification
+# PROOF: WORK-2026110304
 
 Issue: WORK-2026110304 — Tier T2
 Source SHA: f4c34cb62541883c8be560b320a7a528cd4199aa
@@ -6,6 +6,8 @@ MERGE_SHA: pending merge
 Result: static gates pass; writable live DB deferred; browser acceptance not claimed.
 
 Rework baseline: 11f88bde1c700cf5841b8fa2e88f73c106d0303a. New assertions ran before implementation: 39 tests, 36 passing and 3 failing because the page formatter hid the invalid-date guidance. With OperatorInputError, all 39 pass. Ordinary Error, database-shaped object and string with identical text still receive generic wording. Original main regression-first evidence and prepared candidates are retained in evidence.json as historical inputs, not new-epoch phase validity.
+
+## Verification
 
 | Command | Result |
 |---|---|
@@ -23,3 +25,30 @@ Every describeOperatorFailure caller was reviewed again. Picks and Review retain
 R-level PASS checks existing artifacts, including a historical browser FAIL. origin/main advanced; its two-dot comparison also includes unrelated mainline work and matches lifecycle-fsm. The three-dot lane diff remains bounded. No branch refresh or unrelated fix was attempted.
 
 PM approval, staging DB proof, PR opening/labeling, merge, lane finalization and post-merge reconciliation remain for the authorized outer path. No READY_FOR_REVIEW attestation published.
+
+ASSERTIONS:
+- [x] Calendar "From" (`YYYY-MM-DD`) filters `gte` at that day's UTC midnight; calendar "To" filters `lt` at the next UTC midnight, so the whole selected day is included.
+- [x] Full timestamp values keep their exact `gte`/`lte` behaviour.
+- [x] An impossible calendar date throws `OperatorInputError`, and the Picks error state shows its date guidance instead of widening or dropping the filter.
+- [x] `describeOperatorFailure` returns operator language for permission, session, timeout and generic failures; an ordinary Error, database-shaped object or string with identical text still receives generic wording.
+- [ ] Browser acceptance of the rendered pages. Not claimed; see "Verification boundary".
+
+EVIDENCE:
+- Focused tests: `queues-count-relation.test.ts` and `describe-error.test.ts`, 39/39 pass at f4c34cb62; 36/39 on the unmodified rework baseline 11f88bde1 (regression first).
+- Operator-surface server tests: 20/20 pass.
+- `pnpm verify`: static stage passes; the command exits 1 only at the writable DB guard, which refuses a non-staging local target before any write.
+- The exact-head PR CI run is the authority for green status; this file does not claim it.
+
+## Verification boundary
+
+| Link | Status |
+|---|---|
+| Date filter construction and invalid-date handling | Proven by unit tests against the query builder |
+| Operator-language error mapping | Proven by unit tests |
+| Same filtered population for rows and count | Proven by the count-relation test |
+| Rendered Command Center pages in a browser | Not proven; source review of callers only |
+| Writable DB behaviour | Not exercised; this lane changes no write path |
+
+A green run is not a readiness claim. Known cosmetic gap: the Picks page still wraps the invalid-date guidance in its existing critical "Active picks unavailable" banner; `page.tsx` is outside this lane's file scope.
+
+Proof restructured into the gate format by Production Claude (orchestrator); no source or test file changed.
