@@ -165,6 +165,22 @@ export interface ExecutionFinding {
   attempt: number;
 }
 
+/**
+ * An answer the orchestrator records between attempts. Only the operator CLI
+ * writes it, and only while no attempt is open, so an executor can never
+ * author or clear one.
+ */
+export interface OrchestratorRuling {
+  id: string;
+  epoch_id: string;
+  source_epoch_id: string | null;
+  author: 'orchestrator';
+  answers_finding_id: string | null;
+  text: string;
+  recorded_at: string;
+  after_attempt: number;
+}
+
 export interface CompletedPhase {
   epoch_id: string;
   phase: ExecutionPhase;
@@ -206,6 +222,7 @@ export interface ArchivedExecutionEpoch {
   findings: ExecutionFinding[];
   pending_actions: string[];
   attempts: ExecutionAttempt[];
+  orchestrator_rulings?: OrchestratorRuling[];
 }
 
 export interface CheckpointIntegrity {
@@ -234,6 +251,8 @@ export interface ExecutionCheckpoint {
   findings: ExecutionFinding[];
   pending_actions: string[];
   attempts: ExecutionAttempt[];
+  /** Optional so checkpoints written before rulings existed still validate. */
+  orchestrator_rulings?: OrchestratorRuling[];
   cancel_requested: boolean;
   cancel_reason: string | null;
   owner: { pid: number; host: string } | null;
@@ -394,6 +413,11 @@ function isCheckpoint(value: unknown, issueId: string): value is ExecutionCheckp
     checkpoint.attempts.at(-1)?.attempt === checkpoint.attempt &&
     checkpoint.completed_phases.every((phase) => phase.epoch_id === currentEpochId) &&
     checkpoint.findings.every((finding) => finding.epoch_id === currentEpochId) &&
+    (checkpoint.orchestrator_rulings === undefined ||
+      (Array.isArray(checkpoint.orchestrator_rulings) &&
+        checkpoint.orchestrator_rulings.every(
+          (ruling) => ruling.epoch_id === currentEpochId && ruling.author === 'orchestrator',
+        ))) &&
     checkpoint.integrity?.algorithm === 'sha256' &&
     /^[0-9a-f]{64}$/i.test(checkpoint.integrity.checksum) &&
     checkpoint.integrity.checksum === checkpointChecksum(checkpoint)
@@ -585,6 +609,7 @@ export interface ResumePlan {
   completed_phases: ExecutionPhase[];
   skipped_phases: ExecutionPhase[];
   carried_findings: ExecutionFinding[];
+  carried_rulings: OrchestratorRuling[];
   pending_actions: string[];
   prior_attempts: ExecutionAttempt[];
 }
@@ -606,6 +631,7 @@ export function buildResumePlan(checkpoint: ExecutionCheckpoint | null): ResumeP
       completed_phases: [],
       skipped_phases: [],
       carried_findings: [],
+      carried_rulings: [],
       pending_actions: [],
       prior_attempts: [],
     };
@@ -617,9 +643,18 @@ export function buildResumePlan(checkpoint: ExecutionCheckpoint | null): ResumeP
     completed_phases: completed,
     skipped_phases: completed,
     carried_findings: checkpoint.findings,
+    carried_rulings: checkpoint.orchestrator_rulings ?? [],
     pending_actions: checkpoint.pending_actions,
     prior_attempts: checkpoint.attempts,
   };
+}
+
+export function renderRulings(rulings: OrchestratorRuling[]): string[] {
+  return rulings.map(
+    (ruling) =>
+      `- ${ruling.answers_finding_id ? `[answers finding \`${ruling.answers_finding_id}\`] ` : ''}${ruling.text} ` +
+      `(after attempt ${ruling.after_attempt}, ${ruling.recorded_at})`,
+  );
 }
 
 /**
@@ -658,7 +693,18 @@ export function buildResumeBrief(checkpoint: ExecutionCheckpoint | null): string
       lines.push(`- \`${entry.phase}\` (attempt ${entry.attempt}, ${entry.completed_at}): ${entry.summary}`);
     }
   }
-  lines.push('', `Resume at phase: \`${plan.resume_from_phase}\`.`, '', '### Established findings (do not re-derive)', '');
+  lines.push('', `Resume at phase: \`${plan.resume_from_phase}\`.`);
+  if (plan.carried_rulings.length > 0) {
+    lines.push(
+      '',
+      '### Orchestrator rulings — authoritative',
+      '',
+      'Recorded by the orchestrator between attempts. They answer open questions and override any conflicting finding below.',
+      '',
+      ...renderRulings(plan.carried_rulings),
+    );
+  }
+  lines.push('', '### Established findings (do not re-derive)', '');
   if (plan.carried_findings.length === 0) {
     lines.push('- (none recorded)');
   } else {
@@ -686,6 +732,24 @@ export function buildResumeBrief(checkpoint: ExecutionCheckpoint | null): string
     '',
     'Keep recording progress with `pnpm ops:exec-checkpoint phase-complete|finding|heartbeat` so the next attempt can resume too.',
   );
+  return lines.join('\n');
+}
+
+/**
+ * The rework-epoch brief. No phase validity carries over, but orchestrator
+ * rulings do, so a rework attempt is not left re-asking answered questions.
+ */
+export function buildReworkBrief(checkpoint: ExecutionCheckpoint | null): string {
+  const lines = [
+    '## Execution checkpoint — REWORK EPOCH',
+    '',
+    'A new rework epoch will bind the current reviewed head as its immutable baseline.',
+    'No phase validity from the rejected epoch is inherited. Its findings remain as rework inputs.',
+  ];
+  const rulings = checkpoint?.orchestrator_rulings ?? [];
+  if (rulings.length > 0) {
+    lines.push('', '### Orchestrator rulings — authoritative', '', ...renderRulings(rulings));
+  }
   return lines.join('\n');
 }
 
@@ -790,6 +854,15 @@ export function beginAttempt(input: BeginAttemptInput): BeginAttemptResult {
           attempt: 1,
         }))
       : [];
+  const existingRulings = existing?.orchestrator_rulings ?? [];
+  const reworkRulings: OrchestratorRuling[] =
+    input.kind === 'rework'
+      ? existingRulings.map((ruling) => ({
+          ...ruling,
+          epoch_id: epoch.epoch_id,
+          source_epoch_id: ruling.epoch_id,
+        }))
+      : [];
   const priorEpochs: ArchivedExecutionEpoch[] =
     input.kind === 'rework'
       ? [
@@ -801,11 +874,13 @@ export function beginAttempt(input: BeginAttemptInput): BeginAttemptResult {
             findings: existing!.findings,
             pending_actions: existing!.pending_actions,
             attempts: closeDanglingAttempts(existing!.attempts, existing!.phase, now, existing!.attempt + 1),
+            ...(existingRulings.length > 0 ? { orchestrator_rulings: existingRulings } : {}),
           },
         ]
       : (existing?.prior_epochs ?? []);
   const completedPhases = input.kind === 'resume' ? existing!.completed_phases : [];
   const findings = input.kind === 'resume' ? existing!.findings : reworkFindings;
+  const rulings = input.kind === 'resume' ? existingRulings : reworkRulings;
   const pendingActions = input.kind === 'fresh' ? [] : existing!.pending_actions;
   const phase = nextPhaseAfter(completedPhases.map((entry) => entry.phase));
   const attempt = input.kind === 'resume' ? existing!.attempt + 1 : 1;
@@ -827,6 +902,7 @@ export function beginAttempt(input: BeginAttemptInput): BeginAttemptResult {
     completed_phases: completedPhases.map((entry) => entry.phase),
     skipped_phases: completedPhases.map((entry) => entry.phase),
     carried_findings: findings,
+    carried_rulings: rulings,
     pending_actions: pendingActions,
     prior_attempts: priorAttempts,
   };
@@ -866,6 +942,7 @@ export function beginAttempt(input: BeginAttemptInput): BeginAttemptResult {
     findings,
     pending_actions: pendingActions,
     attempts: [...priorAttempts, attemptRecord],
+    orchestrator_rulings: rulings,
     cancel_requested: false,
     cancel_reason: null,
     owner: { pid: process.pid, host: os.hostname() || 'unknown' },
@@ -981,6 +1058,86 @@ export function recordPendingActions(
     pending_actions: actions,
     heartbeat_at: nowIso,
   }));
+}
+
+export interface RecordRulingResult {
+  ok: boolean;
+  code:
+    | 'execution_checkpoint_ruling_recorded'
+    | 'execution_checkpoint_active'
+    | 'execution_checkpoint_busy'
+    | 'execution_checkpoint_missing'
+    | 'execution_checkpoint_ruling_invalid';
+  checkpoint: ExecutionCheckpoint | null;
+  ruling: OrchestratorRuling | null;
+  reason: string;
+}
+
+/**
+ * Record an orchestrator answer between attempts. Refused while any attempt is
+ * open: an in-flight executor holds the epoch, and a ruling written under it
+ * would be indistinguishable from executor self-authorship. Phases, findings,
+ * pending actions and attempts are left exactly as they were.
+ */
+export function recordRuling(
+  issueId: string,
+  ruling: { text: string; answersFindingId?: string | null },
+  options: { dir?: string; now?: Date } = {},
+): RecordRulingResult {
+  const dir = options.dir ?? EXECUTION_CHECKPOINT_DIR;
+  const refuse = (code: RecordRulingResult['code'], reason: string): RecordRulingResult => ({
+    ok: false,
+    code,
+    checkpoint: null,
+    ruling: null,
+    reason,
+  });
+  const text = ruling.text.trim();
+  if (!text) return refuse('execution_checkpoint_ruling_invalid', 'a ruling requires non-empty --text');
+  try {
+    return withCheckpointMutationLock(issueId, dir, () => {
+      const state = readCheckpointState(issueId, dir);
+      const checkpoint = state.checkpoint;
+      if (!checkpoint) return refuse('execution_checkpoint_missing', state.reason);
+      if (checkpoint.status === 'in_progress' || checkpoint.attempts.some((attempt) => attempt.ended_at === null)) {
+        return refuse(
+          'execution_checkpoint_active',
+          `refused to record a ruling while epoch ${checkpoint.epoch.epoch_id} attempt ${checkpoint.attempt} is in progress`,
+        );
+      }
+      const answers = ruling.answersFindingId ?? null;
+      if (answers !== null && !checkpoint.findings.some((finding) => finding.id === answers)) {
+        return refuse(
+          'execution_checkpoint_ruling_invalid',
+          `--answers names finding '${answers}', which does not exist in epoch ${checkpoint.epoch.epoch_id}`,
+        );
+      }
+      const nowIso = (options.now ?? new Date()).toISOString();
+      const existing = checkpoint.orchestrator_rulings ?? [];
+      const recorded: OrchestratorRuling = {
+        id: `ruling-${existing.length + 1}`,
+        epoch_id: checkpoint.epoch.epoch_id,
+        source_epoch_id: null,
+        author: 'orchestrator',
+        answers_finding_id: answers,
+        text,
+        recorded_at: nowIso,
+        after_attempt: checkpoint.attempt,
+      };
+      const next = touch({ ...checkpoint, orchestrator_rulings: [...existing, recorded] }, nowIso);
+      writeCheckpoint(next, dir);
+      return {
+        ok: true,
+        code: 'execution_checkpoint_ruling_recorded',
+        checkpoint: next,
+        ruling: recorded,
+        reason: `recorded ${recorded.id} after attempt ${checkpoint.attempt}`,
+      };
+    });
+  } catch (error) {
+    if (!(error instanceof CheckpointMutationLockedError)) throw error;
+    return refuse('execution_checkpoint_busy', error.message);
+  }
 }
 
 export interface ClearCheckpointResult {
@@ -1295,6 +1452,34 @@ function runCli(): void {
         process.exitCode = checkpoint ? 0 : 1;
         return;
       }
+      case 'ruling': {
+        // An executor runs with its attempt identity in the environment; a
+        // ruling is an orchestrator transition and is never accepted from it.
+        if (process.env.UNIT_TALK_EXECUTION_EPOCH_ID) {
+          emitJson({
+            ok: false,
+            code: 'execution_checkpoint_ruling_refused',
+            issue_id: issueId,
+            message: 'rulings are orchestrator-only; refused under an executor attempt identity',
+          });
+          process.exitCode = 1;
+          return;
+        }
+        const result = recordRuling(
+          issueId,
+          { text: getFlag(flags, 'text') ?? '', answersFindingId: getFlag(flags, 'answers') ?? null },
+          { dir },
+        );
+        emitJson({
+          ok: result.ok,
+          code: result.code,
+          issue_id: issueId,
+          ruling: result.ruling,
+          message: result.reason,
+        });
+        process.exitCode = result.ok ? 0 : 1;
+        return;
+      }
       case 'clear': {
         const result = clearCheckpoint(issueId, { dir });
         emitJson({
@@ -1320,7 +1505,7 @@ function runCli(): void {
       }
       default:
         throw new Error(
-          'Usage: pnpm ops:exec-checkpoint <status|resume-brief|heartbeat|phase-complete|finding|pending|clear|cancel> --issue UTV2-### [--phase <phase>] [--summary <text>] [--reason <text>] [--action <text>] [--epoch-id <id> --attempt <n> --minimum-revision <n>]',
+          'Usage: pnpm ops:exec-checkpoint <status|resume-brief|heartbeat|phase-complete|finding|pending|ruling|clear|cancel> --issue UTV2-### [--phase <phase>] [--summary <text>] [--reason <text>] [--action <text>] [--text <ruling> --answers <finding-id>] [--epoch-id <id> --attempt <n> --minimum-revision <n>]',
         );
     }
   } catch (error) {
