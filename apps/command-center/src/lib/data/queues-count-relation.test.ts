@@ -238,3 +238,69 @@ for (const scenario of [
     });
   });
 }
+
+async function withDateSearch(check: (search: (params: Record<string, string>) => ReturnType<typeof import('./queues').searchPicks>, requests: URL[]) => Promise<void>) {
+  const restoreDefaults = withWorkspaceEnvDefaults();
+  const restoreTarget = withLoopbackSupabaseTarget();
+  const originalFetch = globalThis.fetch;
+  const oldToken = process.env.COMMAND_CENTER_AUTH_TOKEN;
+  process.env.COMMAND_CENTER_AUTH_TOKEN = 'date-filter-test';
+  const requests: URL[] = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(new URL(request.url));
+    return request.method === 'HEAD'
+      ? new Response(null, { headers: { 'content-range': '*/0' } })
+      : Response.json([]);
+  };
+  try {
+    const { searchPicks } = await import('./queues');
+    await check(async (params) => await withRequestContext({ authorization: 'Bearer date-filter-test' }, () => searchPicks(params)), requests);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (oldToken === undefined) delete process.env.COMMAND_CENTER_AUTH_TOKEN;
+    else process.env.COMMAND_CENTER_AUTH_TOKEN = oldToken;
+    restoreTarget(); restoreDefaults();
+  }
+}
+
+for (const [day, nextDay] of [['2026-11-03', '2026-11-04'], ['2026-12-31', '2027-01-01'], ['2028-02-29', '2028-03-01']]) {
+  test(`calendar bounds include all of ${day} in both rows and count`, async () => {
+    await withDateSearch(async (search, requests) => {
+      await search({ dateFrom: day!, dateTo: day! });
+      assert.deepEqual(requests.map((url) => url.pathname.split('/').pop()).sort(), ['picks', 'picks_current_state']);
+      for (const url of requests) {
+        // Exclusive next midnight includes 23:59:59.999999 without rounding to milliseconds.
+        assert.deepEqual(url.searchParams.getAll('created_at'), [`gte.${day}T00:00:00.000Z`, `lt.${nextDay}T00:00:00.000Z`]);
+      }
+    });
+  });
+}
+
+test('full timestamp bounds retain exact gte/lte for rows and count', async () => {
+  await withDateSearch(async (search, requests) => {
+    const from = '2026-11-03T12:34:56.123456Z';
+    const to = '2026-11-03T19:00:00+02:00';
+    await search({ dateFrom: from, dateTo: to });
+    assert.equal(requests.length, 2);
+    for (const url of requests) assert.deepEqual(url.searchParams.getAll('created_at'), [`gte.${from}`, `lte.${to}`]);
+  });
+});
+
+for (const param of ['dateFrom', 'dateTo']) {
+  test(`invalid calendar ${param} fails explicitly without querying an unfiltered population`, async () => {
+    await withDateSearch(async (search, requests) => {
+      for (const value of ['2026-02-30', '2026-13-01', '2026-00-10', '2026-02-29']) {
+        await assert.rejects(search({ [param]: value }), /Use a valid calendar date for pick filters/);
+      }
+      assert.equal(requests.length, 0);
+    });
+  });
+}
+
+test('invalid date cannot silently succeed when a result filter has no matching picks', async () => {
+  await withDateSearch(async (search, requests) => {
+    await assert.rejects(search({ dateTo: '2026-02-30', result: 'win' }), /Use a valid calendar date for pick filters/);
+    assert.equal(requests.length, 0);
+  });
+});

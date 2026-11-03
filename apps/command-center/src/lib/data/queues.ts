@@ -584,6 +584,20 @@ export async function searchPicks(
     : '';
 
   try {
+    // Validate before result-filter short circuits, and share exact bounds across rows/count.
+    const rangeFilters = SEARCH_PICKS_RANGE_FILTERS.flatMap<{ column: string; op: 'gte' | 'lte' | 'lt'; value: string }>((filter) => {
+      const value = params[filter.param]?.trim();
+      if (!value) return [];
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return [{ ...filter, value }];
+      const midnight = new Date(`${value}T00:00:00.000Z`);
+      if (!Number.isFinite(midnight.getTime()) || midnight.toISOString().slice(0, 10) !== value) {
+        throw new Error('Use a valid calendar date for pick filters.');
+      }
+      if (filter.op === 'gte') return [{ ...filter, value: midnight.toISOString() }];
+      // Exclusive next midnight includes the entire UTC day, including DB microseconds.
+      midnight.setUTCDate(midnight.getUTCDate() + 1);
+      return [{ ...filter, op: 'lt' as const, value: midnight.toISOString() }];
+    });
     const client: Client = await getDataClient();
     const requestedResult = params['result'] ?? '';
     const resultFilter = ['win', 'loss', 'push', 'void', 'pending'].includes(requestedResult) ? requestedResult : '';
@@ -633,6 +647,7 @@ export async function searchPicks(
       eq: (c: string, v: string) => T;
       gte: (c: string, v: string) => T;
       lte: (c: string, v: string) => T;
+      lt: (c: string, v: string) => T;
       neq: (c: string, v: string) => T;
       in: (c: string, v: string[]) => T;
       not: (c: string, op: string, v: string) => T;
@@ -648,10 +663,10 @@ export async function searchPicks(
         const value = params[filter.param]?.trim();
         if (value) next = next.eq(filter.column, filter.normalize ? filter.normalize(value) : value);
       }
-      for (const filter of SEARCH_PICKS_RANGE_FILTERS) {
-        const value = params[filter.param]?.trim();
-        if (!value) continue;
-        next = filter.op === 'gte' ? next.gte(filter.column, value) : next.lte(filter.column, value);
+      for (const filter of rangeFilters) {
+        if (filter.op === 'gte') next = next.gte(filter.column, filter.value);
+        else if (filter.op === 'lt') next = next.lt(filter.column, filter.value);
+        else next = next.lte(filter.column, filter.value);
       }
       if (resultFilter === 'pending') {
         next = next.neq('status', 'voided');
