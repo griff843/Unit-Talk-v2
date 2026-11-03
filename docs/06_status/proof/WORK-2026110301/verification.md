@@ -1,6 +1,6 @@
 # PROOF: WORK-2026110301
 
-MERGE_SHA: pending merge
+MERGE_SHA: bb1947e317679d573e00f3b1d2fcd350873b4345
 
 Execution SHA: ca37fd5281e3e7df42db34a66e7aa4eb2222c2a2
 Status: pre-merge; staging proof and governed review pending. No merge, approval or exact-head green CI claim.
@@ -66,7 +66,7 @@ The previous full ops:brief failed configured pipeline/product-truth reads with 
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: bb1947e317679d573e00f3b1d2fcd350873b4345
 PR: pending
 Approved PR head: pending merge
 Execution SHA: ca37fd5281e3e7df42db34a66e7aa4eb2222c2a2
