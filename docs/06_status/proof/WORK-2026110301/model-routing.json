@@ -1,0 +1,37 @@
+{
+  "issue_id": "WORK-2026110301",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-medium",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "medium",
+  "policy_version": "3.0.0",
+  "codex_cli_version": "codex-cli 0.162.1",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": 0,
+  "prompt_bytes": 18701,
+  "estimated_prompt_tokens": 4676,
+  "wall_time_ms": 125562,
+  "generated_at": "2026-11-03T13:06:43.622Z",
+  "routing_source": "declared",
+  "observation": {
+    "status": "observed",
+    "reason": null,
+    "session_id": "01a1a182-fd40-72f2-a7db-3ae60358e6db",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "medium",
+    "cli_version": "0.162.1",
+    "turns": 1,
+    "token_usage": {
+      "input_tokens": 450118,
+      "cached_input_tokens": 414336,
+      "cache_write_input_tokens": 0,
+      "output_tokens": 4179,
+      "reasoning_output_tokens": 386,
+      "total_tokens": 454297
+    },
+    "unavailable_fields": [],
+    "mismatched_fields": []
+  }
+}
