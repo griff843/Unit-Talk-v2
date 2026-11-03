@@ -20,10 +20,10 @@
     "docs/06_status/proof/WORK-2026110101/evidence.json",
     "docs/06_status/proof/WORK-2026110101/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-11-01T19:32:14.818Z",
-  "heartbeat_at": "2026-11-01T20:17:40.721Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-11-03T13:32:58.390Z",
+  "closed_at": "2026-11-03T13:32:58.390Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026110101-reap-keep-status-settled.json",
   "created_by": "claude",
@@ -45,6 +45,13 @@
         "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1817 merged while manifest status was \"blocked\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
       ],
       "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-11-03T13:32:54.973Z",
+      "verdict": "pass",
+      "merge_sha": "e4c5138eebce01b3df19c0edae7005630c951a35",
+      "failures": [],
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": [],
