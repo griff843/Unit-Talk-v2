@@ -16,6 +16,24 @@ test('resolveHeadshotUrl returns null for unknown sport', async () => {
 
 // ── runPlayerEnrichmentPass ────────────────────────────────────────
 
+test('NHL uniquely matched player uses the live asset host and provider playerId only', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => Response.json([
+    { playerId: '8484554', name: 'Unrelated Player', teamAbbrev: 'MTL', league: 'NHL' },
+    { playerId: '8478133', name: 'Jake Evans', teamAbbrev: 'MTL', league: 'NHL' },
+  ]));
+  const url = await resolveHeadshotUrl('Jake Evans', 'NHL', null, { teamAbbrev: 'MTL' });
+  assert.equal(url, 'https://assets.nhle.com/mugs/nhl/latest/8478133.png');
+});
+
+test('NHL resolver never emits the dead bamgrid host', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => Response.json([
+    { playerId: '8478133', name: 'Jake Evans', teamAbbrev: 'MTL', league: 'NHL' },
+  ]));
+  const url = await resolveHeadshotUrl('Jake Evans', 'NHL', null);
+  assert.ok(url);
+  assert.notEqual(new URL(url).hostname, 'cms.nhl.bamgrid.com');
+});
+
 function createFakeParticipantRepo(players: Array<Record<string, unknown>>) {
   const store = new Map<string, Record<string, unknown>>();
   for (const p of players) store.set(p['id'] as string, { ...p });
@@ -228,7 +246,7 @@ test('NHL checks candidate league and team and does not resolve ambiguity using 
   assert.equal(await resolveHeadshotUrl('Jake Evans', 'NHL', null), null);
   candidates = [{ playerId: '1', name: 'Jake Evans', league: 'NHL', teamAbbrev: 'MTL' }];
   assert.equal(await resolveHeadshotUrl('Jake Evans', 'NHL', null, { teamAbbrev: 'BOS' }), null);
-  assert.match((await resolveHeadshotUrl('Jake Evans', 'NHL', null, { teamAbbrev: 'MTL' }))!, /\/1.jpg$/);
+  assert.equal((await resolveHeadshotUrl('Jake Evans', 'NHL', null, { teamAbbrev: 'MTL' }))!, 'https://assets.nhle.com/mugs/nhl/latest/1.png');
 });
 
 test('enrichment records refusal reasons and leaves stored images untouched', async (t) => {
@@ -308,7 +326,7 @@ test('NHL six Jakes sharing a stored URL never confirms an unrelated Jake', asyn
   }
   const evans = await resolveHeadshot('Jake Evans', 'NHL', { teamId: 'MONTREAL_CANADIENS_NHL' });
   assert.equal(evans.reason, 'confirmed');
-  assert.match(evans.url!, /\/8474100.jpg$/);
+  assert.equal(evans.url!, 'https://assets.nhle.com/mugs/nhl/latest/8474100.png');
   assert.doesNotMatch(evans.url!, /8484554/);
 });
 

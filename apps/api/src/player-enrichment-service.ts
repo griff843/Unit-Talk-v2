@@ -8,7 +8,7 @@
  *   MLB  — statsapi.mlb.com people search
  *   NBA  — cdn.nba.com headshots
  *   NFL  — nfl.com headshots via ESPN ID
- *   NHL  — cms.nhl.bamgrid.com headshots
+ *   NHL  — assets.nhle.com headshots
  */
 
 import type { ParticipantRepository, SystemRunRepository } from '@unit-talk/db';
@@ -303,7 +303,7 @@ async function resolveNHLHeadshot(displayName: string, identity: PlayerIdentity)
   if (data.length >= 100) return { url: null, reason: 'ambiguous' };
   return uniqueMatch(displayName, identity, data.map(item => ({
     name: item.name ?? '', teamId: item.teamId ?? null, teamAbbrev: item.teamAbbrev ?? null, teamName: item.teamName ?? (item.teamAbbrev ? NHL_TEAM_NAMES[item.teamAbbrev.toUpperCase()] : null) ?? null, league: item.league ?? 'NHL',
-    url: item.playerId ? `https://cms.nhl.bamgrid.com/images/headshots/current/168x168/${item.playerId}.jpg` : null,
+    url: item.playerId ? `https://assets.nhle.com/mugs/nhl/latest/${item.playerId}.png` : null,
   })));
 }
 
