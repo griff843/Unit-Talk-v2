@@ -1,0 +1,168 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026110308
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026110308
+  objective: >-
+    GitHub's `ubuntu-latest` label now resolves to `ubuntu-26.04`. qa-fast run
+    41692903141 logged `Image: ubuntu-26.04`, version 20261025.179. The repo
+    pins `playwright` 1.58.2, which refuses that OS: `playwright install
+    chromium --with-deps` fails with "Playwright does not support chromium on
+    ubuntu26.04-x64". The last green qa-fast was 41518733002 on 2026-11-02,
+    before the label moved. Every job that installs Playwright now fails at
+    install, before any test runs.
+
+    Pin those jobs to `ubuntu-24.04`, the image they last passed on, so the
+    existing tests run again.
+  acceptance_criteria:
+    - "`runs-on: ubuntu-24.04` on exactly the jobs that run `playwright
+      install`:"
+    - "`.github/workflows/qa-fast.yml` (job at :14);"
+    - "`.github/workflows/qa-experience-regression.yml` (:16);"
+    - "`.github/workflows/post-merge-qa-gate.yml` (:41);"
+    - "`.github/workflows/staging-db-proof.yml` (the job at :47, which installs
+      at :175)."
+    - "No other line changes: no step, trigger, permission, environment, secret,
+      concurrency or test change, and no Playwright version change."
+    - qa-fast on this PR's head reaches and passes the Playwright install step.
+  guardrails: []
+  non_goals:
+    - Upgrading Playwright to a version that supports 26.04. That is a
+      dependency change and would be its own lane.
+    - "`ci.yml`, `merge-gate.yml`, `proof-gate.yml` and any required check or
+      merge-authority input."
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026110308 — pin Playwright jobs to ubuntu-24.04
+
+      Tier: T1
+
+      Lane type: hygiene
+
+      Executor: claude
+
+
+      Source: staging/CI reliability lane (Operating Claude), 2026-11-03.
+
+
+      Tier is T1 because preflight PE2 sets a mechanical T1 floor for any
+      `.github/workflows/**` path. The change itself only moves four
+      non-required jobs back to the runner image they last passed on.
+
+
+      ## File Scope
+
+
+      - `.github/workflows/qa-fast.yml`
+
+      - `.github/workflows/qa-experience-regression.yml`
+
+      - `.github/workflows/post-merge-qa-gate.yml`
+
+      - `.github/workflows/staging-db-proof.yml`
+
+      - `.ops/work/WORK-2026110308.md`
+
+
+      ## Rollback
+
+
+      Revert the PR. The jobs go back to `ubuntu-latest` and fail at install
+      again.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026110308.md
+    title: WORK-2026110308 — pin Playwright jobs to ubuntu-24.04
+    description: >-
+      # WORK-2026110308 — pin Playwright jobs to ubuntu-24.04
+
+
+      Tier: T1
+
+      Lane type: hygiene
+
+      Executor: claude
+
+
+      Source: staging/CI reliability lane (Operating Claude), 2026-11-03.
+
+
+      Tier is T1 because preflight PE2 sets a mechanical T1 floor for any
+      `.github/workflows/**` path. The change itself only moves four
+      non-required jobs back to the runner image they last passed on.
+
+
+      ## Objective
+
+
+      GitHub's `ubuntu-latest` label now resolves to `ubuntu-26.04`. qa-fast run
+      41692903141 logged `Image: ubuntu-26.04`, version 20261025.179. The repo
+      pins `playwright` 1.58.2, which refuses that OS: `playwright install
+      chromium --with-deps` fails with "Playwright does not support chromium on
+      ubuntu26.04-x64". The last green qa-fast was 41518733002 on 2026-11-02,
+      before the label moved. Every job that installs Playwright now fails at
+      install, before any test runs.
+
+
+      Pin those jobs to `ubuntu-24.04`, the image they last passed on, so the
+      existing tests run again.
+
+
+      ## Acceptance Criteria
+
+
+      - `runs-on: ubuntu-24.04` on exactly the jobs that run `playwright
+      install`:
+        - `.github/workflows/qa-fast.yml` (job at :14);
+        - `.github/workflows/qa-experience-regression.yml` (:16);
+        - `.github/workflows/post-merge-qa-gate.yml` (:41);
+        - `.github/workflows/staging-db-proof.yml` (the job at :47, which installs at :175).
+      - No other line changes: no step, trigger, permission, environment,
+      secret, concurrency or test change, and no Playwright version change.
+
+      - qa-fast on this PR's head reaches and passes the Playwright install
+      step.
+
+
+      ## File Scope
+
+
+      - `.github/workflows/qa-fast.yml`
+
+      - `.github/workflows/qa-experience-regression.yml`
+
+      - `.github/workflows/post-merge-qa-gate.yml`
+
+      - `.github/workflows/staging-db-proof.yml`
+
+      - `.ops/work/WORK-2026110308.md`
+
+
+      ## Out of Scope
+
+
+      - Upgrading Playwright to a version that supports 26.04. That is a
+      dependency change and would be its own lane.
+
+      - `ci.yml`, `merge-gate.yml`, `proof-gate.yml` and any required check or
+      merge-authority input.
+
+
+      ## Rollback
+
+
+      Revert the PR. The jobs go back to `ubuntu-latest` and fail at install
+      again.
+    captured_at: 2026-11-03T19:00:58.656Z
+    description_sha256: 449b540e539120520707dd2451a6d9e76348f741483fe7e304206cf2a44183ca
+  contract_hash: 6bc3bab3bd1687a6e4a1946b9b3912477c9f6391bbbf1e03f73683e6d44ca851
