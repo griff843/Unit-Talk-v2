@@ -47,6 +47,14 @@ EVIDENCE:
 - Disclosure: run 41671267309 at `313ae1e80` failed on the fixture idempotency collision described under "Rework at baseline 313ae1e80". Run 41678610020 at `34efcbe05` failed earlier in the chain, in the unrelated `t1-proof-utv2-1907-capper-attribution` suite (`listByLifecycleStates` statement timeout on staging), so this lane's suites did not run there. That timeout is a staging performance issue tracked outside this lane.
 - Commits after `4ed895e54` touch only proof and model-routing files.
 
+```text
+ci.yml run 41682337207 attempt 1, head 4ed895e5460f7274f651607110872eec7a67f00d
+job 126078966205 Writable DB proof (staging only): success
+ok 1 - WORK-2026103007 live staging: canonical authorization/release persists one outbox; Track Only and removed allowlist cannot enqueue
+ok 1 - WORK-2026103007 live staging: test-fixture retarget, real atomic claim/confirm, exactly once and owned kill control with SIMULATED Discord adapter; no official-picks claim
+job 126087833993 verify: success
+```
+
 ## Verification boundary
 
 | Link | Status |
@@ -67,10 +75,10 @@ PR #1826 is open. T1 merge requires Griff's `t1-approved` label and a `pm-verdic
 
 The wrapper's observed launch configuration is gpt-6.1-sol, effort medium; model-routing.json is wrapper-owned evidence and is preserved for wrapper refresh.
 
-## SHA binding
+## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: deferred to Production Claude
+PR: #1826
 PM approval, governed merge, finalization, and orchestration reconciliation remain pending.
 
 ## Rework at baseline 313ae1e80
