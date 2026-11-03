@@ -54,11 +54,15 @@ before(async () => {
       metadata: { discord: { guildId, picksChannelId: channelId, discussionChannelId: '100000000000000003' } } }]),
   });
   assert.equal(response.ok, true, `staging fixture capper write failed (${response.status})`);
+  const cappers = await readRows<{ id: string }>(`cappers?id=eq.${capperId}&select=id`);
+  assert.deepEqual(cappers, [{ id: capperId }], 'seeded capper must persist under its exact identity');
 });
 
 function body(label: string, distributionMode: string) {
-  const away = `Northgate Foundry ${namespace}`;
-  const home = `Southport Ironworks ${namespace}`;
+  // Idempotency excludes capper identity; isolate the bet fields from the
+  // preceding Track Only suite, which shares CI_FIXTURE_RUN_ID.
+  const away = `WORK3007 Northgate Foundry ${namespace}`;
+  const home = `WORK3007 Southport Ironworks ${namespace}`;
   const eventName = `${away} at ${home} (${label})`;
   return { source: 'smart-form', market: 'NFL moneyline', selection: `${away} ML ${label}`,
     odds: -110, stakeUnits: 0.5, confidence: 0.7, eventName,
@@ -96,9 +100,10 @@ test('WORK-2026103007 live staging: canonical authorization/release persists one
   if (!delivered.body.ok) throw new Error('authorized staging submission failed');
   const pickId = delivered.body.data.pickId;
   const picks = await readRows<{ id: string; capper_id: string; status: string; metadata: Record<string, unknown> }>(
-    `picks?capper_id=eq.${capperId}&id=eq.${pickId}&select=id,capper_id,status,metadata`);
-  assert.equal(picks.length, 1);
-  assert.equal(picks[0]!.capper_id, capperId);
+    `picks?id=eq.${pickId}&select=id,capper_id,status,metadata`);
+  const diagnostic = JSON.stringify({ pickId, picks });
+  assert.equal(picks.length, 1, diagnostic);
+  assert.equal(picks[0]!.capper_id, capperId, diagnostic);
   assert.equal(picks[0]!.status, 'queued');
   assert.equal((picks[0]!.metadata['deliveryAuthorization'] as Record<string, unknown>)['decision'], 'authorized');
   const rows = await readRows<{ id: string; target: string; status: string; claimed_at: string | null; claimed_by: string | null; payload: Record<string, unknown> }>(
@@ -120,6 +125,11 @@ test('WORK-2026103007 live staging: canonical authorization/release persists one
   assert.equal(tracked.status, 201, JSON.stringify(tracked.body));
   assert.ok(tracked.body.ok);
   if (!tracked.body.ok) throw new Error('Track Only staging submission failed');
+  const trackedPicks = await readRows<{ id: string; capper_id: string | null; status: string; metadata: Record<string, unknown> }>(
+    `picks?id=eq.${tracked.body.data.pickId}&select=id,capper_id,status,metadata`);
+  const trackedDiagnostic = JSON.stringify({ pickId: tracked.body.data.pickId, picks: trackedPicks });
+  assert.equal(trackedPicks.length, 1, trackedDiagnostic);
+  assert.equal(trackedPicks[0]!.capper_id, capperId, trackedDiagnostic);
   assert.equal((await readRows(`distribution_outbox?pick_id=eq.${tracked.body.data.pickId}&select=id`)).length, 0);
 
   // Required configuration mutation: removing authorization makes the same
@@ -127,5 +137,15 @@ test('WORK-2026103007 live staging: canonical authorization/release persists one
   const removedAllowlist = await submit('removed-allowlist', 'delivery-eligible', '');
   assert.equal(removedAllowlist.status, 403);
   const capperPicks = await readRows<{ id: string }>(`picks?capper_id=eq.${capperId}&select=id`);
-  assert.equal(capperPicks.length, 2, 'rejected mutation must not persist another pick');
+  assert.deepEqual(capperPicks.map((pick) => pick.id).sort(), [pickId, tracked.body.data.pickId].sort(),
+    `rejected mutation must not persist another pick: ${JSON.stringify(capperPicks)}`);
+
+  // Persist the primary ID for the separate worker process, on our own fixture.
+  const handoff = await fetch(`${supabaseUrl}/rest/v1/cappers?id=eq.${capperId}`, {
+    method: 'PATCH', headers: headers(), body: JSON.stringify({ metadata: {
+      discord: { guildId, picksChannelId: channelId, discussionChannelId: '100000000000000003' },
+      proofDeliveryPickId: pickId,
+    } }),
+  });
+  assert.equal(handoff.ok, true, `fixture pick-ID handoff failed (${handoff.status})`);
 });

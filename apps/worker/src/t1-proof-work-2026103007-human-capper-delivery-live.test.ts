@@ -42,11 +42,19 @@ test('WORK-2026103007 live staging: test-fixture retarget, real atomic claim/con
   assert.ok(fixtureRun, 'shared CI fixture namespace is required');
   const repositories = createDatabaseRepositoryBundle(createServiceRoleDatabaseConnectionConfig(environment));
   assert.ok(repositories.killSwitch);
-  const picks = await rest<{ id: string; status: string; metadata: Record<string, unknown> }>(
-    `picks?capper_id=eq.${capperId}&select=id,status,metadata`);
-  const deliveryPicks = picks.filter((pick) => pick.metadata['proof_role'] === 'delivery');
-  assert.equal(deliveryPicks.length, 1, 'API proof must leave one indexed, run-owned delivery pick');
-  const pick = deliveryPicks[0]!;
+  const cappers = await rest<{ id: string; metadata: Record<string, unknown> }>(
+    `cappers?id=eq.${capperId}&select=id,metadata`);
+  assert.equal(cappers.length, 1, `missing fixture capper ${capperId}`);
+  const pickId = cappers[0]!.metadata['proofDeliveryPickId'];
+  assert.ok(typeof pickId === 'string' && /^[0-9a-f-]{36}$/i.test(pickId),
+    'API proof must persist its pick-ID handoff');
+  const picks = await rest<{ id: string; capper_id: string | null; status: string; metadata: Record<string, unknown> }>(
+    `picks?id=eq.${pickId}&select=id,capper_id,status,metadata`);
+  const diagnostic = JSON.stringify({ pickId, picks });
+  assert.equal(picks.length, 1, diagnostic);
+  const pick = picks[0]!;
+  assert.equal(pick.capper_id, capperId, diagnostic);
+  assert.equal(pick.metadata['proof_role'], 'delivery', diagnostic);
   assert.equal(pick.status, 'queued');
   const outbox = await repositories.outbox.listByPickId(pick.id);
   assert.equal(outbox.length, 1);
