@@ -5,7 +5,7 @@ MERGE_SHA: pending merge
 Issue: WORK-2026110305
 Tier: T1
 Implementation SHA: baf1164999da78df5c218733b8d0db8435d8b4ff
-Result: static verification passed; writable staging proof deferred. Acceptance criteria are not yet complete.
+Result: static verification passed, and exact-head writable staging proof passed in CI (`ci.yml` run 41682337207 at `4ed895e5460f7274f651607110872eec7a67f00d`). Real Discord delivery is NOT proven; see "Verification boundary".
 
 ## Assertions and proof boundaries
 
@@ -33,11 +33,35 @@ Full static verification emitted existing expired wiring-baseline warnings. Opti
 
 Local command logs: /tmp/work-2026110305-verify.log, /tmp/work-2026110305-test-db.log, /tmp/work-2026110305-runtime.log. Structured results and limits are retained in evidence.json.
 
-## Deferred live proof and review sequencing
+ASSERTIONS:
+- [x] An authorized human capper's delivery-eligible submission persists one pick attributed to that capper, with an authorized delivery decision, validated and queued lifecycle, and exactly one pending, unclaimed `discord:official-picks` outbox row carrying the pinned capper, channel and guild destination.
+- [x] A Track Only submission by the same capper persists a pick and no outbox row.
+- [x] With the server allowlist removed, the same delivery-eligible request returns 403 and persists no additional pick (the live mutation).
+- [x] The worker honors the test-owned kill switch (no claim, no adapter call), then after release claims and confirms through the real atomic RPCs exactly once: one sent receipt on the pinned channel, one queued-to-posted lifecycle row, an idle second cycle with no new adapter call or receipt, and zero `distribution.dispatch_*` audit rows for the namespaced target.
+- [ ] Real Discord delivery. Not proven here; see "Verification boundary".
 
-Writable live-DB proof is blocked/deferred. The observed local guard reports host=127.0.0.1 (the packet's earlier preflight reported unparseable). Writable verification requires project xskgrzbteyqdufktjrjx and must run through staging-ci with CI_SUPABASE_* credentials. No local DB mutation occurred. Neither the live assertions nor the live mutation are claimed as executed.
+EVIDENCE:
+- Exact-head CI: `ci.yml` run 41682337207, attempt 1, at `4ed895e5460f7274f651607110872eec7a67f00d` (the `ops:merge-wrapper git-merge-main` sync of `34efcbe05` onto main `bb1947e31`). `verify` job 126087833993 succeeded. `Writable DB proof (staging only)` job 126078966205 succeeded against staging `xskgrzbteyqdufktjrjx`, with no `not ok` line anywhere in `pnpm test:t1-proof:live`.
+- API suite: `ok 1 - WORK-2026103007 live staging: canonical authorization/release persists one outbox; Track Only and removed allowlist cannot enqueue`.
+- Worker suite: `ok 1 - WORK-2026103007 live staging: test-fixture retarget, real atomic claim/confirm, exactly once and owned kill control with SIMULATED Discord adapter; no official-picks claim`.
+- Disclosure: run 41671267309 at `313ae1e80` failed on the fixture idempotency collision described under "Rework at baseline 313ae1e80". Run 41678610020 at `34efcbe05` failed earlier in the chain, in the unrelated `t1-proof-utv2-1907-capper-attribution` suite (`listByLifecycleStates` statement timeout on staging), so this lane's suites did not run there. That timeout is a staging performance issue tracked outside this lane.
+- Commits after `4ed895e54` touch only proof and model-routing files.
 
-Production Claude opens the PR when the shared staging slot is free, per the explicit PR-opening override. Expected title: feat(ops): WORK-2026110305 human-capper delivery staging proof. Required label: tier:T1. Require green CI at the exact pushed head, including both new tests executed, not skipped, in Writable DB proof (staging only). No PR was opened by this executor. No READY_FOR_REVIEW attestation is published.
+## Verification boundary
+
+| Link | Status |
+|---|---|
+| Authorized capper -> canonical submission -> exactly one outbox row with correct destination | Proven on real staging Supabase (API suite, run 41682337207) |
+| Track Only and removed allowlist -> no outbox row / 403 | Proven on staging |
+| Worker claim/confirm, kill switch honored, exactly-once send, posted lifecycle, one receipt | Proven on staging with a SIMULATED Discord adapter and a test-fixture retargeted namespaced target, not `official-picks` |
+| `official-picks` claim path and governed-target dispatch ledger | Not proven live; in-memory tests only |
+| Real Discord message reaching a real channel | Not proven; only the private production canary can prove it, which needs Griff's separate delivery authorization |
+
+A green run is not a readiness claim and does not mean Unit Talk can deliver to Discord.
+
+## Review sequencing
+
+PR #1826 is open. T1 merge requires Griff's `t1-approved` label and a `pm-verdict/v1` APPROVED comment at the exact head. This proof closeout (format fixes and recording the measured CI result) was written by Production Claude, the orchestrator. It changes no source or test file.
 
 ## Model routing
 
