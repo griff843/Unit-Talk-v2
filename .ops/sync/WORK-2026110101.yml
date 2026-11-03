@@ -1,0 +1,173 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026110101
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026110101
+  objective: >-
+    The WORK-2026103009 dry run (run 41319898348, cutoff 2026-10-24T00:00:00Z)
+    selected 113,147 picks. That count includes 9,009 picks whose `status` is
+    `settled` but which have no `settlement_records` row. The reaper's only
+    settlement test is the presence of a `settlement_records` row, so it treated
+    them as unsettled fixtures.
+
+    Option B keeps every pick whose `status` is `settled`, whatever its
+    settlement rows say.
+  acceptance_criteria:
+    - "`selectReapablePicks` skips a row whose `status` is `settled`, counted
+      under a new skip reason `status_settled`. It is evaluated after the
+      existing checks, so the count is exactly the picks this correction removes
+      from eligibility."
+    - Every execute-mode pick DELETE re-asserts `status <> 'settled'`
+      (`picks.status` is NOT NULL), so a pick that becomes settled between
+      selection and delete is left alone.
+    - "Unit tests in `scripts/ci/staging-path-enforcement.test.ts` cover:"
+    - the new skip;
+    - the delete-time filter, through the existing in-memory store.
+    - A mutation check shows the tests fail without each change.
+    - After merge, a fresh read-only dry run of `staging-fixture-reap.yml` at
+      the same cutoff reports before and after eligibility counts. No execute is
+      dispatched; execute needs Griff's separate approval.
+  guardrails: []
+  non_goals:
+    - Executing the reap, which is not authorized.
+    - Other terminal statuses (`voided`, `posted` and so on). Only `settled` is
+      covered by the decision.
+    - The workflow file, production, migrations and scheduling.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026110101 — Reaper: keep picks whose status is `settled`
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: Griff, PM decision 2026-11-01, "Staging reaper: Choose Option B.
+      Preserve the approximately 9,009 picks marked settled but lacking
+      settlement records. Prepare a narrow correction, execute a fresh read-only
+      dry run and provide before/after eligibility counts and evidence. No
+      staging deletion is authorized yet."
+
+
+      Tier is T1 because this changes which staging rows the WORK-2026103009
+      reaper may delete. That reaper merged as T1 (#1813).
+
+
+      ## File Scope
+
+
+      - `scripts/ci/staging-fixture-reap.ts`
+
+      - `scripts/ci/staging-path-enforcement.test.ts`
+
+      - `.ops/work/WORK-2026110101.md`
+
+
+      ## Rollback
+
+
+      Revert the PR. A revert widens the selection again, but nothing is deleted
+      without a separately approved execute.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026110101.md
+    title: "WORK-2026110101 — Reaper: keep picks whose status is `settled`"
+    description: >-
+      # WORK-2026110101 — Reaper: keep picks whose status is `settled`
+
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: Griff, PM decision 2026-11-01, "Staging reaper: Choose Option B.
+      Preserve the approximately 9,009 picks marked settled but lacking
+      settlement records. Prepare a narrow correction, execute a fresh read-only
+      dry run and provide before/after eligibility counts and evidence. No
+      staging deletion is authorized yet."
+
+
+      Tier is T1 because this changes which staging rows the WORK-2026103009
+      reaper may delete. That reaper merged as T1 (#1813).
+
+
+      ## Objective
+
+
+      The WORK-2026103009 dry run (run 41319898348, cutoff 2026-10-24T00:00:00Z)
+      selected 113,147 picks. That count includes 9,009 picks whose `status` is
+      `settled` but which have no `settlement_records` row. The reaper's only
+      settlement test is the presence of a `settlement_records` row, so it
+      treated them as unsettled fixtures.
+
+
+      Option B keeps every pick whose `status` is `settled`, whatever its
+      settlement rows say.
+
+
+      ## Acceptance Criteria
+
+
+      - `selectReapablePicks` skips a row whose `status` is `settled`, counted
+      under a new skip reason `status_settled`. It is evaluated after the
+      existing checks, so the count is exactly the picks this correction removes
+      from eligibility.
+
+      - Every execute-mode pick DELETE re-asserts `status <> 'settled'`
+      (`picks.status` is NOT NULL), so a pick that becomes settled between
+      selection and delete is left alone.
+
+      - Unit tests in `scripts/ci/staging-path-enforcement.test.ts` cover:
+        - the new skip;
+        - the delete-time filter, through the existing in-memory store.
+
+        A mutation check shows the tests fail without each change.
+      - After merge, a fresh read-only dry run of `staging-fixture-reap.yml` at
+      the same cutoff reports before and after eligibility counts. No execute is
+      dispatched; execute needs Griff's separate approval.
+
+
+      ## File Scope
+
+
+      - `scripts/ci/staging-fixture-reap.ts`
+
+      - `scripts/ci/staging-path-enforcement.test.ts`
+
+      - `.ops/work/WORK-2026110101.md`
+
+
+      ## Out of Scope
+
+
+      - Executing the reap, which is not authorized.
+
+      - Other terminal statuses (`voided`, `posted` and so on). Only `settled`
+      is covered by the decision.
+
+      - The workflow file, production, migrations and scheduling.
+
+
+      ## Rollback
+
+
+      Revert the PR. A revert widens the selection again, but nothing is deleted
+      without a separately approved execute.
+    captured_at: 2026-11-01T19:32:04.190Z
+    description_sha256: 38c77e6bc834ecd4681e91f0a11a7b555fa9b8f65e9fac341c39a6a85b9694de
+  contract_hash: c59161775212723c9076e510fd52133b101ad94c99efb0b364a6c763e0f16adc
