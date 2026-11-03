@@ -16,6 +16,7 @@ ASSERTIONS:
 - [x] Runtime provider proof: 187/187 selected NHL snapshot rows returned HTTP 200, image/png, positive bytes. Nonexistent ID 9999999 returned 302, empty content type and zero bytes. Redirects were not followed. Per-row measurements and input digest: `nhl-asset-host-check.json`.
 - [x] `updateMetadata` is unchanged. No new live DB test is added and no live DB enrichment proof is claimed. No stored data was changed and production was not connected to.
 - [x] Source scope is limited to the two allowed files; host allowlists, canonical submission, distribution, outbox, worker, domain and Discord paths are unchanged. No new any cast.
+- [x] `pnpm verify:static` passed within the initial `pnpm verify` run: lint, type-check, build, aggregate tests (120 TAP groups; zero failing assertions), post-migration tests, Smart Form verification, command manifest and migration checks. Smart Form browser e2e was not run because its opt-in flag was unset. Expired wiring baseline entries were warnings.
 - [ ] Full `pnpm verify` green at exact final head: pending; local writable DB identity guard refuses this workspace. Final measured local command outcomes and head are recorded in `.out/ops/ready-for-pr/WORK-2026110301.md`.
 - [ ] Exact-head CI `Writable DB proof (staging only)`: Production Claude must open the PR when the staging slot is free; no PR opened by this executor.
 - [ ] Outer-wrapper executor-result/v1, independent Claude review, Griff t1-approved label and pm-verdict/v1 APPROVED at exact head.
@@ -28,6 +29,8 @@ pnpm exec tsx --test apps/api/src/player-enrichment-service.test.ts
 Before: 28 pass / 2 fail (unchanged main implementation)
 After: 30 pass / 0 fail
 Old-builder mutation: exit 1, 26 pass / 4 fail
+pnpm verify
+All static gates PASS; exit 1 at staging identity prerequisite before writable DB suites.
 pnpm test:db
 [assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
 [assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1).

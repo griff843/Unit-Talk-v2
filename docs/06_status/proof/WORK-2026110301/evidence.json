@@ -35,9 +35,11 @@
       "output": "mutation-old-host.txt",
       "description": "Restore only old NHL URL builder; regression and dead-host tests fail."
     },
-    "verify": "running; final exact-head outcome recorded in ready-for-pr handoff",
+    "verify": "exit 1 after all static gates passed; staging identity guard refused host=127.0.0.1 before writable suites. Initial run began before final source commit; final exact-head run recorded in handoff.",
     "test_db": "REFUSED before DB access: target identity unresolved (host=127.0.0.1); staging CI pending",
-    "r_level": "PASS at implementation commit; no matching rules"
+    "r_level": "PASS at implementation commit; no matching rules",
+    "verify_static": "PASS: all verify:static gates completed within pnpm verify; 120 TAP groups, zero failing assertions. Final exact-head rerun recorded in handoff.",
+    "verify_log_sha256": "1081bf63eeb51c56d7af4b5745a210320d91d7da8bb4bd90d219dd7b210d8666"
   },
   "runtime_proof": {
     "queries": [
