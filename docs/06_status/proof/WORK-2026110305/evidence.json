@@ -1,0 +1,246 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110305",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "source_sha": "baf1164999da78df5c218733b8d0db8435d8b4ff",
+  "status": "pre_merge_live_proof_passed",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "baf1164999da78df5c218733b8d0db8435d8b4ff",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm verify:static (executed as the first stage of pnpm verify)",
+    "type_check": "pass",
+    "lint": "pass",
+    "build": "pass",
+    "test": "pass",
+    "note": "All static stages completed before test:live-db reached the staging identity guard. Existing expired wiring-baseline warnings and optional Smart Form browser E2E not-run notice remain; no changes made to baseline."
+  },
+  "focused_live_tests": {
+    "command": "pnpm exec tsx --test apps/api/src/t1-proof-work-2026103007-human-capper-delivery-live.test.ts apps/worker/src/t1-proof-work-2026103007-human-capper-delivery-live.test.ts",
+    "exit_code": 0,
+    "tests": 2,
+    "passed": 0,
+    "skipped": 2,
+    "failed": 0,
+    "note": "Load/skip validation only; no live assertion executed locally."
+  },
+  "runtime_regression": {
+    "command": "pnpm exec tsx --test apps/api/src/capper-delivery-authorization.test.ts apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts apps/worker/src/worker-runtime.test.ts",
+    "exit_code": 0,
+    "tests": 162,
+    "passed": 162,
+    "skipped": 0,
+    "failed": 0
+  },
+  "runtime_proof": {
+    "status": "pass",
+    "command": "pnpm test:t1-proof:live (CI Writable DB proof (staging only))",
+    "ci_exact_head": {
+      "workflow": "ci.yml",
+      "run_id": 41682337207,
+      "attempt": 1,
+      "head_sha": "4ed895e5460f7274f651607110872eec7a67f00d",
+      "staging_db_job_id": 126078966205,
+      "staging_db_job": "success",
+      "verify_job_id": 126087833993,
+      "verify_job": "success",
+      "staging_project": "xskgrzbteyqdufktjrjx"
+    },
+    "results": [
+      "ok 1 - WORK-2026103007 live staging: canonical authorization/release persists one outbox; Track Only and removed allowlist cannot enqueue",
+      "ok 1 - WORK-2026103007 live staging: test-fixture retarget, real atomic claim/confirm, exactly once and owned kill control with SIMULATED Discord adapter; no official-picks claim"
+    ],
+    "chain_failures": 0,
+    "local_note": "Local pnpm test:db still refuses the loopback target; the live proof is the CI exact-head run above.",
+    "prior_runs": [
+      {
+        "run_id": 41671267309,
+        "head_sha": "313ae1e807e7a5aef9dca82bb285bddd128c2571",
+        "conclusion": "failure",
+        "cause": "fixture idempotency collision with the preceding Track Only suite"
+      },
+      {
+        "run_id": 41678610020,
+        "head_sha": "34efcbe05672c11e1a27a96bfa4bb2099230c039",
+        "conclusion": "failure",
+        "cause": "unrelated staging statement timeout in the earlier utv2-1907 suite; this lane's suites did not run"
+      }
+    ],
+    "queries": [
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "ingestor health check canonical freshness SELECT executes against staging (ok 1, 1411.91ms)"
+      },
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "ingestor supervisor canonical freshness SELECT executes against staging (ok 2, 1556.36ms)"
+      },
+      {
+        "table": "picks,submissions",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 3, 10393.75ms)"
+      },
+      {
+        "table": "pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 4, 6027.30ms)"
+      },
+      {
+        "table": "audit_log,distribution_outbox,distribution_receipts,pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 5, 6188.12ms)"
+      },
+      {
+        "table": "audit_log,pick_lifecycle,picks,settlement_records,submissions",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 6, 7824.00ms)"
+      },
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 7, 454.26ms)"
+      },
+      {
+        "table": "picks,settlement_records,submissions",
+        "description": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows (ok 8, 7915.27ms)"
+      },
+      {
+        "table": "audit_log,picks,settlement_records,submissions",
+        "description": "UTV2-996: correction chain is additive — original settlement row is not mutated (ok 9, 7512.25ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 10,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 2,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (synthetic reference rows)"
+      }
+    ],
+    "row_counts_captured_at": "2026-11-03T17:16:14.308Z",
+    "row_counts_note": "Harvested pre-merge by Production Claude calling the scripts/ops/ci-db-proof-harvest.ts functions directly (locate, receipt verify, merge-ref ancestry, job log, build) from the \"Seed synthetic staging fixtures\" step's log of CI job \"Writable DB proof (staging only)\" (run 41682337207, job 126078966205), which ran immediately before the smoke-test step in the same job, on head 4ed895e5460f7274f651607110872eec7a67f00d. Not re-run locally -- this host has no credential to staging xskgrzbteyqdufktjrjx.",
+    "harvest": {
+      "module": "scripts/ops/ci-db-proof-harvest.ts",
+      "run_id": 41682337207,
+      "job_id": 126078966205,
+      "receipt_github_sha": "08d5d48834549e313d0e8b44d9f5e36013be1721",
+      "receipt_sha_relation": "PR merge ref; verifyMergeRefDescendsFromHead proved its second parent is head 4ed895e5460f7274f651607110872eec7a67f00d",
+      "note": "queries are the passing pnpm test:db TAP lines from the receipt; the WORK-2026103007 suites ran in the separate pnpm test:t1-proof:live step of the same job and are recorded under runtime_proof results"
+    }
+  },
+  "mutation": {
+    "status": "executed_live",
+    "change": "Remove server allowlist authorization for delivery-eligible request",
+    "assertions": [
+      "HTTP 403",
+      "No additional persisted pick and therefore no step-2 outbox"
+    ],
+    "live_result": "pass: removed allowlist returned 403 and persisted no additional pick (API suite, run 41682337207)"
+  },
+  "proof_boundaries": {
+    "real_persistence_when_executed": [
+      "capper seed",
+      "processSubmissionAtomic submission and lifecycle",
+      "authorization metadata and pinned destination",
+      "enqueueDistributionAtomic outbox",
+      "fixture-only retarget of owned pending unclaimed row",
+      "owned target kill switch",
+      "claimNextAtomic / claim_next_outbox",
+      "confirmDeliveryAtomic / confirm_delivery_atomic",
+      "receipt and queued-to-posted lifecycle",
+      "second claim idle",
+      "zero distribution.dispatch_* audit rows"
+    ],
+    "simulated": [
+      "Discord adapter and message ID; no Discord API call"
+    ],
+    "fixture_retarget": "Contract-author ruling 2026-11-03 permits only this API-created row to move off official-picks after canonical pending assertions; filter id, pick_id, status=pending, claimed_at=null, claimed_by=null.",
+    "not_proven": [
+      "official-picks worker claim path",
+      "governed-target dispatch ledger; existing in-memory coverage and future production canary"
+    ]
+  },
+  "r_level": {
+    "verdict": "PASS",
+    "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "rule": "lifecycle-fsm",
+    "note": "Mechanical check finds tracked WORK-2026100301 R2/R3/R4 artifacts. No new shadow/fault run is claimed."
+  },
+  "model_routing": "model-routing.json (wrapper-owned observed model gpt-6.1-sol, effort medium)",
+  "pr": {
+    "status": "existing PR #1826; no PR created by rework executor",
+    "owner": "Production Claude",
+    "title": "feat(ops): WORK-2026110305 human-capper delivery staging proof",
+    "tier_label_required": "tier:T1"
+  },
+  "verification": {
+    "pnpm_verify": {
+      "exit_code": 1,
+      "static_stage": "pass",
+      "live_stage": "blocked by staging identity guard"
+    },
+    "pnpm_test_db": {
+      "exit_code": 1,
+      "reason": "same staging identity refusal"
+    },
+    "diff_check": "pass",
+    "r_level": "PASS"
+  },
+  "rework": {
+    "baseline_sha": "313ae1e807e7a5aef9dca82bb285bddd128c2571",
+    "implementation_sha": "baf1164999da78df5c218733b8d0db8435d8b4ff",
+    "root_cause": "The preceding Track Only suite used identical bet identity fields under the shared CI run namespace; idempotency excludes capper identity, so this suite received that other capper's existing pick.",
+    "fix": "Prefix bet fields with WORK3007; verify fixture capper persistence; read both API picks and the worker pick by primary ID before comparing attribution; hand off the pick ID through owned capper metadata.",
+    "local_collision_experiment": "PASS: evaluated both source fixture body functions with the same namespace and real computeSubmissionIdempotencyKey; old keys equal, corrected keys differ. No DB access.",
+    "staging_previous_run": {
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/41671267309/job/126040614439",
+      "result": "API suite failed picks.length=0; worker suite not executed. This supersedes the prior deferred-only CI status."
+    },
+    "live_proof": "Pending corrected exact-head staging CI. Local live tests skip; no local DB writes.",
+    "verification": {
+      "pnpm_verify": "Exit 1: full verify:static PASS; live stage refused loopback target before writes",
+      "pnpm_type_check": "PASS after final test edits",
+      "focused_live_tests": "Exit 0: 2 skipped, 0 passed, 0 failed",
+      "pnpm_test_db": "Exit 1: staging guard refused loopback target",
+      "r_level": "PASS",
+      "diff_check": "PASS",
+      "logs": "/tmp/work-2026110305-rework-{verify,typecheck,focused,test-db}.log"
+    }
+  },
+  "proof_closeout_author": "Production Claude (orchestrator) recorded the CI result and fixed the proof format; no source or test change"
+}
