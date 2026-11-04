@@ -1,7 +1,7 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rebuilt from live evidence on 2026-10-13 under WORK-2026101301 (issue #1747). Not a log, not a backlog, not Linear in Markdown.
-**Measured against:** `origin/main` `4a88bcb49` (re-read 2026-10-15), deployed release `2be2aec81` (Deploy run `38673683471`, 2026-10-15), production `zfzdnfwdarxucxtaojxm` (read-only SQL), GitHub API.
+**Measured against:** `origin/main` `e342655bf` (re-read 2026-11-04), deployed release `913235ce7` (Deploy run `40727467544`, 2026-10-28), production `zfzdnfwdarxucxtaojxm` (read-only SQL), GitHub API. The 2026-11-04 execution state and successor first action are in §11.
 **Archives, read on demand — never at session start:**
 [`plan-readings.md`](plan-readings.md) (dated current-truth readings, production position, evidence batch) ·
 [`plan-lessons.md`](plan-lessons.md) (operating lessons) ·
@@ -64,7 +64,8 @@ A migration lane is a singleton and is forbidden alongside a runtime lane, whate
 | B | NCAAF live acceptance | **Griff** (submits), Claude (verifies read-only) | **Done:** acceptance passed (`8968f86c`) |
 | C | NCAAB participant catalog | Codex | SMALL; queued behind the migration singleton |
 | D | Command Center operator view | Codex (Delivery/UI, display only) | **Display gaps closed on `main`** (#1685, #1689, #1692); awaiting a deployed render. No lane to start. |
-| E | Plan refresh | Claude | WORK-2026101405 (this lane) |
+| E | Plan refresh and session handoff | Claude | WORK-2026110401 (this lane, 2026-11-04) |
+| H | Private delivery-to-recap canary safeguards | Codex (T1 lanes), Production Claude dispatches | WORK-2026110309 (#1830) in review; WORK-2026110302 and WORK-2026110307 queued behind it. See §11 |
 | F | Pre-SGO engineering completion | Codex, in bounded lanes | §5 |
 | G | Discord Waves 0–6 | **Independent Codex worker** | Not duplicated here |
 
@@ -132,6 +133,9 @@ never produces delivery, and the kill switches stay as they are.
 | 7 | **Whop and Discord setup**: plan ids, webhook secret, roles, refund policy, prices and tier names | secrets, pricing authority | the paid-member path |
 | 8 | **Un-kill `official-picks`** once its delivery gaps close | member-delivery activation | first member delivery |
 | 9 | **Frozen PRs** #1491, #1492, #1495 architecture review; #1451 production DDL | merge authority; production DDL | those PRs only |
+| 10 | **`SCOPE_OVERRIDE` on #1830** for `apps/api/src/controllers/submit-pick-controller.test.ts`, then `t1-approved` + `pm-verdict/v1` at its final head (2026-11-04) | merge authority | the canary idempotency fix and everything queued behind it |
+| 11 | **Deployment dispatch** carrying the merged canary safeguards (#1811 and later); `main` is 83 commits past the deployed `913235ce7` (2026-11-04) | production deployment | the consolidated canary packet |
+| 12 | **Carry-forward allowlist** (a WORK-* closeout on `main` breaks approval carry-forward) and the production `picks.participant_id` index (2026-11-04) | merge authority; production DDL | those items only |
 
 **Affirmatively not asked for:** any containment change, any provider unparking, any member delivery,
 any clearing of the 32 stranded canary `processing` rows, any re-enabling of cron job 5.
@@ -192,3 +196,22 @@ any clearing of the 32 stranded canary `processing` rows, any re-enabling of cro
   on `ci.yml`, and report a repeat as a staging-health blocker.
 - **Do not choose a lane type to evade a concurrency rule.** That is an operating-model change
   reserved to PM.
+
+---
+
+## 11. Current execution state and successor first action
+
+Recorded 2026-11-04 by Production Claude for a controlled session rotation (WORK-2026110401). The full
+dated reading is [`plan-readings.md`](plan-readings.md) §11. Re-measure before relying on it.
+
+- **Next objective:** the single private delivery-to-recap canary (`intent.md` § "Bounded exception").
+  Blockers, in order: the cross-capper idempotency fix (#1830), a deployment carrying the merged
+  audience exclusion (#1811), verified Discord artwork (WORK-2026110302) and keyset-paged performance
+  readers (WORK-2026110307), then the consolidated final packet for Griff.
+- **Active lane:** WORK-2026110309, PR #1830, T1, Codex via `ops:codex-exec`, resumable checkpoint
+  with four orchestrator rulings. It is waiting on Griff's `SCOPE_OVERRIDE` (decision #10).
+- **Successor first action:** read `plan-readings.md` §11, then check #1830 for a `SCOPE_OVERRIDE` at
+  its head. If it is present, record the fixture patch from #1830 comment `6632286109` as an
+  orchestrator ruling and dispatch one Codex attempt from the 0309 lane worktree. Do not open a new
+  lane for it. If it is absent, prepare (do not present) the canary packet draft; wiring the unwired
+  `apps/api` tests waits for #1830 to release `package.json` (reading §11.8).
