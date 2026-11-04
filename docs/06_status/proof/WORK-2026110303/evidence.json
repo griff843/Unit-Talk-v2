@@ -7,26 +7,28 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "46bd6da75c3df62011b91ed7aff362e512385b60",
+    "verified_source_sha": "5c927519c1e278148c1962c3edb5af253f7edbd9",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
     "status": "pass",
-    "command": "pnpm test",
+    "command": "pnpm verify",
     "conclusion": "success",
-    "verified_source_sha": "46bd6da75c3df62011b91ed7aff362e512385b60",
+    "verified_source_sha": "5c927519c1e278148c1962c3edb5af253f7edbd9",
     "full_suite": {
-      "command": "pnpm test",
-      "tests": 7818,
-      "pass": 7805,
+      "command": "pnpm verify (static stage; summed over every suite it runs)",
+      "tests": 8072,
+      "pass": 8059,
       "fail": 0,
-      "skipped": 13
+      "skipped": 13,
+      "exit_code": 1,
+      "blocker": "test:live-db -> ci:assert-staging refused host=127.0.0.1 ref=unidentified before any database access; the writable stage runs only in CI's staging-only DB job"
     },
     "focused_tests": {
-      "command": "npx tsx --test scripts/ops/execution-checkpoint.test.ts",
-      "tests": 42,
-      "pass": 42,
+      "command": "pnpm exec tsx --test scripts/ops/execution-checkpoint.test.ts",
+      "tests": 46,
+      "pass": 46,
       "fail": 0,
       "skipped": 0
     },
@@ -36,9 +38,9 @@
       "pass": 54,
       "fail": 0
     },
-    "type_check": "pnpm type-check exit 0 (covers packages/apps only); direct tsc of the three changed scripts/ops files reports only TS1470/TS2307, which the same run also reports on files this lane does not modify",
+    "type_check": "pnpm type-check exit 0 on 5c927519c (covers packages/apps only); eslint on the two changed checkpoint files exit 0",
     "r_level": "PASS",
-    "mutation_checks": "8 of 8 caught on 46bd6da75",
-    "note": "Measured on 46bd6da75c3df62011b91ed7aff362e512385b60. Later branch commits are proof files, a merge of main that brought only docs/06_status/readiness/readiness-score.json, and the PR-binding bot commit."
+    "mutation_checks": "8 of 8 caught on 46bd6da75 (ruling command); 7 of 7 caught on 5c927519c (clear guard)",
+    "note": "Measured on 5c927519c1e278148c1962c3edb5af253f7edbd9, the commit that resolves the PM review's clear-path finding. Later branch commits are proof files, merges of main, and the PR-binding bot commit."
   }
 }
