@@ -1,6 +1,6 @@
 # PROOF: WORK-2026110308
 
-MERGE_SHA: pending merge
+MERGE_SHA: 1ba31df783f8e7ca36a27729b79be6a9c7461469
 
 Issue: WORK-2026110308
 Tier: T1
@@ -77,5 +77,5 @@ No staging or production database was read or written by this lane.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `1ba31df783f8e7ca36a27729b79be6a9c7461469`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1829
