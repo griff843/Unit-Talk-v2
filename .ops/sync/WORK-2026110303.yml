@@ -1,0 +1,229 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026110303
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026110303
+  objective: >-
+    When a Codex attempt stops on a question (recorded as a finding), the
+    orchestrator has no sanctioned way to answer it. The next attempt's resume
+    brief carries the open question as an "established finding" and nothing
+    else. So the executor either re-derives the answer or stops again.
+
+    Add an orchestrator ruling: an answer recorded between attempts, bound to
+    the epoch, that the next attempt's prompt states as authoritative.
+  acceptance_criteria:
+    - '**The command.** `pnpm ops:exec-checkpoint ruling --issue <ID> --text
+      "<ruling>" [--answers <finding-id>]` records a ruling with:'
+    - '`author: "orchestrator"`;'
+    - the epoch id;
+    - the attempt it follows;
+    - a timestamp.
+    - "**When it is refused.** The ruling is refused, and the checkpoint is left
+      unchanged, while:"
+    - any attempt is open, or the status is `in_progress`;
+    - the command runs with the executor identity environment
+      (`UNIT_TALK_EXECUTION_EPOCH_ID`) set;
+    - "`--answers` names a finding id that does not exist in the current epoch;"
+    - the text is empty;
+    - no validated checkpoint exists.
+    - "**It never resets anything.** Recording a ruling does not change
+      completed phases, findings, pending actions or attempts. It only adds the
+      ruling and advances `state_revision`."
+    - "**The executor cannot write or clear it.** No executor-identity command
+      adds, edits or removes a ruling."
+    - Resume carries rulings unchanged.
+    - Rework archives them with the prior epoch and carries them into the new
+      epoch, rebased exactly as findings are.
+    - '**It reaches the next prompt.** The resume brief renders "###
+      Orchestrator rulings — authoritative" before the established findings. The
+      rework brief in `codex-exec.ts` also lists the rulings it carries.'
+    - "**Compatibility.** Checkpoints written before this change, with no
+      rulings field, still validate."
+    - "**Tests.**"
+    - The ruling appears in attempt N+1's brief and prompt.
+    - It is refused while an attempt is in progress.
+    - Phases and findings are intact afterwards.
+    - Rework and resume carry it.
+    - An unknown `--answers` is refused.
+    - Each test is mutation-checked.
+  guardrails: []
+  non_goals:
+    - Automatic rulings, any change to merge authority, approval artifacts or
+      executor-result publication.
+    - The checkpoint schema version, lane-start, the manifest schema and proof
+      generation.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026110303 — orchestrator rulings on the execution checkpoint
+
+      Tier: T2
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: Griff, "begin work now", 2026-11-03. This answered whether to
+      start the checkpoint-ruling fix that Production Claude handed off from the
+      hybrid Codex runs.
+
+
+      Tier is T2. The change adds an orchestrator-only field to the execution
+      checkpoint and renders it in the resume brief. It does not change:
+
+      - any approval artifact, merge authority, branch protection or production
+      authorization;
+
+      - the checkpoint schema version;
+
+      - the meaning of any existing checkpoint field.
+
+
+      ## File Scope
+
+
+      - `scripts/ops/execution-checkpoint.ts`
+
+      - `scripts/ops/execution-checkpoint.test.ts`
+
+      - `scripts/ops/codex-exec.ts`
+
+      - `scripts/ops/codex-exec.test.ts`
+
+      - `.ops/work/WORK-2026110303.md`
+
+
+      ## Rollback
+
+
+      Revert the PR. The field is optional and additive. The reverted validator
+      does not inspect unknown fields, and the checksum covers the whole object,
+      so a checkpoint carrying rulings still validates there. The rulings are
+      simply no longer rendered.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026110303.md
+    title: WORK-2026110303 — orchestrator rulings on the execution checkpoint
+    description: >-
+      # WORK-2026110303 — orchestrator rulings on the execution checkpoint
+
+
+      Tier: T2
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: Griff, "begin work now", 2026-11-03. This answered whether to
+      start the checkpoint-ruling fix that Production Claude handed off from the
+      hybrid Codex runs.
+
+
+      Tier is T2. The change adds an orchestrator-only field to the execution
+      checkpoint and renders it in the resume brief. It does not change:
+
+      - any approval artifact, merge authority, branch protection or production
+      authorization;
+
+      - the checkpoint schema version;
+
+      - the meaning of any existing checkpoint field.
+
+
+      ## Objective
+
+
+      When a Codex attempt stops on a question (recorded as a finding), the
+      orchestrator has no sanctioned way to answer it. The next attempt's resume
+      brief carries the open question as an "established finding" and nothing
+      else. So the executor either re-derives the answer or stops again.
+
+
+      Add an orchestrator ruling: an answer recorded between attempts, bound to
+      the epoch, that the next attempt's prompt states as authoritative.
+
+
+      ## Acceptance Criteria
+
+
+      - **The command.** `pnpm ops:exec-checkpoint ruling --issue <ID> --text
+      "<ruling>" [--answers <finding-id>]` records a ruling with:
+        - `author: "orchestrator"`;
+        - the epoch id;
+        - the attempt it follows;
+        - a timestamp.
+      - **When it is refused.** The ruling is refused, and the checkpoint is
+      left unchanged, while:
+        - any attempt is open, or the status is `in_progress`;
+        - the command runs with the executor identity environment (`UNIT_TALK_EXECUTION_EPOCH_ID`) set;
+        - `--answers` names a finding id that does not exist in the current epoch;
+        - the text is empty;
+        - no validated checkpoint exists.
+      - **It never resets anything.** Recording a ruling does not change
+      completed phases, findings, pending actions or attempts. It only adds the
+      ruling and advances `state_revision`.
+
+      - **The executor cannot write or clear it.** No executor-identity command
+      adds, edits or removes a ruling.
+        - Resume carries rulings unchanged.
+        - Rework archives them with the prior epoch and carries them into the new epoch, rebased exactly as findings are.
+      - **It reaches the next prompt.** The resume brief renders "###
+      Orchestrator rulings — authoritative" before the established findings. The
+      rework brief in `codex-exec.ts` also lists the rulings it carries.
+
+      - **Compatibility.** Checkpoints written before this change, with no
+      rulings field, still validate.
+
+      - **Tests.**
+        - The ruling appears in attempt N+1's brief and prompt.
+        - It is refused while an attempt is in progress.
+        - Phases and findings are intact afterwards.
+        - Rework and resume carry it.
+        - An unknown `--answers` is refused.
+        - Each test is mutation-checked.
+
+      ## File Scope
+
+
+      - `scripts/ops/execution-checkpoint.ts`
+
+      - `scripts/ops/execution-checkpoint.test.ts`
+
+      - `scripts/ops/codex-exec.ts`
+
+      - `scripts/ops/codex-exec.test.ts`
+
+      - `.ops/work/WORK-2026110303.md`
+
+
+      ## Out of Scope
+
+
+      - Automatic rulings, any change to merge authority, approval artifacts or
+      executor-result publication.
+
+      - The checkpoint schema version, lane-start, the manifest schema and proof
+      generation.
+
+
+      ## Rollback
+
+
+      Revert the PR. The field is optional and additive. The reverted validator
+      does not inspect unknown fields, and the checksum covers the whole object,
+      so a checkpoint carrying rulings still validates there. The rulings are
+      simply no longer rendered.
+    captured_at: 2026-11-03T13:58:12.406Z
+    description_sha256: e50b73d5fe1fa9ea44083faacd45250904c91ec92a61fea7b0434b513e2c35b1
+  contract_hash: e36fa6903223865d212930c8d3435f28222c4cbeb9ea403f337726e8a64c5daa

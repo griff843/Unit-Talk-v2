@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110303",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "5c927519c1e278148c1962c3edb5af253f7edbd9",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm verify",
+    "conclusion": "success",
+    "verified_source_sha": "5c927519c1e278148c1962c3edb5af253f7edbd9",
+    "full_suite": {
+      "command": "pnpm verify (static stage; summed over every suite it runs)",
+      "tests": 8072,
+      "pass": 8059,
+      "fail": 0,
+      "skipped": 13,
+      "exit_code": 1,
+      "blocker": "test:live-db -> ci:assert-staging refused host=127.0.0.1 ref=unidentified before any database access; the writable stage runs only in CI's staging-only DB job"
+    },
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/execution-checkpoint.test.ts",
+      "tests": 46,
+      "pass": 46,
+      "fail": 0,
+      "skipped": 0
+    },
+    "related_tests": {
+      "command": "npx tsx --test scripts/ops/codex-exec.test.ts",
+      "tests": 54,
+      "pass": 54,
+      "fail": 0
+    },
+    "type_check": "pnpm type-check exit 0 on 5c927519c (covers packages/apps only); eslint on the two changed checkpoint files exit 0",
+    "r_level": "PASS",
+    "mutation_checks": "8 of 8 caught on 46bd6da75 (ruling command); 7 of 7 caught on 5c927519c (clear guard)",
+    "note": "Measured on 5c927519c1e278148c1962c3edb5af253f7edbd9, the commit that resolves the PM review's clear-path finding. Later branch commits are proof files, merges of main, and the PR-binding bot commit."
+  }
+}
