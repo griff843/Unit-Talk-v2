@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "issue_id": "WORK-2026110309",
+  "tier": "T1",
+  "status": "INCOMPLETE",
+  "merge_sha": null,
+  "static_proof": {
+    "status": "pending resumed static gate",
+    "focused_tests": {
+      "pass": 105,
+      "fail": 0
+    },
+    "regression_before": {
+      "pass": 1,
+      "fail": 6
+    },
+    "regression_after": {
+      "pass": 7,
+      "fail": 0
+    },
+    "mutations": {
+      "remove_submitter": {
+        "fail": 1
+      },
+      "remove_distribution_mode": {
+        "fail": 2
+      }
+    },
+    "board_writer": {
+      "pass": 19,
+      "fail": 0
+    },
+    "r_level": {
+      "status": "PASS",
+      "execution_sha": "c6ada223c9d558765301cb986428c7262c23daf7",
+      "rules": [
+        "lifecycle-fsm"
+      ]
+    }
+  },
+  "runtime_proof": {
+    "status": "deferred_to_staging_ci",
+    "queries": [],
+    "row_counts": {},
+    "reason": "No observed live results; expected values are not proof. Local staging identity guard refuses host=127.0.0.1."
+  },
+  "open_blockers": [
+    "verify-4: controller guard mutation fixture 12 pass / 1 fail; pending PM SCOPE_OVERRIDE",
+    "Exact-head pnpm verify and Writable DB proof (staging only) CI pending",
+    "Merge SHA binding and PM approval pending",
+    "Packet v1 evidence requirement conflicts with pre-merge validator requiring schema v2"
+  ],
+  "evidence_file": "verification.md"
+}
