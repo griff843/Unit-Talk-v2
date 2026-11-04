@@ -57,6 +57,7 @@ import {
   beginAttempt,
   buildResumeBrief,
   buildResumePlan,
+  buildReworkBrief,
   checkpointPath,
   classifyCheckpointLiveness,
   failVisiblyAndRelease,
@@ -1158,6 +1159,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     ? {
         ...buildResumePlan(null),
         carried_findings: existingCheckpoint!.findings,
+        carried_rulings: existingCheckpoint!.orchestrator_rulings ?? [],
         pending_actions: existingCheckpoint!.pending_actions,
       }
     : buildResumePlan(existingCheckpoint);
@@ -1167,14 +1169,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     phase: resumePlan.resume_from_phase,
   });
 
-  const resumeBrief = rework
-    ? [
-        '## Execution checkpoint — REWORK EPOCH',
-        '',
-        'A new rework epoch will bind the current reviewed head as its immutable baseline.',
-        'No phase validity from the rejected epoch is inherited. Its findings remain as rework inputs.',
-      ].join('\n')
-    : buildResumeBrief(existingCheckpoint);
+  const resumeBrief = rework ? buildReworkBrief(existingCheckpoint) : buildResumeBrief(existingCheckpoint);
   // A preview must not mutate. Resolving the packet persists the sync record in
   // both roots and, for a pre-contract lane, makes a live Linear call — all
   // before the dry-run branch below, while the emitted message says "without

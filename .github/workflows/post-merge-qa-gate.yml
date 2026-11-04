@@ -38,7 +38,7 @@ permissions:
 jobs:
   qa-gate:
     name: Post-Merge QA Gate (Policy Engine)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Never re-trigger on bot housekeeping commits — prevents infinite push loops.
     if: github.actor != 'github-actions[bot]'
 

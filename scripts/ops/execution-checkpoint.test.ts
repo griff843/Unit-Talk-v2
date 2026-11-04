@@ -18,6 +18,7 @@ import {
   beginAttempt,
   buildResumeBrief,
   buildResumePlan,
+  buildReworkBrief,
   checkpointMutationLockPath,
   checkpointRecoveryPath,
   checkpointPath,
@@ -32,6 +33,7 @@ import {
   recordHeartbeat as recordHeartbeatWithIdentity,
   recordPendingActions as recordPendingActionsWithIdentity,
   recordPhaseComplete as recordPhaseCompleteWithIdentity,
+  recordRuling,
   requestCancel,
   resolveExecutionTimeout,
   writeCheckpoint,
@@ -893,5 +895,295 @@ test('liveness describes the attempt in flight, not an older dangling one', () =
     assert.match(verdict.reason, /attempt 2/, 'liveness must report the latest open attempt, not the first');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── orchestrator rulings (WORK-2026110303) ──────────────────────────────────
+
+function stoppedOnQuestion(issueId: string, dir: string) {
+  const timeoutPolicy = resolveExecutionTimeout(T1_SOL_HIGH);
+  beginNext({ issueId, timeoutPolicy, dir });
+  recordPhaseComplete(issueId, 'orient', 'scope understood', { dir });
+  recordFinding(issueId, { id: 'plan-q1', phase: 'plan', summary: 'QUESTION: may the reaper touch settled picks?' }, { dir });
+  recordPendingActions(issueId, ['wait for the orchestrator'], { dir });
+  finishAttempt({ issueId, outcome: 'failed', reason: 'stopped on an open question', dir });
+  return timeoutPolicy;
+}
+
+test('a ruling recorded between attempts is stated as authoritative in attempt N+1', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-20993';
+    const timeoutPolicy = stoppedOnQuestion(issueId, dir);
+    const result = recordRuling(issueId, { text: 'No. Settled picks are kept.', answersFindingId: 'plan-q1' }, { dir });
+    assert.equal(result.ok, true, result.reason);
+    assert.equal(result.ruling?.author, 'orchestrator');
+    assert.equal(result.ruling?.after_attempt, 1);
+
+    // codex-exec builds the next prompt from the closed checkpoint, before beginAttempt.
+    const brief = buildResumeBrief(readCheckpoint(issueId, dir));
+    assert.match(brief, /### Orchestrator rulings — authoritative/);
+    assert.match(brief, /\[answers finding `plan-q1`\] No\. Settled picks are kept\./);
+    assert.ok(brief.indexOf('Orchestrator rulings') < brief.indexOf('Established findings'));
+
+    const second = beginNext({ issueId, timeoutPolicy, dir });
+    assert.equal(second.resume.carried_rulings[0]?.text, 'No. Settled picks are kept.');
+    assert.equal(second.checkpoint.orchestrator_rulings?.length, 1);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a ruling is refused while an attempt is in progress and leaves the checkpoint untouched', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-20994';
+    beginNext({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
+    const before = fs.readFileSync(checkpointPath(issueId, dir), 'utf8');
+    const result = recordRuling(issueId, { text: 'answer' }, { dir });
+    assert.equal(result.ok, false);
+    assert.equal(result.code, 'execution_checkpoint_active');
+    assert.equal(fs.readFileSync(checkpointPath(issueId, dir), 'utf8'), before);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('recording a ruling leaves phases, findings, pending actions and attempts intact', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-20995';
+    stoppedOnQuestion(issueId, dir);
+    const before = readCheckpoint(issueId, dir)!;
+    const result = recordRuling(issueId, { text: 'Proceed with option B.' }, { dir });
+    assert.equal(result.ok, true, result.reason);
+    const after = readCheckpoint(issueId, dir)!;
+    assert.deepEqual(after.completed_phases, before.completed_phases);
+    assert.deepEqual(after.findings, before.findings);
+    assert.deepEqual(after.pending_actions, before.pending_actions);
+    assert.deepEqual(after.attempts, before.attempts);
+    assert.equal(after.status, before.status);
+    assert.equal(after.epoch.epoch_id, before.epoch.epoch_id);
+    assert.equal(after.state_revision, before.state_revision + 1);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a ruling naming an unknown finding, or with empty text, is refused', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-20996';
+    stoppedOnQuestion(issueId, dir);
+    const unknown = recordRuling(issueId, { text: 'answer', answersFindingId: 'plan-q9' }, { dir });
+    assert.equal(unknown.ok, false);
+    assert.equal(unknown.code, 'execution_checkpoint_ruling_invalid');
+    const empty = recordRuling(issueId, { text: '   ' }, { dir });
+    assert.equal(empty.ok, false);
+    assert.equal(empty.code, 'execution_checkpoint_ruling_invalid');
+    assert.equal((readCheckpoint(issueId, dir)?.orchestrator_rulings ?? []).length, 0);
+    assert.equal(recordRuling('UTV2-20997', { text: 'answer' }, { dir }).code, 'execution_checkpoint_missing');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a rework epoch archives rulings with the rejected epoch and carries them rebased', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-20998';
+    const timeoutPolicy = stoppedOnQuestion(issueId, dir);
+    const recorded = recordRuling(issueId, { text: 'Keep the public API.', answersFindingId: 'plan-q1' }, { dir });
+    const oldEpoch = recorded.checkpoint!.epoch.epoch_id;
+    const rework = beginAttempt({
+      kind: 'rework',
+      issueId,
+      rejectedHeadSha: 'c'.repeat(40),
+      objectiveIdentity: `issue:${issueId}`,
+      findingsIdentity: 'review-round-1',
+      authority: 'pm-review',
+      timeoutPolicy,
+      dir,
+    });
+    const carried = rework.checkpoint.orchestrator_rulings?.[0];
+    assert.equal(carried?.epoch_id, rework.checkpoint.epoch.epoch_id);
+    assert.equal(carried?.source_epoch_id, oldEpoch);
+    assert.equal(rework.checkpoint.prior_epochs[0]?.orchestrator_rulings?.[0]?.epoch_id, oldEpoch);
+    assert.match(buildReworkBrief(recorded.checkpoint), /Keep the public API\./);
+    assert.ok(readCheckpoint(issueId, dir), 'rebased rulings must pass checkpoint validation');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a checkpoint written before rulings existed still validates and renders no rulings section', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-20999';
+    stoppedOnQuestion(issueId, dir);
+    const legacy = { ...readCheckpoint(issueId, dir)! };
+    delete legacy.orchestrator_rulings;
+    writeCheckpoint(legacy, dir);
+    const reread = readCheckpoint(issueId, dir);
+    assert.ok(reread, 'legacy checkpoint without orchestrator_rulings must validate');
+    assert.doesNotMatch(buildResumeBrief(reread), /Orchestrator rulings/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the ruling CLI refuses under an executor attempt identity and records without one', () => {
+  const root = tmpDir();
+  try {
+    assert.equal(spawnSync('git', ['init', '--initial-branch=main'], { cwd: root, stdio: 'pipe' }).status, 0);
+    const dir = path.join(root, 'checkpoints');
+    const issueId = 'UTV2-21000';
+    stoppedOnQuestion(issueId, dir);
+    const env: NodeJS.ProcessEnv = { ...process.env, UNIT_TALK_EXECUTION_CHECKPOINT_DIR: dir };
+    delete env.UNIT_TALK_EXECUTION_EPOCH_ID;
+    const asExecutor = runCheckpointCli(['ruling', '--issue', issueId, '--text', 'self-granted'], root, {
+      ...env,
+      UNIT_TALK_EXECUTION_EPOCH_ID: readCheckpoint(issueId, dir)!.epoch.epoch_id,
+    });
+    assert.equal(asExecutor.status, 1, asExecutor.stdout);
+    assert.match(asExecutor.stdout, /execution_checkpoint_ruling_refused/);
+    assert.equal((readCheckpoint(issueId, dir)?.orchestrator_rulings ?? []).length, 0);
+
+    const asOrchestrator = runCheckpointCli(
+      ['ruling', '--issue', issueId, '--answers', 'plan-q1', '--text', 'Settled picks are kept.'],
+      root,
+      env,
+    );
+    assert.equal(asOrchestrator.status, 0, `${asOrchestrator.stdout}\n${asOrchestrator.stderr}`);
+    assert.equal(readCheckpoint(issueId, dir)?.orchestrator_rulings?.[0]?.answers_finding_id, 'plan-q1');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── rulings survive an executor clear (WORK-2026110303 PM review) ────────────
+
+function closedWithRuling(issueId: string, dir: string) {
+  const timeoutPolicy = stoppedOnQuestion(issueId, dir);
+  const recorded = recordRuling(issueId, { text: 'Settled picks are kept.', answersFindingId: 'plan-q1' }, { dir });
+  assert.equal(recorded.ok, true, recorded.reason);
+  return { timeoutPolicy, epochId: recorded.checkpoint!.epoch.epoch_id };
+}
+
+function assertStateIntact(issueId: string, dir: string, primary: string, sidecar: string) {
+  assert.equal(fs.readFileSync(checkpointPath(issueId, dir), 'utf8'), primary);
+  assert.equal(fs.readFileSync(checkpointRecoveryPath(issueId, dir), 'utf8'), sidecar);
+}
+
+test('an executor identity cannot clear a closed checkpoint that carries a ruling', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-21001';
+    const { epochId } = closedWithRuling(issueId, dir);
+    const primary = fs.readFileSync(checkpointPath(issueId, dir), 'utf8');
+    const sidecar = fs.readFileSync(checkpointRecoveryPath(issueId, dir), 'utf8');
+
+    const current = clearCheckpoint(issueId, { dir, executorEpochId: epochId });
+    assert.equal(current.ok, false);
+    assert.equal(current.code, 'execution_checkpoint_ruling_protected');
+    assert.equal(current.removed.length, 0);
+
+    const stale = clearCheckpoint(issueId, { dir, executorEpochId: 'stale-epoch-from-an-earlier-attempt' });
+    assert.equal(stale.ok, false);
+    assert.equal(stale.code, 'execution_checkpoint_ruling_protected');
+
+    assertStateIntact(issueId, dir, primary, sidecar);
+    assert.equal(readCheckpoint(issueId, dir)?.orchestrator_rulings?.[0]?.text, 'Settled picks are kept.');
+
+    const orchestrator = clearCheckpoint(issueId, { dir, executorEpochId: null });
+    assert.equal(orchestrator.ok, true, orchestrator.reason);
+    assert.equal(orchestrator.removed.length, 2);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('an executor clear is refused when only the sidecar or an archived epoch holds a ruling', () => {
+  const dir = tmpDir();
+  try {
+    const sidecarOnly = 'UTV2-21002';
+    closedWithRuling(sidecarOnly, dir);
+    fs.rmSync(checkpointPath(sidecarOnly, dir));
+    const fromSidecar = clearCheckpoint(sidecarOnly, { dir, executorEpochId: 'any-executor' });
+    assert.equal(fromSidecar.code, 'execution_checkpoint_ruling_protected');
+    assert.equal(fs.existsSync(checkpointRecoveryPath(sidecarOnly, dir)), true);
+
+    const archived = 'UTV2-21003';
+    const { timeoutPolicy } = closedWithRuling(archived, dir);
+    beginAttempt({
+      kind: 'rework',
+      issueId: archived,
+      rejectedHeadSha: 'c'.repeat(40),
+      objectiveIdentity: `issue:${archived}`,
+      findingsIdentity: 'review-round-1',
+      authority: 'pm-review',
+      timeoutPolicy,
+      dir,
+    });
+    finishAttempt({ issueId: archived, outcome: 'failed', reason: 'closed for clear', dir });
+    const onlyArchived = { ...readCheckpoint(archived, dir)! };
+    delete onlyArchived.orchestrator_rulings;
+    writeCheckpoint(onlyArchived, dir);
+    assert.equal(readCheckpoint(archived, dir)?.prior_epochs[0]?.orchestrator_rulings?.length, 1);
+    const fromArchive = clearCheckpoint(archived, { dir, executorEpochId: 'any-executor' });
+    assert.equal(fromArchive.code, 'execution_checkpoint_ruling_protected');
+    assert.equal(fs.existsSync(checkpointPath(archived, dir)), true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('an executor clear fails closed on state it cannot parse, and still clears ruling-free state', () => {
+  const dir = tmpDir();
+  try {
+    const corrupt = 'UTV2-21004';
+    closedWithRuling(corrupt, dir);
+    fs.writeFileSync(checkpointPath(corrupt, dir), '{"orchestrator_rulings": [', 'utf8');
+    fs.writeFileSync(checkpointRecoveryPath(corrupt, dir), 'not json', 'utf8');
+    const refused = clearCheckpoint(corrupt, { dir, executorEpochId: 'any-executor' });
+    assert.equal(refused.code, 'execution_checkpoint_ruling_protected');
+    assert.equal(fs.existsSync(checkpointPath(corrupt, dir)), true);
+    assert.equal(fs.existsSync(checkpointRecoveryPath(corrupt, dir)), true);
+
+    const plain = 'UTV2-21005';
+    stoppedOnQuestion(plain, dir);
+    const cleared = clearCheckpoint(plain, { dir, executorEpochId: 'any-executor' });
+    assert.equal(cleared.ok, true, cleared.reason);
+    assert.equal(cleared.removed.length, 2);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the clear CLI refuses under an executor attempt identity when the checkpoint carries a ruling', () => {
+  const root = tmpDir();
+  try {
+    assert.equal(spawnSync('git', ['init', '--initial-branch=main'], { cwd: root, stdio: 'pipe' }).status, 0);
+    const dir = path.join(root, 'checkpoints');
+    const issueId = 'UTV2-21006';
+    const { epochId } = closedWithRuling(issueId, dir);
+    const env: NodeJS.ProcessEnv = { ...process.env, UNIT_TALK_EXECUTION_CHECKPOINT_DIR: dir };
+    delete env.UNIT_TALK_EXECUTION_EPOCH_ID;
+
+    for (const identity of [epochId, 'stale-epoch-from-an-earlier-attempt']) {
+      const asExecutor = runCheckpointCli(['clear', '--issue', issueId], root, {
+        ...env,
+        UNIT_TALK_EXECUTION_EPOCH_ID: identity,
+      });
+      assert.equal(asExecutor.status, 1, asExecutor.stdout);
+      assert.match(asExecutor.stdout, /execution_checkpoint_ruling_protected/);
+      assert.equal(readCheckpoint(issueId, dir)?.orchestrator_rulings?.length, 1);
+    }
+
+    const asOrchestrator = runCheckpointCli(['clear', '--issue', issueId], root, env);
+    assert.equal(asOrchestrator.status, 0, `${asOrchestrator.stdout}\n${asOrchestrator.stderr}`);
+    assert.equal(readCheckpointState(issueId, dir).ok, false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
