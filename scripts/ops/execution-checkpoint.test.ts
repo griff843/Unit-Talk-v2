@@ -1060,3 +1060,130 @@ test('the ruling CLI refuses under an executor attempt identity and records with
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+// ── rulings survive an executor clear (WORK-2026110303 PM review) ────────────
+
+function closedWithRuling(issueId: string, dir: string) {
+  const timeoutPolicy = stoppedOnQuestion(issueId, dir);
+  const recorded = recordRuling(issueId, { text: 'Settled picks are kept.', answersFindingId: 'plan-q1' }, { dir });
+  assert.equal(recorded.ok, true, recorded.reason);
+  return { timeoutPolicy, epochId: recorded.checkpoint!.epoch.epoch_id };
+}
+
+function assertStateIntact(issueId: string, dir: string, primary: string, sidecar: string) {
+  assert.equal(fs.readFileSync(checkpointPath(issueId, dir), 'utf8'), primary);
+  assert.equal(fs.readFileSync(checkpointRecoveryPath(issueId, dir), 'utf8'), sidecar);
+}
+
+test('an executor identity cannot clear a closed checkpoint that carries a ruling', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-21001';
+    const { epochId } = closedWithRuling(issueId, dir);
+    const primary = fs.readFileSync(checkpointPath(issueId, dir), 'utf8');
+    const sidecar = fs.readFileSync(checkpointRecoveryPath(issueId, dir), 'utf8');
+
+    const current = clearCheckpoint(issueId, { dir, executorEpochId: epochId });
+    assert.equal(current.ok, false);
+    assert.equal(current.code, 'execution_checkpoint_ruling_protected');
+    assert.equal(current.removed.length, 0);
+
+    const stale = clearCheckpoint(issueId, { dir, executorEpochId: 'stale-epoch-from-an-earlier-attempt' });
+    assert.equal(stale.ok, false);
+    assert.equal(stale.code, 'execution_checkpoint_ruling_protected');
+
+    assertStateIntact(issueId, dir, primary, sidecar);
+    assert.equal(readCheckpoint(issueId, dir)?.orchestrator_rulings?.[0]?.text, 'Settled picks are kept.');
+
+    const orchestrator = clearCheckpoint(issueId, { dir, executorEpochId: null });
+    assert.equal(orchestrator.ok, true, orchestrator.reason);
+    assert.equal(orchestrator.removed.length, 2);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('an executor clear is refused when only the sidecar or an archived epoch holds a ruling', () => {
+  const dir = tmpDir();
+  try {
+    const sidecarOnly = 'UTV2-21002';
+    closedWithRuling(sidecarOnly, dir);
+    fs.rmSync(checkpointPath(sidecarOnly, dir));
+    const fromSidecar = clearCheckpoint(sidecarOnly, { dir, executorEpochId: 'any-executor' });
+    assert.equal(fromSidecar.code, 'execution_checkpoint_ruling_protected');
+    assert.equal(fs.existsSync(checkpointRecoveryPath(sidecarOnly, dir)), true);
+
+    const archived = 'UTV2-21003';
+    const { timeoutPolicy } = closedWithRuling(archived, dir);
+    beginAttempt({
+      kind: 'rework',
+      issueId: archived,
+      rejectedHeadSha: 'c'.repeat(40),
+      objectiveIdentity: `issue:${archived}`,
+      findingsIdentity: 'review-round-1',
+      authority: 'pm-review',
+      timeoutPolicy,
+      dir,
+    });
+    finishAttempt({ issueId: archived, outcome: 'failed', reason: 'closed for clear', dir });
+    const onlyArchived = { ...readCheckpoint(archived, dir)! };
+    delete onlyArchived.orchestrator_rulings;
+    writeCheckpoint(onlyArchived, dir);
+    assert.equal(readCheckpoint(archived, dir)?.prior_epochs[0]?.orchestrator_rulings?.length, 1);
+    const fromArchive = clearCheckpoint(archived, { dir, executorEpochId: 'any-executor' });
+    assert.equal(fromArchive.code, 'execution_checkpoint_ruling_protected');
+    assert.equal(fs.existsSync(checkpointPath(archived, dir)), true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('an executor clear fails closed on state it cannot parse, and still clears ruling-free state', () => {
+  const dir = tmpDir();
+  try {
+    const corrupt = 'UTV2-21004';
+    closedWithRuling(corrupt, dir);
+    fs.writeFileSync(checkpointPath(corrupt, dir), '{"orchestrator_rulings": [', 'utf8');
+    fs.writeFileSync(checkpointRecoveryPath(corrupt, dir), 'not json', 'utf8');
+    const refused = clearCheckpoint(corrupt, { dir, executorEpochId: 'any-executor' });
+    assert.equal(refused.code, 'execution_checkpoint_ruling_protected');
+    assert.equal(fs.existsSync(checkpointPath(corrupt, dir)), true);
+    assert.equal(fs.existsSync(checkpointRecoveryPath(corrupt, dir)), true);
+
+    const plain = 'UTV2-21005';
+    stoppedOnQuestion(plain, dir);
+    const cleared = clearCheckpoint(plain, { dir, executorEpochId: 'any-executor' });
+    assert.equal(cleared.ok, true, cleared.reason);
+    assert.equal(cleared.removed.length, 2);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the clear CLI refuses under an executor attempt identity when the checkpoint carries a ruling', () => {
+  const root = tmpDir();
+  try {
+    assert.equal(spawnSync('git', ['init', '--initial-branch=main'], { cwd: root, stdio: 'pipe' }).status, 0);
+    const dir = path.join(root, 'checkpoints');
+    const issueId = 'UTV2-21006';
+    const { epochId } = closedWithRuling(issueId, dir);
+    const env: NodeJS.ProcessEnv = { ...process.env, UNIT_TALK_EXECUTION_CHECKPOINT_DIR: dir };
+    delete env.UNIT_TALK_EXECUTION_EPOCH_ID;
+
+    for (const identity of [epochId, 'stale-epoch-from-an-earlier-attempt']) {
+      const asExecutor = runCheckpointCli(['clear', '--issue', issueId], root, {
+        ...env,
+        UNIT_TALK_EXECUTION_EPOCH_ID: identity,
+      });
+      assert.equal(asExecutor.status, 1, asExecutor.stdout);
+      assert.match(asExecutor.stdout, /execution_checkpoint_ruling_protected/);
+      assert.equal(readCheckpoint(issueId, dir)?.orchestrator_rulings?.length, 1);
+    }
+
+    const asOrchestrator = runCheckpointCli(['clear', '--issue', issueId], root, env);
+    assert.equal(asOrchestrator.status, 0, `${asOrchestrator.stdout}\n${asOrchestrator.stderr}`);
+    assert.equal(readCheckpointState(issueId, dir).ok, false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

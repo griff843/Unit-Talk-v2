@@ -1142,9 +1142,49 @@ export function recordRuling(
 
 export interface ClearCheckpointResult {
   ok: boolean;
-  code: 'execution_checkpoint_cleared' | 'execution_checkpoint_active' | 'execution_checkpoint_busy';
+  code:
+    | 'execution_checkpoint_cleared'
+    | 'execution_checkpoint_active'
+    | 'execution_checkpoint_busy'
+    | 'execution_checkpoint_ruling_protected';
   removed: string[];
   reason: string;
+}
+
+/**
+ * Whether any state file on disk may hold an orchestrator ruling. Files are read
+ * raw, not through validation, so a ruling in a file that no longer validates
+ * still counts. A file that cannot be parsed may hold one, so it counts too.
+ */
+function stateFilesMayHoldRulings(paths: string[]): string | null {
+  for (const candidate of paths) {
+    if (!fs.existsSync(candidate)) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(fs.readFileSync(candidate, 'utf8'));
+    } catch {
+      return `${candidate} cannot be parsed, so it may hold orchestrator rulings`;
+    }
+    if (parsed === null || typeof parsed !== 'object') {
+      return `${candidate} is not a checkpoint object, so it may hold orchestrator rulings`;
+    }
+    const value = parsed as {
+      orchestrator_rulings?: unknown;
+      prior_epochs?: unknown;
+    };
+    const carries = (rulings: unknown) => (Array.isArray(rulings) ? rulings.length > 0 : rulings !== undefined);
+    const priorEpochs = Array.isArray(value.prior_epochs) ? (value.prior_epochs as unknown[]) : [];
+    if (
+      carries(value.orchestrator_rulings) ||
+      priorEpochs.some(
+        (epoch) => typeof epoch === 'object' && epoch !== null &&
+          carries((epoch as { orchestrator_rulings?: unknown }).orchestrator_rulings),
+      )
+    ) {
+      return `${candidate} carries orchestrator rulings`;
+    }
+  }
+  return null;
 }
 
 /**
@@ -1152,14 +1192,31 @@ export interface ClearCheckpointResult {
  * attempt owns the epoch, so a concurrent clear is refused. If an external
  * actor deletes the files anyway, post-spawn evaluation observes unavailable
  * state and cannot report success.
+ *
+ * Rulings are orchestrator-authored, so an executor must not be able to delete
+ * them by clearing the checkpoint they live in. Any executor attempt identity,
+ * current or stale, refuses a clear of state that may hold a ruling.
  */
 export function clearCheckpoint(
   issueId: string,
-  options: { dir?: string } = {},
+  options: { dir?: string; executorEpochId?: string | null } = {},
 ): ClearCheckpointResult {
   const dir = options.dir ?? EXECUTION_CHECKPOINT_DIR;
+  const executorEpochId =
+    options.executorEpochId === undefined ? process.env.UNIT_TALK_EXECUTION_EPOCH_ID : options.executorEpochId;
   try {
     return withCheckpointMutationLock(issueId, dir, () => {
+      if (executorEpochId?.trim()) {
+        const protectedBy = stateFilesMayHoldRulings([checkpointPath(issueId, dir), checkpointRecoveryPath(issueId, dir)]);
+        if (protectedBy) {
+          return {
+            ok: false,
+            code: 'execution_checkpoint_ruling_protected',
+            removed: [],
+            reason: `refused to clear under executor attempt identity ${executorEpochId}: ${protectedBy}`,
+          };
+        }
+      }
       const state = readCheckpointState(issueId, dir);
       const openAttempt = state.checkpoint?.attempts.some((attempt) => attempt.ended_at === null) ?? false;
       if (openAttempt) {
@@ -1481,7 +1538,11 @@ function runCli(): void {
         return;
       }
       case 'clear': {
-        const result = clearCheckpoint(issueId, { dir });
+        // A clear can delete rulings, so it carries the caller's attempt identity.
+        const result = clearCheckpoint(issueId, {
+          dir,
+          executorEpochId: process.env.UNIT_TALK_EXECUTION_EPOCH_ID ?? null,
+        });
         emitJson({
           ok: result.ok,
           code: result.code,
