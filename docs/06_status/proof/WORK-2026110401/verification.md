@@ -1,6 +1,6 @@
 # PROOF: WORK-2026110401
 
-MERGE_SHA: pending merge
+MERGE_SHA: 0ea2c24fc99cd0dd3702d35522014c977764d52b
 
 Issue: WORK-2026110401
 Tier: T2
@@ -53,5 +53,5 @@ None applicable. This lane changes documentation only and has no database or run
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
-PR: pending
+Merge SHA: `0ea2c24fc99cd0dd3702d35522014c977764d52b`
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1831

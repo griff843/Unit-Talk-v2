@@ -17,5 +17,5 @@ Scope: the lane's documentation and work order, excluding `docs/06_status/**` an
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 0ea2c24fc99cd0dd3702d35522014c977764d52b
 PR: pending
