@@ -1,9 +1,8 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "issue_id": "WORK-2026110309",
   "tier": "T1",
-  "status": "INCOMPLETE",
-  "merge_sha": null,
+  "status": "pre_merge",
   "static_proof": {
     "status": "PASS",
     "focused_tests": {
@@ -28,11 +27,14 @@
     },
     "board_writer": {
       "pass": 19,
-      "fail": 0
+      "fail": 0,
+      "tests": 19,
+      "skipped": 0,
+      "execution": "local direct tsx --test"
     },
     "r_level": {
       "status": "PASS",
-      "execution_sha": "c6ada223c9d558765301cb986428c7262c23daf7",
+      "execution_sha": "6a0b9f2b708ad26c1371208a81796c10a22828e1",
       "rules": [
         "lifecycle-fsm"
       ]
@@ -49,28 +51,89 @@
         "exit_code": 1,
         "reason": "staging identity guard refusal before DB writes"
       }
+    },
+    "verified_source_sha": "6a0b9f2b708ad26c1371208a81796c10a22828e1",
+    "controller_guard_mutations": {
+      "tests": 14,
+      "pass": 14,
+      "fail": 0,
+      "skipped": 0,
+      "execution": "local direct tsx --test"
+    },
+    "full_suite": {
+      "tests": 8100,
+      "pass": 8087,
+      "fail": 0,
+      "skipped": 13,
+      "command": "pnpm verify (all completed static suites; live stage refused before DB access)",
+      "exit_code": 1,
+      "static_stage_exit_code": 0,
+      "execution": "local on verified_source_sha"
     }
   },
   "runtime_proof": {
     "status": "deferred_to_staging_ci",
-    "queries": [],
-    "row_counts": {},
-    "reason": "No observed live results; expected values are not proof. Local staging identity guard refuses host=127.0.0.1."
+    "queries": [
+      {
+        "query": "picks?id=eq.<primary-id>&select=*",
+        "status": "not_executed_locally; staging CI pending",
+        "observed": false
+      },
+      {
+        "query": "submissions?id=eq.<primary-id>&select=*",
+        "status": "not_executed_locally; staging CI pending",
+        "observed": false
+      },
+      {
+        "query": "pick_lifecycle?id=eq.<primary-id>&select=*",
+        "status": "not_executed_locally; staging CI pending",
+        "observed": false
+      },
+      {
+        "query": "distribution_outbox?pick_id=eq.<primary-id>&select=*",
+        "status": "not_executed_locally; staging CI pending",
+        "observed": false
+      },
+      {
+        "query": "cappers?id=eq.<primary-id>&select=*",
+        "status": "not_executed_locally; staging CI pending",
+        "observed": false
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "cappers",
+        "observed_count": null,
+        "status": "not_measured; staging CI pending"
+      },
+      {
+        "table": "picks",
+        "observed_count": null,
+        "status": "not_measured; staging CI pending"
+      },
+      {
+        "table": "distribution_outbox",
+        "observed_count": null,
+        "status": "not_measured; staging CI pending"
+      }
+    ],
+    "reason": "Query inventory is declared, not executed evidence. All observed_count values are null because no live measurements exist yet. Structural validation does not establish runtime proof."
   },
   "open_blockers": [
-    "verify-4: controller guard mutation fixture 12 pass / 1 fail; pending PM SCOPE_OVERRIDE",
-    "Exact-head pnpm verify and Writable DB proof (staging only) CI pending",
-    "Merge SHA binding and PM approval pending",
-    "Packet v1 evidence requirement conflicts with pre-merge validator requiring schema v2"
+    "Exact-head verify and Writable DB proof (staging only) CI pending",
+    "Fresh exact-head Griff SCOPE_OVERRIDE pending",
+    "Merge SHA binding, Griff t1-approved and exact-head pm-verdict/v1 APPROVED pending",
+    "Runtime queries and row counts are declared but unmeasured; CI receipt and post-executor harvest required"
   ],
   "evidence_file": "verification.md",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1830",
-  "execution_sha": "c6ada223c9d558765301cb986428c7262c23daf7",
-  "ci_observation": {
-    "run_id": 41836305217,
-    "head_sha": "b641f500229f7fd82e6622c376208995bf032050",
-    "status": "in_progress",
-    "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/41836305217",
-    "final_head_proven": false
+  "execution_sha": "6a0b9f2b708ad26c1371208a81796c10a22828e1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "6a0b9f2b708ad26c1371208a81796c10a22828e1",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
   }
 }

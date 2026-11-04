@@ -1,4 +1,4 @@
-# WORK-2026110309 — submission idempotency evidence v1
+# PROOF: WORK-2026110309
 
 MERGE_SHA: pending merge
 
@@ -15,14 +15,14 @@ ASSERTIONS:
 - [x] Six behavior regressions fail on the unmodified origin/main service; seven issue tests pass after repair (one legacy invariant passes before and after).
 - [x] Removing submitter fails cross-capper isolation; removing distribution mode fails both cross-mode orders.
 - [x] UTV2-1672 / UTV2-1923 controller guards remain unmodified.
-- [ ] OPEN BLOCKER verify-4: controller guard mutation-control fixture at apps/api/src/controllers/submit-pick-controller.test.ts:432 assumes old cross-mode collision; suite is 12 pass / 1 fail. It is not wired into any package script, so CI does not run it. PM SCOPE_OVERRIDE on the PR is required before editing this fixture. Per orchestrator ruling, neither controller nor its test was changed.
+- [x] verify-4 resolved under Griff scope-override/v1 comment 6634406820 and orchestrator rulings 5/6. Exact supplied patch applied (SHA-256 5a28816fc9e1e843b4370debbbf825f07d805a7805eccec60d4186e62b2285bd): forced collision fixture preserves refusal coverage, regex accepts UTV2-\d+, and human integrity mutation control is added. Direct controller suite: 14 pass / 0 fail. Controller runtime and both guards remain unmodified. Fresh exact-head override remains required from Griff.
 - [x] Resumed pnpm verify:static passed (lint, type-check, build, aggregate tests and command/migration checks).
 - [ ] Exact-head pnpm verify green: local staging identity gate refuses configured host before DB work.
 - [ ] Exact-head Writable DB proof (staging only) CI job green with new suite reporting no skips.
-- [ ] OPEN BLOCKER: packet requires evidence schema v1; current proof-binding-validator rejects v1 for pre-merge authoring (historical read-only). A governed contract reconciliation is needed; no runtime evidence is fabricated to satisfy the gate.
+- [x] Proof format reconciled by ruling 4: schema v2 pre-merge sha_binding, literal PROOF heading, and SHA-bindable diff summary. Earlier v1 failures below are historical, superseded by final validation.
 - [ ] Final merge SHA binding, Griff t1-approved label and exact-head pm-verdict/v1 APPROVED comment.
 
-The tests named `WORK0309 distribution isolation: track-only then delivery-eligible bypasses conflict guards with separate immutable picks` and the reverse-order variant in apps/api/src/submission-service.test.ts:3598 exercise the actual controller and show both modes succeed with distinct picks. They snapshot the first pick and outbox before the second submission and compare afterward. New key isolation avoids the guards on normal cross-mode resubmission; the existing artificial guard fixture remains an explicit blocker above.
+The tests named `WORK0309 distribution isolation: track-only then delivery-eligible bypasses conflict guards with separate immutable picks` and the reverse-order variant in apps/api/src/submission-service.test.ts:3598 exercise the actual controller and show both modes succeed with distinct picks. They snapshot the first pick and outbox before the second submission and compare afterward. New key isolation avoids the guards on normal cross-mode resubmission; the authorized forced-collision fixture independently proves guard refusal paths.
 
 Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (packet: host=unparseable; observed locally: host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run through the staging-ci GitHub environment with CI_SUPABASE_* credentials. No local writable DB command passed the staging guard.
 
@@ -44,7 +44,7 @@ lifecycle-fsm requires R1/R2/R3/R4 (R5 advisory). Binding PM ruling accepts exis
 
 ## Model routing
 
-The existing model-routing.json is preserved: it contains wrapper-observed model gpt-6.1-sol and effort medium for attempt 2, including session identity, CLI version and usage. Attempt 3 routing observation must be persisted by the outer wrapper; this executor does not invent new session provenance.
+The existing model-routing.json is preserved: it contains wrapper-observed model gpt-6.1-sol and effort medium for attempt 2, including session identity, CLI version and usage. Current-attempt routing observation must be persisted by the outer wrapper; this executor does not invent new session provenance.
 
 ## Recorded command evidence
 
@@ -995,18 +995,136 @@ verify	Assert the DB proof producer succeeded	2026-11-04T13:15:40.7482131Z ##[er
 verify	Assert the DB proof producer succeeded	2026-11-04T13:15:40.7491974Z ##[error]Process completed with exit code 1.
 ```
 
-## Resumed review candidate
+## Final resumed candidate
 
-Implementation commit: c6ada223c9d558765301cb986428c7262c23daf7. Proof commit: 745f72f951039de24da7961b4aa13a9c5f54b9be. GitHub bot PR-binding commit b641f500229f7fd82e6622c376208995bf032050 was fast-forwarded under the merge mutex; it changes only the lane manifest. Runtime implementation is identical across these commits. Focused suite 105/105; verify:static exited 0; pnpm verify and pnpm test:db exited 1 at staging identity refusal before writable DB work. No new any casts or test removals. Controller and guard fixture remain unmodified.
+Verified source SHA: 6a0b9f2b708ad26c1371208a81796c10a22828e1. The supplied test-only patch is committed at 0966e3929; main is synced in this source commit. Historical failed controller and schema-v1 checks above are superseded by the final runs below. Runtime controller, authorization and delivery behavior are unchanged. No new any cast or test removal.
 
-Post-proof-commit R-level check at 745f72f951039de24da7961b4aa13a9c5f54b9be: PASS, 11 changed files, lifecycle-fsm matched. A final candidate check is also required after committing this proof update; its output is recorded on the PR.
+| Assertion | Proven | Not proven |
+|---|---|---|
+| Submission isolation and retry behavior | Local direct submission suite: 105/105 | Exact-head staging CI pending |
+| Guard refusals and mutation controls | Local direct controller suite: 14/14 | This file is not wired into CI scripts |
+| Board writer rerun dedupe | Local direct board writer suite: 19/19 | This file is not wired into CI scripts |
+| Live staging persistence | No local writable run authorized | Exact-head CI and observed row counts pending |
 
-PR #1830 is a draft with tier:T1. CI run 41836215684 at 745f72f951039de24da7961b4aa13a9c5f54b9be was canceled when the bot advanced the PR head; verify failed closed because its DB producer was canceled. Replacement CI run 41836305217 at b641f500229f7fd82e6622c376208995bf032050 is running at this observation. Neither run is asserted to prove the final head. Exact-head live evidence remains pending on the final pushed candidate.
-
-The v1 bundle is deliberately marked INCOMPLETE. Both the packet's schema-v1 requirement and the validator's refusal are preserved; the final validator output below also explains that v1 cannot use the pending-merge placeholder as authoritative SHA. Do not invent a merge SHA to bypass it. No PM approval or READY_FOR_REVIEW attestation is emitted. Verify and closeout phases remain incomplete.
+No executor-result, PM verdict, approval, merge or lane finalization is emitted by this executor.
 
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 Execution binding: final candidate identity is the Git commit containing this bundle; exact-head CI and authoritative post-merge binding remain pending. No branch SHA is presented as merge authority.
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1830
+
+EVIDENCE: final local pnpm exec tsx --test apps/api/src/controllers/submit-pick-controller.test.ts at 6a0b9f2b708ad26c1371208a81796c10a22828e1
+```text
+# tests 14
+# pass 14
+# fail 0
+# skipped 0
+```
+
+EVIDENCE: final local pnpm exec tsx --test apps/api/src/board-pick-writer.test.ts at 6a0b9f2b708ad26c1371208a81796c10a22828e1
+```text
+# tests 19
+# pass 19
+# fail 0
+# skipped 0
+```
+
+EVIDENCE: final local pnpm exec tsx --test apps/api/src/submission-service.test.ts at 6a0b9f2b708ad26c1371208a81796c10a22828e1
+```text
+# tests 105
+# pass 105
+# fail 0
+# skipped 0
+```
+
+## Final proof format checks
+
+Query entries below describe the CI readback inventory; row counts have null observed_count and explicit not_measured status. Structural CEP-E7 acceptance does not prove live execution. Required CI receipt and measured staging rows remain OPEN BLOCKERS.
+
+EVIDENCE: final close-eligibility evaluation. Executed the Evaluate close eligibility step extracted from .github/workflows/close-eligibility-preflight.yml with ISSUE_ID=WORK-2026110309 and MANIFEST_PATH=docs/06_status/lanes/WORK-2026110309.json; only the import path was adjusted for the ignored runner location.
+```text
+[PASS] CEP-E1         every declared proof artifact is present at the PR head
+[PASS] CEP-E2         no declared proof artifact is empty
+[PASS] CEP-E3         verification document carries every required section  [regression: UTV2-1661]
+[PASS] CEP-E4         T2 proof-evidence rules P11-P14 do not apply at tier T1; ops:lane-close evaluates them only on the T2 branch  [regression: UTV2-1661]
+[PASS] CEP-E5         every markdown proof artifact carries a rebindable merge-SHA anchor  [regression: UTV2-1649]
+[PASS] CEP-E6         model-routing sidecar carries override_used and execution provenance  [regression: UTV2-1649]
+[PASS] CEP-E7         evidence satisfies shared schema-v2 app-runtime contract
+[PASS] CEP-M1         tier resolves to T1
+[PASS] CEP-M2         manifest carries the required model_routing block  [regression: UTV2-1661]
+[PASS] CEP-M3         manifest.pr_url is present and parseable
+[PASS] CEP-C1         no pre-merge-knowable condition would prevent ops:lane-close from producing a receipt
+[N/A ] CEP-C2         merge-SHA reachability, CI results on the merge commit, and the receipt itself cannot be evaluated before the merge exists; they remain the close gate's responsibility
+[PASS] CEP-L1         lane completion and issue completion are separate decisions: ops:lane-close completes a lane and completes an issue only under the five-condition gate, which requires an explicit completion intent that a lane closing cannot supply for itself
+[N/A ] CEP-L2         whether an automatic Done path exists OUTSIDE this repository cannot be determined from lane data; external mutation authorities are inventoried and governed separately
+
+Close eligibility: PASS — this lane can truthfully close after merge.
+```
+
+EVIDENCE: final pnpm exec tsx scripts/ops/proof-schema.ts proof-identity --phase pre-merge --verification docs/06_status/proof/WORK-2026110309/verification.md --evidence docs/06_status/proof/WORK-2026110309/evidence.json
+```text
+{"mode":"schema-v2","phase":"pre-merge","failures":[],"provenanceAnchorSha":"6a0b9f2b708ad26c1371208a81796c10a22828e1"}
+```
+
+EVIDENCE: final pnpm ops:proof-auditor-gate --proof-dir docs/06_status/proof/WORK-2026110309 --sha 6a0b9f2b708ad26c1371208a81796c10a22828e1 --require-executed-command "pnpm test:db" --json
+```text
+{"verdict":"PASS","proofDir":"docs/06_status/proof/WORK-2026110309","sha":"6a0b9f2b708ad26c1371208a81796c10a22828e1","failures":[],"warnings":["Writable DB execution is not audited from proof text: pnpm test:db. Text cannot show which database a run targeted. Enforcement is the CI-produced ci-db-proof-receipt/v2, verified in the required `verify` context by scripts/ci/verify-db-proof-receipt.ts."],"checkedAt":"2026-11-04T15:22:15.028Z"}
+```
+
+EVIDENCE: final pnpm exec tsx scripts/ci/proof-binding-validator.ts --proof-dir docs/06_status/proof/WORK-2026110309 --json
+```text
+{
+  "schema_version": 2,
+  "gate": "proof-binding-versioned",
+  "issue_id": "WORK-2026110309",
+  "verified_source_sha": "6a0b9f2b708ad26c1371208a81796c10a22828e1",
+  "resolved_evidence_commit_sha": "331c9479bf1181067559fe6b44f231358e8a5dd1",
+  "resolved_current_pr_head_sha": "6a0b9f2b708ad26c1371208a81796c10a22828e1",
+  "placeholder_fields_resolved": true,
+  "violations": [],
+  "ok": true
+}
+```
+
+EVIDENCE: final pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+```text
+Verdict: PASS
+Changed files: 12
+Rules matched: lifecycle-fsm
+```
+
+EVIDENCE: final pnpm test:db (exit 1; no DB access)
+```text
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
+```
+
+EVIDENCE: final pnpm verify at 6a0b9f2b708ad26c1371208a81796c10a22828e1 (exit 1; verify:static completed successfully, then staging guard refusal)
+```text
+Summed completed TAP suites: {"tests": 8100, "pass": 8087, "fail": 0, "skipped": 13}
+  ---
+  duration_ms: 0.37426
+  type: 'test'
+  ...
+1..153
+# tests 227
+# suites 23
+# pass 227
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3058.782763
+smart-form e2e: not run (UNIT_TALK_SMART_FORM_E2E is not set).
+Set UNIT_TALK_SMART_FORM_E2E=1 to run it. It requires a Playwright browser:
+  pnpm exec playwright install chromium --with-deps
+[command-manifest] Verified 14 command definition(s) against /home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110309/.out/worktrees/codex__work-2026110309-submission-idempotency-scope/apps/discord-bot/command-manifest.json
+[check-migration-versions] 139 migration file(s) verified — no duplicate versions.
+[lint-migrations] Skipping schema baseline replay-root 00000000000000_baseline_live_schema.sql (snapshot, not a forward migration; fidelity verified by Live Schema Parity).
+[lint-migrations] 138 migration file(s) checked — no findings.
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
+```
+
+Final local verification is incomplete for writable DB proof: the static stage (including lint, type-check, build, aggregate tests and command/migration checks) passes, and the live stage refuses the loopback target before access. Do not claim full pnpm verify green locally. Exact-head required verify and staging DB job, measured row counts, fresh Griff scope override and PM approval remain pending.
