@@ -1,6 +1,6 @@
 # PROOF: WORK-2026110305
 
-MERGE_SHA: pending merge
+MERGE_SHA: d29719e997b4bca32239e5369c3a99e92d454616
 
 Issue: WORK-2026110305
 Tier: T1
@@ -77,7 +77,7 @@ The wrapper's observed launch configuration is gpt-6.1-sol, effort medium; model
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: d29719e997b4bca32239e5369c3a99e92d454616
 PR: #1826
 PM approval, governed merge, finalization, and orchestration reconciliation remain pending.
 

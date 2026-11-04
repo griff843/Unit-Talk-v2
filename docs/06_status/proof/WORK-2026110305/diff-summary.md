@@ -18,7 +18,7 @@ The real-persistence assertions require the staging-ci environment and have not 
 ## SHA Binding
 
 Implementation SHA: c91ac116c024bf9029788fd0a8939cae5c6291c9
-Merge SHA: pending merge
+Merge SHA: d29719e997b4bca32239e5369c3a99e92d454616
 PR: deferred to Production Claude under the explicit staging-slot sequencing override.
 
 ## Rework
