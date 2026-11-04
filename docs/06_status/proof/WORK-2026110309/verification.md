@@ -16,6 +16,7 @@ ASSERTIONS:
 - [x] Removing submitter fails cross-capper isolation; removing distribution mode fails both cross-mode orders.
 - [x] UTV2-1672 / UTV2-1923 controller guards remain unmodified.
 - [ ] OPEN BLOCKER verify-4: controller guard mutation-control fixture at apps/api/src/controllers/submit-pick-controller.test.ts:432 assumes old cross-mode collision; suite is 12 pass / 1 fail. It is not wired into any package script, so CI does not run it. PM SCOPE_OVERRIDE on the PR is required before editing this fixture. Per orchestrator ruling, neither controller nor its test was changed.
+- [x] Resumed pnpm verify:static passed (lint, type-check, build, aggregate tests and command/migration checks).
 - [ ] Exact-head pnpm verify green: local staging identity gate refuses configured host before DB work.
 - [ ] Exact-head Writable DB proof (staging only) CI job green with new suite reporting no skips.
 - [ ] OPEN BLOCKER: packet requires evidence schema v1; current proof-binding-validator rejects v1 for pre-merge authoring (historical read-only). A governed contract reconciliation is needed; no runtime evidence is fabricated to satisfy the gate.
@@ -352,39 +353,6 @@ ok 106 - WORK0309 live staging: capper isolation, retry dedupe and immutable Tra
 # duration_ms 1993.390792
 ```
 
-EVIDENCE: focused-resume
-```text
-# fail 0
-[terminal output excerpt]
-  ...
-# Subtest: WORK0309 scope encoding cannot alias identities containing separators
-ok 103 - WORK0309 scope encoding cannot alias identities containing separators
-  ---
-  duration_ms: 0.56532
-  type: 'test'
-  ...
-# Subtest: WORK0309 historical scoped retry creates a new pick without rewriting the legacy row or key
-ok 104 - WORK0309 historical scoped retry creates a new pick without rewriting the legacy row or key
-  ---
-  duration_ms: 5.404563
-  type: 'test'
-  ...
-# Subtest: WORK0309 legacy producers retain the exact six-field key bytes without submitter or mode
-ok 105 - WORK0309 legacy producers retain the exact six-field key bytes without submitter or mode
-  ---
-  duration_ms: 0.835713
-  type: 'test'
-  ...
-1..105
-# tests 105
-# suites 0
-# pass 105
-# fail 0
-# cancelled 0
-# skipped 0
-# todo 0
-# duration_ms 3198.872734
-```
 
 EVIDENCE: mutation-mode
 ```text
@@ -695,61 +663,6 @@ Changed files: 5
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
-EVIDENCE: static-resume
-```text
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-# fail 0
-[terminal output excerpt]
-# Subtest: retry: an ambiguous attempt refuses without an operator attestation and leaves the row alone
-ok 16 - retry: an ambiguous attempt refuses without an operator attestation and leaves the row alone
-  ---
-  duration_ms: 0.909463
-  type: 'test'
-  ...
-# Subtest: retry: confirmedNotDelivered records the reconciliation BEFORE resetting the row
-ok 17 - retry: confirmedNotDelivered records the reconciliation BEFORE resetting the row
-  ---
-  duration_ms: 1.133012
-  type: 'test'
-  ...
-# Subtest: retry: an unreadable ledger fails closed with 503
-ok 18 - retry: an unreadable ledger fails closed with 503
-  ---
-  duration_ms: 0.867461
-  type: 'test'
-  ...
-1..18
-# tests 18
-# suites 0
-# pass 18
-# fail 0
-# cancelled 0
-# skipped 0
-# todo 0
-# duration_ms 1527.93833
-TAP version 13
-```
 
 EVIDENCE: tsc
 ```text
@@ -951,8 +864,149 @@ EVIDENCE: proof-validator (initial check; missing top-level MERGE_SHA row subseq
 }
 ```
 
+EVIDENCE: focused-resume
+```text
+  ...
+# Subtest: WORK0309 scope encoding cannot alias identities containing separators
+ok 103 - WORK0309 scope encoding cannot alias identities containing separators
+  ---
+  duration_ms: 0.56532
+  type: 'test'
+  ...
+# Subtest: WORK0309 historical scoped retry creates a new pick without rewriting the legacy row or key
+ok 104 - WORK0309 historical scoped retry creates a new pick without rewriting the legacy row or key
+  ---
+  duration_ms: 5.404563
+  type: 'test'
+  ...
+# Subtest: WORK0309 legacy producers retain the exact six-field key bytes without submitter or mode
+ok 105 - WORK0309 legacy producers retain the exact six-field key bytes without submitter or mode
+  ---
+  duration_ms: 0.835713
+  type: 'test'
+  ...
+1..105
+# tests 105
+# suites 0
+# pass 105
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3198.872734
+```
+
+EVIDENCE: static-resume
+```text
+# Subtest: a changed matchup replaces the previous home choice and preserves the away identity
+ok 152 - a changed matchup replaces the previous home choice and preserves the away identity
+  ---
+  duration_ms: 0.17709
+  type: 'test'
+  ...
+# Subtest: only QA with a missing explicit identity is blocked by the QA safeguard
+ok 153 - only QA with a missing explicit identity is blocked by the QA safeguard
+  ---
+  duration_ms: 0.248901
+  type: 'test'
+  ...
+1..153
+# tests 227
+# suites 23
+# pass 227
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3321.824293
+smart-form e2e: not run (UNIT_TALK_SMART_FORM_E2E is not set).
+Set UNIT_TALK_SMART_FORM_E2E=1 to run it. It requires a Playwright browser:
+  pnpm exec playwright install chromium --with-deps
+[command-manifest] Verified 14 command definition(s) against /home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110309/.out/worktrees/codex__work-2026110309-submission-idempotency-scope/apps/discord-bot/command-manifest.json
+[check-migration-versions] 139 migration file(s) verified — no duplicate versions.
+[lint-migrations] Skipping schema baseline replay-root 00000000000000_baseline_live_schema.sql (snapshot, not a forward migration; fidelity verified by Live Schema Parity).
+[lint-migrations] 138 migration file(s) checked — no findings.
+```
+
+EVIDENCE: verify-resume
+```text
+  ---
+  duration_ms: 0.202932
+  type: 'test'
+  ...
+# Subtest: only QA with a missing explicit identity is blocked by the QA safeguard
+ok 153 - only QA with a missing explicit identity is blocked by the QA safeguard
+  ---
+  duration_ms: 0.267445
+  type: 'test'
+  ...
+1..153
+# tests 227
+# suites 23
+# pass 227
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2923.453935
+smart-form e2e: not run (UNIT_TALK_SMART_FORM_E2E is not set).
+Set UNIT_TALK_SMART_FORM_E2E=1 to run it. It requires a Playwright browser:
+  pnpm exec playwright install chromium --with-deps
+[command-manifest] Verified 14 command definition(s) against /home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110309/.out/worktrees/codex__work-2026110309-submission-idempotency-scope/apps/discord-bot/command-manifest.json
+[check-migration-versions] 139 migration file(s) verified — no duplicate versions.
+[lint-migrations] Skipping schema baseline replay-root 00000000000000_baseline_live_schema.sql (snapshot, not a forward migration; fidelity verified by Live Schema Parity).
+[lint-migrations] 138 migration file(s) checked — no findings.
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
+```
+
+EVIDENCE: proof-validator-final
+```text
+{
+  "schema_version": 1,
+  "gate": "proof-binding-versioned",
+  "issue_id": "WORK-2026110309",
+  "verified_source_sha": "",
+  "resolved_evidence_commit_sha": "(unresolved)",
+  "resolved_current_pr_head_sha": "745f72f951039de24da7961b4aa13a9c5f54b9be",
+  "placeholder_fields_resolved": false,
+  "violations": [
+    "schema_version: schema-v1 evidence is historical read-only and cannot pass a pre-merge authoring gate",
+    "Proof MERGE_SHA is not a valid git SHA: \"pending merge\". This bundle declares no schema-v2 sha_binding block, so the legacy contract applies and the row itself must be a real commit. Add a sha_binding block to use the schema-v2 contract."
+  ],
+  "ok": false
+}
+```
+
+EVIDENCE: ci-initial-failure
+```text
+verify	Assert the DB proof producer succeeded	﻿2026-11-04T13:15:40.7346499Z ##[group]Run set -euo pipefail
+verify	Assert the DB proof producer succeeded	2026-11-04T13:15:40.7347370Z ^[[36;1mset -euo pipefail^[[0m
+verify	Assert the DB proof producer succeeded	2026-11-04T13:15:40.7348042Z ^[[36;1mresult="cancelled"^[[0m
+verify	Assert the DB proof producer succeeded	2026-11-04T13:15:40.7348789Z ^[[36;1mecho "staging-db-proof result: $result"^[[0m
+verify	Assert the DB proof producer succeeded	2026-11-04T13:15:40.7349644Z ^[[36;1mif [ "$result" != "success" ]; then^[[0m
+verify	Assert the DB proof producer succeeded	2026-11-04T13:15:40.7350826Z ^[[36;1m  echo "::error::staging-db-proof did not succeed ($result). The required verify context fails closed."^[[0m
+verify	Assert the DB proof producer succeeded	2026-11-04T13:15:40.7352006Z ^[[36;1m  exit 1^[[0m
+verify	Assert the DB proof producer succeeded	2026-11-04T13:15:40.7352571Z ^[[36;1mfi^[[0m
+verify	Assert the DB proof producer succeeded	2026-11-04T13:15:40.7367322Z shell: /usr/bin/bash -e {0}
+verify	Assert the DB proof producer succeeded	2026-11-04T13:15:40.7368273Z ##[endgroup]
+verify	Assert the DB proof producer succeeded	2026-11-04T13:15:40.7459384Z staging-db-proof result: cancelled
+verify	Assert the DB proof producer succeeded	2026-11-04T13:15:40.7482131Z ##[error]staging-db-proof did not succeed (cancelled). The required verify context fails closed.
+verify	Assert the DB proof producer succeeded	2026-11-04T13:15:40.7491974Z ##[error]Process completed with exit code 1.
+```
+
+## Resumed review candidate
+
+Implementation commit: c6ada223c9d558765301cb986428c7262c23daf7. Proof commit: 745f72f951039de24da7961b4aa13a9c5f54b9be. GitHub bot PR-binding commit b641f500229f7fd82e6622c376208995bf032050 was fast-forwarded under the merge mutex; it changes only the lane manifest. Runtime implementation is identical across these commits. Focused suite 105/105; verify:static exited 0; pnpm verify and pnpm test:db exited 1 at staging identity refusal before writable DB work. No new any casts or test removals. Controller and guard fixture remain unmodified.
+
+Post-proof-commit R-level check at 745f72f951039de24da7961b4aa13a9c5f54b9be: PASS, 11 changed files, lifecycle-fsm matched. A final candidate check is also required after committing this proof update; its output is recorded on the PR.
+
+PR #1830 is a draft with tier:T1. CI run 41836215684 at 745f72f951039de24da7961b4aa13a9c5f54b9be was canceled when the bot advanced the PR head; verify failed closed because its DB producer was canceled. Replacement CI run 41836305217 at b641f500229f7fd82e6622c376208995bf032050 is running at this observation. Neither run is asserted to prove the final head. Exact-head live evidence remains pending on the final pushed candidate.
+
+The v1 bundle is deliberately marked INCOMPLETE. Both the packet's schema-v1 requirement and the validator's refusal are preserved; the final validator output below also explains that v1 cannot use the pending-merge placeholder as authoritative SHA. Do not invent a merge SHA to bypass it. No PM approval or READY_FOR_REVIEW attestation is emitted. Verify and closeout phases remain incomplete.
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 Execution binding: final candidate identity is the Git commit containing this bundle; exact-head CI and authoritative post-merge binding remain pending. No branch SHA is presented as merge authority.
-PR: pending draft creation
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1830

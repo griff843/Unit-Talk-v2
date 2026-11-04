@@ -5,7 +5,7 @@
   "status": "INCOMPLETE",
   "merge_sha": null,
   "static_proof": {
-    "status": "pending resumed static gate",
+    "status": "PASS",
     "focused_tests": {
       "pass": 105,
       "fail": 0
@@ -36,6 +36,19 @@
       "rules": [
         "lifecycle-fsm"
       ]
+    },
+    "commands": {
+      "pnpm verify:static": {
+        "exit_code": 0
+      },
+      "pnpm verify": {
+        "exit_code": 1,
+        "reason": "staging identity guard refusal before DB writes"
+      },
+      "pnpm test:db": {
+        "exit_code": 1,
+        "reason": "staging identity guard refusal before DB writes"
+      }
     }
   },
   "runtime_proof": {
@@ -50,5 +63,14 @@
     "Merge SHA binding and PM approval pending",
     "Packet v1 evidence requirement conflicts with pre-merge validator requiring schema v2"
   ],
-  "evidence_file": "verification.md"
+  "evidence_file": "verification.md",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1830",
+  "execution_sha": "c6ada223c9d558765301cb986428c7262c23daf7",
+  "ci_observation": {
+    "run_id": 41836305217,
+    "head_sha": "b641f500229f7fd82e6622c376208995bf032050",
+    "status": "in_progress",
+    "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/41836305217",
+    "final_head_proven": false
+  }
 }
