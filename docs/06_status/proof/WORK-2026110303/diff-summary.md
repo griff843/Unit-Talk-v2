@@ -19,5 +19,5 @@ Scope of the figures below: implementation files and the work order only, exclud
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 226decfb98239b01821c0a27063c2b2c679d6980
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1825

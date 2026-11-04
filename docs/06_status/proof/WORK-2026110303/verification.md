@@ -1,6 +1,6 @@
 # PROOF: WORK-2026110303
 
-MERGE_SHA: pending merge
+MERGE_SHA: 226decfb98239b01821c0a27063c2b2c679d6980
 
 Issue: WORK-2026110303
 Tier: T2
@@ -103,5 +103,5 @@ This lane has no database or production runtime surface. It changes the local ex
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `226decfb98239b01821c0a27063c2b2c679d6980`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1825
