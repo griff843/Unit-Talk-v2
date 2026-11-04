@@ -1,0 +1,190 @@
+TAP version 13
+# Subtest: resolveHeadshotUrl returns null for null sport
+ok 1 - resolveHeadshotUrl returns null for null sport
+  ---
+  duration_ms: 1.654787
+  type: 'test'
+  ...
+# Subtest: resolveHeadshotUrl returns null for unknown sport
+ok 2 - resolveHeadshotUrl returns null for unknown sport
+  ---
+  duration_ms: 0.249789
+  type: 'test'
+  ...
+# Subtest: NHL uniquely matched player uses the live asset host and provider playerId only
+ok 3 - NHL uniquely matched player uses the live asset host and provider playerId only
+  ---
+  duration_ms: 65.2723
+  type: 'test'
+  ...
+# Subtest: NHL resolver never emits the dead bamgrid host
+ok 4 - NHL resolver never emits the dead bamgrid host
+  ---
+  duration_ms: 0.838871
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass skips players with existing headshot_url
+ok 5 - runPlayerEnrichmentPass skips players with existing headshot_url
+  ---
+  duration_ms: 0.809067
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass reports skipped for players with null sport
+ok 6 - runPlayerEnrichmentPass reports skipped for players with null sport
+  ---
+  duration_ms: 0.22855
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass handles empty participant list
+ok 7 - runPlayerEnrichmentPass handles empty participant list
+  ---
+  duration_ms: 0.276982
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass writes system_runs record with correct details
+ok 8 - runPlayerEnrichmentPass writes system_runs record with correct details
+  ---
+  duration_ms: 0.259839
+  type: 'test'
+  ...
+# Subtest: NHL unrelated player is refused
+ok 9 - NHL unrelated player is refused
+  ---
+  duration_ms: 0.8907
+  type: 'test'
+  ...
+# Subtest: NHL ambiguous name is refused
+ok 10 - NHL ambiguous name is refused
+  ---
+  duration_ms: 1.170803
+  type: 'test'
+  ...
+# Subtest: NFL unrelated first result is refused
+ok 11 - NFL unrelated first result is refused
+  ---
+  duration_ms: 1.13427
+  type: 'test'
+  ...
+# Subtest: all sports require a unique normalized full identity, including symmetric suffixes
+ok 12 - all sports require a unique normalized full identity, including symmetric suffixes
+  ---
+  duration_ms: 24.672338
+  type: 'test'
+  ...
+# Subtest: NFL selects the unique identity after an unrelated first hit and refuses duplicate exact hits
+ok 13 - NFL selects the unique identity after an unrelated first hit and refuses duplicate exact hits
+  ---
+  duration_ms: 1.188397
+  type: 'test'
+  ...
+# Subtest: NHL checks candidate league and team and does not resolve ambiguity using an image
+ok 14 - NHL checks candidate league and team and does not resolve ambiguity using an image
+  ---
+  duration_ms: 0.845566
+  type: 'test'
+  ...
+# Subtest: enrichment records refusal reasons and leaves stored images untouched
+ok 15 - enrichment records refusal reasons and leaves stored images untouched
+  ---
+  duration_ms: 2.235884
+  type: 'test'
+  ...
+# Subtest: NFL checks real ESPN teamRelationships and leagueRelationships identities
+ok 16 - NFL checks real ESPN teamRelationships and leagueRelationships identities
+  ---
+  duration_ms: 1.226506
+  type: 'test'
+  ...
+# Subtest: canonical team keys correlate by full team name and preserve Red Sox versus White Sox
+ok 17 - canonical team keys correlate by full team name and preserve Red Sox versus White Sox
+  ---
+  duration_ms: 2.997461
+  type: 'test'
+  ...
+# Subtest: NBA resolves provider columns by headers and correlates LA Clippers with canonical Los Angeles
+ok 18 - NBA resolves provider columns by headers and correlates LA Clippers with canonical Los Angeles
+  ---
+  duration_ms: 2.246251
+  type: 'test'
+  ...
+# Subtest: NHL six Jakes sharing a stored URL never confirms an unrelated Jake
+ok 19 - NHL six Jakes sharing a stored URL never confirms an unrelated Jake
+  ---
+  duration_ms: 2.528289
+  type: 'test'
+  ...
+# Subtest: NHL production catalog key refuses conflicting provider abbreviation
+ok 20 - NHL production catalog key refuses conflicting provider abbreviation
+  ---
+  duration_ms: 1.705035
+  type: 'test'
+  ...
+# Subtest: NHL production catalog key accepts matching provider abbreviation
+ok 21 - NHL production catalog key accepts matching provider abbreviation
+  ---
+  duration_ms: 2.192654
+  type: 'test'
+  ...
+# Subtest: MLB production catalog key refuses conflicting numeric provider team
+ok 22 - MLB production catalog key refuses conflicting numeric provider team
+  ---
+  duration_ms: 1.919219
+  type: 'test'
+  ...
+# Subtest: MLB production catalog key accepts matching numeric provider team
+ok 23 - MLB production catalog key accepts matching numeric provider team
+  ---
+  duration_ms: 1.861383
+  type: 'test'
+  ...
+# Subtest: non-catalog caller team refuses incomparable provider team
+ok 24 - non-catalog caller team refuses incomparable provider team
+  ---
+  duration_ms: 1.614754
+  type: 'test'
+  ...
+# Subtest: NHL namesake outside old top five is ambiguous
+ok 25 - NHL namesake outside old top five is ambiguous
+  ---
+  duration_ms: 2.034951
+  type: 'test'
+  ...
+# Subtest: NFL namesake outside old top five is ambiguous
+ok 26 - NFL namesake outside old top five is ambiguous
+  ---
+  duration_ms: 1.258603
+  type: 'test'
+  ...
+# Subtest: MLB refuses an unknown provider team ID for a catalog team
+ok 27 - MLB refuses an unknown provider team ID for a catalog team
+  ---
+  duration_ms: 1.459337
+  type: 'test'
+  ...
+# Subtest: NHL refuses an unknown provider team abbreviation for a catalog team
+ok 28 - NHL refuses an unknown provider team abbreviation for a catalog team
+  ---
+  duration_ms: 1.536506
+  type: 'test'
+  ...
+# Subtest: NHL refuses a full search window even with one matching identity
+ok 29 - NHL refuses a full search window even with one matching identity
+  ---
+  duration_ms: 1.9695
+  type: 'test'
+  ...
+# Subtest: NFL refuses a full search window even with one matching identity
+ok 30 - NFL refuses a full search window even with one matching identity
+  ---
+  duration_ms: 1.602615
+  type: 'test'
+  ...
+1..30
+# tests 30
+# suites 0
+# pass 30
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 787.464806
