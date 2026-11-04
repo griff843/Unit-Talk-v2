@@ -1,0 +1,44 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110308",
+  "tier": "T1",
+  "lane_type": "hygiene",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "e13612ce77a11210d5f93ba957b9b2d92c34214a",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm test",
+    "conclusion": "success",
+    "verified_source_sha": "e13612ce77a11210d5f93ba957b9b2d92c34214a",
+    "full_suite": {
+      "command": "pnpm test",
+      "tests": 7822,
+      "pass": 7809,
+      "fail": 0,
+      "skipped": 13
+    },
+    "focused_tests": {
+      "command": "npx tsx --test scripts/ci/staging-path-enforcement.test.ts",
+      "tests": 53,
+      "pass": 53,
+      "fail": 0,
+      "skipped": 0
+    },
+    "build": "pnpm build exit 0",
+    "r_level": "PASS",
+    "note": "Measured on e13612ce77a11210d5f93ba957b9b2d92c34214a after pnpm build. The diff is four runs-on lines. None of the four pinned jobs triggers on this PR (path filters, push-to-main, workflow_dispatch), so no pre-merge run of them exists. Evidence for ubuntu-24.04 with playwright 1.58.2: qa-fast runs 41518733002 and 41515869243 (2026-11-02, Image ubuntu-24.04, chromium downloaded). Direct proof is the first post-merge run of a pinned job."
+  },
+  "db_verification": {
+    "command": "pnpm test:db",
+    "status": "blocked_deferred_to_protected_ci",
+    "required_staging_ref": "xskgrzbteyqdufktjrjx",
+    "production_accessed": false,
+    "write_attempted": false
+  }
+}
