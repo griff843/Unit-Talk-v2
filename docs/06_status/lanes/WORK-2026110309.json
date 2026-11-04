@@ -8,7 +8,7 @@
   "branch": "codex/work-2026110309-submission-idempotency-scope",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1830",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/submission-service.test.ts",
@@ -24,9 +24,9 @@
     "docs/06_status/proof/WORK-2026110309/verification.md",
     "docs/06_status/proof/WORK-2026110309/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-11-04T05:40:27.695Z",
-  "heartbeat_at": "2026-11-04T05:40:27.695Z",
+  "heartbeat_at": "2026-11-04T13:14:25.679Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026110309-submission-idempotency-scope.json",
