@@ -81,3 +81,94 @@ the readings above stop being UNKNOWN. It must not use the `v_governed_pick_perf
 filters `source = 'board-construction'` and cannot contain an operator submission.
 
 ---
+
+## 11. Production session rotation reading — 2026-11-04
+
+Taken by Production Claude at about 13:40–14:10Z on 2026-11-04 for a controlled session rotation (WORK-2026110401). Sources are named per row. Re-measure before relying on any figure.
+
+### 11.1 Mission and commercial objective
+
+- The direction is unchanged from `plan.md` §0: quantity and truthful reconciliation of real **Track Only** lifecycles, with zero member delivery.
+- The next bounded acceptance objective is the single **private delivery-to-recap canary** (`intent.md` § "Bounded exception", Griff 2026-10-30).
+  - One allow-listed human capper's `delivery-eligible` pick goes to a staff-only destination.
+  - It is settled with evidence, recapped there, and reconciled in that capper's statistics.
+  - Broad member delivery stays disabled.
+  - Every production mutation for the canary needs Griff's authorization of **one consolidated final packet**.
+
+### 11.2 Shipped versus deployed
+
+| Fact | Reading | Source |
+|---|---|---|
+| `origin/main` | `e342655bf` (WORK-2026110303 closeout) | `git fetch; git log -1 origin/main` |
+| Deployed release | `913235ce7`, from `Deploy` run `40727467544`, 2026-10-28T16:35Z, `workflow_dispatch`, success | `gh run list --workflow deploy.yml` |
+| Drift | 83 commits on `main` since the deployed SHA, 31 of them non-lane, non-ledger | `git rev-list --count 913235ce7..origin/main` |
+| Merged, not deployed (product-relevant) | #1811 (canary audiences excluded from member readers), #1816 (worker fails closed when the kill switch is unwired), #1817 (reaper keeps settled picks), #1818 (member `/help` and `/trial-status` copy), #1819 (staff-canary label in operator detail), #1812 / #1800 / #1808 (Command Center results and settlement), #1822 / #1824 (participant artwork binding, NHL headshot host), #1828 (Command Center date range) | `gh pr list --state merged --search "merged:>=2026-10-27"` |
+| Containment mode of the deployed release | **UNKNOWN** this reading: the run log's `syndicate_machine_mode.validated` line was not retrievable. The last reading was `human-capper` (§1) | `gh run view 40727467544 --log` |
+
+A merged repair is not a running repair. Everything above "merged, not deployed" is staging-proven at most until Griff dispatches a deployment.
+
+### 11.3 Production acceptance versus staging-only proof
+
+| Item | Production (read-only, `zfzdnfwdarxucxtaojxm`, ~13:42Z) | Staging only |
+|---|---|---|
+| Governed cohort (`metadata ? 'distributionMode'`) | 4 picks, all `track-only`, all status `validated`, one capper `kingro623`, created 10-27 → 10-31. Each has one `operator`-source settlement (4 wins) | — |
+| Delivery | 0 outbox rows in 14 days; 3,734 receipts in total (historical); 32 `processing` outbox rows (the stranded canary rows, held) | Human-capper delivery path proven live on staging by #1826 |
+| Kill switches | `official-picks`, `best-bets`, `trader-insights`, `exclusive-insights` all `killed=true`. No `human-capper-recaps` row exists, and `isKilled()` fails closed for a missing row | — |
+| Runtime | `worker.heartbeat` 13:44Z and `grading.cron.heartbeat` 13:39Z today | — |
+| Ingestion / grading data | SGO parked. Newest `ingestor.cycle` 2026-06-30, newest `game_results` 2026-06-30, newest `events` 2026-09-28 | Fixture/staging proofs only |
+| Members | `member_tiers` has 9 rows | — |
+
+Settled Track Only picks keep `status = validated` **by design**. `validated -> settled` is not a legal lifecycle edge for a Track Only pick, and its settlement is recorded in `settlement_records` (`apps/api/src/settlement-service.ts:312-319`). It is not a data-truth defect.
+
+### 11.4 Active work
+
+| Work | PR / head | Lane, owner, worktree | State | Next action |
+|---|---|---|---|---|
+| WORK-2026110309 submission idempotency (T1, Codex) | #1830 draft, head `0650fe86364fc25353fd4af3236904636be4da4c` | branch `codex/work-2026110309-submission-idempotency-scope`; Codex via `ops:codex-exec`; lane worktree `.out/worktrees/control__work-2026110309/.out/worktrees/codex__work-2026110309-submission-idempotency-scope`; checkpoint `.out/ops/execution-checkpoints/WORK-2026110309.json` in that worktree (epoch `410933eb`, attempts 1–3 ended `failed` by design, rulings 1–4 recorded) | Implementation, regressions, both mutations, the live staging suite and the proof are on the PR. CI run `41837349837` at `0650fe863` passed `verify` and `Writable DB proof (staging only)`, including the new suite: `ok 1 - WORK0309 live staging: capper isolation, retry dedupe and immutable Track Only in both orders`, `# skipped 0`. Open: (a) the controller guard fixture needs Griff's `SCOPE_OVERRIDE`. The request and the exact patch (14/14 in a scratch worktree, plus a new mutation control for the delivery-authorization guard) are in #1830 comment `6632286109`. (b) Proof format CEP-E3/E5/E7 (ruling-4). The board-writer rerun dedupe test (`board-pick-writer.test.ts`) runs in no CI script, so its result is local only | 1. Griff posts `SCOPE_OVERRIDE` at the PR head for `apps/api/src/controllers/submit-pick-controller.test.ts`. 2. Record ruling-5 giving Codex the patch from comment `6632286109`, and state in the proof boundary that the board-writer test is local-only. 3. Dispatch one Codex attempt (`pnpm -s ops:codex-exec --issue WORK-2026110309` from the lane worktree, staging idle first). 4. One final CI run. 5. Executor result at the final head. 6. Griff `t1-approved` + `pm-verdict/v1`. 7. Merge wrapper `pr-merge`, closeout |
+| WORK-2026110401 this handoff (T2, Claude) | this lane's PR | `control__work-2026110401` | In progress | Merge through normal controls |
+| WORK-2026110302 Discord shared artwork (T1) | none | Work order only, on the **unpushed** local branch `control/work-2026110302` in `.out/worktrees/control__work-2026110302` (2 commits, behind `main`) | Queued: shares `apps/api/src/submission-service.ts` with 0309 and runs after it | Lane-start from that control worktree once 0309 merges |
+| WORK-2026110307 performance readers keyset paging (T1) | none | Work order only, on the **unpushed** local branch `control/work-2026110307` in `.out/worktrees/control__work-2026110307` (4 commits) | Queued behind the `package.json` singleton held by 0309 | Lane-start once 0309 releases `package.json` |
+| Older open PRs | #1778, #1776, #1775, #1772, #1771, #1739, #1738, #1736, #1556, #1505, #1498, #1429 | various | Not touched this session | Triage when capacity allows. Frozen: #1491, #1492, #1495. Production DDL: #1451 |
+
+### 11.5 Private-canary blockers (in order)
+
+1. **Cross-capper idempotency collision.** A second capper's identical wager was answered with the first capper's pick (staging, CI run `41671267309`). Fix in #1830, above.
+2. **Deployed release lacks the canary audience exclusion.** Clause 5 requires the deployed release to exclude canary-audience picks from every member read before the packet is presented. #1811 merged 2026-10-31, after the deployed `913235ce7`. A deployment is Griff's dispatch.
+3. **Verified Discord artwork** (0302) and **keyset-paged performance readers** (0307, so capper statistics reconcile beyond one page). Both are queued.
+4. **The consolidated final packet** (destination, capper, pick scope, release windows, rollback, proof criteria) is not yet prepared. Prepare it once 1–3 are merged and a deploy carries them; presenting it is Griff's decision.
+
+### 11.6 Outstanding acceptance outside the canary
+
+- **Grading and CLV:** no live provider data since 2026-06-30. Automated grading and CLV on live data wait on the SGO gate (`plan.md` §7 #6). Manual-fallback picks claim no CLV.
+- **Discord:** the Waves program belongs to the independent worker (`plan.md` §6.G). Member copy (#1818) is merged but not deployed.
+- **Whop:** setup and lifecycle proof stay Griff's (§7 #7). `member_tiers` has 9 rows; the Whop→role lifecycle is unverified in this reading.
+
+### 11.7 Reserved Griff decisions now pending
+
+1. `SCOPE_OVERRIDE` on #1830 for the controller test fixture.
+2. `t1-approved` + `pm-verdict/v1` on #1830 at its final head.
+3. A deployment dispatch carrying the merged canary safeguards.
+4. The carry-forward allowlist: a WORK-* closeout on `main` breaks approval carry-forward for other open PRs (merge authority).
+5. The production `picks.participant_id` index (production DDL).
+6. Standing: SGO, Whop/Discord setup, un-killing `official-picks`, the frozen PRs, #1451.
+
+### 11.8 Safe parallel work ready to dispatch
+
+- **Wire the unwired `apps/api` tests.** 41 of 126 `apps/api/src/*.test.ts` files run in no CI script, including `controllers/*.test.ts`, `board-pick-writer.test.ts`, `distribution-service.test.ts` and `routes/kill-switch.test.ts` (measured by the Operating session, 2026-11-04). Split into (a) in-memory unit tests and (b) a staging-writer decision for 18 historical `t1-proof-utv2-*` files. Admit after #1830 merges. Production Claude admits it.
+- Prepare, but do not present, the canary packet draft.
+
+### 11.9 Uncommitted state, running processes, staging
+
+- **Uncommitted changes:** none in the 0309 lane worktree. The 0302 and 0307 work orders are committed but **unpushed**, on local control branches.
+- **Root checkout:** the untracked `.ops/sync/*` and `docs/06_status/lanes/*` copies predate this session. Leave them.
+- **Running processes:** no Codex process. A `scripts/ops/command-center-bridge.ts --local-port 14302` process (PID 783153, root checkout, up about 5 days) predates this session. Its owner is **UNKNOWN**; leave it. Session-local monitors end with the session.
+- **Staging:** no reservation is held. The Operating session rotated out at about 13:55Z. Until a new one pings, check `gh run list --workflow ci.yml` is idle before any staging-bound push. A merge is two `main` arrivals. A ci.yml verify that comes back `(cancelled)` gets one full rerun, never `--failed`.
+- **Merge lock:** released (`.ops/merge-lock.json`, WORK-2026110303).
+
+### 11.10 Do not duplicate
+
+- Do not recreate, close or re-admit WORK-2026110309. Resume its checkpoint; rulings 1–4 are recorded and carry forward.
+- Do not post `SCOPE_OVERRIDE` or `pm-verdict/v1`; those are Griff's.
+- Do not write new work orders for 0302 or 0307; use the control worktrees above.
+- Do not repeat the 0309 impact review or mutations; they are in its proof bundle.
+- Do not re-derive the controller fixture patch. It is recorded verbatim in #1830 comment `6632286109`.
