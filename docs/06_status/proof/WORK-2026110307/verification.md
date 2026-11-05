@@ -4,7 +4,7 @@ MERGE_SHA: pending merge
 
 Issue: WORK-2026110307
 Tier: T1
-Source SHA: 13b2d94c69f3188559e7e0b930ba04f8a011d2f8
+Source SHA: 4e351399be1b22510923486893d252a5a3584855
 result: draft_live_proof_deferred
 
 ## ASSERTIONS:
@@ -50,6 +50,18 @@ Writable live-DB proof is blocked/deferred: target identity could not be resolve
 
 The paragraph above records the packet's precondition. The measured local `test:db` guard identified host=127.0.0.1. Both refuse an unproven staging target; neither result is live performance evidence.
 
+## Attempt 2 verification
+
+Source SHA: 4e351399be1b22510923486893d252a5a3584855
+
+The staging fixture assertion now uses `assert.notEqual(result.duplicate, true)`: fresh submissions omit the optional field. The remaining live assertions contain no similar optional-field defect. Runtime reader code is unchanged.
+
+- Focused paging, server and live suites: 179 tests, 178 passed, 0 failed, 1 staging skip.
+- `pnpm verify:static` inside `pnpm verify`: PASS; 8,108 tests, 8,095 passed, 0 failed, 13 skipped across local TAP blocks.
+- `pnpm verify`: exit 1 at the staging identity guard (host=127.0.0.1); writable tests did not run.
+- R-level: PASS; no matched rules.
+- Live timing, exact counts and seeded boundary/mutation proof remain deferred to staging-ci. Runtime query and row-count receipts remain empty.
+
 ## Verification boundary
 
 | Boundary | Result |
@@ -70,4 +82,4 @@ No READY_FOR_REVIEW attestation, PM approval, truth-check success or completed c
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1832
-Execution SHA: 13b2d94c69f3188559e7e0b930ba04f8a011d2f8
+Execution SHA: 4e351399be1b22510923486893d252a5a3584855

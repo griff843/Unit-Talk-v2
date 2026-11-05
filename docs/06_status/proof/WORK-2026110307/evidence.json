@@ -4,7 +4,7 @@
   "tier": "T1",
   "status": "draft_live_proof_deferred",
   "sha_binding": {
-    "verified_source_sha": "13b2d94c69f3188559e7e0b930ba04f8a011d2f8",
+    "verified_source_sha": "4e351399be1b22510923486893d252a5a3584855",
     "merge_sha": null,
     "sha_type": "source_sha",
     "evidence_commit_sha": "RESOLVED_BY_CI",
@@ -76,6 +76,35 @@
         "runtime_proof.row_counts"
       ],
       "source_and_evidence_binding": "PASS: source ancestor of proof-only commits; CI SHA placeholders resolve; only missing runtime query/row-count receipts block the full validator"
+    },
+    "attempt_2": {
+      "source_sha": "4e351399be1b22510923486893d252a5a3584855",
+      "change": "Live fixture assertion rejects duplicate=true and accepts the omitted optional field; remaining live assertions reviewed with no similar defect. Runtime reader unchanged.",
+      "focused_tests": {
+        "command": "pnpm exec tsx --test packages/db/src/member-performance-read-completeness.test.ts apps/api/src/server.test.ts apps/api/src/t1-proof-work-2026110307-keyset-paging-live.test.ts",
+        "tests": 179,
+        "pass": 178,
+        "fail": 0,
+        "skipped": 1
+      },
+      "verify": {
+        "command": "pnpm verify",
+        "exit": 1,
+        "static_subgate": "PASS: pnpm verify:static",
+        "local_test_totals": {
+          "tests": 8108,
+          "pass": 8095,
+          "fail": 0,
+          "skipped": 13
+        },
+        "failure": "test:db staging identity guard refused host=127.0.0.1 before writable tests"
+      },
+      "r_level": "PASS; no matched rules",
+      "log_sha256": {
+        "focused": "6c78769be4c970095aa47451d86919e39704b496e76096e89acff0cf262c6e45",
+        "verify": "d4113e354ae729ca239ac57036e19e9b6f58a7092e9e24f2e5a3b5aaf86b5316",
+        "rlevel": "6d4b7e714ba0630385b59dc4fcc6883a41779b5218c177dd2d179463fd015f92"
+      }
     }
   },
   "runtime_proof": {
