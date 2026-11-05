@@ -1,6 +1,6 @@
 # PROOF: WORK-2026110309
 
-MERGE_SHA: pending merge
+MERGE_SHA: 760a2c8a67a8e385aa857a7af7ed37cb97c140bc
 
 ## Verification
 
@@ -1010,7 +1010,7 @@ No executor-result, PM verdict, approval, merge or lane finalization is emitted 
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 760a2c8a67a8e385aa857a7af7ed37cb97c140bc
 Execution binding: final candidate identity is the Git commit containing this bundle; exact-head CI and authoritative post-merge binding remain pending. No branch SHA is presented as merge authority.
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1830
 

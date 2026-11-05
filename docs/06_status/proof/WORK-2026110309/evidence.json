@@ -2,7 +2,7 @@
   "schema_version": 2,
   "issue_id": "WORK-2026110309",
   "tier": "T1",
-  "status": "pre_merge",
+  "status": "merged",
   "static_proof": {
     "status": "PASS",
     "focused_tests": {
@@ -131,9 +131,11 @@
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "760a2c8a67a8e385aa857a7af7ed37cb97c140bc",
     "verified_source_sha": "6a0b9f2b708ad26c1371208a81796c10a22828e1",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-11-05T12:44:35.972Z"
   }
 }

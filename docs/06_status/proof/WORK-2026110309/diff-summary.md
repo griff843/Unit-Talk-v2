@@ -10,5 +10,5 @@ Open: exact-head staging CI, fresh Griff scope override and PM approval. Histori
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 760a2c8a67a8e385aa857a7af7ed37cb97c140bc
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1830
