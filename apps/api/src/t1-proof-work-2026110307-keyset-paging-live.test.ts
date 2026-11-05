@@ -7,7 +7,7 @@ import {
   createDatabaseRepositoryBundle,
   createDatabaseClientFromConnection,
   createServiceRoleDatabaseConnectionConfig,
-  orderedPageFilter,
+  applyOrderedPageCursor,
   readAllOrderedPages,
 } from '@unit-talk/db';
 import { processSubmission } from './submission-service.js';
@@ -80,11 +80,14 @@ test('WORK0307 staging: complete readers and duplicate timestamp boundary mutati
       let query = client.from('picks').select('id,created_at').in('id', ids)
         .order('created_at', { ascending: true }).order('id', { ascending: true }).limit(2);
       if (cursor) {
-        const filter = mutation === 'no-id'
-          ? `created_at.gt.${cursor.created_at}`
-          : orderedPageFilter(mutation === 'date'
-            ? { ...cursor, created_at: new Date(cursor.created_at).toISOString() } : cursor);
-        query = query.or(filter);
+        // Mutations intercept the shared production helper, preserving its bound.
+        const controlled = mutation === 'no-id'
+          ? new Proxy(query, { get(target, property, receiver) {
+            if (property === 'or') return () => target.or(`created_at.gt.${cursor.created_at}`);
+            return Reflect.get(target, property, receiver);
+          } }) : query;
+        query = applyOrderedPageCursor(controlled, mutation === 'date'
+          ? { ...cursor, created_at: new Date(cursor.created_at).toISOString() } : cursor);
       }
       return query;
     }, 2);

@@ -524,6 +524,18 @@ export function orderedPageFilter(cursor: OrderedPageCursor, ascending = true): 
   return `created_at.${operator}.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.${operator}.${cursor.id})`;
 }
 
+/** Redundant timestamp bound lets Postgres seek into the ordered index. */
+export function applyOrderedPageCursor<Q extends {
+  gte(column: string, value: string): Q;
+  lte(column: string, value: string): Q;
+  or(filter: string): Q;
+}>(query: Q, cursor: OrderedPageCursor, ascending = true): Q {
+  const bounded = ascending
+    ? query.gte('created_at', cursor.created_at)
+    : query.lte('created_at', cursor.created_at);
+  return bounded.or(orderedPageFilter(cursor, ascending));
+}
+
 /** Read a total (created_at, id) order until a short page, retaining DB precision.
  * from/to describe logical progress only; subsequent queries use the cursor.
  */
@@ -3518,7 +3530,7 @@ export class DatabasePickRepository implements PickRepository {
         .order('created_at', { ascending: true })
         .order('id', { ascending: true })
         .range(0, to - from);
-      if (cursor) query = query.or(orderedPageFilter(cursor));
+      if (cursor) query = applyOrderedPageCursor(query, cursor);
       return query;
     });
   }
@@ -3550,7 +3562,7 @@ export class DatabasePickRepository implements PickRepository {
         throw new Error('Failed to listByLifecycleStates: ' + reason);
       };
       try {
-        return await readAllOrderedPages<PickRecord>(async (from, to, cursor) => {
+        const rows = await readAllOrderedPages<PickRecord>(async (from, to, cursor) => {
           const width = Math.min(
             to - from + 1,
             limit === undefined ? POSTGREST_MAX_ROWS : limit - from,
@@ -3562,44 +3574,27 @@ export class DatabasePickRepository implements PickRepository {
             fail('unsafe page range');
           let query = this.client
             .from('picks')
-            .select('*', { count: 'exact' })
+            .select('*', cursor ? undefined : { count: 'exact' })
             .in('status', lifecycleStates)
             .order('created_at', { ascending: true })
             .order('id', { ascending: true })
             .range(cursor ? 0 : start, (cursor ? 0 : start) + width - 1);
-          if (cursor) query = query.or(orderedPageFilter(cursor, true));
+          if (cursor) query = applyOrderedPageCursor(query, cursor, true);
           const { data, error, count } = await query;
           if (error) fail(error.message);
-          if (
-            typeof count !== 'number' ||
-            !Number.isSafeInteger(count) ||
-            count < 0
-          ) {
-            fail('missing or invalid exact population count');
-          }
-          // Cursor counts exclude earlier rows. Re-count the full filter so even
-          // deletions/state changes behind the cursor trigger a whole-read retry.
-          let currentCount = count as number;
-          if (cursor) {
-            const population = await this.client.from('picks')
-              .select('id', { count: 'exact', head: true }).in('status', lifecycleStates);
-            if (population.error) fail(population.error.message);
-            if (typeof population.count !== 'number' || !Number.isSafeInteger(population.count) || population.count < 0)
+          if (!cursor) {
+            if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0)
               fail('missing or invalid exact population count');
-            currentCount = population.count as number;
+            total = count as number;
           }
-          if (total !== undefined && (total !== currentCount || (count as number) + (cursor ? start + from : 0) !== total))
-            fail('population count changed while paging');
-          total = currentCount;
           const wanted = Math.min(
-            Math.max(0, total - start),
+            Math.max(0, total! - start),
             limit ?? Number.POSITIVE_INFINITY,
           );
           if (wanted > maxRows) fail('read exceeds 100000-row safety budget');
           if (!Array.isArray(data)) fail('missing page data');
           const page = data ?? [];
-          const expected = Math.min(width, Math.max(0, total - start - from));
-          if (page.length !== expected) fail('inconsistent or truncated page');
+          if (page.length > width) fail('inconsistent or truncated page');
           for (const row of page) {
             if (
               typeof row.id !== 'string' ||
@@ -3627,6 +3622,18 @@ export class DatabasePickRepository implements PickRepository {
           }
           return { data: page, error: null };
         });
+        // Net-count drift at read boundaries restarts the entire population.
+        const population = await this.client.from('picks')
+          .select('id', { count: 'exact', head: true }).in('status', lifecycleStates);
+        if (population.error) fail(population.error.message);
+        if (typeof population.count !== 'number' || !Number.isSafeInteger(population.count) || population.count < 0)
+          fail('missing or invalid exact population count');
+        if (total !== population.count)
+          fail('population count changed while paging');
+        const wanted = Math.min(Math.max(0, total! - start), limit ?? Number.POSITIVE_INFINITY);
+        if (rows.length !== wanted)
+          fail('population count changed while paging: inconsistent or truncated page');
+        return rows;
       } catch (error) {
         if (!(error instanceof Error) || !error.message.includes('population count changed while paging') || attempt === 2) throw error;
       }
@@ -3674,7 +3681,7 @@ export class DatabasePickRepository implements PickRepository {
         .order('created_at', { ascending: true })
         .order('id', { ascending: true })
         .range(0, to - from);
-      if (cursor) query = query.or(orderedPageFilter(cursor));
+      if (cursor) query = applyOrderedPageCursor(query, cursor);
       return query;
     });
     const readAuthorizedHuman = readAllOrderedPages<PromotedPickCandidate>(async (from, to, cursor) => {
@@ -3687,7 +3694,7 @@ export class DatabasePickRepository implements PickRepository {
         .order('created_at', { ascending: true })
         .order('id', { ascending: true })
         .range(0, to - from);
-      if (cursor) query = query.or(orderedPageFilter(cursor));
+      if (cursor) query = applyOrderedPageCursor(query, cursor);
       return query;
     });
 
@@ -4492,7 +4499,7 @@ export class DatabaseOutboxRepository implements OutboxRepository {
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
         .range(cursor ? 0 : start, (cursor ? 0 : start) + width - 1);
-      if (cursor) query = query.or(orderedPageFilter(cursor, false));
+      if (cursor) query = applyOrderedPageCursor(query, cursor, false);
       const { data, error, count } = await query;
       if (error) fail(error.message);
       if (
@@ -5218,7 +5225,7 @@ export class DatabaseSettlementRepository implements SettlementRepository {
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
         .range(cursor ? 0 : start, (cursor ? 0 : start) + width - 1);
-      if (cursor) query = query.or(orderedPageFilter(cursor, false));
+      if (cursor) query = applyOrderedPageCursor(query, cursor, false);
       const { data, error, count } = await query;
       if (error) fail(error.message);
       if (

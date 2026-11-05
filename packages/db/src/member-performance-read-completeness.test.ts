@@ -9,6 +9,7 @@ import {
   InMemoryOutboxRepository,
   POSTGREST_MAX_ROWS,
   readAllOrderedPages,
+  applyOrderedPageCursor,
 } from './runtime-repositories.js';
 
 // Exercise the actual readers with a PostgREST-cap-emulating query boundary.
@@ -49,8 +50,10 @@ function rows(count: number): Row[] {
 }
 function client(population: Row[], options: Options = {}) {
   const requests: Request[] = [];
+  let headRequests = 0;
   return {
     requests,
+    get headRequests() { return headRequests; },
     from(table: string) {
       const filters: Array<(row: Row) => boolean> = [];
       const ordering: Array<[string, boolean]> = [];
@@ -75,6 +78,8 @@ function client(population: Row[], options: Options = {}) {
           ordering.push([column, config.ascending]);
           return query;
         },
+        gte(_column: string, _value: string) { return query; },
+        lte(_column: string, _value: string) { return query; },
         or(expression: string) {
           const match = expression.match(/^created_at\.(gt|lt)\.(.*),and\(created_at\.eq\.(.*),id\.(gt|lt)\.(.*)\)$/);
           assert.ok(match, 'cursor includes timestamp and id tie break');
@@ -111,7 +116,8 @@ function client(population: Row[], options: Options = {}) {
               return 0;
             });
           if (head) {
-            const result: Result = { data: null, error: null, count: selected.length };
+            headRequests++;
+            const result: Result = { data: selected, error: null, count: selected.length };
             return options.mutate ? options.mutate(result, { table, from: -1, to: -1, order: [], exact }) : result;
           }
           const skipped = cursor ? selected.findIndex(row => row.id === cursor!.id) + 1 : 0;
@@ -273,7 +279,7 @@ for (const reader of readers) {
       );
       assert.ok(
         c.requests.every(
-          (request) => request.table === reader.table && request.exact,
+          (request) => request.table === reader.table && (reader.name === 'pick lifecycle states' ? request.exact === (request.from === 0) : request.exact),
         ),
       );
       assert.ok(
@@ -330,7 +336,7 @@ for (const reader of readers) {
     [
       'changed population count',
       (result, req) =>
-        req.from >= 1000 ? { ...result, count: result.count! + 1 } : result,
+        (reader.name === 'pick lifecycle states' ? req.from === -1 : req.from >= 1000) ? { ...result, count: result.count! + 1 } : result,
     ],
     [
       'duplicate identity',
@@ -568,6 +574,8 @@ for (const kind of ['states', 'track-only', 'promoted', 'settlements', 'outbox']
           cursorRequests++;
           const op = descending ? 'lt' : 'gt';
           const last = population[999]!;
+          assert.equal(url.searchParams.get('created_at'), `${descending ? 'lte' : 'gte'}.${last.created_at}`);
+          if (kind === 'states') assert.ok(!headers.get('prefer')?.includes('count=exact'), 'cursor pages omit exact remainder count');
           assert.equal(cursor, `(created_at.${op}.${last.created_at},and(created_at.eq.${last.created_at},id.${op}.${last.id}))`);
           assert.ok(url.search.includes('%2B00%3A00'), 'URL encodes plus, exactly once');
           assert.ok(!url.search.includes('%252B'), 'no double encoding');
@@ -593,3 +601,27 @@ for (const kind of ['states', 'track-only', 'promoted', 'settlements', 'outbox']
     assert.equal(cursorRequests, kind === 'promoted' ? 2 : 1);
   });
 }
+
+for (const ascending of [true, false]) {
+  test(`cursor helper emits index bound and tuple predicate: ascending=${ascending}`, () => {
+    const calls: unknown[] = [];
+    const query = {
+      gte(column: string, value: string) { calls.push(['gte', column, value]); return query; },
+      lte(column: string, value: string) { calls.push(['lte', column, value]); return query; },
+      or(filter: string) { calls.push(['or', filter]); return query; },
+    };
+    const timestamp = '2026-11-03T12:34:56.123456+00:00';
+    applyOrderedPageCursor(query, { created_at: timestamp, id: 'boundary-id' }, ascending);
+    const op = ascending ? 'gt' : 'lt';
+    assert.deepEqual(calls, [
+      [ascending ? 'gte' : 'lte', 'created_at', timestamp],
+      ['or', `created_at.${op}.${timestamp},and(created_at.eq.${timestamp},id.${op}.boundary-id)`],
+    ]);
+  });
+}
+test('lifecycle read uses exactly one starting count and one ending count per attempt', async () => {
+  const c = client(rows(2501));
+  await readers[0]!.database(c);
+  assert.equal(c.requests.filter(request => request.exact).length, 1);
+  assert.equal(c.headRequests, 1);
+});
