@@ -2,7 +2,7 @@
   "schema_version": 2,
   "issue_id": "WORK-2026110307",
   "tier": "T1",
-  "status": "draft_live_proof_deferred",
+  "status": "draft_staging_proven",
   "sha_binding": {
     "verified_source_sha": "f6a694f78c7124cd43ee772a15b2ca22b9bc88ae",
     "merge_sha": null,
@@ -114,7 +114,12 @@
       "source_and_evidence_binding": "PASS: pre-merge proof-identity, proof-binding-validator, and proof-auditor; source SHA unchanged"
     },
     "artifact_validation": {
-      "runtime_evidence_contract": "DEFERRED: current source needs new staging CI receipts; CEP-E7 not claimed"
+      "close_eligibility": "PASS; eligible=true, blocking=[]; CEP-E3/E5/E7 pass",
+      "proof_identity": "PASS; schema-v2 pre-merge, failures=[]",
+      "proof_binding": "PASS; ok=true, violations=[]; source f6a694f78c7124cd43ee772a15b2ca22b9bc88ae",
+      "proof_auditor": "PASS; failures=[], warnings=[]",
+      "r_level": "PASS; no matched rules",
+      "runtime_evidence_contract": "PASS: CEP-E7 shared schema-v2 app-runtime contract; current-source staging receipts supplied by ruling 6"
     },
     "attempt_5": {
       "source_sha": "c069e2af7040daa59b46c3cbb2bd755af8727955",
@@ -261,22 +266,130 @@
         "auditor": "ace949b16ffb87514b4e61878656ab6e2a0a77ceadb740b49bad120da4089b30",
         "preflight": "a8e6ef7aab232769ce00e26f7b51959dc3aecd4f71766db7defa85040e047a40"
       }
+    },
+    "attempt_7_closeout": {
+      "scope": "Evidence only; no source or test edits",
+      "authority": "orchestrator ruling 6",
+      "tested_ci_head_sha": "f9cbc60c953ea079cea650ec85e1bae5ae713088",
+      "verified_source_sha": "f6a694f78c7124cd43ee772a15b2ca22b9bc88ae",
+      "gates": {
+        "close_eligibility": "PASS; eligible=true, blocking=[]; CEP-E3/E5/E7 pass",
+        "proof_identity": "PASS; schema-v2 pre-merge, failures=[]",
+        "proof_binding": "PASS; ok=true, violations=[]; source f6a694f78c7124cd43ee772a15b2ca22b9bc88ae",
+        "proof_auditor": "PASS; failures=[], warnings=[]",
+        "r_level": "PASS; no matched rules"
+      },
+      "log_sha256": {
+        "identity": "265aa6d8403a57e192c667e3aa2dda18ca330908f4e7dde42aea16c75d752e5a",
+        "binding": "6936ddf22c8a40db8c8c916098f86ad8ab377d9917c52e34820fdfcec6cfcdce",
+        "auditor": "dc9085383e3b55fda356183fb58215e3425f534703d91a2efdfa3fd59ba5cca4",
+        "rlevel": "6d4b7e714ba0630385b59dc4fcc6883a41779b5218c177dd2d179463fd015f92",
+        "preflight": "d39a73ab6c3a42fc55ad91044951473439a373dba2e13938e08a854f7858bd6c"
+      },
+      "verification_boundary": "Staging CI writable proof and verify passed for unchanged source; historical local verify/test:db identity refusal retained; production behavior and row counts not proven; earlier page-1/2 stall cause not identified",
+      "closeout": "One authorized final push; no PR mutations, comments or READY_FOR_REVIEW attestation. Outer-wrapper provenance, PM approval, merge, lane finalization and reconciliation remain pending."
     }
   },
   "runtime_proof": {
     "target_project_ref": "xskgrzbteyqdufktjrjx",
     "required_environment": "staging-ci with CI_SUPABASE_* credentials and CI_FIXTURE_RUN_ID",
     "observed_local_guard": "pnpm test:db exit 1: host=127.0.0.1, ref=unidentified; refused before writable tests",
-    "status": "deferred_to_staging_ci",
-    "queries": [],
-    "row_counts": [],
+    "status": "proven_staging_ci",
+    "queries": [
+      {
+        "label": "settled-voided",
+        "reader": "listByLifecycleStates(['settled','voided'])",
+        "exactCount": 49099,
+        "rows": 49099,
+        "elapsedMs": 16065.17,
+        "statementTimeoutMs": 8000,
+        "timeout_scope": "per page query; elapsedMs is whole-read duration",
+        "ci_run_id": 42050230261,
+        "ci_job_id": 127324426051
+      },
+      {
+        "label": "track-only-validated",
+        "reader": "listTrackOnlyByLifecycleState('validated')",
+        "exactCount": 27775,
+        "rows": 27775,
+        "elapsedMs": 8942.23,
+        "statementTimeoutMs": 8000,
+        "timeout_scope": "per page query; elapsedMs is whole-read duration",
+        "ci_run_id": 42050230261,
+        "ci_job_id": 127324426051
+      },
+      {
+        "label": "validated",
+        "reader": "listByLifecycleStates(['validated'])",
+        "exactCount": 69690,
+        "rows": 69690,
+        "elapsedMs": 16118.4,
+        "statementTimeoutMs": 8000,
+        "timeout_scope": "per page query; elapsedMs is whole-read duration",
+        "ci_run_id": 42050230261,
+        "ci_job_id": 127324426051
+      }
+    ],
+    "row_counts": [
+      {
+        "label": "settled-voided",
+        "exactCount": 49099,
+        "rows": 49099,
+        "ci_run_id": 42050230261,
+        "ci_job_id": 127324426051
+      },
+      {
+        "label": "track-only-validated",
+        "exactCount": 27775,
+        "rows": 27775,
+        "ci_run_id": 42050230261,
+        "ci_job_id": 127324426051
+      },
+      {
+        "label": "validated",
+        "exactCount": 69690,
+        "rows": 69690,
+        "ci_run_id": 42050230261,
+        "ci_job_id": 127324426051
+      }
+    ],
     "not_proven": [
-      "current source staging timing/count reconciliation",
-      "current source seeded boundary and live mutations",
       "production behavior",
       "production row counts",
-      "deployment"
-    ]
+      "deployment",
+      "cause of the 42044986080 page-1/2 stall; exposure reduced rather than eliminated"
+    ],
+    "ci_run_id": 42050230261,
+    "ci_job_id": 127324426051,
+    "ci_run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/42050230261",
+    "ci_job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/42050230261/job/127324426051",
+    "ci_head_sha": "f9cbc60c953ea079cea650ec85e1bae5ae713088",
+    "ci_result": {
+      "writable_db_proof": "success",
+      "verify": "success",
+      "verify_job_id": 127330848150,
+      "suite": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "skipped": 0
+      },
+      "utv2_1907_test_5": "PASS: repaired performance readers reconcile with exact live PostgREST counts"
+    },
+    "boundary": {
+      "rows": 5,
+      "pageSize": 2,
+      "created_at": "2026-11-03T12:34:56.123456+00:00",
+      "oracle": "deepEqual passed",
+      "mutations": {
+        "noId": "rejected",
+        "dateReserialization": "rejected"
+      },
+      "ci_run_id": 42050230261,
+      "ci_job_id": 127324426051,
+      "namespace": "work0307-utv2-1630-42050230261-1-979bcaae-4af5-446f-917f-ad5623f23a7b"
+    },
+    "authority": "orchestrator ruling 6; staging CI results supplied for current source"
   },
   "boundaries": {
     "production_ddl": false,
@@ -411,8 +524,9 @@
       "ci_head_sha": "717991ba8",
       "ci_job_id": 127306260636,
       "result": "failure",
-      "cause": "t1-proof-utv2-1907 test 5 timed out in validated page query (page 1 or 2); OR cursor was not an Index Cond, so deep pages scanned from the index start. No staging writer overlapped. Operating Claude warm EXPLAIN: redundant created_at bound reduced 191 ms / 63412 buffers to 33 ms / 2392 buffers, same 9590 rows.",
-      "authority": "orchestrator ruling 4"
+      "cause": "t1-proof-utv2-1907 test 5 timed out in validated page query (page 1 or 2); cause of that stall not identified. No staging writer overlapped. Separately, OR cursor was not an Index Cond, so deep pages scanned from the index start. Operating Claude warm EXPLAIN: redundant created_at bound reduced 191 ms / 63412 buffers to 33 ms / 2392 buffers, same 9590 rows. Exposure reduced rather than eliminated.",
+      "authority": "orchestrator ruling 4",
+      "clarification_authority": "orchestrator ruling 6"
     }
   ]
 }
