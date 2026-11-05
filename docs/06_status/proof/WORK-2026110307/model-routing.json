@@ -1,0 +1,13 @@
+{
+  "issue_id": "WORK-2026110307",
+  "routing_source": "lane_manifest_declared",
+  "model_profile": "codex-sol-medium",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "medium",
+  "policy_version": "3.0.0",
+  "observation": {
+    "status": "pending_outer_executor",
+    "reason": "Canonical observed routing and execution provenance are persisted by the outer wrapper after the child exits; this file records the lane declaration only."
+  },
+  "override_used": false
+}

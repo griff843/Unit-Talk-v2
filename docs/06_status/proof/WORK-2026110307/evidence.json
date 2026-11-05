@@ -1,0 +1,121 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110307",
+  "tier": "T1",
+  "status": "draft_live_proof_deferred",
+  "sha_binding": {
+    "verified_source_sha": "13b2d94c69f3188559e7e0b930ba04f8a011d2f8",
+    "merge_sha": null,
+    "sha_type": "source_sha",
+    "evidence_commit_sha": "RESOLVED_BY_CI",
+    "current_pr_head_sha": "RESOLVED_BY_CI"
+  },
+  "static_proof": {
+    "focused_tests": {
+      "command": "pnpm exec tsx --test apps/api/src/t1-proof-work-2026110307-keyset-paging-live.test.ts packages/db/src/member-performance-read-completeness.test.ts",
+      "tests": 112,
+      "pass": 111,
+      "fail": 0,
+      "skipped": 1
+    },
+    "server_tests": {
+      "tests": 67,
+      "pass": 67,
+      "fail": 0
+    },
+    "db_writer_inventory": {
+      "ok": true,
+      "discovered_credentialed_tests": 62
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "rules_matched": []
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "exit": 1,
+      "static_subgate": "PASS: pnpm verify:static completed, including lint, type-check, build, test, post-migration tests, Smart Form verification and command verification",
+      "local_test_totals": {
+        "tests": 8108,
+        "pass": 8095,
+        "fail": 0,
+        "skipped": 13
+      },
+      "failure": "test:live-db / test:db staging identity guard refused host=127.0.0.1 before DB tests"
+    },
+    "regression": {
+      "old_source_sha": "1225b80361c657993877a0e497a3637b14abf016",
+      "pass": 100,
+      "fail": 11,
+      "explanation": "Offset paging already preserves duplicate timestamps in a stable population. New cursor-progress, SDK cursor/encoding and retry tests fail on the old implementation. Three adapted count-double tests also fail under the old offset contract; those are not claimed as product regressions."
+    },
+    "mutations": [
+      {
+        "change": "remove id tie break from orderedPageFilter",
+        "pass": 73,
+        "fail": 38
+      },
+      {
+        "change": "re-serialize cursor timestamp through Date",
+        "pass": 106,
+        "fail": 5
+      },
+      {
+        "change": "remove listByLifecycleStates count comparison",
+        "pass": 108,
+        "fail": 3
+      }
+    ],
+    "artifact_validation": {
+      "markdown_binding": "PASS",
+      "declared_routing": "PASS",
+      "runtime_evidence_contract": "BLOCKED/DEFERRED",
+      "missing_receipts": [
+        "runtime_proof.queries",
+        "runtime_proof.row_counts"
+      ]
+    }
+  },
+  "runtime_proof": {
+    "status": "blocked/deferred",
+    "target_project_ref": "xskgrzbteyqdufktjrjx",
+    "required_environment": "staging-ci with CI_SUPABASE_* credentials and CI_FIXTURE_RUN_ID",
+    "observed_local_guard": "pnpm test:db exit 1: host=127.0.0.1, ref=unidentified; refused before writable tests",
+    "packet_reason": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.",
+    "not_proven": [
+      "settled/voided live statement timeout and exact count",
+      "Track Only validated live statement timeout and exact count",
+      "validated live statement timeout and exact count",
+      "seeded duplicate-created_at boundary on staging",
+      "live Date and no-id mutation failures"
+    ],
+    "queries": [],
+    "row_counts": []
+  },
+  "boundaries": {
+    "production_ddl": false,
+    "schema_changes": false,
+    "production_data_mutation": false,
+    "local_live_writes": false,
+    "pm_approval": "pending",
+    "merge": "pending",
+    "lane_finalize": "pending",
+    "orchestration_reconcile": "pending",
+    "ready_for_review_attestation": "not published"
+  },
+  "log_sha256": {
+    "focused": "c81c0f3fd3c4839231de894e5c9bc61d1c6787ee9c22d6459b40fa3f764a48fe",
+    "server": "10d1cd768296d98a50a388763a0e0b943e646e536486afbffb341bbea4e45815",
+    "baseline": "74d51128dfbeb3bbf8ae70ac7e5198103c77c794e46770cbc4ce8ed1dc1cc048",
+    "no-id": "5e0965fa45ecfadc6080f625ef3c4c8cf143be37556589d97cde72cf2c7b1f49",
+    "date": "a3491a0d2ef4510198593b94e8901080989043d1e52e5cbb4ef336815fd98be7",
+    "no-count": "e43fbfe5ccebf818cc1f0175633544fa534a892c2a0164a777a44cae16024995",
+    "db": "c16a495ae6ee7511695a6d68e9bab77c5934b6a6eeb85a61c67cde97f6584086",
+    "inventory": "4175053f92ca9ebd7bb18b7dddecd06513d32cea30bfc64da95ae3bc43c83a3c",
+    "rlevel": "308e8b480e8d0d6a9e874d5776b87c0a6c4171b4c3b988ba91d62538e1fd0616",
+    "verify": "e9bcc19bdfdcdf6dd1514b3d179d23158ddfc61563f6cd7095d6abf449d243c6"
+  },
+  "proof_profile": "app-runtime",
+  "lane_type": "runtime"
+}
