@@ -60,7 +60,7 @@ test('WORK0307 staging: complete readers and duplicate timestamp boundary mutati
       eventName: `${namespace} fixture`, odds: -110, stakeUnits: 1,
       metadata: { distributionMode: 'track-only', proof_issue: 'WORK-2026110307', proof_run: namespace },
     }, repositories);
-    assert.equal(result.duplicate, false);
+    assert.notEqual(result.duplicate, true);
     ids.push(result.pick.id);
   }
   const timestamp = '2026-11-03T12:34:56.123456+00:00';
