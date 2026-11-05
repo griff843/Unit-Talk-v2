@@ -20,6 +20,30 @@ Drift detection is net-count at read boundaries, so an insert and a delete that 
 
 ## EVIDENCE:
 
+The following lines are excerpted from CI run 42050230261 / Writable DB proof job 127324426051; elapsedMs is rounded to 2 decimals.
+
+```text
+ok 1 - WORK0307 staging: complete readers and duplicate timestamp boundary mutations
+# tests 1
+# pass 1
+# fail 0
+# skipped 0
+ok 5 - WORK-2026101401: repaired performance readers reconcile with exact live PostgREST counts
+{"label":"settled-voided","exactCount":49099,"rows":49099,"elapsedMs":16065.17,"statementTimeoutMs":8000}
+{"label":"track-only-validated","exactCount":27775,"rows":27775,"elapsedMs":8942.23,"statementTimeoutMs":8000}
+{"label":"validated","exactCount":69690,"rows":69690,"elapsedMs":16118.40,"statementTimeoutMs":8000}
+```
+
+Attempt 7 gate commands already recorded below (all exit 0):
+
+```text
+Local close-eligibility preflight: invoked evaluateCloseEligibilityPreflight via pnpm exec tsx --eval, reading the lane manifest and all declared/on-disk proof artifacts exactly as close-eligibility-preflight.yml does.
+pnpm exec tsx scripts/ops/proof-schema.ts proof-identity --phase pre-merge --verification docs/06_status/proof/WORK-2026110307/verification.md --evidence docs/06_status/proof/WORK-2026110307/evidence.json
+pnpm exec tsx scripts/ci/proof-binding-validator.ts --proof-dir docs/06_status/proof/WORK-2026110307 --json
+pnpm ops:proof-auditor-gate -- --proof-dir docs/06_status/proof/WORK-2026110307 --sha f6a694f78c7124cd43ee772a15b2ca22b9bc88ae --json
+npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+```
+
 Current source SHA: f6a694f78c7124cd43ee772a15b2ca22b9bc88ae. Merged origin/main `4d34da992` with a no-ff merge before the source/proof commits; only readiness-score.json came from main.
 
 Attempt 6 focused paging, server and credential-skipped live suites: 186 tests, 185 passed, 0 failed, 1 staging skip. Server contributes 67 passed; paging contributes 118 passed. The single-page tests prove exactly one picks request and no HEAD count for empty and short pages; multi-page tests prove the end count and three bounded retries. The out-of-scope member-performance-service test remains unchanged.
