@@ -8,6 +8,7 @@ import {
   InMemorySettlementRepository,
   InMemoryOutboxRepository,
   POSTGREST_MAX_ROWS,
+  readAllOrderedPages,
 } from './runtime-repositories.js';
 
 // Exercise the actual readers with a PostgREST-cap-emulating query boundary.
@@ -54,9 +55,12 @@ function client(population: Row[], options: Options = {}) {
       const filters: Array<(row: Row) => boolean> = [];
       const ordering: Array<[string, boolean]> = [];
       let exact = false;
+      let head = false;
+      let cursor: { timestamp: string; id: string; ascending: boolean } | undefined;
       const query = {
-        select(_columns?: string, config?: { count?: string }) {
+        select(_columns?: string, config?: { count?: string; head?: boolean }) {
           exact = config?.count === 'exact';
+          head = config?.head ?? false;
           return query;
         },
         in(column: keyof Row, values: readonly string[]) {
@@ -71,7 +75,25 @@ function client(population: Row[], options: Options = {}) {
           ordering.push([column, config.ascending]);
           return query;
         },
-        async range(from: number, to: number): Promise<Result> {
+        or(expression: string) {
+          const match = expression.match(/^created_at\.(gt|lt)\.(.*),and\(created_at\.eq\.(.*),id\.(gt|lt)\.(.*)\)$/);
+          assert.ok(match, 'cursor includes timestamp and id tie break');
+          assert.equal(match[2], match[3]);
+          cursor = { timestamp: match[2]!, id: match[5]!, ascending: match[1] === 'gt' };
+          return query;
+        },
+        range(from: number, to: number) {
+          rangeFrom = from;
+          rangeTo = to;
+          return query;
+        },
+        then(resolve: (result: Result) => unknown, reject: (error: unknown) => unknown) {
+          return execute(rangeFrom, rangeTo).then(resolve, reject);
+        },
+      };
+      let rangeFrom = 0;
+      let rangeTo = POSTGREST_MAX_ROWS - 1;
+      async function execute(from: number, to: number): Promise<Result> {
           assert.ok(
             to - from + 1 <= POSTGREST_MAX_ROWS,
             'each request respects server cap',
@@ -80,14 +102,24 @@ function client(population: Row[], options: Options = {}) {
             .filter((row) => filters.every((filter) => filter(row)))
             .sort((a, b) => {
               for (const [key, ascending] of ordering) {
-                const comparison = String(a[key as keyof Row]).localeCompare(
-                  String(b[key as keyof Row]),
-                );
+                const instant = (value: string) => BigInt(Date.parse(value)) * 1000n + BigInt((value.match(/\.(\d+)/)?.[1] ?? '').padEnd(6, '0').slice(3, 6));
+                const comparison = key === 'created_at'
+                  ? (instant(a.created_at) < instant(b.created_at) ? -1 : instant(a.created_at) > instant(b.created_at) ? 1 : 0)
+                  : String(a[key as keyof Row]).localeCompare(String(b[key as keyof Row]));
                 if (comparison) return ascending ? comparison : -comparison;
               }
               return 0;
             });
-          const request = { table, from, to, order: [...ordering], exact };
+          if (head) {
+            const result: Result = { data: null, error: null, count: selected.length };
+            return options.mutate ? options.mutate(result, { table, from: -1, to: -1, order: [], exact }) : result;
+          }
+          const skipped = cursor ? selected.findIndex(row => row.id === cursor!.id) + 1 : 0;
+          const request = { table, from: from + skipped, to: to + skipped, order: [...ordering], exact };
+          if (cursor) {
+            assert.equal(from, 0, 'cursor pages never use deep offsets');
+            selected.splice(0, skipped);
+          }
           requests.push(request);
           // PostgREST with an exact count refuses a range starting at/after
           // a positive population's EOF (PGRST103/HTTP416). An empty response
@@ -109,8 +141,7 @@ function client(population: Row[], options: Options = {}) {
             count: exact ? selected.length : null,
           };
           return options.mutate ? options.mutate(result, request) : result;
-        },
-      };
+      }
       return query;
     },
   };
@@ -219,7 +250,7 @@ for (const reader of readers) {
         ...result,
         data: reversedMicros.slice(request.from, request.to + 1),
       }),
-    })), /non-progressing|inconsistent page order/);
+    })), /non-progressing|inconsistent page order|population count changed|truncated/);
   });
 }
 for (const reader of readers) {
@@ -384,7 +415,7 @@ for (const reader of readers) {
     await assert.rejects(
       reader.database(
         client(rows(2501), {
-          mutate: (result) => ({ ...result, count: 2600 }),
+          mutate: (result, request) => ({ ...result, count: 2600 - Math.max(0, request.from) }),
         }),
       ),
       /truncated/,
@@ -473,3 +504,92 @@ test('pick explicit EOF or beyond-EOF offset propagates PostgREST416, never an i
     assert.equal(c.requests.length, 1);
   }
 });
+
+
+test('keyset cursor preserves exact timestamp text across a duplicate timestamp boundary', async () => {
+  const population = rows(5).map(row => ({ ...row, created_at: '2026-11-03T12:34:56.123456+00:00' }));
+  const cursors: unknown[] = [];
+  const result = await readAllOrderedPages<Row>(async (_from, to, cursor) => {
+    assert.ok(cursors.length < 3, 'cursor must progress');
+    cursors.push(cursor);
+    const remaining = cursor ? population.filter(row => row.created_at > cursor.created_at || (row.created_at === cursor.created_at && row.id > cursor.id)) : population;
+    return { data: remaining.slice(0, to - _from + 1), error: null };
+  }, 2);
+  assert.deepEqual(result, population);
+  assert.deepEqual(cursors, [undefined, population[1], population[3]]);
+});
+
+for (const always of [false, true]) {
+  test(`population drift ${always ? 'fails after three attempts' : 'restarts with one coherent population'}`, async () => {
+    let attempts = 0;
+    let drifted = false;
+    const population = rows(2001);
+    const c = client(population, {
+      mutate(result, request) {
+        if (request.from === 0) attempts++;
+        if (request.from === -1 && (always || !drifted)) {
+          drifted = true;
+          // Remove a row BEHIND the cursor, so remaining-count arithmetic
+          // alone cannot detect the changed full population.
+          population.shift();
+          return { ...result, count: population.length };
+        }
+        return result;
+      },
+    });
+    if (always) await assert.rejects(readers[0]!.database(c), /population count changed while paging/);
+    else assert.deepEqual((await readers[0]!.database(c)).map(row => row.id), population.map(row => row.id));
+    assert.equal(attempts, always ? 3 : 2);
+  });
+}
+
+// Use the installed SDK's real URL encoding, with an HTTP boundary only.
+// This checks every cursor producer, including both promotion query branches.
+for (const kind of ['states', 'track-only', 'promoted', 'settlements', 'outbox'] as const) {
+  test(`${kind}: real SDK cursor encodes UTC plus and retains microseconds and id`, async () => {
+    const { createClient } = await import('@supabase/supabase-js');
+    const population = rows(1001).map(row => ({
+      ...row, created_at: '2026-11-03T12:34:56.123456+00:00',
+      promotion_status: 'promoted', promotion_target: 'test-only',
+      metadata: { distributionMode: 'track-only' },
+    }));
+    const descending = kind === 'settlements' || kind === 'outbox';
+    if (descending) population.reverse();
+    let cursorRequests = 0;
+    const sdk = createClient('https://example.supabase.co', 'test-key', {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { fetch: async (input, init) => {
+        const url = new URL(String(input));
+        const headers = new Headers(init?.headers);
+        if (init?.method === 'HEAD') return new Response(null, { headers: { 'content-range': `*/${population.length}` } });
+        let page = population.slice(Number(url.searchParams.get('offset') ?? 0));
+        const cursor = url.searchParams.get('or');
+        if (cursor) {
+          cursorRequests++;
+          const op = descending ? 'lt' : 'gt';
+          const last = population[999]!;
+          assert.equal(cursor, `(created_at.${op}.${last.created_at},and(created_at.eq.${last.created_at},id.${op}.${last.id}))`);
+          assert.ok(url.search.includes('%2B00%3A00'), 'URL encodes plus, exactly once');
+          assert.ok(!url.search.includes('%252B'), 'no double encoding');
+          assert.equal(url.searchParams.get('offset') ?? '0', '0');
+          page = population.slice(1000);
+        }
+        const count = cursor ? page.length : population.length;
+        const limit = Number(url.searchParams.get('limit') ?? 1000);
+        const wantsCount = headers.get('prefer')?.includes('count=exact');
+        return new Response(JSON.stringify(page.slice(0, limit)), {
+          headers: { 'content-type': 'application/json', ...(wantsCount ? { 'content-range': `0-${Math.min(limit, count) - 1}/${count}` } : {}) },
+        });
+      } },
+    });
+    const repository = <T>(prototype: object): T => Object.create(prototype, { client: { value: sdk } }) as T;
+    let result;
+    if (kind === 'states') result = await repository<DatabasePickRepository>(DatabasePickRepository.prototype).listByLifecycleStates(['settled']);
+    else if (kind === 'track-only') result = await repository<DatabasePickRepository>(DatabasePickRepository.prototype).listTrackOnlyByLifecycleState('settled');
+    else if (kind === 'promoted') result = await repository<DatabasePickRepository>(DatabasePickRepository.prototype).listPromotedByLifecycleStates(['settled'], ['promoted']);
+    else if (kind === 'settlements') result = await repository<DatabaseSettlementRepository>(DatabaseSettlementRepository.prototype).listByPick('pick-public');
+    else result = await repository<DatabaseOutboxRepository>(DatabaseOutboxRepository.prototype).listByPickId('pick-public');
+    assert.deepEqual(result.map(row => row.id), population.map(row => row.id));
+    assert.equal(cursorRequests, kind === 'promoted' ? 2 : 1);
+  });
+}
