@@ -4,7 +4,7 @@
   "tier": "T1",
   "status": "draft_live_proof_deferred",
   "sha_binding": {
-    "verified_source_sha": "c069e2af7040daa59b46c3cbb2bd755af8727955",
+    "verified_source_sha": "f6a694f78c7124cd43ee772a15b2ca22b9bc88ae",
     "merge_sha": null,
     "sha_type": "source_sha",
     "evidence_commit_sha": "RESOLVED_BY_CI",
@@ -12,9 +12,9 @@
   },
   "static_proof": {
     "focused_tests": {
-      "command": "pnpm exec tsx --test apps/api/src/t1-proof-work-2026110307-keyset-paging-live.test.ts packages/db/src/member-performance-read-completeness.test.ts",
-      "tests": 112,
-      "pass": 111,
+      "command": "pnpm exec tsx --test packages/db/src/member-performance-read-completeness.test.ts apps/api/src/server.test.ts apps/api/src/t1-proof-work-2026110307-keyset-paging-live.test.ts",
+      "tests": 186,
+      "pass": 185,
       "fail": 0,
       "skipped": 1
     },
@@ -35,14 +35,15 @@
     "verify": {
       "command": "pnpm verify",
       "exit": 1,
-      "static_subgate": "PASS: pnpm verify:static completed, including lint, type-check, build, test, post-migration tests, Smart Form verification and command verification",
+      "static_subgate": "PASS: pnpm verify:static completed including lint, type-check, build, aggregate tests, post-migration tests, Smart Form verification and command verification",
       "local_test_totals": {
-        "tests": 8108,
-        "pass": 8095,
+        "tests": 8115,
+        "pass": 8102,
         "fail": 0,
         "skipped": 13
       },
-      "failure": "test:live-db / test:db staging identity guard refused host=127.0.0.1 before DB tests"
+      "failure": "test:live-db staging identity guard refused host=127.0.0.1 before writable tests",
+      "optional_smart_form_browser_e2e": "not enabled"
     },
     "regression": {
       "old_source_sha": "1225b80361c657993877a0e497a3637b14abf016",
@@ -202,6 +203,64 @@
         "verify": "86d88f79bb0a8e24c4ca7a2c1c7133f5f5014a5028f627f9e54c96159fad88ea"
       },
       "closeout": "Stopped before push pending authorization for out-of-scope test-double update; no PR changes or governance comments"
+    },
+    "attempt6": {
+      "source_sha": "f6a694f78c7124cd43ee772a15b2ca22b9bc88ae",
+      "ruling": 5,
+      "focused": {
+        "tests": 186,
+        "pass": 185,
+        "fail": 0,
+        "skipped": 1
+      },
+      "paging": {
+        "tests": 118,
+        "pass": 118,
+        "fail": 0
+      },
+      "mutation_always_skip_end_count": {
+        "pass": 113,
+        "fail": 5
+      },
+      "single_page_count": "first data statement snapshot; no final HEAD",
+      "multi_page_count": "first exact data count and exactly one final HEAD per attempt; at most three attempts",
+      "out_of_scope_test_modified": false,
+      "live_proof": "deferred_to_staging_ci",
+      "verify": {
+        "command": "pnpm verify",
+        "exit": 1,
+        "static_subgate": "PASS: pnpm verify:static completed including lint, type-check, build, aggregate tests, post-migration tests, Smart Form verification and command verification",
+        "local_test_totals": {
+          "tests": 8115,
+          "pass": 8102,
+          "fail": 0,
+          "skipped": 13
+        },
+        "failure": "test:live-db staging identity guard refused host=127.0.0.1 before writable tests",
+        "optional_smart_form_browser_e2e": "not enabled"
+      },
+      "gates": {
+        "r_level": "PASS; no matched rules",
+        "proof_identity": "PASS",
+        "proof_auditor": "PASS",
+        "close_eligibility": "CEP-E3/E5 pass; E7 and consequent C1 blocked only by deferred runtime receipts",
+        "proof_binding": "blocked only by empty current-source runtime queries and row_counts"
+      },
+      "db": "refused 127.0.0.1 before writes; deferred to staging-ci",
+      "pr": "1832 open/draft/tier:T1 verified read-only; no PR mutations or comments",
+      "closeout": "one authorized final push; PM approval, merge, finalization, fresh live receipts and outer provenance remain pending",
+      "log_sha256": {
+        "focused": "d092a5a44e6b4b4ee23dd02cc8a884cd631a030f4b71b6d421b8a3aa959d925a",
+        "paging": "e19fc1cbf8b56aeff5600d358022aab82e9fca56aefb77afaa1902e24497a352",
+        "mutation-no-end-count": "08eaf25d91b2af71254fac7933f8d92e2e88ba1900f13505eddb0daf4ef37b33",
+        "verify": "34127a4769812277848aa489beb83a24c683bfc9ee993a971edb2c024324e2d8",
+        "db": "c16a495ae6ee7511695a6d68e9bab77c5934b6a6eeb85a61c67cde97f6584086",
+        "rlevel": "6d4b7e714ba0630385b59dc4fcc6883a41779b5218c177dd2d179463fd015f92",
+        "identity": "265aa6d8403a57e192c667e3aa2dda18ca330908f4e7dde42aea16c75d752e5a",
+        "binding": "3d1ea51c05f033be68bfb3010da9fd8af7600e75786f91b9a101b543ea535963",
+        "auditor": "ace949b16ffb87514b4e61878656ab6e2a0a77ceadb740b49bad120da4089b30",
+        "preflight": "a8e6ef7aab232769ce00e26f7b51959dc3aecd4f71766db7defa85040e047a40"
+      }
     }
   },
   "runtime_proof": {
