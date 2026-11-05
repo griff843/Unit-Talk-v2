@@ -625,3 +625,25 @@ test('lifecycle read uses exactly one starting count and one ending count per at
   assert.equal(c.requests.filter(request => request.exact).length, 1);
   assert.equal(c.headRequests, 1);
 });
+
+for (const count of [0, 1, 999]) {
+  test(`single-page lifecycle read uses one snapshot and no head count (${count} rows)`, async () => {
+    const c = client(rows(count));
+    assert.equal((await readers[0]!.database(c)).length, count);
+    assert.equal(c.requests.length, 1);
+    assert.equal(c.requests[0]!.exact, true);
+    assert.equal(c.headRequests, 0);
+  });
+}
+
+test('multi-page lifecycle end-count drift retries three whole reads and fails closed', async () => {
+  const c = client(rows(1001), {
+    mutate(result, request) {
+      return request.from === -1 ? { ...result, count: result.count! + 1 } : result;
+    },
+  });
+  await assert.rejects(readers[0]!.database(c), /population count changed while paging/);
+  assert.equal(c.requests.filter(request => request.from === 0).length, 3);
+  assert.equal(c.requests.length, 6);
+  assert.equal(c.headRequests, 3);
+});

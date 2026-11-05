@@ -3556,6 +3556,7 @@ export class DatabasePickRepository implements PickRepository {
     const maxRows = 100_000;
     for (let attempt = 0; attempt < 3; attempt++) {
       let total: number | undefined;
+      let usedCursorPage = false;
       let previous: { created_at: string; id: string } | undefined;
       const seen = new Set<string>();
       const fail = (reason: string): never => {
@@ -3580,6 +3581,7 @@ export class DatabasePickRepository implements PickRepository {
             .order('id', { ascending: true })
             .range(cursor ? 0 : start, (cursor ? 0 : start) + width - 1);
           if (cursor) query = applyOrderedPageCursor(query, cursor, true);
+          if (cursor) usedCursorPage = true;
           const { data, error, count } = await query;
           if (error) fail(error.message);
           if (!cursor) {
@@ -3622,14 +3624,17 @@ export class DatabasePickRepository implements PickRepository {
           }
           return { data: page, error: null };
         });
-        // Net-count drift at read boundaries restarts the entire population.
-        const population = await this.client.from('picks')
-          .select('id', { count: 'exact', head: true }).in('status', lifecycleStates);
-        if (population.error) fail(population.error.message);
-        if (typeof population.count !== 'number' || !Number.isSafeInteger(population.count) || population.count < 0)
-          fail('missing or invalid exact population count');
-        if (total !== population.count)
-          fail('population count changed while paging');
+        // A single data statement already supplies rows and count from one
+        // snapshot. Multi-statement reads need an end count to detect net drift.
+        if (usedCursorPage) {
+          const population = await this.client.from('picks')
+            .select('id', { count: 'exact', head: true }).in('status', lifecycleStates);
+          if (population.error) fail(population.error.message);
+          if (typeof population.count !== 'number' || !Number.isSafeInteger(population.count) || population.count < 0)
+            fail('missing or invalid exact population count');
+          if (total !== population.count)
+            fail('population count changed while paging');
+        }
         const wanted = Math.min(Math.max(0, total! - start), limit ?? Number.POSITIVE_INFINITY);
         if (rows.length !== wanted)
           fail('population count changed while paging: inconsistent or truncated page');
