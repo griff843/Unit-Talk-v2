@@ -2,7 +2,7 @@
   "schema_version": 2,
   "issue_id": "WORK-2026110307",
   "tier": "T1",
-  "status": "draft_live_proof_deferred",
+  "status": "draft_staging_proven",
   "sha_binding": {
     "verified_source_sha": "4e351399be1b22510923486893d252a5a3584855",
     "merge_sha": null,
@@ -70,12 +70,9 @@
     "artifact_validation": {
       "markdown_binding": "PASS",
       "declared_routing": "PASS",
-      "runtime_evidence_contract": "BLOCKED/DEFERRED",
-      "missing_receipts": [
-        "runtime_proof.queries",
-        "runtime_proof.row_counts"
-      ],
-      "source_and_evidence_binding": "PASS: source ancestor of proof-only commits; CI SHA placeholders resolve; only missing runtime query/row-count receipts block the full validator"
+      "runtime_evidence_contract": "PASS: CEP-E7 schema-v2 app-runtime contract; staging CI receipts supplied",
+      "missing_receipts": [],
+      "source_and_evidence_binding": "PASS: pre-merge proof-identity, proof-binding-validator, and proof-auditor; source SHA unchanged"
     },
     "attempt_2": {
       "source_sha": "4e351399be1b22510923486893d252a5a3584855",
@@ -105,23 +102,113 @@
         "verify": "d4113e354ae729ca239ac57036e19e9b6f58a7092e9e24f2e5a3b5aaf86b5316",
         "rlevel": "6d4b7e714ba0630385b59dc4fcc6883a41779b5218c177dd2d179463fd015f92"
       }
+    },
+    "attempt_4_closeout": {
+      "scope": "Evidence only; resumed uncommitted attempt 3 staging receipts, no source or test edits",
+      "close_eligibility": "PASS; eligible=true, blocking=[]; CEP-E3/E5/E7 pass",
+      "proof_identity": "PASS; schema-v2 pre-merge; failures=[]",
+      "proof_binding": "PASS; ok=true, violations=[]; verified source 4e351399be1b22510923486893d252a5a3584855",
+      "proof_auditor": "PASS; failures=[], warnings=[]",
+      "r_level": "PASS; no matched rules",
+      "verification_boundary": "Historical local verify/test:db identity refusal retained; green staging CI verify and writable proof supplied by orchestrator ruling 3; no production claims"
     }
   },
   "runtime_proof": {
-    "status": "blocked/deferred",
+    "status": "proven_staging_ci",
     "target_project_ref": "xskgrzbteyqdufktjrjx",
     "required_environment": "staging-ci with CI_SUPABASE_* credentials and CI_FIXTURE_RUN_ID",
     "observed_local_guard": "pnpm test:db exit 1: host=127.0.0.1, ref=unidentified; refused before writable tests",
-    "packet_reason": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.",
     "not_proven": [
-      "settled/voided live statement timeout and exact count",
-      "Track Only validated live statement timeout and exact count",
-      "validated live statement timeout and exact count",
-      "seeded duplicate-created_at boundary on staging",
-      "live Date and no-id mutation failures"
+      "production behavior",
+      "production row counts",
+      "deployment"
     ],
-    "queries": [],
-    "row_counts": []
+    "queries": [
+      {
+        "label": "settled-voided",
+        "reader": "listByLifecycleStates(['settled','voided'])",
+        "exactCount": 49003,
+        "rows": 49003,
+        "elapsedMs": 25311.85,
+        "statementTimeoutMs": 8000,
+        "timeout_scope": "per page query; elapsedMs is whole-read duration",
+        "ci_run_id": 42040861746,
+        "ci_job_id": 127291780486
+      },
+      {
+        "label": "track-only-validated",
+        "reader": "listTrackOnlyByLifecycleState('validated')",
+        "exactCount": 27697,
+        "rows": 27697,
+        "elapsedMs": 13826.36,
+        "statementTimeoutMs": 8000,
+        "timeout_scope": "per page query; elapsedMs is whole-read duration",
+        "ci_run_id": 42040861746,
+        "ci_job_id": 127291780486
+      },
+      {
+        "label": "validated",
+        "reader": "listByLifecycleStates(['validated'])",
+        "exactCount": 69527,
+        "rows": 69527,
+        "elapsedMs": 38623.1,
+        "statementTimeoutMs": 8000,
+        "timeout_scope": "per page query; elapsedMs is whole-read duration",
+        "ci_run_id": 42040861746,
+        "ci_job_id": 127291780486
+      }
+    ],
+    "row_counts": [
+      {
+        "label": "settled-voided",
+        "exactCount": 49003,
+        "rows": 49003,
+        "ci_run_id": 42040861746,
+        "ci_job_id": 127291780486
+      },
+      {
+        "label": "track-only-validated",
+        "exactCount": 27697,
+        "rows": 27697,
+        "ci_run_id": 42040861746,
+        "ci_job_id": 127291780486
+      },
+      {
+        "label": "validated",
+        "exactCount": 69527,
+        "rows": 69527,
+        "ci_run_id": 42040861746,
+        "ci_job_id": 127291780486
+      }
+    ],
+    "ci_run_id": 42040861746,
+    "ci_job_id": 127291780486,
+    "ci_run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/42040861746",
+    "ci_job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/42040861746/job/127291780486",
+    "ci_head_sha": "b5edaa06d247c8c3e94d2f6058f093f98979ab46",
+    "ci_result": {
+      "writable_db_proof": "success",
+      "verify": "success",
+      "verify_job_id": 127297871755,
+      "suite": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "skipped": 0
+      }
+    },
+    "boundary": {
+      "rows": 5,
+      "pageSize": 2,
+      "created_at": "2026-11-03T12:34:56.123456+00:00",
+      "oracle": "deepEqual passed",
+      "mutations": {
+        "noId": "rejected",
+        "dateReserialization": "rejected"
+      },
+      "ci_run_id": 42040861746,
+      "ci_job_id": 127291780486
+    }
   },
   "boundaries": {
     "production_ddl": false,
