@@ -3,6 +3,11 @@
   "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
   "credentialed_tests": [
     {
+      "path": "apps/api/src/t1-proof-work-2026110309-submission-idempotency-live.test.ts",
+      "owner": "api",
+      "execution": ["pnpm test:t1-proof:live"]
+    },
+    {
       "path": "apps/api/src/t1-proof-work-2026103007-human-capper-delivery-live.test.ts",
       "owner": "api",
       "execution": ["pnpm test:t1-proof:live"]

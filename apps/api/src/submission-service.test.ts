@@ -1,6 +1,7 @@
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { validateSubmissionPayload } from '@unit-talk/contracts';
 import type { CanonicalPick, PickSource, SubmissionPayload } from '@unit-talk/contracts';
@@ -3560,3 +3561,112 @@ test('UTV2-1842: waivesEventExistenceGate is the whole predicate, and it is fail
   }
 });
 // UTV2-1842 EVENT_GATE_FALLBACK_WAIVER_TESTS_END
+
+const scopedWager: SubmissionPayload = {
+  source: 'api', market: 'moneyline', selection: 'WORK0309 home', odds: -110,
+  stakeUnits: 1, eventName: 'WORK0309 fixture',
+};
+
+test('WORK0309 cross-capper: identical wagers create separate attributed picks; same-capper retry creates no rows', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  let writes = 0;
+  const save = repositories.picks.savePick.bind(repositories.picks);
+  repositories.picks.savePick = async (...args) => { writes++; return save(...args); };
+  const first = await processSubmission({ ...scopedWager, submittedBy: 'capper-a' }, repositories);
+  const second = await processSubmission({ ...scopedWager, submittedBy: 'capper-b' }, repositories);
+  assert.notEqual(first.pick.id, second.pick.id);
+  assert.equal(first.pickRecord.capper_id, 'capper-a');
+  assert.equal(second.pickRecord.capper_id, 'capper-b');
+  const snapshot = structuredClone(second.pickRecord);
+  const unexpectedWrite = async (): Promise<never> => { assert.fail('retry attempted persistence'); };
+  repositories.submissions.processSubmissionAtomic = unexpectedWrite;
+  repositories.submissions.saveSubmission = unexpectedWrite;
+  repositories.submissions.saveSubmissionEvent = unexpectedWrite;
+  repositories.picks.savePick = unexpectedWrite;
+  repositories.picks.saveLifecycleEvent = unexpectedWrite;
+  repositories.audit.record = unexpectedWrite;
+  const retry = await processSubmission({ ...scopedWager, submittedBy: 'capper-b' }, repositories);
+  assert.equal(retry.pick.id, second.pick.id);
+  assert.equal(retry.duplicate, true);
+  assert.equal(writes, 2);
+  assert.deepEqual(await repositories.picks.findPickById(second.pick.id), snapshot);
+});
+
+for (const modes of [
+  ['track-only', 'delivery-eligible'], ['delivery-eligible', 'track-only'],
+] as const) {
+  test(`WORK0309 distribution isolation: ${modes.join(' then ')} bypasses conflict guards with separate immutable picks`, async () => {
+    const repositories = createInMemoryRepositoryBundle();
+    const payload = (distributionMode: string): SubmissionPayload => ({
+      ...scopedWager, submittedBy: 'capper-a', metadata: { distributionMode },
+    });
+    const first = await submitPickController(payload(modes[0]), repositories);
+    assert.ok(first.body.ok);
+    if (!first.body.ok) return;
+    const id = first.body.data.pickId;
+    const snapshot = structuredClone(await repositories.picks.findPickById(id));
+    const outbox = structuredClone(await repositories.outbox.listByPickId(id));
+    const second = await submitPickController(payload(modes[1]), repositories);
+    assert.ok(second.body.ok);
+    if (!second.body.ok) return;
+    assert.notEqual(second.body.data.pickId, id);
+    assert.deepEqual(await repositories.picks.findPickById(id), snapshot);
+    assert.deepEqual(await repositories.outbox.listByPickId(id), outbox);
+    const trackedId = modes[0] === 'track-only' ? id : second.body.data.pickId;
+    assert.deepEqual(await repositories.outbox.listByPickId(trackedId), []);
+    const retry = await processSubmission(payload(modes[1]), repositories);
+    assert.equal(retry.duplicate, true);
+    assert.equal(retry.pick.id, second.body.data.pickId);
+  });
+}
+
+test('WORK0309 attribution precedence matches persistence, including materialization capper pin and metadata strings', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  for (const [submittedBy, metadata, expected] of [
+    ['payload', { capper: 'capper', submittedBy: 'metadata' }, 'payload'],
+    [undefined, { capper: 'capper', submittedBy: 'metadata' }, 'capper'],
+    [undefined, { submittedBy: 'metadata' }, 'metadata'],
+    [' payload ', {}, ' payload '],
+    [undefined, { capper: '', submittedBy: 'metadata' }, ''],
+    [undefined, { capper: 123, submittedBy: 'metadata' }, 'metadata'],
+  ] as const) {
+    const payload = { ...scopedWager, submittedBy, metadata };
+    const result = await processSubmission(payload, repositories);
+    assert.equal(result.pickRecord.capper_id, expected);
+    assert.equal(computeSubmissionIdempotencyKey(payload), computeSubmissionIdempotencyKey({
+      ...scopedWager, metadata: { capper: expected },
+    }));
+  }
+});
+
+test('WORK0309 scope encoding cannot alias identities containing separators', () => {
+  assert.notEqual(
+    computeSubmissionIdempotencyKey({ ...scopedWager, submittedBy: 'a|track-only' }),
+    computeSubmissionIdempotencyKey({ ...scopedWager, submittedBy: 'a', metadata: { distributionMode: 'track-only' } }),
+  );
+});
+
+test('WORK0309 historical scoped retry creates a new pick without rewriting the legacy row or key', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const legacyKey = computeSubmissionIdempotencyKey(scopedWager);
+  const created = await processSubmission({ ...scopedWager, submittedBy: 'capper-a' }, repositories);
+  const legacy = await repositories.picks.savePick(created.pick, legacyKey);
+  const snapshot = structuredClone(legacy);
+  const retry = await processSubmission({ ...scopedWager, submittedBy: 'capper-a' }, repositories);
+  assert.notEqual(retry.pick.id, legacy.id);
+  assert.equal(retry.duplicate, undefined);
+  assert.deepEqual(await repositories.picks.findPickById(legacy.id), snapshot);
+  assert.equal((await repositories.picks.findPickByIdempotencyKey(legacyKey))?.id, legacy.id);
+});
+
+
+test('WORK0309 legacy producers retain the exact six-field key bytes without submitter or mode', () => {
+  for (const source of ['board-construction', 'system-pick-scanner', 'alert-agent', 'api'] as const) {
+    const payload = { ...scopedWager, source };
+    const legacy = createHash('sha256').update([
+      source, payload.market, payload.selection, '', '-110', payload.eventName,
+    ].join('|')).digest('hex').slice(0, 32);
+    assert.equal(computeSubmissionIdempotencyKey(payload), legacy);
+    assert.equal(computeSubmissionIdempotencyKey({ ...payload, metadata: { unrelated: true } }), legacy);
+  }
+});
