@@ -74,7 +74,8 @@
       "missing_receipts": [
         "runtime_proof.queries",
         "runtime_proof.row_counts"
-      ]
+      ],
+      "source_and_evidence_binding": "PASS: source ancestor of proof-only commits; CI SHA placeholders resolve; only missing runtime query/row-count receipts block the full validator"
     }
   },
   "runtime_proof": {
@@ -117,5 +118,7 @@
     "verify": "e9bcc19bdfdcdf6dd1514b3d179d23158ddfc61563f6cd7095d6abf449d243c6"
   },
   "proof_profile": "app-runtime",
-  "lane_type": "runtime"
+  "lane_type": "runtime",
+  "pr_number": 1832,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1832"
 }

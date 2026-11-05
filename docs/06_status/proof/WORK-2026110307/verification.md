@@ -69,5 +69,5 @@ No READY_FOR_REVIEW attestation, PM approval, truth-check success or completed c
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending draft creation
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1832
 Execution SHA: 13b2d94c69f3188559e7e0b930ba04f8a011d2f8

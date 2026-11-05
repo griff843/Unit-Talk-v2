@@ -18,4 +18,6 @@ Scaffolding in .ops/sync and docs/06_status/lanes predates this implementation c
 
 Draft review candidate only. Writable staging proof, outer-wrapper provenance, PM approval, merge, lane finalization and orchestration reconciliation remain pending.
 
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1832
+
 Merge SHA: pending merge
