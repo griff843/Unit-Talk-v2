@@ -18,6 +18,8 @@ on:
       - 'scripts/ci/migration-reversibility-gate.ts'
       - 'scripts/ci/schema-roundtrip-hash.ts'
       - 'scripts/ci/migration-precondition-drill.ts'
+      - 'scripts/ci/privilege-only-view-drill.ts'
+      - 'scripts/ci/privilege-only-view-drill.test.ts'
       - 'scripts/ci/participant-catalog-seed-drill.ts'
       - 'scripts/ci/participant-catalog-seed-drill.test.ts'
       - '.github/workflows/migration-reversibility-gate.yml'
@@ -75,12 +77,12 @@ jobs:
         run: |
           # Detect issue ID from PR branch name — validates the current PR's proof.
           BRANCH="${{ github.head_ref }}"
-          ISSUE_ID=$(echo "$BRANCH" | grep -oiE 'utv2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
+          ISSUE_ID=$(echo "$BRANCH" | grep -oiE '(utv2|uni|work)-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
 
           if [ -z "$ISSUE_ID" ]; then
-            # Fail-closed: migration PRs must have a UTV2 issue ID in the branch name.
-            echo "::error title=proof-binding::No UTV2 issue ID found in branch name '${BRANCH}'."
-            echo "Migration PRs must use branch name format: <prefix>/utv2-NNN-<description>"
+            # Fail-closed: migration PRs must have a canonical issue ID in the branch name.
+            echo "::error title=proof-binding::No UTV2, UNI, or WORK issue ID found in branch name '${BRANCH}'."
+            echo "Migration PRs must use branch name format: <prefix>/<utv2|uni|work>-NNN-<description>"
             exit 1
           fi
 
@@ -425,6 +427,11 @@ jobs:
           PARTICIPANT_CATALOG_TEST_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/postgres
         run: pnpm exec tsx --test scripts/ci/participant-catalog-seed-drill.test.ts
 
+      - name: Privilege-only view drill adversarial tests (scratch only)
+        env:
+          PRIVILEGE_ONLY_VIEW_TEST_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: pnpm exec tsx --test scripts/ci/privilege-only-view-drill.test.ts
+
       - name: Drill each new migration's fail-closed precondition
         if: steps.detect.outputs.has_migration == 'true'
         env:
@@ -456,6 +463,27 @@ jobs:
                 continue
                 ;;
             esac
+
+            # The anchored policy marker selects this alternate only after the
+            # mechanical classifier proves every executable statement belongs to
+            # one existing view. Exit 3 means there is no marker and preserves the
+            # legacy path below. A present-but-invalid marker fails closed here;
+            # it never falls through to an exemption.
+            if pnpm exec tsx scripts/ci/privilege-only-view-drill.ts "$MIGRATION" --classify; then
+              echo "=== Drilling privilege-only view policy: $MIGRATION ==="
+              DRILLED=$((DRILLED + 1))
+              if ! pnpm exec tsx scripts/ci/privilege-only-view-drill.ts "$MIGRATION"; then
+                FAIL=1
+              fi
+              continue
+            else
+              PRIVILEGE_CLASSIFICATION=$?
+              if [[ "$PRIVILEGE_CLASSIFICATION" -ne 3 ]]; then
+                echo "::error title=privilege-only-view-drill::$MIGRATION carries an invalid PRIVILEGE-ONLY-VIEW declaration."
+                FAIL=1
+                continue
+              fi
+            fi
 
             # Both marker greps are anchored to the start of a comment line.
             # An unanchored grep matches PROSE that merely mentions a marker, which

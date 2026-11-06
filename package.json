@@ -160,6 +160,7 @@
     "supabase:types": "node scripts/generate-types.mjs",
     "test:db": "pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts",
     "test:production-post-migration": "tsx --test scripts/ci/production-post-migration-verify.test.ts",
+    "test:privilege-only-view-drill": "tsx --test scripts/ci/privilege-only-view-drill.test.ts",
     "verify:production-post-migration": "tsx scripts/ci/production-post-migration-verify.ts",
     "proof:command-center-staging": "tsx scripts/ops/command-center/staging-operator-proof.ts",
     "test:t1-proof:local": "tsx --test apps/api/src/t1-proof-utv2-1108-authority-matrix.test.ts && tsx --test apps/api/src/t1-proof-utv2-1109-dual-auth.test.ts && tsx --test apps/api/src/t1-proof-utv2-1110-approval-expiration.test.ts && tsx --test apps/api/src/t1-proof-utv2-1111-governance-rollback.test.ts && tsx --test apps/api/src/t1-proof-utv2-1182-dual-auth-expiry-boundary.test.ts && tsx --test apps/api/src/t1-proof-utv2-1181-cross-domain-enforcement.test.ts && tsx --test apps/api/src/t1-proof-utv2-1183-terminal-rollback-states.test.ts && tsx --test apps/api/src/t1-proof-utv2-1811-rpc-contract-parity.test.ts && tsx --test apps/api/src/t1-proof-utv2-1811-rate-limit-contract.test.ts && tsx --test apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts",
