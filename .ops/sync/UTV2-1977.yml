@@ -1,0 +1,71 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1977
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1977
+  objective: Repair the contradiction between .lane/lanes/delivery-ui.yml
+    supporting-path admission and scripts/ops/shared.ts deriveDeliveryUiApp.
+    Explicit PM authorization in this session permits a separate narrow
+    admission repair, governed PR/CI/merge, then resuming
+    [UTV2-1976](https://linear.app/unit-talk-v2/issue/UTV2-1976/adopt-owner-approved-primary-circular-website-logo-from-pr1736).
+  acceptance_criteria:
+    - deriveDeliveryUiApp identifies exactly one recognized Delivery/UI app root
+      and admits additional supporting paths only when independently allowed and
+      not forbidden by delivery-ui.yml.
+    - Empty scope, supporting-only scope, multi-app scope, unknown/out-of-policy
+      supporting paths still return null. Do not ignore arbitrary non-app paths.
+      Missing/invalid policy must fail closed.
+    - "Regression PASS: apps/web/\\*\\* only; website plus
+      docs/03_product/brand/**; website plus issue-owned proof/lane/sync paths.
+      FAIL: docs/brand only; web plus command-center; web plus unknown path;
+      empty. Preserve existing other-app coverage and test count. Update
+      obsolete scripts/** rejection because policy independently authorizes
+      scripts/\\*\\*, retaining out-of-policy rejection coverage."
+    - Focused shared tests and full relevant shared/ops tests pass; required
+      pnpm verify and R-level check; normal registered CLI executor/proof/PR/CI,
+      actual tier:T2 label, no policy bypass.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Authorized scope / where to look
+      Modify only scripts/ops/shared.ts and scripts/ops/shared.test.ts plus this issue's lane/sync/proof artifacts. Read .lane/lanes/delivery-ui.yml and scripts/lane-contract.ts for canonical policy loading/path matching; do not edit them. Reuse existing policy validation/matching where possible. No logo assets, apps/web, [UTV2-1976](https://linear.app/unit-talk-v2/issue/UTV2-1976/adopt-owner-approved-primary-circular-website-logo-from-pr1736) source, concurrency limits/caps, Tier C, merge authority, CODEOWNERS, branch protection or runtime changes.
+    - |-
+      Definition of done / required evidence
+      Issue-owned verification.md, evidence.json and diff-summary.md record before failure and measured after acceptance matrix; no false completion or PM attestation. Registered CLI genuinely completes implement, verify and draft-PR closeout with ops:exec-checkpoint phase-complete for each phase, outer wrapper succeeds before READY_FOR_REVIEW publication. Return exact HEAD, PR, files, focused/full relevant results, supporting admission proof and multi-app/unauthorized rejection proof. User authorizes normal governed merge of this narrow correction after required checks/review are green, lane finalization/truth close, then resume [UTV2-1976](https://linear.app/unit-talk-v2/issue/UTV2-1976/adopt-owner-approved-primary-circular-website-logo-from-pr1736). Do not self-approve missing reviewer/PM requirements. No production changes, deploy or activation.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1977/admit-policy-authorized-supporting-paths-with-one-deliveryui-app
+    title: Admit policy-authorized supporting paths with one Delivery/UI app
+    description: |-
+      ## Objective
+
+      Repair the contradiction between .lane/lanes/delivery-ui.yml supporting-path admission and scripts/ops/shared.ts deriveDeliveryUiApp. Explicit PM authorization in this session permits a separate narrow admission repair, governed PR/CI/merge, then resuming [UTV2-1976](https://linear.app/unit-talk-v2/issue/UTV2-1976/adopt-owner-approved-primary-circular-website-logo-from-pr1736).
+
+      ## Authorized scope / where to look
+
+      Modify only scripts/ops/shared.ts and scripts/ops/shared.test.ts plus this issue's lane/sync/proof artifacts. Read .lane/lanes/delivery-ui.yml and scripts/lane-contract.ts for canonical policy loading/path matching; do not edit them. Reuse existing policy validation/matching where possible. No logo assets, apps/web, [UTV2-1976](https://linear.app/unit-talk-v2/issue/UTV2-1976/adopt-owner-approved-primary-circular-website-logo-from-pr1736) source, concurrency limits/caps, Tier C, merge authority, CODEOWNERS, branch protection or runtime changes.
+
+      ## Acceptance criteria
+
+      * deriveDeliveryUiApp identifies exactly one recognized Delivery/UI app root and admits additional supporting paths only when independently allowed and not forbidden by delivery-ui.yml.
+      * Empty scope, supporting-only scope, multi-app scope, unknown/out-of-policy supporting paths still return null. Do not ignore arbitrary non-app paths. Missing/invalid policy must fail closed.
+      * Regression PASS: apps/web/\*\* only; website plus docs/03_product/brand/**; website plus issue-owned proof/lane/sync paths. FAIL: docs/brand only; web plus command-center; web plus unknown path; empty. Preserve existing other-app coverage and test count. Update obsolete scripts/** rejection because policy independently authorizes scripts/\*\*, retaining out-of-policy rejection coverage.
+      * Focused shared tests and full relevant shared/ops tests pass; required pnpm verify and R-level check; normal registered CLI executor/proof/PR/CI, actual tier:T2 label, no policy bypass.
+
+      ## Definition of done / required evidence
+
+      Issue-owned verification.md, evidence.json and diff-summary.md record before failure and measured after acceptance matrix; no false completion or PM attestation. Registered CLI genuinely completes implement, verify and draft-PR closeout with ops:exec-checkpoint phase-complete for each phase, outer wrapper succeeds before READY_FOR_REVIEW publication. Return exact HEAD, PR, files, focused/full relevant results, supporting admission proof and multi-app/unauthorized rejection proof. User authorizes normal governed merge of this narrow correction after required checks/review are green, lane finalization/truth close, then resume [UTV2-1976](https://linear.app/unit-talk-v2/issue/UTV2-1976/adopt-owner-approved-primary-circular-website-logo-from-pr1736). Do not self-approve missing reviewer/PM requirements. No production changes, deploy or activation.
+    captured_at: 2026-10-11T15:58:04.938Z
+    description_sha256: 8b7a370a7777da6278741becfcae53cda4afac752d2d667816cd05bed822a820
+  contract_hash: 00cab72625cd46c0541ae8bfe1473720c670be0e15f1d176ad65143a05b62bdf
