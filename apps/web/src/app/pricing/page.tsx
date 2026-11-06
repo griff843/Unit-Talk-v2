@@ -5,7 +5,12 @@ import { PageHeader } from '@/components/PageHeader';
 import { PlanCard } from '@/components/PlanCard';
 import { PricingTable } from '@/components/PricingTable';
 import { ResponsiblePlayBanner } from '@/components/ResponsiblePlayBanner';
-import { PAGE_TITLES, TIERS, VIP_PLUS_CAPABILITIES } from '@/lib/site-config';
+import {
+  PAGE_TITLES,
+  TIERS,
+  VIP_CHECKOUT_ENABLED,
+  VIP_PLUS_CAPABILITIES,
+} from '@/lib/site-config';
 
 const description =
   'Free settled history. Full VIP Trial for $1 / 7 days. VIP: every official capper pick for $49.99/month. VIP+ availability unconfirmed; Black Label is a future tier.';
@@ -25,16 +30,23 @@ export default function PricingPage() {
       <section className="ut-wrap ut-section pt-0">
         <div className="ut-notice">
           <span className="ut-status-dot" aria-hidden="true" />
-          <p>
-            Website checkout is unavailable. The prices below describe the
-            approved memberships; these links explain the product and do not
-            start a purchase.
-          </p>
+          {VIP_CHECKOUT_ENABLED ? (
+            <p>
+              VIP checkout is available for the $49.99/month plan. Trial and
+              VIP+ checkout remain unavailable.
+            </p>
+          ) : (
+            <p>
+              Website checkout is unavailable. The prices below describe the
+              approved memberships; these links explain the product and do not
+              start a purchase.
+            </p>
+          )}
         </div>
         <h2 className="sr-only">Membership options</h2>
         <div className="ut-plan-grid mt-8">
           {TIERS.slice(0, 3).map((tier) => (
-            <PlanCard key={tier.id} tier={tier} />
+            <PlanCard key={tier.id} tier={tier} showCheckout />
           ))}
         </div>
         <div className="ut-plan-future mt-6">
