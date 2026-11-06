@@ -2,9 +2,9 @@
   "schema_version": 2,
   "issue_id": "WORK-2026110307",
   "tier": "T1",
-  "status": "draft_staging_proven",
+  "status": "draft_live_deferred",
   "sha_binding": {
-    "verified_source_sha": "f6a694f78c7124cd43ee772a15b2ca22b9bc88ae",
+    "verified_source_sha": "1a8850d5092088016a9f2372192af09aa718853b",
     "merge_sha": null,
     "sha_type": "source_sha",
     "evidence_commit_sha": "RESOLVED_BY_CI",
@@ -33,17 +33,15 @@
       "rules_matched": []
     },
     "verify": {
+      "current_attempt": 10,
       "command": "pnpm verify",
       "exit": 1,
-      "static_subgate": "PASS: pnpm verify:static completed including lint, type-check, build, aggregate tests, post-migration tests, Smart Form verification and command verification",
-      "local_test_totals": {
-        "tests": 8115,
-        "pass": 8102,
-        "fail": 0,
-        "skipped": 13
-      },
-      "failure": "test:live-db staging identity guard refused host=127.0.0.1 before writable tests",
-      "optional_smart_form_browser_e2e": "not enabled"
+      "static": "PASS: verify:static completed all gates; lint, type-check, build, aggregate tests, production-post-migration tests, Smart Form verify and command verification",
+      "tests": 8122,
+      "pass": 8109,
+      "fail": 0,
+      "skipped": 13,
+      "boundary": "test:live-db refused unresolved host=127.0.0.1 before writable tests; staging-ci required; optional browser E2E not enabled"
     },
     "regression": {
       "old_source_sha": "1225b80361c657993877a0e497a3637b14abf016",
@@ -288,108 +286,205 @@
       },
       "verification_boundary": "Staging CI writable proof and verify passed for unchanged source; historical local verify/test:db identity refusal retained; production behavior and row counts not proven; earlier page-1/2 stall cause not identified",
       "closeout": "One authorized final push; no PR mutations, comments or READY_FOR_REVIEW attestation. Outer-wrapper provenance, PM approval, merge, lane finalization and reconciliation remain pending."
+    },
+    "attempt_10": {
+      "trigger": "PM CHANGES REQUIRED comment 6684477811; finding 4482558564; orchestrator rulings 8/9 and addenda",
+      "focused": {
+        "tests": 193,
+        "pass": 192,
+        "fail": 0,
+        "skipped": 1
+      },
+      "paging": {
+        "tests": 125,
+        "pass": 125,
+        "fail": 0
+      },
+      "mutations": {
+        "control": {
+          "exit": 0,
+          "totals": [
+            "# tests 125",
+            "# pass 125",
+            "# fail 0"
+          ],
+          "failures": []
+        },
+        "no-range-change": {
+          "exit": 1,
+          "totals": [
+            "# tests 125",
+            "# pass 120",
+            "# fail 5"
+          ],
+          "failures": [
+            "not ok 114 - lifecycle read uses exactly one starting count and one ending count per attempt",
+            "not ok 118 - multi-page lifecycle end-count drift retries three whole reads and fails closed",
+            "not ok 120 - membership behind-swap: discards drifted attempt and retries coherently",
+            "not ok 122 - membership always: discards drifted attempt and retries coherently",
+            "not ok 124 - multi-page probe is discarded before watermark and fresh first count"
+          ]
+        },
+        "no-beyond": {
+          "exit": 1,
+          "totals": [
+            "# tests 125",
+            "# pass 121",
+            "# fail 4"
+          ],
+          "failures": [
+            "not ok 114 - lifecycle read uses exactly one starting count and one ending count per attempt",
+            "not ok 118 - multi-page lifecycle end-count drift retries three whole reads and fails closed",
+            "not ok 121 - membership delete-insert: discards drifted attempt and retries coherently",
+            "not ok 124 - multi-page probe is discarded before watermark and fresh first count"
+          ]
+        },
+        "gte-watermark": {
+          "exit": 1,
+          "totals": [
+            "# tests 125",
+            "# pass 109",
+            "# fail 16"
+          ],
+          "failures": [
+            "not ok 1 - pick lifecycle states: PostgreSQL timestamp precision and equivalent UTC offsets retain chronological order across pages",
+            "not ok 8 - pick lifecycle states: complete 1001 rows with equal timestamp boundaries and Database/InMemory parity",
+            "not ok 9 - pick lifecycle states: complete 2000 rows with equal timestamp boundaries and Database/InMemory parity",
+            "not ok 10 - pick lifecycle states: complete 2501 rows with equal timestamp boundaries and Database/InMemory parity",
+            "not ok 85 - pick bounded limit/offset reads retain explicit slicing even across server pages",
+            "not ok 91 - pick lifecycle states: count-aware completion never requests positive EOF (2000 rows)",
+            "not ok 105 - population drift restarts with one coherent population",
+            "not ok 106 - population drift fails after three attempts",
+            "not ok 114 - lifecycle read uses exactly one starting count and one ending count per attempt",
+            "not ok 118 - multi-page lifecycle end-count drift retries three whole reads and fails closed",
+            "not ok 119 - membership ahead-swap: discards drifted attempt and retries coherently",
+            "not ok 120 - membership behind-swap: discards drifted attempt and retries coherently",
+            "not ok 121 - membership delete-insert: discards drifted attempt and retries coherently",
+            "not ok 123 - bounded multi-page read omits beyond-cursor count and succeeds",
+            "not ok 124 - multi-page probe is discarded before watermark and fresh first count",
+            "not ok 125 - stable microsecond watermark uses strict greater-than and exact DB text"
+          ]
+        },
+        "date-watermark": {
+          "exit": 1,
+          "totals": [
+            "# tests 125",
+            "# pass 109",
+            "# fail 16"
+          ],
+          "failures": [
+            "not ok 1 - pick lifecycle states: PostgreSQL timestamp precision and equivalent UTC offsets retain chronological order across pages",
+            "not ok 8 - pick lifecycle states: complete 1001 rows with equal timestamp boundaries and Database/InMemory parity",
+            "not ok 9 - pick lifecycle states: complete 2000 rows with equal timestamp boundaries and Database/InMemory parity",
+            "not ok 10 - pick lifecycle states: complete 2501 rows with equal timestamp boundaries and Database/InMemory parity",
+            "not ok 85 - pick bounded limit/offset reads retain explicit slicing even across server pages",
+            "not ok 91 - pick lifecycle states: count-aware completion never requests positive EOF (2000 rows)",
+            "not ok 105 - population drift restarts with one coherent population",
+            "not ok 106 - population drift fails after three attempts",
+            "not ok 114 - lifecycle read uses exactly one starting count and one ending count per attempt",
+            "not ok 118 - multi-page lifecycle end-count drift retries three whole reads and fails closed",
+            "not ok 119 - membership ahead-swap: discards drifted attempt and retries coherently",
+            "not ok 120 - membership behind-swap: discards drifted attempt and retries coherently",
+            "not ok 121 - membership delete-insert: discards drifted attempt and retries coherently",
+            "not ok 123 - bounded multi-page read omits beyond-cursor count and succeeds",
+            "not ok 124 - multi-page probe is discarded before watermark and fresh first count",
+            "not ok 125 - stable microsecond watermark uses strict greater-than and exact DB text"
+          ]
+        },
+        "date-last": {
+          "exit": 1,
+          "totals": [
+            "# tests 125",
+            "# pass 123",
+            "# fail 2"
+          ],
+          "failures": [
+            "not ok 120 - membership behind-swap: discards drifted attempt and retries coherently",
+            "not ok 122 - membership always: discards drifted attempt and retries coherently"
+          ]
+        }
+      },
+      "single_page": "one data statement; no watermark or HEAD counts",
+      "multi_page": "discard probe, watermark, fresh counted first page, cursor pages, range-change HEAD, beyond-cursor HEAD only when unbounded, final exact count; fresh state and count on every retry",
+      "cost": "one discarded first page of at most 1000 rows, watermark and up to three HEAD counts; no second probe on retries",
+      "residuals": [
+        "Transaction start time now() can give updated_at <= W for a transaction committing mid-read; window unmeasured; pure same-count swap can remain undetected.",
+        "Any picks UPDATE in created_at <= L triggers retry even without membership change; busy writers may exhaust three retries and correctly fail closed."
+      ],
+      "test_db": "REFUSED host=127.0.0.1 before writes; defer to staging-ci xskgrzbteyqdufktjrjx",
+      "main_sync": "Not performed per ruling 8 addendum and ruling 9",
+      "pr_actions": "No open/close/ready/comment actions",
+      "source_sha": "1a8850d5092088016a9f2372192af09aa718853b",
+      "regression_control": {
+        "source": "946754570 prior source",
+        "tests": 125,
+        "pass": 112,
+        "fail": 13,
+        "note": "New tests on prior source; includes protocol-shape failures, not 13 independent product defects."
+      },
+      "artifact_validation": {
+        "identity": "PASS: schema-v2, failures=[]",
+        "binding": "DEFERRED/FAIL: current-source runtime_proof.queries and row_counts empty by ruling 8",
+        "auditor": "PASS: failures=[], warnings=[]",
+        "r_level": "PASS: no rules matched",
+        "close_eligibility": "BLOCKED: CEP-E7 missing runtime receipts, CEP-C1 consequent; CEP-E3/E5 pass"
+      },
+      "verify": {
+        "command": "pnpm verify",
+        "exit": 1,
+        "static": "PASS: verify:static completed all gates; lint, type-check, build, aggregate tests, production-post-migration tests, Smart Form verify and command verification",
+        "tests": 8122,
+        "pass": 8109,
+        "fail": 0,
+        "skipped": 13,
+        "boundary": "test:live-db refused unresolved host=127.0.0.1 before writable tests; staging-ci required; optional browser E2E not enabled"
+      },
+      "type_check": "PASS: final pnpm type-check exit 0",
+      "format": {
+        "fence_lines": 4,
+        "forbidden_tokens": []
+      },
+      "log_sha256": {
+        "verify": "6066f07e51aeda78359ee094148dc5705b4078cd32674aad90f1990ebf0b5991",
+        "focused-final": "ca2e76bd8d63c9a6962b1f2fef4714b7e91884ef68c151c6d69ee177f43ce982",
+        "typecheck-final": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "db": "c16a495ae6ee7511695a6d68e9bab77c5934b6a6eeb85a61c67cde97f6584086",
+        "preflight": "a8e6ef7aab232769ce00e26f7b51959dc3aecd4f71766db7defa85040e047a40",
+        "identity": "8d1e0b1fdebfbbe82fdc295ac449ad13a6d88755f49a79017273982e7f668445",
+        "binding": "54f16a012781873583d6b310e90e857b958335cbea129eae3b75ca05d7090a07",
+        "auditor": "5514178bc0b55b80ebcf815a5f46c01f8ccf3888d0473b34f3fcf6a11b360bb7",
+        "rlevel": "72acc7f5919a4b20e495c1387c823a308cc1dc957095c09387c7eba01b4c6f84",
+        "regression": "9c5b05cb1dffae369b7ac31e3ebf12d0d3865b0c4ba235999c50ef91e85009d2",
+        "control": "9b50dd8d0c8da1bdd6cecbae5af371ea80a4bcd72f0f5aef22395de9b433a1d7",
+        "no-range-change": "d0112f1a2a3f5da0fc7d86b0db557f999e82208a8c9f4d72848a76c4700003f3",
+        "no-beyond": "7a7ca97385996651a08aaf2f11e09ad9713147ea6bdab116d27089a478d2d888",
+        "gte-watermark": "ce67d0f3f53955e99274c23ee1db5171f6488d306edb8ad055986bb0996d9274",
+        "date-watermark": "d9f49cae9c2672dffcd08b96bb2a46296f73364ecd9a5d088a5593447e69e005",
+        "date-last": "3c97d335bfc70ae8c98e6f89a6496af09b99563cc84d3c7df2a54cc820deb883"
+      },
+      "final_gate_log_sha256": {
+        "preflight": "a8e6ef7aab232769ce00e26f7b51959dc3aecd4f71766db7defa85040e047a40",
+        "identity": "8d1e0b1fdebfbbe82fdc295ac449ad13a6d88755f49a79017273982e7f668445",
+        "binding": "54f16a012781873583d6b310e90e857b958335cbea129eae3b75ca05d7090a07",
+        "auditor": "2cfe1f244cd88403bf49f58b75ba3949ed03f4b90e15b1ef352fc578f2b36f3c",
+        "rlevel": "72acc7f5919a4b20e495c1387c823a308cc1dc957095c09387c7eba01b4c6f84"
+      }
     }
   },
   "runtime_proof": {
     "target_project_ref": "xskgrzbteyqdufktjrjx",
     "required_environment": "staging-ci with CI_SUPABASE_* credentials and CI_FIXTURE_RUN_ID",
     "observed_local_guard": "pnpm test:db exit 1: host=127.0.0.1, ref=unidentified; refused before writable tests",
-    "status": "proven_staging_ci",
-    "queries": [
-      {
-        "label": "settled-voided",
-        "reader": "listByLifecycleStates(['settled','voided'])",
-        "exactCount": 49099,
-        "rows": 49099,
-        "elapsedMs": 16065.17,
-        "statementTimeoutMs": 8000,
-        "timeout_scope": "per page query; elapsedMs is whole-read duration",
-        "ci_run_id": 42050230261,
-        "ci_job_id": 127324426051
-      },
-      {
-        "label": "track-only-validated",
-        "reader": "listTrackOnlyByLifecycleState('validated')",
-        "exactCount": 27775,
-        "rows": 27775,
-        "elapsedMs": 8942.23,
-        "statementTimeoutMs": 8000,
-        "timeout_scope": "per page query; elapsedMs is whole-read duration",
-        "ci_run_id": 42050230261,
-        "ci_job_id": 127324426051
-      },
-      {
-        "label": "validated",
-        "reader": "listByLifecycleStates(['validated'])",
-        "exactCount": 69690,
-        "rows": 69690,
-        "elapsedMs": 16118.4,
-        "statementTimeoutMs": 8000,
-        "timeout_scope": "per page query; elapsedMs is whole-read duration",
-        "ci_run_id": 42050230261,
-        "ci_job_id": 127324426051
-      }
-    ],
-    "row_counts": [
-      {
-        "label": "settled-voided",
-        "exactCount": 49099,
-        "rows": 49099,
-        "ci_run_id": 42050230261,
-        "ci_job_id": 127324426051
-      },
-      {
-        "label": "track-only-validated",
-        "exactCount": 27775,
-        "rows": 27775,
-        "ci_run_id": 42050230261,
-        "ci_job_id": 127324426051
-      },
-      {
-        "label": "validated",
-        "exactCount": 69690,
-        "rows": 69690,
-        "ci_run_id": 42050230261,
-        "ci_job_id": 127324426051
-      }
-    ],
     "not_proven": [
       "production behavior",
       "production row counts",
       "deployment",
       "cause of the 42044986080 page-1/2 stall; exposure reduced rather than eliminated"
     ],
-    "ci_run_id": 42050230261,
-    "ci_job_id": 127324426051,
-    "ci_run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/42050230261",
-    "ci_job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/42050230261/job/127324426051",
-    "ci_head_sha": "f9cbc60c953ea079cea650ec85e1bae5ae713088",
-    "ci_result": {
-      "writable_db_proof": "success",
-      "verify": "success",
-      "verify_job_id": 127330848150,
-      "suite": {
-        "tests": 1,
-        "pass": 1,
-        "fail": 0,
-        "skipped": 0
-      },
-      "utv2_1907_test_5": "PASS: repaired performance readers reconcile with exact live PostgREST counts"
-    },
-    "boundary": {
-      "rows": 5,
-      "pageSize": 2,
-      "created_at": "2026-11-03T12:34:56.123456+00:00",
-      "oracle": "deepEqual passed",
-      "mutations": {
-        "noId": "rejected",
-        "dateReserialization": "rejected"
-      },
-      "ci_run_id": 42050230261,
-      "ci_job_id": 127324426051,
-      "namespace": "work0307-utv2-1630-42050230261-1-979bcaae-4af5-446f-917f-ad5623f23a7b"
-    },
-    "authority": "orchestrator ruling 6; staging CI results supplied for current source"
+    "status": "deferred_to_staging_ci",
+    "queries": [],
+    "row_counts": [],
+    "reason": "Current source needs a new green staging-ci run; local writable target identity is unresolved."
   },
   "boundaries": {
     "production_ddl": false,
@@ -527,6 +622,116 @@
       "cause": "t1-proof-utv2-1907 test 5 timed out in validated page query (page 1 or 2); cause of that stall not identified. No staging writer overlapped. Separately, OR cursor was not an Index Cond, so deep pages scanned from the index start. Operating Claude warm EXPLAIN: redundant created_at bound reduced 191 ms / 63412 buffers to 33 ms / 2392 buffers, same 9590 rows. Exposure reduced rather than eliminated.",
       "authority": "orchestrator ruling 4",
       "clarification_authority": "orchestrator ruling 6"
+    },
+    {
+      "reason": "Attempt 10 source changes after PM CHANGES REQUIRED at c143a22999a1fceb055a72c6b1aa7a4fa73d4122, comment 6684477811, finding 4482558564; prior live receipts no longer bind current source.",
+      "runtime_proof": {
+        "target_project_ref": "xskgrzbteyqdufktjrjx",
+        "required_environment": "staging-ci with CI_SUPABASE_* credentials and CI_FIXTURE_RUN_ID",
+        "observed_local_guard": "pnpm test:db exit 1: host=127.0.0.1, ref=unidentified; refused before writable tests",
+        "status": "proven_staging_ci",
+        "queries": [
+          {
+            "label": "settled-voided",
+            "reader": "listByLifecycleStates(['settled','voided'])",
+            "exactCount": 49099,
+            "rows": 49099,
+            "elapsedMs": 16065.17,
+            "statementTimeoutMs": 8000,
+            "timeout_scope": "per page query; elapsedMs is whole-read duration",
+            "ci_run_id": 42050230261,
+            "ci_job_id": 127324426051
+          },
+          {
+            "label": "track-only-validated",
+            "reader": "listTrackOnlyByLifecycleState('validated')",
+            "exactCount": 27775,
+            "rows": 27775,
+            "elapsedMs": 8942.23,
+            "statementTimeoutMs": 8000,
+            "timeout_scope": "per page query; elapsedMs is whole-read duration",
+            "ci_run_id": 42050230261,
+            "ci_job_id": 127324426051
+          },
+          {
+            "label": "validated",
+            "reader": "listByLifecycleStates(['validated'])",
+            "exactCount": 69690,
+            "rows": 69690,
+            "elapsedMs": 16118.4,
+            "statementTimeoutMs": 8000,
+            "timeout_scope": "per page query; elapsedMs is whole-read duration",
+            "ci_run_id": 42050230261,
+            "ci_job_id": 127324426051
+          }
+        ],
+        "row_counts": [
+          {
+            "label": "settled-voided",
+            "exactCount": 49099,
+            "rows": 49099,
+            "ci_run_id": 42050230261,
+            "ci_job_id": 127324426051
+          },
+          {
+            "label": "track-only-validated",
+            "exactCount": 27775,
+            "rows": 27775,
+            "ci_run_id": 42050230261,
+            "ci_job_id": 127324426051
+          },
+          {
+            "label": "validated",
+            "exactCount": 69690,
+            "rows": 69690,
+            "ci_run_id": 42050230261,
+            "ci_job_id": 127324426051
+          }
+        ],
+        "not_proven": [
+          "production behavior",
+          "production row counts",
+          "deployment",
+          "cause of the 42044986080 page-1/2 stall; exposure reduced rather than eliminated"
+        ],
+        "ci_run_id": 42050230261,
+        "ci_job_id": 127324426051,
+        "ci_run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/42050230261",
+        "ci_job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/42050230261/job/127324426051",
+        "ci_head_sha": "f9cbc60c953ea079cea650ec85e1bae5ae713088",
+        "ci_result": {
+          "writable_db_proof": "success",
+          "verify": "success",
+          "verify_job_id": 127330848150,
+          "suite": {
+            "tests": 1,
+            "pass": 1,
+            "fail": 0,
+            "skipped": 0
+          },
+          "utv2_1907_test_5": "PASS: repaired performance readers reconcile with exact live PostgREST counts"
+        },
+        "boundary": {
+          "rows": 5,
+          "pageSize": 2,
+          "created_at": "2026-11-03T12:34:56.123456+00:00",
+          "oracle": "deepEqual passed",
+          "mutations": {
+            "noId": "rejected",
+            "dateReserialization": "rejected"
+          },
+          "ci_run_id": 42050230261,
+          "ci_job_id": 127324426051,
+          "namespace": "work0307-utv2-1630-42050230261-1-979bcaae-4af5-446f-917f-ad5623f23a7b"
+        },
+        "authority": "orchestrator ruling 6; staging CI results supplied for current source"
+      },
+      "related_historical_ci_runs": [
+        42050230261,
+        42053943830,
+        42057587335
+      ],
+      "authority": "orchestrator rulings 8 and 9; later run IDs retained as superseded history only"
     }
   ]
 }
