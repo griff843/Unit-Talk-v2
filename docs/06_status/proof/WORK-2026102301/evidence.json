@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102301",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "767ca4c2a9820fc2e143b621d62b2c5ec5a76cdb",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "scope": "documentation-only lane; no code path changed",
+    "ci_run": "https://github.com/griff843/Unit-Talk-v2/actions/runs/39955617051",
+    "ci_verified_head": "767ca4c2a9820fc2e143b621d62b2c5ec5a76cdb",
+    "ci_static_verification": "PASS (verify completed success on the verified head)",
+    "ci_authorized_staging_proof": "PASS (Writable DB proof (staging only) completed success on the verified head)",
+    "required_contexts_at_merge": "verify, Executor Result Validation, Merge Gate, P0 Protocol all SUCCESS on the verified head",
+    "local_checks": "git diff --check clean; pnpm lint exit 0",
+    "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1777",
+    "merge_commit": "306905874d51f5af050f1dce7e446034775c7b1d",
+    "note": "evidence.json supplied post-merge by WORK-2026102304 because the original lane omitted it; every value above was read from GitHub, none invented."
+  }
+}
