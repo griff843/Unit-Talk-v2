@@ -515,17 +515,35 @@ function comparePerformanceReaderRows(
 /** PostgREST `max-rows` on this project: the most rows any single response carries. */
 export const POSTGREST_MAX_ROWS = 1000;
 
-/**
- * Reads every row of an ordered query by requesting consecutive
- * `[from, to]` ranges of `pageSize` until a page comes back short. The caller
- * must order on a total order, or rows can move between pages mid-read.
- * `pageSize` must not exceed the server cap: a capped page would read as short
- * and end the read early, which is exactly the truncation this exists to stop.
+type OrderedPageCursor = { created_at: string; id: string };
+
+export function orderedPageFilter(cursor: OrderedPageCursor, ascending = true): string {
+  const operator = ascending ? 'gt' : 'lt';
+  // Pass the exact database text to supabase-js. Its URLSearchParams encoding
+  // preserves '+' as %2B; pre-encoding here would double-encode the timestamp.
+  return `created_at.${operator}.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.${operator}.${cursor.id})`;
+}
+
+/** Redundant timestamp bound lets Postgres seek into the ordered index. */
+export function applyOrderedPageCursor<Q extends {
+  gte(column: string, value: string): Q;
+  lte(column: string, value: string): Q;
+  or(filter: string): Q;
+}>(query: Q, cursor: OrderedPageCursor, ascending = true): Q {
+  const bounded = ascending
+    ? query.gte('created_at', cursor.created_at)
+    : query.lte('created_at', cursor.created_at);
+  return bounded.or(orderedPageFilter(cursor, ascending));
+}
+
+/** Read a total (created_at, id) order until a short page, retaining DB precision.
+ * from/to describe logical progress only; subsequent queries use the cursor.
  */
-export async function readAllOrderedPages<T>(
+export async function readAllOrderedPages<T extends OrderedPageCursor>(
   fetchPage: (
     from: number,
     to: number,
+    cursor: OrderedPageCursor | undefined,
   ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
   pageSize: number = POSTGREST_MAX_ROWS,
 ): Promise<T[]> {
@@ -533,16 +551,14 @@ export async function readAllOrderedPages<T>(
     throw new Error(`pageSize must be an integer from 1 to ${POSTGREST_MAX_ROWS}; received ${pageSize}`);
   }
   const rows: T[] = [];
+  let cursor: OrderedPageCursor | undefined;
   for (let from = 0; ; from += pageSize) {
-    const { data, error } = await fetchPage(from, from + pageSize - 1);
-    if (error) {
-      throw new Error(error.message);
-    }
+    const { data, error } = await fetchPage(from, from + pageSize - 1, cursor);
+    if (error) throw new Error(error.message);
     const page = (data ?? []) as T[];
     rows.push(...page);
-    if (page.length < pageSize) {
-      return rows;
-    }
+    if (page.length < pageSize) return rows;
+    cursor = page[page.length - 1]!;
   }
 }
 
@@ -3505,16 +3521,18 @@ export class DatabasePickRepository implements PickRepository {
   async listTrackOnlyByLifecycleState(
     lifecycleState: CanonicalPick['lifecycleState'],
   ): Promise<PickRecord[]> {
-    return readAllOrderedPages<PickRecord>(async (from, to) =>
-      this.client
+    return readAllOrderedPages<PickRecord>(async (from, to, cursor) => {
+      let query = this.client
         .from('picks')
         .select('*')
         .eq('status', lifecycleState)
         .eq('metadata->>distributionMode', 'track-only')
         .order('created_at', { ascending: true })
         .order('id', { ascending: true })
-        .range(from, to),
-    );
+        .range(0, to - from);
+      if (cursor) query = applyOrderedPageCursor(query, cursor);
+      return query;
+    });
   }
 
   async listByLifecycleStates(
@@ -3536,77 +3554,128 @@ export class DatabasePickRepository implements PickRepository {
     // Explicit bounds prevent an unbounded read from quietly becoming a capped
     // PostgREST response. A bounded caller keeps its limit/offset contract.
     const maxRows = 100_000;
-    let total: number | undefined;
-    let previous: { created_at: string; id: string } | undefined;
-    const seen = new Set<string>();
-    const fail = (reason: string): never => {
-      throw new Error('Failed to listByLifecycleStates: ' + reason);
-    };
-    return readAllOrderedPages<PickRecord>(async (from, to) => {
-      const width = Math.min(
-        to - from + 1,
-        limit === undefined ? POSTGREST_MAX_ROWS : limit - from,
-      );
-      if (width <= 0 || (total !== undefined && start + from >= total)) {
-        return { data: [], error: null };
+    // Attempt -1 is a single-snapshot probe. Its rows are discarded if
+    // another page is needed; retries start with their own watermark.
+    for (let attempt = -1; attempt < 3; attempt++) {
+      let watermark: string | undefined;
+      if (attempt >= 0) {
+        const newest = await this.client.from('picks').select('updated_at')
+          .order('updated_at', { ascending: false }).limit(1);
+        if (newest.error) throw new Error('Failed to listByLifecycleStates: ' + newest.error.message);
+        watermark = newest.data?.[0]?.updated_at;
       }
-      if (!Number.isSafeInteger(start + from + width - 1))
-        fail('unsafe page range');
-      const { data, error, count } = await this.client
-        .from('picks')
-        .select('*', { count: 'exact' })
-        .in('status', lifecycleStates)
-        .order('created_at', { ascending: true })
-        .order('id', { ascending: true })
-        .range(start + from, start + from + width - 1);
-      if (error) fail(error.message);
-      if (
-        typeof count !== 'number' ||
-        !Number.isSafeInteger(count) ||
-        count < 0
-      ) {
-        fail('missing or invalid exact population count');
-      }
-      const currentCount = count as number;
-      if (total !== undefined && total !== currentCount)
-        fail('population count changed while paging');
-      total = currentCount;
-      const wanted = Math.min(
-        Math.max(0, total - start),
-        limit ?? Number.POSITIVE_INFINITY,
-      );
-      if (wanted > maxRows) fail('read exceeds 100000-row safety budget');
-      if (!Array.isArray(data)) fail('missing page data');
-      const page = data ?? [];
-      const expected = Math.min(width, Math.max(0, total - start - from));
-      if (page.length !== expected) fail('inconsistent or truncated page');
-      for (const row of page) {
-        if (
-          typeof row.id !== 'string' ||
-          row.id.length === 0 ||
-          typeof row.created_at !== 'string' ||
-          !Number.isFinite(Date.parse(row.created_at))
-        ) {
-          fail('invalid row ordering identity');
+      let probeNeedsRestart = false;
+      let total: number | undefined;
+      let usedCursorPage = false;
+      let previous: { created_at: string; id: string } | undefined;
+      const seen = new Set<string>();
+      const fail = (reason: string): never => {
+        throw new Error('Failed to listByLifecycleStates: ' + reason);
+      };
+      try {
+        const rows = await readAllOrderedPages<PickRecord>(async (from, to, cursor) => {
+          if (probeNeedsRestart) return { data: [], error: null };
+          const width = Math.min(
+            to - from + 1,
+            limit === undefined ? POSTGREST_MAX_ROWS : limit - from,
+          );
+          if (width <= 0 || (total !== undefined && start + from >= total)) {
+            return { data: [], error: null };
+          }
+          if (!Number.isSafeInteger(start + from + width - 1))
+            fail('unsafe page range');
+          let query = this.client
+            .from('picks')
+            .select('*', cursor ? undefined : { count: 'exact' })
+            .in('status', lifecycleStates)
+            .order('created_at', { ascending: true })
+            .order('id', { ascending: true })
+            .range(cursor ? 0 : start, (cursor ? 0 : start) + width - 1);
+          if (cursor) query = applyOrderedPageCursor(query, cursor, true);
+          if (cursor) usedCursorPage = true;
+          const { data, error, count } = await query;
+          if (error) fail(error.message);
+          if (!cursor) {
+            if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0)
+              fail('missing or invalid exact population count');
+            total = count as number;
+          }
+          const wanted = Math.min(
+            Math.max(0, total! - start),
+            limit ?? Number.POSITIVE_INFINITY,
+          );
+          if (wanted > maxRows) fail('read exceeds 100000-row safety budget');
+          if (!Array.isArray(data)) fail('missing page data');
+          const page = data ?? [];
+          if (page.length > width) fail('inconsistent or truncated page');
+          for (const row of page) {
+            if (
+              typeof row.id !== 'string' ||
+              row.id.length === 0 ||
+              typeof row.created_at !== 'string' ||
+              !Number.isFinite(Date.parse(row.created_at))
+            ) {
+              fail('invalid row ordering identity');
+            }
+            if (
+              !lifecycleStates.includes(
+                row.status as CanonicalPick['lifecycleState'],
+              )
+            )
+              fail('row does not match requested filter');
+            if (seen.has(row.id)) fail('duplicate or overlapping page identity');
+            if (previous) {
+              const order =
+                comparePerformanceReaderRows(previous, row);
+              if (!(order < 0)) fail('non-progressing or inconsistent page order');
+            }
+            seen.add(row.id);
+            if (seen.size > maxRows) fail('read exceeds 100000-row safety budget');
+            previous = row;
+          }
+          if (attempt === -1 && page.length === POSTGREST_MAX_ROWS && wanted > page.length)
+            probeNeedsRestart = true;
+          return { data: page, error: null };
+        });
+        if (probeNeedsRestart) continue;
+        // A single data statement already supplies rows and count from one
+        // snapshot. Multi-statement reads need an end count to detect net drift.
+        if (usedCursorPage) {
+          // No status filter: departed members must still be visible here.
+          let changes = this.client.from('picks')
+            .select('id', { count: 'exact', head: true });
+          if (watermark !== undefined) changes = changes.gt('updated_at', watermark);
+          if (previous) changes = changes.lte('created_at', previous.created_at);
+          const changed = await changes;
+          if (changed.error) fail(changed.error.message);
+          if (typeof changed.count !== 'number' || !Number.isSafeInteger(changed.count) || changed.count < 0)
+            fail('missing or invalid exact population count');
+          if (typeof changed.count === 'number' && changed.count > 0) fail('population membership changed while paging');
+          if (limit === undefined && previous) {
+            const beyond = await applyOrderedPageCursor(this.client.from('picks')
+              .select('id', { count: 'exact', head: true }).in('status', lifecycleStates), previous, true);
+            if (beyond.error) fail(beyond.error.message);
+            if (typeof beyond.count !== 'number' || !Number.isSafeInteger(beyond.count) || beyond.count < 0)
+              fail('missing or invalid exact population count');
+            if (typeof beyond.count === 'number' && beyond.count > 0) fail('population membership changed while paging');
+          }
+          const population = await this.client.from('picks')
+            .select('id', { count: 'exact', head: true }).in('status', lifecycleStates);
+          if (population.error) fail(population.error.message);
+          if (typeof population.count !== 'number' || !Number.isSafeInteger(population.count) || population.count < 0)
+            fail('missing or invalid exact population count');
+          if (total !== population.count)
+            fail('population count changed while paging');
         }
-        if (
-          !lifecycleStates.includes(
-            row.status as CanonicalPick['lifecycleState'],
-          )
-        )
-          fail('row does not match requested filter');
-        if (seen.has(row.id)) fail('duplicate or overlapping page identity');
-        if (previous) {
-          const order =
-            comparePerformanceReaderRows(previous, row);
-          if (!(order < 0)) fail('non-progressing or inconsistent page order');
-        }
-        seen.add(row.id);
-        if (seen.size > maxRows) fail('read exceeds 100000-row safety budget');
-        previous = row;
+        const wanted = Math.min(Math.max(0, total! - start), limit ?? Number.POSITIVE_INFINITY);
+        if (rows.length !== wanted)
+          fail('population count changed while paging: inconsistent or truncated page');
+        return rows;
+      } catch (error) {
+        if (!(error instanceof Error) || !(/population (count|membership) changed while paging/.test(error.message)) || attempt === 2) throw error;
       }
-      return { data: page, error: null };
-    });
+    }
+    throw new Error('Failed to listByLifecycleStates: population count changed while paging');
   }
 
   async listMemberVisibleOfficialPicks(
@@ -3639,8 +3708,8 @@ export class DatabasePickRepository implements PickRepository {
     promotionStatuses: readonly string[],
   ): Promise<PromotedPickCandidate[]> {
     const select = 'id,status,promotion_status,promotion_target,metadata,selection,created_at';
-    const readPromoted = readAllOrderedPages<PromotedPickCandidate>(async (from, to) =>
-      this.client
+    const readPromoted = readAllOrderedPages<PromotedPickCandidate>(async (from, to, cursor) => {
+      let query = this.client
         .from('picks')
         .select(select)
         .in('status', [...lifecycleStates])
@@ -3648,10 +3717,12 @@ export class DatabasePickRepository implements PickRepository {
         .not('promotion_target', 'is', null)
         .order('created_at', { ascending: true })
         .order('id', { ascending: true })
-        .range(from, to),
-    );
-    const readAuthorizedHuman = readAllOrderedPages<PromotedPickCandidate>(async (from, to) =>
-      this.client
+        .range(0, to - from);
+      if (cursor) query = applyOrderedPageCursor(query, cursor);
+      return query;
+    });
+    const readAuthorizedHuman = readAllOrderedPages<PromotedPickCandidate>(async (from, to, cursor) => {
+      let query = this.client
         .from('picks')
         .select(select)
         .in('status', [...lifecycleStates])
@@ -3659,8 +3730,10 @@ export class DatabasePickRepository implements PickRepository {
         .eq('metadata->deliveryAuthorization->>decision', 'authorized')
         .order('created_at', { ascending: true })
         .order('id', { ascending: true })
-        .range(from, to),
-    );
+        .range(0, to - from);
+      if (cursor) query = applyOrderedPageCursor(query, cursor);
+      return query;
+    });
 
     // Each branch is filtered before PostgREST pagination, so health never
     // reads the full draft/validated population. Merge by id because a human
@@ -4446,7 +4519,7 @@ export class DatabaseOutboxRepository implements OutboxRepository {
     const fail = (reason: string): never => {
       throw new Error('Failed to listByPickId: ' + reason);
     };
-    return readAllOrderedPages<OutboxRecord>(async (from, to) => {
+    return readAllOrderedPages<OutboxRecord>(async (from, to, cursor) => {
       const width = Math.min(
         to - from + 1,
         limit === undefined ? POSTGREST_MAX_ROWS : limit - from,
@@ -4456,13 +4529,15 @@ export class DatabaseOutboxRepository implements OutboxRepository {
       }
       if (!Number.isSafeInteger(start + from + width - 1))
         fail('unsafe page range');
-      const { data, error, count } = await this.client
+      let query = this.client
         .from('distribution_outbox')
         .select('*', { count: 'exact' })
         .eq('pick_id', pickId)
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
-        .range(start + from, start + from + width - 1);
+        .range(cursor ? 0 : start, (cursor ? 0 : start) + width - 1);
+      if (cursor) query = applyOrderedPageCursor(query, cursor, false);
+      const { data, error, count } = await query;
       if (error) fail(error.message);
       if (
         typeof count !== 'number' ||
@@ -4471,7 +4546,7 @@ export class DatabaseOutboxRepository implements OutboxRepository {
       ) {
         fail('missing or invalid exact population count');
       }
-      const currentCount = count as number;
+      const currentCount = (count as number) + (cursor ? start + from : 0);
       if (total !== undefined && total !== currentCount)
         fail('population count changed while paging');
       total = currentCount;
@@ -5170,7 +5245,7 @@ export class DatabaseSettlementRepository implements SettlementRepository {
     const fail = (reason: string): never => {
       throw new Error('Failed to listByPick: ' + reason);
     };
-    return readAllOrderedPages<SettlementRecord>(async (from, to) => {
+    return readAllOrderedPages<SettlementRecord>(async (from, to, cursor) => {
       const width = Math.min(
         to - from + 1,
         limit === undefined ? POSTGREST_MAX_ROWS : limit - from,
@@ -5180,13 +5255,15 @@ export class DatabaseSettlementRepository implements SettlementRepository {
       }
       if (!Number.isSafeInteger(start + from + width - 1))
         fail('unsafe page range');
-      const { data, error, count } = await this.client
+      let query = this.client
         .from('settlement_records')
         .select('*', { count: 'exact' })
         .eq('pick_id', pickId)
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
-        .range(start + from, start + from + width - 1);
+        .range(cursor ? 0 : start, (cursor ? 0 : start) + width - 1);
+      if (cursor) query = applyOrderedPageCursor(query, cursor, false);
+      const { data, error, count } = await query;
       if (error) fail(error.message);
       if (
         typeof count !== 'number' ||
@@ -5195,7 +5272,7 @@ export class DatabaseSettlementRepository implements SettlementRepository {
       ) {
         fail('missing or invalid exact population count');
       }
-      const currentCount = count as number;
+      const currentCount = (count as number) + (cursor ? start + from : 0);
       if (total !== undefined && total !== currentCount)
         fail('population count changed while paging');
       total = currentCount;
