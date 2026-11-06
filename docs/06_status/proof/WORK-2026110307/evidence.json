@@ -5,10 +5,11 @@
   "status": "draft_staging_proven",
   "sha_binding": {
     "verified_source_sha": "1a8850d5092088016a9f2372192af09aa718853b",
-    "merge_sha": null,
-    "sha_type": "source_sha",
+    "merge_sha": "6d96159dc02440be0aa449609a736afc2bfaef1b",
+    "sha_type": "merge_sha",
     "evidence_commit_sha": "RESOLVED_BY_CI",
-    "current_pr_head_sha": "RESOLVED_BY_CI"
+    "current_pr_head_sha": "RESOLVED_BY_CI",
+    "bound_at": "2026-11-06T17:23:12.481Z"
   },
   "static_proof": {
     "focused_tests": {
@@ -479,7 +480,7 @@
       "gates": {
         "preflight": "PASS; eligible true; CEP-E3/E5/E7 pass",
         "identity": "PASS",
-        "binding": "FAIL: Non-proof files changed between verified_source_sha and HEAD \u2014 only proof/evidence paths are allowed after the substantive commit. Offending files: docs/06_status/readiness/readiness-score.json",
+        "binding": "FAIL: Non-proof files changed between verified_source_sha and HEAD — only proof/evidence paths are allowed after the substantive commit. Offending files: docs/06_status/readiness/readiness-score.json",
         "auditor": "PASS; no failures or warnings",
         "rlevel": "PASS; no matched rules"
       },

@@ -10,4 +10,4 @@ Current-source live proof is now bound to green staging CI run 42218315166 / job
 
 The guard cannot detect every same-count swap from a transaction started before W; its timing window is unmeasured. Unrelated picks updates in the covered range can exhaust retries and correctly fail closed. Cost adds one discarded page, W and up to three HEAD counts. Production behavior is unproven. Static verification PASS: 8109 passed, 0 failed, 13 skipped. Full verify exited 1 only at the staging identity guard. Attempt 11 preflight (including CEP-E3/E5/E7), proof identity, auditor and R-level pass; proof binding fails because the authorized readiness-score.json merge changed a non-proof path after the verified source SHA. This rejection is reported without workaround; the source binding is unchanged. Final gate outcomes are recorded in verification.md/evidence.json; no PM approval, merge or closeout is claimed.
 
-Merge SHA: pending merge
+Merge SHA: 6d96159dc02440be0aa449609a736afc2bfaef1b
