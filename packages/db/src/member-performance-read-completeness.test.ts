@@ -17,6 +17,7 @@ import {
 interface Row {
   id: string;
   created_at: string;
+  updated_at: string;
   status: string;
   pick_id: string;
   corrects_id: string | null;
@@ -32,6 +33,7 @@ interface Request {
   to: number;
   order: Array<[string, boolean]>;
   exact: boolean;
+  kind?: 'watermark' | 'data' | 'range-change' | 'beyond' | 'population';
 }
 interface Options {
   cap?: number;
@@ -43,25 +45,33 @@ function rows(count: number): Row[] {
     created_at: new Date(
       Date.UTC(2026, 9, 1, 0, 0, Math.floor(i / 7)),
     ).toISOString(),
+    updated_at: '2026-11-03T12:34:56.123456+00:00',
     status: 'settled',
     pick_id: 'pick-public',
     corrects_id: i ? `row-${String(i - 1).padStart(7, '0')}` : null,
   }));
 }
+function instant(value: string) {
+  return BigInt(Date.parse(value)) * 1000n + BigInt((value.match(/\.(\d+)/)?.[1] ?? '').padEnd(6, '0').slice(3, 6));
+}
 function client(population: Row[], options: Options = {}) {
   const requests: Request[] = [];
   let headRequests = 0;
+  const allRequests: Request[] = [];
   return {
-    requests,
+    requests, allRequests,
     get headRequests() { return headRequests; },
     from(table: string) {
       const filters: Array<(row: Row) => boolean> = [];
       const ordering: Array<[string, boolean]> = [];
       let exact = false;
       let head = false;
+      let columns = '*';
+      let changedRange = false;
       let cursor: { timestamp: string; id: string; ascending: boolean } | undefined;
       const query = {
         select(_columns?: string, config?: { count?: string; head?: boolean }) {
+          columns = _columns ?? '*';
           exact = config?.count === 'exact';
           head = config?.head ?? false;
           return query;
@@ -78,8 +88,20 @@ function client(population: Row[], options: Options = {}) {
           ordering.push([column, config.ascending]);
           return query;
         },
-        gte(_column: string, _value: string) { return query; },
-        lte(_column: string, _value: string) { return query; },
+        gt(column: keyof Row, value: string) {
+          changedRange = true;
+          filters.push(row => instant(String(row[column])) > instant(value));
+          return query;
+        },
+        gte(column: keyof Row, value: string) {
+          if (column === 'updated_at') { changedRange = true; filters.push(row => instant(row.updated_at) >= instant(value)); }
+          return query;
+        },
+        lte(column: keyof Row, value: string) {
+          filters.push(row => cursor !== undefined || instant(String(row[column])) <= instant(value));
+          return query;
+        },
+        limit(value: number) { rangeTo = value - 1; return query; },
         or(expression: string) {
           const match = expression.match(/^created_at\.(gt|lt)\.(.*),and\(created_at\.eq\.(.*),id\.(gt|lt)\.(.*)\)$/);
           assert.ok(match, 'cursor includes timestamp and id tie break');
@@ -108,23 +130,35 @@ function client(population: Row[], options: Options = {}) {
             .sort((a, b) => {
               for (const [key, ascending] of ordering) {
                 const instant = (value: string) => BigInt(Date.parse(value)) * 1000n + BigInt((value.match(/\.(\d+)/)?.[1] ?? '').padEnd(6, '0').slice(3, 6));
-                const comparison = key === 'created_at'
-                  ? (instant(a.created_at) < instant(b.created_at) ? -1 : instant(a.created_at) > instant(b.created_at) ? 1 : 0)
+                const comparison = key === 'created_at' || key === 'updated_at'
+                  ? (instant(a[key]) < instant(b[key]) ? -1 : instant(a[key]) > instant(b[key]) ? 1 : 0)
                   : String(a[key as keyof Row]).localeCompare(String(b[key as keyof Row]));
                 if (comparison) return ascending ? comparison : -comparison;
               }
               return 0;
             });
-          if (head) {
-            headRequests++;
-            const result: Result = { data: selected, error: null, count: selected.length };
-            return options.mutate ? options.mutate(result, { table, from: -1, to: -1, order: [], exact }) : result;
-          }
-          const skipped = cursor ? selected.findIndex(row => row.id === cursor!.id) + 1 : 0;
-          const request = { table, from: from + skipped, to: to + skipped, order: [...ordering], exact };
+          const skipped = cursor ? selected.filter(row =>
+            cursor!.ascending
+              ? instant(row.created_at) < instant(cursor!.timestamp) || (instant(row.created_at) === instant(cursor!.timestamp) && row.id <= cursor!.id)
+              : instant(row.created_at) > instant(cursor!.timestamp) || (instant(row.created_at) === instant(cursor!.timestamp) && row.id >= cursor!.id)
+          ).length : 0;
           if (cursor) {
             assert.equal(from, 0, 'cursor pages never use deep offsets');
             selected.splice(0, skipped);
+          }
+          const kind = columns === 'updated_at' ? 'watermark' : head
+            ? changedRange ? 'range-change' : cursor ? 'beyond' : 'population' : 'data';
+          const request: Request = { table, from: head ? kind === 'population' ? -1 : -2 : from + skipped,
+            to: head ? -1 : to + skipped, order: [...ordering], exact, kind };
+          allRequests.push(request);
+          if (head) {
+            headRequests++;
+            const result: Result = { data: null, error: null, count: selected.length };
+            return options.mutate ? options.mutate(result, request) : result;
+          }
+          if (kind === 'watermark') {
+            const result: Result = { data: selected.slice(0, 1), error: null, count: null };
+            return options.mutate ? options.mutate(result, request) : result;
           }
           requests.push(request);
           // PostgREST with an exact count refuses a range starting at/after
@@ -142,7 +176,7 @@ function client(population: Row[], options: Options = {}) {
             data: selected.slice(
               from,
               Math.min(to + 1, from + (options.cap ?? POSTGREST_MAX_ROWS)),
-            ),
+            ).map(row => ({ ...row })),
             error: null,
             count: exact ? selected.length : null,
           };
@@ -240,7 +274,7 @@ for (const reader of readers) {
     const expectedIds = expected.map((row) => row.id);
     assert.deepEqual((await reader.database(c)).map((row) => row.id), expectedIds);
     assert.deepEqual((await reader.memory(population)).map((row) => row.id), expectedIds);
-    assert.deepEqual(c.requests.map((request) => request.from), [0, POSTGREST_MAX_ROWS]);
+    assert.deepEqual(c.requests.map((request) => request.from), reader === readers[0] ? [0, 0, POSTGREST_MAX_ROWS] : [0, POSTGREST_MAX_ROWS]);
 
     // A strict chronological guard must still reject reversed microseconds,
     // even though both instants collapse to the same Date.parse millisecond
@@ -424,7 +458,7 @@ for (const reader of readers) {
           mutate: (result, request) => ({ ...result, count: 2600 - Math.max(0, request.from) }),
         }),
       ),
-      /truncated/,
+      /truncated|population membership changed/,
     );
   });
 }
@@ -493,7 +527,7 @@ for (const reader of readers) {
       const c = client(rows(count));
       const result = await reader.database(c);
       assert.equal(result.length, count);
-      assert.equal(c.requests.length, Math.max(1, Math.ceil(count / POSTGREST_MAX_ROWS)));
+      assert.equal(c.requests.length, Math.max(1, Math.ceil(count / POSTGREST_MAX_ROWS)) + (reader === readers[0] && count > POSTGREST_MAX_ROWS ? 1 : 0));
       if (count > 0) assert.ok(c.requests.every(request => request.from < count));
     });
   }
@@ -532,7 +566,7 @@ for (const always of [false, true]) {
     const population = rows(2001);
     const c = client(population, {
       mutate(result, request) {
-        if (request.from === 0) attempts++;
+        if (request.from === 0 && request.kind === 'data') attempts++;
         if (request.from === -1 && (always || !drifted)) {
           drifted = true;
           // Remove a row BEHIND the cursor, so remaining-count arithmetic
@@ -545,7 +579,7 @@ for (const always of [false, true]) {
     });
     if (always) await assert.rejects(readers[0]!.database(c), /population count changed while paging/);
     else assert.deepEqual((await readers[0]!.database(c)).map(row => row.id), population.map(row => row.id));
-    assert.equal(attempts, always ? 3 : 2);
+    assert.equal(attempts, always ? 4 : 3);
   });
 }
 
@@ -567,7 +601,8 @@ for (const kind of ['states', 'track-only', 'promoted', 'settlements', 'outbox']
       global: { fetch: async (input, init) => {
         const url = new URL(String(input));
         const headers = new Headers(init?.headers);
-        if (init?.method === 'HEAD') return new Response(null, { headers: { 'content-range': `*/${population.length}` } });
+        if (url.searchParams.get('select') === 'updated_at') return new Response(JSON.stringify([{ updated_at: '2026-11-03T12:34:56.123456+00:00' }]), { headers: { 'content-type': 'application/json' } });
+        if (init?.method === 'HEAD') return new Response(null, { headers: { 'content-range': `*/${url.searchParams.has('updated_at') || url.searchParams.has('or') ? 0 : population.length}` } });
         let page = population.slice(Number(url.searchParams.get('offset') ?? 0));
         const cursor = url.searchParams.get('or');
         if (cursor) {
@@ -622,8 +657,8 @@ for (const ascending of [true, false]) {
 test('lifecycle read uses exactly one starting count and one ending count per attempt', async () => {
   const c = client(rows(2501));
   await readers[0]!.database(c);
-  assert.equal(c.requests.filter(request => request.exact).length, 1);
-  assert.equal(c.headRequests, 1);
+  assert.equal(c.requests.filter(request => request.exact).length, 2);
+  assert.equal(c.headRequests, 3);
 });
 
 for (const count of [0, 1, 999]) {
@@ -643,7 +678,100 @@ test('multi-page lifecycle end-count drift retries three whole reads and fails c
     },
   });
   await assert.rejects(readers[0]!.database(c), /population count changed while paging/);
-  assert.equal(c.requests.filter(request => request.from === 0).length, 3);
-  assert.equal(c.requests.length, 6);
-  assert.equal(c.headRequests, 3);
+  assert.equal(c.requests.filter(request => request.from === 0).length, 4);
+  assert.equal(c.requests.length, 7);
+  assert.equal(c.headRequests, 9);
+});
+
+
+// Membership controls use DB-text microseconds for both watermark and last row.
+for (const scenario of ['ahead-swap', 'behind-swap', 'delete-insert', 'always'] as const) {
+  test(`membership ${scenario}: discards drifted attempt and retries coherently`, async () => {
+    const population = rows(3000).map(row => ({
+      ...row, created_at: '2026-11-03T12:34:56.123456+00:00',
+    }));
+    const entrant = { ...population[0]!, id: scenario === 'behind-swap' ? 'older-member' : 'zz-new-member', status: 'validated' };
+    if (scenario !== 'delete-insert') population.push(entrant);
+    let attempts = 0;
+    let dataPages = 0;
+    let changed = false;
+    const c = client(population, {
+      mutate(result, request) {
+        if (request.kind === 'watermark') { attempts++; dataPages = 0; }
+        if (request.kind === 'data' && attempts > 0) {
+          dataPages++;
+          if (dataPages === 1 && (!changed || scenario === 'always')) {
+            changed = true;
+            if (scenario === 'delete-insert') {
+              population.splice(population.findIndex(row => row.id === result.data![0]!.id), 1);
+              entrant.status = 'settled';
+              population.push(entrant);
+              // Insert has an old created_at but a fresh updated_at, beyond L by id.
+              // Use a later created_at to isolate the beyond-cursor guard.
+              entrant.created_at = '2026-11-04T00:00:00.000000+00:00';
+              entrant.updated_at = '2026-11-05T00:00:00.000001+00:00';
+            } else {
+              const departed = population.find(row => row.id === result.data![0]!.id)!;
+              departed.status = 'validated';
+              departed.updated_at = `2026-11-05T00:00:00.00000${attempts}+00:00`;
+              if (scenario === 'behind-swap') { entrant.status = 'settled'; entrant.updated_at = departed.updated_at; }
+              // Snapshot objects returned by the data statement do not mutate.
+            }
+          }
+          if (dataPages === 2 && scenario === 'ahead-swap' && attempts === 1) {
+            entrant.status = 'settled';
+            entrant.updated_at = '2026-11-05T00:00:00.000002+00:00';
+          }
+        }
+        return result;
+      },
+    });
+    // Copy the page snapshot before mutations, like a real PostgREST response.
+    // client.execute does this before invoking the mutation callback.
+    if (scenario === 'always') {
+      await assert.rejects(readers[0]!.database(c), /population membership changed while paging/);
+      assert.equal(attempts, 3);
+    } else {
+      const actual = await readers[0]!.database(c);
+      const expected = population.filter(row => row.status === 'settled')
+        .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+      assert.deepEqual(actual.map(row => row.id), expected.map(row => row.id));
+      assert.equal(attempts, 2);
+      assert.ok(!actual.some(row => row.id === 'row-0000000'));
+    }
+  });
+}
+
+test('bounded multi-page read omits beyond-cursor count and succeeds', async () => {
+  const c = client(rows(3000));
+  const result = await readers[0]!.database(c, 1500);
+  assert.deepEqual(result.map(row => row.id), rows(3000).slice(0, 1500).map(row => row.id));
+  assert.equal(c.allRequests.filter(request => request.kind === 'beyond').length, 0);
+  assert.equal(c.allRequests.filter(request => request.kind === 'watermark').length, 1);
+});
+
+test('multi-page probe is discarded before watermark and fresh first count', async () => {
+  const population = rows(2001);
+  let probe = true;
+  const c = client(population, { mutate(result, request) {
+    if (probe && request.kind === 'data') {
+      probe = false;
+      population[0]!.status = 'validated';
+      population[0]!.updated_at = '2026-11-05T00:00:00.000001+00:00';
+    }
+    return result;
+  } });
+  const result = await readers[0]!.database(c);
+  assert.deepEqual(result.map(row => row.id), population.filter(row => row.status === 'settled').map(row => row.id));
+  assert.ok(!result.some(row => row.id === 'row-0000000'));
+  assert.deepEqual(c.allRequests.map(request => request.kind), [
+    'data', 'watermark', 'data', 'data', 'range-change', 'beyond', 'population',
+  ]);
+  assert.equal(c.allRequests[2]!.exact, true);
+});
+
+test('stable microsecond watermark uses strict greater-than and exact DB text', async () => {
+  const c = client(rows(2001));
+  assert.equal((await readers[0]!.database(c)).length, 2001);
+  assert.equal(c.allRequests.filter(request => request.kind === 'watermark').length, 1);
 });

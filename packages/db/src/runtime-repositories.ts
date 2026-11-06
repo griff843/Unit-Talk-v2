@@ -3554,7 +3554,17 @@ export class DatabasePickRepository implements PickRepository {
     // Explicit bounds prevent an unbounded read from quietly becoming a capped
     // PostgREST response. A bounded caller keeps its limit/offset contract.
     const maxRows = 100_000;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    // Attempt -1 is a single-snapshot probe. Its rows are discarded if
+    // another page is needed; retries start with their own watermark.
+    for (let attempt = -1; attempt < 3; attempt++) {
+      let watermark: string | undefined;
+      if (attempt >= 0) {
+        const newest = await this.client.from('picks').select('updated_at')
+          .order('updated_at', { ascending: false }).limit(1);
+        if (newest.error) throw new Error('Failed to listByLifecycleStates: ' + newest.error.message);
+        watermark = newest.data?.[0]?.updated_at;
+      }
+      let probeNeedsRestart = false;
       let total: number | undefined;
       let usedCursorPage = false;
       let previous: { created_at: string; id: string } | undefined;
@@ -3564,6 +3574,7 @@ export class DatabasePickRepository implements PickRepository {
       };
       try {
         const rows = await readAllOrderedPages<PickRecord>(async (from, to, cursor) => {
+          if (probeNeedsRestart) return { data: [], error: null };
           const width = Math.min(
             to - from + 1,
             limit === undefined ? POSTGREST_MAX_ROWS : limit - from,
@@ -3622,11 +3633,32 @@ export class DatabasePickRepository implements PickRepository {
             if (seen.size > maxRows) fail('read exceeds 100000-row safety budget');
             previous = row;
           }
+          if (attempt === -1 && page.length === POSTGREST_MAX_ROWS && wanted > page.length)
+            probeNeedsRestart = true;
           return { data: page, error: null };
         });
+        if (probeNeedsRestart) continue;
         // A single data statement already supplies rows and count from one
         // snapshot. Multi-statement reads need an end count to detect net drift.
         if (usedCursorPage) {
+          // No status filter: departed members must still be visible here.
+          let changes = this.client.from('picks')
+            .select('id', { count: 'exact', head: true });
+          if (watermark !== undefined) changes = changes.gt('updated_at', watermark);
+          if (previous) changes = changes.lte('created_at', previous.created_at);
+          const changed = await changes;
+          if (changed.error) fail(changed.error.message);
+          if (typeof changed.count !== 'number' || !Number.isSafeInteger(changed.count) || changed.count < 0)
+            fail('missing or invalid exact population count');
+          if (typeof changed.count === 'number' && changed.count > 0) fail('population membership changed while paging');
+          if (limit === undefined && previous) {
+            const beyond = await applyOrderedPageCursor(this.client.from('picks')
+              .select('id', { count: 'exact', head: true }).in('status', lifecycleStates), previous, true);
+            if (beyond.error) fail(beyond.error.message);
+            if (typeof beyond.count !== 'number' || !Number.isSafeInteger(beyond.count) || beyond.count < 0)
+              fail('missing or invalid exact population count');
+            if (typeof beyond.count === 'number' && beyond.count > 0) fail('population membership changed while paging');
+          }
           const population = await this.client.from('picks')
             .select('id', { count: 'exact', head: true }).in('status', lifecycleStates);
           if (population.error) fail(population.error.message);
@@ -3640,7 +3672,7 @@ export class DatabasePickRepository implements PickRepository {
           fail('population count changed while paging: inconsistent or truncated page');
         return rows;
       } catch (error) {
-        if (!(error instanceof Error) || !error.message.includes('population count changed while paging') || attempt === 2) throw error;
+        if (!(error instanceof Error) || !(/population (count|membership) changed while paging/.test(error.message)) || attempt === 2) throw error;
       }
     }
     throw new Error('Failed to listByLifecycleStates: population count changed while paging');
