@@ -2,7 +2,7 @@
   "schema_version": 2,
   "issue_id": "WORK-2026110307",
   "tier": "T1",
-  "status": "draft_live_deferred",
+  "status": "draft_staging_proven",
   "sha_binding": {
     "verified_source_sha": "1a8850d5092088016a9f2372192af09aa718853b",
     "merge_sha": null,
@@ -469,6 +469,32 @@
         "auditor": "2cfe1f244cd88403bf49f58b75ba3949ed03f4b90e15b1ef352fc578f2b36f3c",
         "rlevel": "72acc7f5919a4b20e495c1387c823a308cc1dc957095c09387c7eba01b4c6f84"
       }
+    },
+    "attempt_11": {
+      "scope": "evidence only and final main readiness sync; no source/test changes",
+      "main_merge_sha": "9491ec808c4dc74732b52fa9b63f4dd559a94929",
+      "main_merge_files": [
+        "docs/06_status/readiness/readiness-score.json"
+      ],
+      "gates": {
+        "preflight": "PASS; eligible true; CEP-E3/E5/E7 pass",
+        "identity": "PASS",
+        "binding": "FAIL: Non-proof files changed between verified_source_sha and HEAD \u2014 only proof/evidence paths are allowed after the substantive commit. Offending files: docs/06_status/readiness/readiness-score.json",
+        "auditor": "PASS; no failures or warnings",
+        "rlevel": "PASS; no matched rules"
+      },
+      "gate_log_sha256": {
+        "preflight": "d39a73ab6c3a42fc55ad91044951473439a373dba2e13938e08a854f7858bd6c",
+        "identity": "8d1e0b1fdebfbbe82fdc295ac449ad13a6d88755f49a79017273982e7f668445",
+        "binding": "cb5bd8a89978fee9e4802055200f8e6c29ffcb8ac1587021fbcb2472d85ead90",
+        "auditor": "c849c782467882e566ac2ae2f5c1b0809d9667c8b92e2738809dde3d9d783767",
+        "rlevel": "6d4b7e714ba0630385b59dc4fcc6883a41779b5218c177dd2d179463fd015f92"
+      },
+      "format_checks": {
+        "fence_lines": 4,
+        "prohibited_tokens": 0,
+        "result": "PASS"
+      }
     }
   },
   "runtime_proof": {
@@ -479,12 +505,102 @@
       "production behavior",
       "production row counts",
       "deployment",
-      "cause of the 42044986080 page-1/2 stall; exposure reduced rather than eliminated"
+      "cause of the 42044986080 page-1/2 stall; exposure reduced rather than eliminated",
+      "count-restoring intermediate drift live (unit tests and mutations only)",
+      "straddling-transaction residual; window unmeasured",
+      "guard behavior under a concurrent staging writer"
     ],
-    "status": "deferred_to_staging_ci",
-    "queries": [],
-    "row_counts": [],
-    "reason": "Current source needs a new green staging-ci run; local writable target identity is unresolved."
+    "status": "proven_staging_ci",
+    "queries": [
+      {
+        "label": "settled-voided",
+        "exactCount": 49234,
+        "rows": 49234,
+        "ci_run_id": 42218315166,
+        "ci_job_id": 127894343168,
+        "reader": "listByLifecycleStates(['settled','voided'])",
+        "elapsedMs": 22733.315903000002,
+        "statementTimeoutMs": 8000,
+        "timeout_scope": "per page query; elapsedMs is whole-read duration"
+      },
+      {
+        "label": "track-only-validated",
+        "exactCount": 27871,
+        "rows": 27871,
+        "ci_run_id": 42218315166,
+        "ci_job_id": 127894343168,
+        "reader": "listTrackOnlyByLifecycleState('validated')",
+        "elapsedMs": 5623.625773,
+        "statementTimeoutMs": 8000,
+        "timeout_scope": "per page query; elapsedMs is whole-read duration"
+      },
+      {
+        "label": "validated",
+        "exactCount": 69873,
+        "rows": 69873,
+        "ci_run_id": 42218315166,
+        "ci_job_id": 127894343168,
+        "reader": "listByLifecycleStates(['validated'])",
+        "elapsedMs": 13259.172829,
+        "statementTimeoutMs": 8000,
+        "timeout_scope": "per page query; elapsedMs is whole-read duration"
+      }
+    ],
+    "row_counts": [
+      {
+        "label": "settled-voided",
+        "exactCount": 49234,
+        "rows": 49234,
+        "ci_run_id": 42218315166,
+        "ci_job_id": 127894343168
+      },
+      {
+        "label": "track-only-validated",
+        "exactCount": 27871,
+        "rows": 27871,
+        "ci_run_id": 42218315166,
+        "ci_job_id": 127894343168
+      },
+      {
+        "label": "validated",
+        "exactCount": 69873,
+        "rows": 69873,
+        "ci_run_id": 42218315166,
+        "ci_job_id": 127894343168
+      }
+    ],
+    "ci_result": {
+      "writable_db_proof": "success",
+      "verify": "success",
+      "verify_job_id": 127898104734,
+      "suite": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "skipped": 0
+      },
+      "utv2_1907_test_5": "PASS: repaired performance readers reconcile with exact live PostgREST counts"
+    },
+    "boundary": {
+      "rows": 5,
+      "pageSize": 2,
+      "created_at": "2026-11-03T12:34:56.123456+00:00",
+      "oracle": "deepEqual passed",
+      "mutations": {
+        "noId": "rejected",
+        "dateReserialization": "rejected"
+      },
+      "ci_run_id": 42218315166,
+      "ci_job_id": 127894343168,
+      "namespace": "work0307-utv2-1630-42218315166-1-0bc0e3db-bcbc-4b60-8a87-1f5751b61c5d"
+    },
+    "ci_run_id": 42218315166,
+    "ci_job_id": 127894343168,
+    "ci_head_sha": "a4baf0412f66d7512c272b44865b1ab77101f836",
+    "ci_run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/42218315166",
+    "ci_job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/42218315166/job/127894343168",
+    "authority": "orchestrator ruling 10; current-source staging receipts supplied",
+    "guard_observation": "All three populations completed without a membership retry failure; no retry is claimed. C2 ended at 12:32:55Z before seeding began at 12:33:04Z; no concurrent writer overlap."
   },
   "boundaries": {
     "production_ddl": false,

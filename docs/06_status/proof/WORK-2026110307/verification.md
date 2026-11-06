@@ -5,7 +5,7 @@ MERGE_SHA: pending merge
 Issue: WORK-2026110307
 Tier: T1
 Source SHA: 1a8850d5092088016a9f2372192af09aa718853b
-result: draft_live_deferred
+result: draft_staging_proven
 
 ## ASSERTIONS:
 
@@ -15,17 +15,15 @@ result: draft_live_deferred
 - [x] After multi-page reads, check 2 counts all picks with updated_at strictly greater than W and created_at <= L, without a status filter. Check 3 counts requested members beyond the bounded last-row cursor only for unbounded population reads. The final exact population count and rows.length comparison remain.
 - [x] Membership/count drift discards the attempt and retries; the third failure surfaces the last drift error. A limit-truncated read skips check 3.
 - [x] T1–T7 and the microsecond stability test pass locally. Isolated mutations demonstrate the necessity of both new checks, strict gt, and precise W/L text.
-- [ ] Current-source staging runtime proof is deferred to the next staging-ci run. Historical successful receipts are superseded.
+- [x] Current-source staging runtime proof is bound to run 42218315166 / Writable DB proof job 127894343168. Historical receipts remain superseded.
 
-The trigger was PM CHANGES REQUIRED at c143a22999a1fceb055a72c6b1aa7a4fa73d4122, comment 6684477811, confirming finding 4482558564. Rulings 8/9 and their addenda authorize this implementation. No main merge is authorized in this attempt.
+The trigger was PM CHANGES REQUIRED at c143a22999a1fceb055a72c6b1aa7a4fa73d4122, comment 6684477811, confirming finding 4482558564. Rulings 8/9 and their addenda authorize this implementation. Attempt 11 ruling 11 authorizes the final main sync; the merge brought only docs/06_status/readiness/readiness-score.json.
 
 Multi-page cost: one discarded first page of at most POSTGREST_MAX_ROWS (1000) rows, a watermark query and up to three HEAD counts, in addition to the fresh full data read. A bounded read omits the beyond-cursor HEAD. Drift retries repeat W and the full read, with no new probe. If the restarted first page ends the read, its statement snapshot is authoritative and all HEAD checks are skipped.
 
 ## EVIDENCE:
 
-The following two fenced blocks are historical evidence from the superseded source, retained for provenance and proof format. They do not prove the current source.
-
-The following lines are excerpted from CI run 42050230261 / Writable DB proof job 127324426051; elapsedMs is rounded to 2 decimals.
+The following lines are excerpted verbatim from CI run 42218315166 / Writable DB proof job 127894343168 for source 1a8850d5092088016a9f2372192af09aa718853b. elapsedMs is the whole-read duration; the 8000 ms statement timeout applies per page query.
 
 ```text
 ok 1 - WORK0307 staging: complete readers and duplicate timestamp boundary mutations
@@ -34,10 +32,12 @@ ok 1 - WORK0307 staging: complete readers and duplicate timestamp boundary mutat
 # fail 0
 # skipped 0
 ok 5 - WORK-2026101401: repaired performance readers reconcile with exact live PostgREST counts
-{"label":"settled-voided","exactCount":49099,"rows":49099,"elapsedMs":16065.17,"statementTimeoutMs":8000}
-{"label":"track-only-validated","exactCount":27775,"rows":27775,"elapsedMs":8942.23,"statementTimeoutMs":8000}
-{"label":"validated","exactCount":69690,"rows":69690,"elapsedMs":16118.40,"statementTimeoutMs":8000}
+{"label":"settled-voided","exactCount":49234,"rows":49234,"elapsedMs":22733.315903000002,"statementTimeoutMs":8000}
+{"label":"track-only-validated","exactCount":27871,"rows":27871,"elapsedMs":5623.625773,"statementTimeoutMs":8000}
+{"label":"validated","exactCount":69873,"rows":69873,"elapsedMs":13259.172829,"statementTimeoutMs":8000}
 ```
+
+The live boundary used five fixtures sharing 2026-11-03T12:34:56.123456+00:00 at pageSize 2, matched the oracle, and rejected noId and dateReserialization mutations. Namespace: work0307-utv2-1630-42218315166-1-0bc0e3db-bcbc-4b60-8a87-1f5751b61c5d. All three live populations completed the multi-page guard without a membership retry failure. This does not show that a retry happened. The supplied job log has no failing test, statement-timeout line or membership-drift error. Writable DB proof and verify job 127898104734 succeeded.
 
 Attempt 7 gate commands already recorded below (all exit 0):
 
@@ -67,9 +67,11 @@ Prior isolated controls remain: remove timestamp bound 7 failures, remove ID tie
 
 ## Verification
 
-Current attempt gates and log hashes are recorded in evidence.json static_proof.attempt_10. pnpm verify:static PASS through the full pnpm verify command: lint, type-check, build, aggregate tests, post-migration tests, Smart Form verify and command verification all completed. Completed TAP totals: 8122 tests, 8109 pass, 0 fail, 13 skipped. Optional browser E2E was not enabled. Final standalone pnpm type-check also passed. Full pnpm verify exited 1 only when test:live-db reached the staging identity guard after the static gate passed. Local test:db is blocked/deferred: target identity could not be resolved (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx and staging-ci CI_SUPABASE_* credentials; the guard refused before writes. Current-source runtime_proof.queries and row_counts are intentionally empty, so CEP-E7 and proof binding remain deferred rather than falsely passing.
+Prior source verification and log hashes are recorded in evidence.json static_proof.attempt_10; current evidence-only gate results are in static_proof.attempt_11. pnpm verify:static PASS through the full pnpm verify command: lint, type-check, build, aggregate tests, post-migration tests, Smart Form verify and command verification all completed. Completed TAP totals: 8122 tests, 8109 pass, 0 fail, 13 skipped. Optional browser E2E was not enabled. Final standalone pnpm type-check also passed. Full pnpm verify exited 1 only when test:live-db reached the staging identity guard after the static gate passed. Local test:db is blocked/deferred: target identity could not be resolved (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx and staging-ci CI_SUPABASE_* credentials; the guard refused before writes. Attempt 11 now fills current-source runtime receipts from the supplied green staging CI; local DB writes remain blocked.
 
-Attempt 10 proof gates: proof identity PASS (schema-v2, no failures); proof auditor PASS (no failures/warnings); R-level PASS (no matched rules). Local close-eligibility preflight is BLOCKED only by CEP-E7 and consequent CEP-C1; CEP-E3/E5 pass. Proof binding is DEFERRED/FAIL solely because current-source runtime queries and row counts are empty by instruction. This is not merge eligibility or completed closeout.
+Attempt 11: final main merge 9491ec808c4dc74732b52fa9b63f4dd559a94929 brought only docs/06_status/readiness/readiness-score.json. No source/test file changed. Local close-eligibility preflight PASS (eligible true, including CEP-E3/E5/E7), proof identity PASS, proof auditor PASS (no failures/warnings) and R-level PASS (no matched rules). Proof binding FAIL: "Non-proof files changed between verified_source_sha and HEAD — only proof/evidence paths are allowed after the substantive commit. Offending files: docs/06_status/readiness/readiness-score.json". Ruling 11 requires this rejection to be reported without a workaround. The verified source SHA remains unchanged. Runtime receipts prove that source on staging; they do not establish passing proof binding for the merged head. Gate log hashes are in evidence.json static_proof.attempt_11. Formatting checks PASS: four fence lines; no prohibited unresolved-marker tokens. No completion or merge eligibility is claimed with this red gate.
+
+Historical attempt 10 proof gates: proof identity PASS (schema-v2, no failures); proof auditor PASS (no failures/warnings); R-level PASS (no matched rules). Local close-eligibility preflight is BLOCKED only by CEP-E7 and consequent CEP-C1; CEP-E3/E5 pass. Proof binding is DEFERRED/FAIL solely because current-source runtime queries and row counts are empty by instruction. This is not merge eligibility or completed closeout.
 
 Gate commands:
 
@@ -119,16 +121,19 @@ Run 42050230261 / Writable DB proof job 127324426051 passed for source f6a694f78
 | Local keyset ordering, cap, transport, retries, T1–T7 and mutations | Proven by focused tests |
 | Count-restoring intermediate drift | Proven by unit tests and mutations only; live not observed |
 | Current-source lint/type-check/build/aggregate tests | PASS: 8109 pass, 0 fail, 13 skips; existing member-performance-service test unchanged |
-| Current-source settled/voided, Track Only validated and validated staging timings/counts | Deferred to next staging-ci; receipts empty |
-| Current-source live seeded boundary and mutations | Deferred to next staging-ci |
+| Current-source settled/voided, Track Only validated and validated staging timings/counts | Proven in staging CI run 42218315166: 49234, 27871 and 69873 rows equal exact counts; per-page timeout 8000 ms |
+| Current-source live seeded boundary and mutations | Proven in staging CI run 42218315166: five fixtures, pageSize 2, both mutations rejected |
+| Guard behavior under a concurrent staging writer | Not proven: C2 ended at 12:32:55Z before seeding began at 12:33:04Z; no overlap |
 | Transaction straddling W with updated_at <= W | Not covered; window unmeasured; pure same-count swap can escape |
 | Retries caused by unrelated picks updates; busy-writer retry exhaustion | Expected fail-closed behavior; frequency/cost not measured |
 | Production behavior and row counts | Not proven; nothing deployed |
 | Production schema/index/DDL/data writes | None |
 | Cause of 42044986080 page-1/2 stall | Not identified; exposure reduced rather than eliminated |
-| PM approval, exact-head CI, executor result, final main sync, merge, finalization | Pending authorized outer path |
+| Current merged-head proof binding | FAIL: readiness-score.json changed after verified source; reported without workaround |
+| Final main sync | Completed in attempt 11; readiness-score.json only |
+| PM approval, new-head CI, governed merge, finalization | Pending authorized outer path |
 
-No PR opening/closing/ready/comment actions or executor READY_FOR_REVIEW attestation. One final push is authorized after local commits; no main sync in this attempt. Run-namespaced fixtures from cancelled run 42216379304 were not cleared; reaping is Griff's decision.
+No PR opening/closing/ready/comment actions or executor READY_FOR_REVIEW attestation. One final push is authorized after local commits; final main readiness sync completed in attempt 11. Run-namespaced fixtures from cancelled run 42216379304 were not cleared; reaping is Griff's decision.
 
 ## Merge SHA Binding
 
