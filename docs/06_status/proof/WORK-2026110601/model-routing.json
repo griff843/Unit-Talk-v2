@@ -1,0 +1,12 @@
+{
+  "issue_id": "WORK-2026110601",
+  "model_profile": "codex-sol-medium",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "medium",
+  "policy_version": "3.0.0",
+  "override_used": false,
+  "execution_sha": "f246e1b0ec32fb0cf300de41b188172b24f1d411",
+  "routing_source": "lane-manifest declaration",
+  "execution_verification": "unverified-external-session",
+  "note": "Routing declaration matches the executor command; authoritative session provenance and completion are owned by the outer executor wrapper. No child READY_FOR_REVIEW attestation is published."
+}
