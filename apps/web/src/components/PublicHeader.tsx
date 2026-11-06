@@ -26,7 +26,11 @@ export function PublicHeader() {
           onClick={() => setOpen(false)}
           className="shrink-0"
         >
-          <BrandLogo priority className="h-[48px] w-[156px] object-contain" />
+          <BrandLogo
+            compact
+            priority
+            className="h-[54px] w-[54px] rounded-full object-cover"
+          />
         </Link>
         <nav
           aria-label="Main"
