@@ -1,4 +1,8 @@
-# WORK-2026110704 — Evidence bundle v1
+# PROOF: WORK-2026110704
+
+MERGE_SHA: 25f066444cc43fb98c7f43295f989034a1fe6f74
+
+Evidence bundle v1 (tier T1, lane type runtime).
 
 ## Metadata
 
@@ -23,7 +27,15 @@ Poll cadence, grading/settlement services, provider settings, containment and ot
 Runtime proof is synthetic fault injection. No production restart, deployment, host change or data writes occurred.
 Live DB proof, PM approval, merge, merge-SHA binding and post-merge closeout remain pending.
 
-## Assertions
+## ASSERTIONS:
+
+- [x] Transient bookkeeping failures recover and reset the consecutive-failure budget (E1, 23/23 focused tests).
+- [x] Continuous failures exhaust the bounded budget, alert within 5 s, reject and exit 1 (E2).
+- [x] Missing, stale, malformed or future liveness markers are unhealthy (E3).
+- [x] Removing the outer try/catch fails the recovery tests (E4, mutation).
+- [x] Only the grading-cron healthcheck changed in deploy config (E5).
+- [x] Static verification passes on exact head 25f066444cc43fb98c7f43295f989034a1fe6f74 (E6).
+- [x] Writable live-DB proof passes on exact head 25f066444cc43fb98c7f43295f989034a1fe6f74 in CI against staging (E7).
 
 | # | Assertion | Evidence Type | Source | Result | Evidence Ref |
 |---|---|---|---|---|---|
@@ -32,10 +44,10 @@ Live DB proof, PM approval, merge, merge-SHA binding and post-merge closeout rem
 | 3 | Missing/stale markers are unhealthy; fresh markers are healthy | test | grading-cron.test.ts | PASS | [E3](#e3-freshness) |
 | 4 | Removing the outer try/catch breaks transient recovery | test | isolated mutation | PASS | [E4](#e4-mutation) |
 | 5 | Only grading-cron healthcheck changed in deploy config | git-artifact | git diff | PASS | [E5](#e5-scope) |
-| 6 | Required static verification passes | test | pnpm verify:static | FAIL | [E6](#e6-static-verification) |
-| 7 | Writable live DB verification passes | test | staging guard | FAIL | [E7](#e7-live-db-deferred) |
+| 6 | Required static verification passes | test | pnpm verify:static | PASS | [E6](#e6-static-verification) |
+| 7 | Writable live DB verification passes | test | CI Writable DB proof (staging only) | PASS | [E7](#e7-live-db-deferred) |
 
-## Evidence Blocks
+## EVIDENCE:
 
 ### E1 Failure-injection transcript
 
@@ -437,3 +449,8 @@ PR: https://github.com/griff843/Unit-Talk-v2/pull/1837
 
 - WIRING_TEST_UNWIRED_NEW resolved without a scope change: the liveness-freshness test was folded into the already-wired `apps/api/src/grading-cron.test.ts`; the separate unwired test file was removed. `package.json` is untouched. The "scope addition requested" lines above are superseded.
 - Healthcheck changed from `tsx grading-cron-health.ts` (measured ~190 MB peak RSS, vs ~59 MB bare node) to a plain `node -e` probe applying the same freshness rule (marker present, not future, age <= 15 min), because a tsx probe beside the cron inside the 256m container limit risks OOM. The probe honours the default 5-minute poll only; `UNIT_TALK_GRADING_CRON_POLL_MS` overrides apply to the TS helper, not the compose probe.
+
+
+### E6/E7 Exact-head CI proof (supersedes the earlier FAIL notes above)
+
+

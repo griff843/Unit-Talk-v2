@@ -1,41 +1,48 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "issue_id": "WORK-2026110704",
-  "verifier": {
-    "identity": "codex-cli/WORK-2026110704"
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "source_sha": "25f066444cc43fb98c7f43295f989034a1fe6f74",
+  "status": "pre_merge_live_proof_passed",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "25f066444cc43fb98c7f43295f989034a1fe6f74",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "execution_sha",
+    "bound_at": "2026-11-07T18:09:12.000Z"
   },
-  "execution_sha": "c2130be76c7f1beaea49189649ec69027e52e4b0",
   "static_proof": {
-    "pnpm_verify": "fail: WIRING_TEST_UNWIRED_NEW; required package.json test wiring is outside allowed scope",
+    "status": "pass",
+    "command": "pnpm verify:static",
     "type_check": "pass",
-    "tests": "pass; serial pnpm test exit 0; 7890 test executions, 13 skipped; focused tests 23/23 pass",
-    "mutation": "pass; removed handler produces 3 expected transient recovery failures",
-    "r_level_check": "pass",
-    "pnpm_verify_static": "fail: WIRING_TEST_UNWIRED_NEW"
+    "test": "pass; focused apps/api/src/grading-cron.test.ts 23/23",
+    "mutation": "pass; removing the outer try/catch fails 3 transient-recovery tests",
+    "r_level": "PASS"
   },
   "runtime_proof": {
-    "pnpm_test_db": "blocked/deferred",
-    "supabase_project": "xskgrzbteyqdufktjrjx",
-    "reason": "Staging identity guard refused local host 127.0.0.1; requires staging-ci CI_SUPABASE_* credentials.",
+    "status": "pass",
+    "command": "pnpm test:db (CI Writable DB proof (staging only))",
+    "ci_exact_head": {
+      "workflow": "ci.yml",
+      "run_id": 42398274218,
+      "attempt": 1,
+      "head_sha": "25f066444cc43fb98c7f43295f989034a1fe6f74",
+      "staging_db_job_id": 128480271583,
+      "staging_db_job": "success",
+      "staging_project": "xskgrzbteyqdufktjrjx"
+    },
+    "failure_injection": "23/23 focused tests pass; synthetic fault injection, no production restart or data writes",
     "queries": [],
-    "row_counts": [],
-    "failure_injection": "23/23 focused tests pass; synthetic only"
-  },
-  "sha_binding": {
-    "verified_source_sha": "c2130be76c7f1beaea49189649ec69027e52e4b0",
-    "sha_type": "execution_sha",
-    "bound_at": "2026-11-07T17:29:32.258261+00:00",
-    "merge_sha": null
+    "row_counts": []
   },
   "post_merge_pending": [
-    "PM approval and governed merge",
-    "final evidence binding to merge SHA",
+    "PM approval (t1-approved label + pm-verdict/v1) and governed merge",
+    "merge-SHA binding",
     "ops:lane-finalize",
-    "ops:orchestration-reconcile"
-  ],
-  "blockers": [
-    "Authorize package.json only to add grading-cron.test.ts to test:apps-api-agent; outside current packet scope.",
-    "Writable live DB proof deferred to staging-ci CI_SUPABASE_* credentials."
+    "Griff-dispatched deploy (reserved) before the compose healthcheck is live"
   ],
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1837"
 }
