@@ -151,6 +151,7 @@
   },
   "limitations": [
     "Local test:db refuses unidentified target; writable proof rests on the exact-head staging CI job (run 42349510567 job 128334429172), which passed.",
+    "A later proof-only head (4ba93c913) had its staging writable job FAIL with a listByLifecycleStates statement timeout (run 42351038313 job 128339020022); the passing receipt is at the verified source SHA 07107d11d. The timeout is intermittent and not resolved by this lane.",
     "Staging index apply, before/after performance, under-load comparison, write costs, HOT ratio, build size and duration remain not proven.",
     "No production or staging DDL by executor; production parity stays PENDING_POST_DEPLOY until separately authorized production apply and deploy.",
     "No generated type edits; index has no TypeScript schema shape.",

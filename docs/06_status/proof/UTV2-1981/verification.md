@@ -2,7 +2,7 @@
 
 MERGE_SHA: pending merge
 
-Execution SHA: 1741d71b9ce5b640a179f83412cccdc20d1d0e5d. Draft PR: https://github.com/griff843/Unit-Talk-v2/pull/1834.
+Verified source SHA: 07107d11d0d241c5933d1e671878e6e5eb09dfca (earlier attempt: 1741d71b9ce5b640a179f83412cccdc20d1d0e5d). Draft PR: https://github.com/griff843/Unit-Talk-v2/pull/1834.
 No READY_FOR_REVIEW attestation, PM approval, merge, live DDL or lane finalization.
 
 ## ASSERTIONS:
@@ -62,12 +62,18 @@ passed: checked 1, passed 1, failed 0. The supplied pre-push acceptance block pa
 
 ## Exact implementation-SHA CI receipts
 
-| Receipt                | Result                              | Run                                                                              | Job                                                                                                |
-| ---------------------- | ----------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Precondition drill     | PASS                                | [42345350961](https://github.com/griff843/Unit-Talk-v2/actions/runs/42345350961) | [128321773869](https://github.com/griff843/Unit-Talk-v2/actions/runs/42345350961/job/128321773869) |
-| Schema round trip      | PASS                                | 42345350961                                                                      | [128321773808](https://github.com/griff843/Unit-Talk-v2/actions/runs/42345350961/job/128321773808) |
-| Staging writable proof | FAIL                                | [42345350967](https://github.com/griff843/Unit-Talk-v2/actions/runs/42345350967) | [128321774196](https://github.com/griff843/Unit-Talk-v2/actions/runs/42345350967/job/128321774196) |
-| Live Schema Parity     | PENDING_POST_DEPLOY (observed FAIL) | [42345350987](https://github.com/griff843/Unit-Talk-v2/actions/runs/42345350987) | [128321796557](https://github.com/griff843/Unit-Talk-v2/actions/runs/42345350987/job/128321796557) |
+| Receipt                | Result                              | Run                                                    | Job                                                          |
+| ---------------------- | ----------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------ |
+| Precondition drill     | PASS                                | [42349510510](https://github.com/griff843/Unit-Talk-v2/actions/runs/42349510510)                          | [128334428692](https://github.com/griff843/Unit-Talk-v2/actions/runs/42349510510/job/128334428692)              |
+| Schema round trip      | PASS                                | 42349510510                                            | [128334428644](https://github.com/griff843/Unit-Talk-v2/actions/runs/42349510510/job/128334428644)              |
+| Staging writable proof | PASS                                | [42349510567](https://github.com/griff843/Unit-Talk-v2/actions/runs/42349510567)                          | [128334429172](https://github.com/griff843/Unit-Talk-v2/actions/runs/42349510567/job/128334429172)              |
+| Live Schema Parity     | PENDING_POST_DEPLOY (observed FAIL) | [42349510570](https://github.com/griff843/Unit-Talk-v2/actions/runs/42349510570)                          | [128334449741](https://github.com/griff843/Unit-Talk-v2/actions/runs/42349510570/job/128334449741)              |
+
+Receipts above are at the exact verified source SHA
+`07107d11d0d241c5933d1e671878e6e5eb09dfca` (the earlier attempt at
+`1741d71b9ce5b640a179f83412cccdc20d1d0e5d` had a writable-proof FAIL, run 42345350967 job
+128321774196, a statement timeout in `listByLifecycleStates`; it is superseded by the
+passing run above but shows the timeout is intermittent).
 
 The CI precondition drill refused a same-named table with 42P07, preserved its
 fingerprint, restored the scratch schema and applied with no index present.
@@ -232,8 +238,19 @@ to respond to this failure. Draft candidate is BLOCKED, with no successful full
 verify or migration-proof completion claimed. The versioned proof-binding validator
 remains FAIL because it requires a passing writable staging receipt.
 
+## Later proof-only head and a repeat staging timeout
+
+PR head `4ba93c9139cb20694bcf9da9309dbcf388708e29` differs from `07107d11d` only in
+`docs/06_status/proof/**`. Its CI run 42351038313 job 128339020022 (staging writable proof)
+FAILED with `Failed to listByLifecycleStates:` in `WORK0307 staging: complete readers and
+duplicate timestamp boundary mutations`, so the `verify` context failed closed. No
+application code changed between the passing and failing runs. This is a second observed
+instance of the intermittent staging timeout the index targets; it is not evidence that
+the index works or fails. Parity at this head is still `PENDING_POST_DEPLOY`
+(`missing_in_actual public.picks.picks_updated_at_idx`).
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1834
-Execution SHA: 1741d71b9ce5b640a179f83412cccdc20d1d0e5d
+Verified source SHA: 07107d11d0d241c5933d1e671878e6e5eb09dfca
