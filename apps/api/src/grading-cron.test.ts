@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createInMemoryRepositoryBundle, InMemorySystemRunRepository } from '@unit-talk/db';
+import { isGradingCronFresh, refreshGradingCronLiveness } from './grading-cron-health.js';
 import test from 'node:test';
 import {
   evaluateGradingHealthAlertTransition,
+  runGradingCronEntrypoint,
   runGradingCronCycles,
   startGradingCronLoop,
 } from './grading-cron.js';
@@ -521,4 +527,136 @@ test('PM-ratified five-value grading model is understood by readiness', () => {
     });
     assert.equal(result.status, expected, outcome);
   }
+});
+
+const emptyGradingPass = async () => ({ attempted: 0, graded: 0, skipped: 0, errors: 0, details: [] });
+const quietLogger = { info() {}, warn() {}, error() {} };
+
+for (const method of ['startRun', 'completeRun', 'listByType'] as const) {
+  test(`loop recovers from transient ${method} failures and resets the consecutive budget`, async () => {
+    const runs = new InMemorySystemRunRepository();
+    const original = runs[method].bind(runs);
+    let attempts = 0;
+    // Two bursts separated by success prove the budget resets, rather than accumulating.
+    Object.assign(runs, {
+      [method]: async (...args: Parameters<typeof original>) => {
+        attempts += 1;
+        if ([1, 2, 4, 5].includes(attempts)) throw new Error(`injected ${method}`);
+        return Reflect.apply(original, runs, args);
+      },
+    });
+    const sleeps: number[] = [];
+    let freshCycles = 0;
+    const stop = new Error('test complete');
+    await assert.rejects(startGradingCronLoop({
+      repositories: { ...createInMemoryRepositoryBundle(), runs },
+      runGradingPass: emptyGradingPass,
+      maxConsecutiveFailures: 3,
+      pollIntervalMs: 100,
+      retryBaseMs: 10,
+      retryMaxMs: 20,
+      refreshLiveness: async () => { freshCycles += 1; },
+      logger: quietLogger,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+        if (freshCycles === 2) throw stop;
+      },
+    }), (error) => error === stop);
+    assert.equal(attempts, 6);
+    assert.equal(freshCycles, 2);
+    assert.deepEqual(sleeps, [10, 20, 100, 10, 20, 100]);
+  });
+
+  test(`continuous ${method} failure rejects, alerts, exits and leaves the liveness marker stale`, async (t) => {
+    const dir = await mkdtemp(join(tmpdir(), 'grading-failure-'));
+    t.after(() => rm(dir, { recursive: true, force: true }));
+    const path = join(dir, 'marker');
+    let now = 1_000;
+    await refreshGradingCronLiveness(path, now);
+    const runs = new InMemorySystemRunRepository();
+    let attempts = 0;
+    Object.assign(runs, { [method]: async () => { attempts += 1; throw new Error('continuous failure'); } });
+    const sleeps: number[] = [];
+    const alerts: string[] = [];
+    const errors: string[] = [];
+    const exits: number[] = [];
+    let rejected = false;
+    await runGradingCronEntrypoint(async () => {
+      try {
+        await startGradingCronLoop({
+          repositories: { ...createInMemoryRepositoryBundle(), runs },
+          runGradingPass: emptyGradingPass,
+          pollIntervalMs: 10,
+          maxConsecutiveFailures: 5,
+          retryBaseMs: 10,
+          retryMaxMs: 20,
+          logger: { ...quietLogger, error: (msg: unknown) => { errors.push(String(msg)); } },
+          refreshLiveness: () => refreshGradingCronLiveness(path, now),
+          sleep: async (ms) => { sleeps.push(ms); now += ms; },
+          onStalenessAlert: async (msg) => { alerts.push(msg); },
+        });
+      } catch (error) {
+        rejected = true;
+        assert.match(String(error), /grading.cron.failure_budget_exhausted/);
+        throw error;
+      }
+    }, (code) => { exits.push(code); }, quietLogger);
+    assert.equal(rejected, true);
+    assert.equal(attempts, 5);
+    assert.deepEqual(sleeps, [10, 20, 20, 20]);
+    assert.deepEqual(exits, [1]);
+    assert.equal(alerts.length, 1);
+    assert.match(alerts[0]!, /grading.cron.failure_budget_exhausted/);
+    assert.equal(errors.filter((msg) => msg.includes('failure_budget_exhausted')).length, 1);
+    assert.equal(await isGradingCronFresh(path, 10, now), false);
+  });
+}
+
+test('entrypoint exits even when the ops alert rejects', async () => {
+  const runs = new InMemorySystemRunRepository();
+  runs.startRun = async () => { throw new Error('offline'); };
+  const exits: number[] = [];
+  await runGradingCronEntrypoint(() => startGradingCronLoop({
+    repositories: { ...createInMemoryRepositoryBundle(), runs },
+    runGradingPass: emptyGradingPass,
+    maxConsecutiveFailures: 1,
+    onStalenessAlert: async () => { throw new Error('webhook offline'); },
+    logger: quietLogger,
+  }), (code) => { exits.push(code); }, quietLogger);
+  assert.deepEqual(exits, [1]);
+});
+
+test('a hung ops alert cannot keep an exhausted loop alive', async () => {
+  const runs = new InMemorySystemRunRepository();
+  runs.startRun = async () => { throw new Error('offline'); };
+  const exits: number[] = [];
+  await runGradingCronEntrypoint(() => startGradingCronLoop({
+    repositories: { ...createInMemoryRepositoryBundle(), runs },
+    runGradingPass: emptyGradingPass,
+    maxConsecutiveFailures: 1,
+    onStalenessAlert: () => new Promise<void>(() => {}),
+    logger: quietLogger,
+  }), (code) => { exits.push(code); }, quietLogger);
+  assert.deepEqual(exits, [1]);
+});
+
+test('liveness write failures use the same bounded recovery policy', async () => {
+  let writes = 0;
+  const stop = new Error('test complete');
+  const sleeps: number[] = [];
+  await assert.rejects(startGradingCronLoop({
+    repositories: createInMemoryRepositoryBundle(),
+    runGradingPass: emptyGradingPass,
+    logger: quietLogger,
+    refreshLiveness: async () => {
+      writes += 1;
+      if (writes < 3) throw new Error('disk unavailable');
+    },
+    sleep: async (ms) => {
+      sleeps.push(ms);
+      if (writes === 3) throw stop;
+    },
+  }), (error) => error === stop);
+  assert.deepEqual(sleeps, [1_000, 2_000, 300_000]);
+  assert.equal(writes, 3);
 });
