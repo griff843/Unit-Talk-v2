@@ -155,7 +155,7 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | Sonnet-5-era operating model (Outcome Contracts, PM gates, runtime validation by tier, cutover) | `docs/05_operations/OPERATING_MODEL_SONNET5.md` |
 | Evidence bundle template | `docs/05_operations/EVIDENCE_BUNDLE_TEMPLATE.md` |
 | Docs authority map | `docs/05_operations/docs_authority_map.md` |
-| Program status | `docs/06_status/PROGRAM_STATUS.md` |
+| Program status snapshot (dated; check its "Last verified" line; live evidence and `docs/mission/plan.md` override it. `PROGRAM_STATUS.md` is superseded audit history) | `docs/06_status/CURRENT_STATE.md` |
 | Codebase guide (architecture reference) | `docs/CODEBASE_GUIDE.md` |
 | Phase 7 ratification + execution plan | `docs/06_status/PHASE7R_RATIFICATION.md`, `docs/06_status/PHASE7E_EXECUTION_PLAN.md` |
 | SGO / provider knowledge | `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md` |
