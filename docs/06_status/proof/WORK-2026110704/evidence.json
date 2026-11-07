@@ -32,11 +32,41 @@
       "head_sha": "25f066444cc43fb98c7f43295f989034a1fe6f74",
       "staging_db_job_id": 128480271583,
       "staging_db_job": "success",
-      "staging_project": "xskgrzbteyqdufktjrjx"
+      "staging_project": "xskgrzbteyqdufktjrjx",
+      "receipt_artifact": "utv2-1630-db-proof-receipt-42398274218-1 (ci-db-proof-receipt/v2: exit_code 0, tap 9/9 pass, observed project xskgrzbteyqdufktjrjx)"
     },
     "failure_injection": "23/23 focused tests pass; synthetic fault injection, no production restart or data writes",
-    "queries": [],
-    "row_counts": []
+    "queries": [
+      {
+        "table": "picks,settlement_records,pick_lifecycle,audit_log",
+        "description": "ok 6 - UTV2-920 invalid atomic settlement writes no settlement, lifecycle event, or audit row"
+      },
+      {
+        "table": "settlement_records",
+        "description": "ok 8 - UTV2-996 re-settling a settled pick creates a correction, no true duplicate base rows"
+      },
+      {
+        "table": "settlement_records",
+        "description": "ok 9 - UTV2-996 correction chain is additive; original settlement row not mutated"
+      },
+      {
+        "table": "provider_offers",
+        "description": "ok 1/2 - canonical freshness SELECT executes against staging (latestOfferUpdatedAt=2026-11-07T17:34:02.404+00:00)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "settlement_records",
+        "count": 0,
+        "status": "asserted by test 6: invalid atomic settlement writes zero rows"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 0,
+        "status": "asserted by test 4: invalid atomic enqueue writes zero rows"
+      }
+    ],
+    "scope_note": "The staging suite is the generic pnpm test:db smoke suite (apps/api/src/database-smoke.test.ts). It does not execute the grading cron loop; cron failure-injection proof is the synthetic unit suite. The DB tests below bound settlement idempotency/duplicate prevention on the staging schema."
   },
   "post_merge_pending": [
     "PM approval (t1-approved label + pm-verdict/v1) and governed merge",
