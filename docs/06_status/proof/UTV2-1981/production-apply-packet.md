@@ -45,6 +45,9 @@ requires catalog inspection; never retry blindly.
 ```sql
 SELECT ns.nspname, idx.relname, am.amname,
        i.indisvalid, i.indisready, i.indislive,
+       i.indisunique, i.indnkeyatts, i.indnatts,
+       pg_get_expr(i.indpred, i.indrelid) AS predicate,
+       pg_get_expr(i.indexprs, i.indrelid) AS expressions,
        pg_get_indexdef(i.indexrelid) AS definition,
        pg_size_pretty(pg_relation_size(i.indexrelid)) AS size
 FROM pg_index i
@@ -63,6 +66,7 @@ a predicate or additional keys. Save the definition, size, and measured timing.
 Capture before/after `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` for:
 
 ```sql
+EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
 SELECT updated_at FROM public.picks ORDER BY updated_at DESC LIMIT 1;
 -- Bind the exact DB-text watermark and last row timestamp from a real guard run:
 EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
