@@ -429,6 +429,19 @@ This section is authoritative. Where an earlier section (E5, E6, E7, or the firs
 | Resource limits | grading-cron service limits unchanged: memory 256m, cpus 0.25 |
 | Not done / reserved | No deploy, restart, provider change, data mutation or kill-switch change. The compose healthcheck only takes effect after a Griff-dispatched deploy. T1 approval (t1-approved label and pm-verdict/v1) is independent and pending |
 
+## Summary
+
+The grading cron now survives transient bookkeeping failures: it catches them, retries with bounded exponential backoff (5 consecutive failures; 1s, 2s, 4s, 8s, 30s cap), alerts through the existing ops callback within 5 s on exhaustion, rejects and exits 1 so the compose restart policy recreates it. Each successful cycle refreshes a liveness marker that the grading-cron healthcheck reads. Settlement and grading services are untouched.
+
+## Verification
+
+- Focused failure-injection suite: `pnpm exec tsx --test apps/api/src/grading-cron.test.ts` -> 23 tests, 23 pass, 0 fail (E1-E3).
+- Mutation: removing the outer try/catch fails the 3 transient-recovery tests (E4).
+- Static: `pnpm verify:static` exit 0 on the folded-test layout; `pnpm type-check` pass.
+- Runtime (live DB): CI Writable DB proof against staging xskgrzbteyqdufktjrjx, run 42398274218 attempt 1, `pnpm test:db` exit 0, 9/9, receipt artifact utv2-1630-db-proof-receipt-42398274218-1. Generic DB smoke suite: it covers settlement idempotency and no-duplicate tests (UTV2-920, UTV2-996) but does not run the cron loop.
+- Healthcheck probe exercised at 400 s and 1000 s marker age with default and 600000 ms poll, and with a missing marker.
+- Not done, by design: no deploy, restart, provider change, data mutation or kill-switch change.
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
