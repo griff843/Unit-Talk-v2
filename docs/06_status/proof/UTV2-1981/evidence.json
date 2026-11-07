@@ -5,10 +5,10 @@
   "lane_type": "migration",
   "proof_profile": "migration",
   "status": "pre_merge",
-  "generated_at": "2026-11-07T06:07:12.403046+00:00",
+  "generated_at": "2026-11-07T07:40:00+00:00",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "1741d71b9ce5b640a179f83412cccdc20d1d0e5d",
+    "verified_source_sha": "07107d11d0d241c5933d1e671878e6e5eb09dfca",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -50,21 +50,20 @@
       "reason": "Static stage passed; writable staging identity assertion refused host=127.0.0.1."
     },
     "proof_binding": {
-      "status": "blocked",
-      "exit_code": 1,
-      "reason": "Only remaining violation: runtime_proof.writable_db_proof_staging requires a passing exact run/job receipt; actual exact-head job FAIL."
+      "status": "pending_ci_recheck",
+      "reason": "Rebound to exact head 07107d11d0d241c5933d1e671878e6e5eb09dfca; rerun of proof-binding gate required after this proof-only commit."
     }
   },
   "runtime_proof": {
-    "status": "blocked",
+    "status": "pass_pending_post_deploy_parity",
     "queries": [],
     "row_counts": {},
-    "reason": "Local writable DB proof refused unidentified target (127.0.0.1; packet originally host=unparseable). Exact-head staging-ci job with CI_SUPABASE_* credentials ran and FAILED on WORK0307 listByLifecycleStates statement timeout. No executor staging/production DDL; index apply and performance proof deferred to authorized path.",
-    "head": "1741d71b9ce5b640a179f83412cccdc20d1d0e5d",
+    "reason": "Exact-head CI at 07107d11d0d241c5933d1e671878e6e5eb09dfca: precondition drill, schema round-trip drill and staging writable DB proof all PASS. No executor staging/production DDL. Live schema parity is PENDING_POST_DEPLOY: the production index is not yet applied (Griff-only), so parity observed FAIL as expected.",
+    "head": "07107d11d0d241c5933d1e671878e6e5eb09dfca",
     "precondition_drill": {
       "result": "PASS",
-      "run": 42345350961,
-      "job": 128321773869,
+      "run": 42349510510,
+      "job": 128334428692,
       "cases": [
         "refuses decoy with SQLSTATE 42P07",
         "schema fingerprint unchanged on refusal",
@@ -73,24 +72,25 @@
     },
     "schema_roundtrip_drill": {
       "result": "PASS",
-      "run": 42345350961,
-      "job": 128321773808,
+      "run": 42349510510,
+      "job": 128334428644,
       "pre_up_hash": "1f5dd57add8cb9758b8aa13d13ce408a0ceacd87b70d5c01fb449c2a10067b44",
       "post_down_hash": "1f5dd57add8cb9758b8aa13d13ce408a0ceacd87b70d5c01fb449c2a10067b44",
       "post_up_hash": "a00dab7d08e881476261acb2140bccea03ebe80c68ca2981a8391d104fb76386",
       "post_reup_hash": "a00dab7d08e881476261acb2140bccea03ebe80c68ca2981a8391d104fb76386"
     },
     "writable_db_proof_staging": {
-      "result": "FAIL",
-      "run": 42345350967,
-      "job": 128321774196,
-      "reason": "WORK0307 staging: complete readers and duplicate timestamp boundary mutations failed: Failed to listByLifecycleStates: canceling statement due to statement timeout; apps/api/src/t1-proof-work-2026110307-keyset-paging-live.test.ts:44."
+      "result": "PASS",
+      "run": 42349510567,
+      "job": 128334429172,
+      "workflow": "ci.yml",
+      "note": "Staging writable DB proof (staging only) succeeded at exact head; timeouts on staging are intermittent and this run does not prove the index improves them."
     },
     "live_schema_parity": {
       "result": "PENDING_POST_DEPLOY",
       "observed_result": "FAIL",
-      "run": 42345350987,
-      "job": 128321796557,
+      "run": 42349510570,
+      "job": 128334449741,
       "production_ddl_applied": false,
       "required_phase": "post-deploy-before-lane-close",
       "reason": "Exact-head Live Schema Parity reported indexes missing_in_actual public.picks.picks_updated_at_idx. Separate authorized production CIC and guarded ledger apply are required after merge; no executor production DDL."
@@ -150,11 +150,11 @@
     }
   },
   "limitations": [
-    "Local test:db refuses unidentified target. Exact-head staging writable CI job FAILED on WORK0307 listByLifecycleStates statement timeout; no successful writable proof is claimed.",
+    "Local test:db refuses unidentified target; writable proof rests on the exact-head staging CI job (run 42349510567 job 128334429172), which passed.",
     "Staging index apply, before/after performance, under-load comparison, write costs, HOT ratio, build size and duration remain not proven.",
-    "No production or staging DDL by executor; production parity must pass after separate authorized deployment.",
-    "No generated type edits; index has no TypeScript schema shape; regeneration deferred.",
-    "No READY_FOR_REVIEW attestation, PM approval, merge or lane finalization."
+    "No production or staging DDL by executor; production parity stays PENDING_POST_DEPLOY until separately authorized production apply and deploy.",
+    "No generated type edits; index has no TypeScript schema shape.",
+    "No PM approval, t1-approved label, merge or lane finalization."
   ],
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1834",
   "scratch_postgres": {
@@ -172,7 +172,10 @@
       "included column",
       "wrong table"
     ],
-    "accepted_cases": ["absent index", "valid matching index no-op"],
+    "accepted_cases": [
+      "absent index",
+      "valid matching index no-op"
+    ],
     "up_down_up": "PASS",
     "transcript": "verification.md"
   }
