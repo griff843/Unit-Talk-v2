@@ -124,5 +124,6 @@
     "No live migration apply, refusal/empty-scratch drill, roundtrip, or staging performance measurements; CI receipts are pending.",
     "Smart Form browser e2e was not enabled by the standard static gate.",
     "Initial lane sync modification remains preserved and uncommitted outside executor file scope."
-  ]
+  ],
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1834"
 }

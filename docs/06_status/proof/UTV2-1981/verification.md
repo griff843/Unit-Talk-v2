@@ -67,5 +67,5 @@ wiring-baseline expiry/glob warnings were emitted without failing that gate.
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1834
 Execution SHA: c8820ba7a21034475bcadb57f0454e7eb4083fc6
