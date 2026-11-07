@@ -4,19 +4,27 @@
   "tier": "T2",
   "lane_type": "governance",
   "proof_profile": "static",
-  "status": "pre_merge",
+  "status": "merged",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "1f0a4332029fe9c82a9e5d97c0fececbdffc0451",
     "verified_source_sha": "ca844c8b029dbc0250f4824cb0511fd723876210",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-11-07T18:32:45.677Z"
   },
   "static_proof": {
     "status": "pass",
     "command": "pnpm test",
     "conclusion": "success",
     "verified_source_sha": "ca844c8b029dbc0250f4824cb0511fd723876210",
-    "full_suite": { "command": "pnpm test", "pass": 7868, "fail": 0, "skipped": 13, "exit_code": 0 },
+    "full_suite": {
+      "command": "pnpm test",
+      "pass": 7868,
+      "fail": 0,
+      "skipped": 13,
+      "exit_code": 0
+    },
     "type_check": "pnpm type-check exit 0",
     "r_level": "PASS",
     "note": "Documentation-only lane. Local pnpm verify is not claimed; the PR's required verify check is the authority."

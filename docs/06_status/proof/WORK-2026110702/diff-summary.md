@@ -11,5 +11,5 @@ Navigation only. Two agent command files stop pointing at the superseded `PROGRA
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 1f0a4332029fe9c82a9e5d97c0fececbdffc0451
 PR: pending
