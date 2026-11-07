@@ -1,0 +1,128 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1981",
+  "tier": "T1",
+  "lane_type": "migration",
+  "proof_profile": "migration",
+  "status": "pre_merge",
+  "generated_at": "2026-11-07T05:35:28.064050+00:00",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "c8820ba7a21034475bcadb57f0454e7eb4083fc6",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "focused_tests": {
+      "status": "pass",
+      "tests": 135,
+      "fail": 0
+    },
+    "r_level": "pass",
+    "reversibility_presence": "pass",
+    "root_test": {
+      "status": "pass",
+      "exit_code": 0,
+      "tests": 7881,
+      "passed": 7868,
+      "failed": 0,
+      "skipped": 13
+    },
+    "precondition_tooling_tests": {
+      "status": "pass",
+      "tests": 8,
+      "failed": 0
+    },
+    "type_check": {
+      "status": "pass",
+      "exit_code": 0
+    },
+    "verify_static": {
+      "status": "pass",
+      "exit_code": 0
+    },
+    "verify": {
+      "status": "blocked",
+      "exit_code": 1,
+      "reason": "Static stage passed; writable staging identity assertion refused host=127.0.0.1."
+    }
+  },
+  "runtime_proof": {
+    "status": "blocked",
+    "queries": [],
+    "row_counts": {},
+    "reason": "Writable DB proof deferred to staging-ci with CI_SUPABASE_* credentials for xskgrzbteyqdufktjrjx. Actual local guard refusal: host=127.0.0.1, ref=unidentified. Packet originally reported host=unparseable. No live DDL or DB writes performed.",
+    "head": "c8820ba7a21034475bcadb57f0454e7eb4083fc6",
+    "precondition_drill": {
+      "status": "not_run",
+      "run_id": null,
+      "job_id": null
+    },
+    "schema_roundtrip_drill": {
+      "status": "not_run",
+      "run_id": null,
+      "job_id": null
+    },
+    "writable_db_proof_staging": {
+      "status": "blocked",
+      "run_id": null,
+      "job_id": null
+    },
+    "live_schema_parity": {
+      "status": "not_run",
+      "run_id": null,
+      "job_id": null
+    }
+  },
+  "production_authorization": "separate Griff packet required",
+  "pm_approval": "pending",
+  "ready_for_review_attestation": "not_published",
+  "command_logs": {
+    "static": {
+      "path": "/tmp/utv2-1981-static.log",
+      "sha256": "9236dc7a914f02d1808864807474e3586c7e6e577696be37e50afcd9d72d6104"
+    },
+    "verify": {
+      "path": "/tmp/utv2-1981-verify.log",
+      "sha256": "a8d21a67692a4e6add0c687dce3859b020bff85645facdbb94e59c2c70c13c29"
+    },
+    "test": {
+      "path": "/tmp/utv2-1981-test.log",
+      "sha256": "8e333cc4363797b023f88ce6727e5da02629f81748e08199a40bc44696cead90"
+    },
+    "typecheck": {
+      "path": "/tmp/utv2-1981-typecheck.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "focused": {
+      "path": "/tmp/utv2-1981-focused.log",
+      "sha256": "ccd1d9fb9145125089cb6957273721174364542e160865016c375f1ea551e42c"
+    },
+    "precondition-tests": {
+      "path": "/tmp/utv2-1981-precondition-tests.log",
+      "sha256": "c04894e7ec28cc7b4403a328bc8739291de8b6df38bbc00b0e815ef79a8cf5ee"
+    },
+    "db": {
+      "path": "/tmp/utv2-1981-db.log",
+      "sha256": "c16a495ae6ee7511695a6d68e9bab77c5934b6a6eeb85a61c67cde97f6584086"
+    },
+    "types": {
+      "path": "/tmp/utv2-1981-types.log",
+      "sha256": "e3e726f362e51de720416cb25b05f22b39e1ca99d8131119a9ef6b355be4bd7f"
+    },
+    "rlevel": {
+      "path": "/tmp/utv2-1981-rlevel.log",
+      "sha256": "ec9102c3ed5cb6a12edde4af373a6416e8d8665583dcf722bf44b6bf6476df66"
+    },
+    "reversibility": {
+      "path": "/tmp/utv2-1981-reversibility.log",
+      "sha256": "93b7eaf06fe67f82aa16c9ae979e967ea379453203eb01a9ca5d28f46e375569"
+    }
+  },
+  "limitations": [
+    "No live migration apply, refusal/empty-scratch drill, roundtrip, or staging performance measurements; CI receipts are pending.",
+    "Smart Form browser e2e was not enabled by the standard static gate.",
+    "Initial lane sync modification remains preserved and uncommitted outside executor file scope."
+  ]
+}

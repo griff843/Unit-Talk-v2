@@ -1,28 +1,64 @@
-# PROOF: UTV2-1981
+# UTV2-1981 — executor verification
 
-MERGE_SHA: pending merge
-
-> Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command
-> actually executed and its real result before review. `post-merge-lane-close.yml`
-> binds the merge SHA; never write one here by hand.
-
-Issue: UTV2-1981
-Tier: T1
-result: not_run
-
-## ASSERTIONS:
-
-- [ ] (state each behavior this lane proves, and the test that proves it)
-
-## EVIDENCE:
-
-(paste measured output here, in fenced blocks)
+Execution SHA: c8820ba7a21034475bcadb57f0454e7eb4083fc6
+Merge SHA: pending merge
+Result: static PASS; full verify BLOCKED at staging identity assertion. No READY_FOR_REVIEW attestation.
 
 ## Verification
 
-(record every verification command run on the final code commit, with its real result)
+| Command                                                                                                                             | Measured result                                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `pnpm type-check`                                                                                                                   | PASS, exit 0                                                                    |
+| `pnpm exec tsx --test packages/db/src/member-performance-read-completeness.test.ts scripts/ci/migration-reversibility-gate.test.ts` | PASS, 135 tests, 0 failures                                                     |
+| `pnpm exec tsx --test scripts/ci/migration-precondition-drill.test.ts`                                                              | PASS, 8 tests, 0 failures; tests the existing drill, not a live migration apply |
+| `pnpm test`                                                                                                                         | PASS, exit 0; 7,881 tests: 7,868 passed, 13 skipped, 0 failed                   |
+| `pnpm verify:static`                                                                                                                | PASS, exit 0; all static stages completed                                       |
+| `pnpm verify`                                                                                                                       | BLOCKED, exit 1; static stage passed, then staging identity refused             |
+| `pnpm test:db`                                                                                                                      | REFUSED, exit 1, before constructing a writable DB client                       |
+| `pnpm supabase:types`                                                                                                               | BLOCKED, exit 1: supabase/.temp/project-ref not found; generated file unchanged |
+| `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`                                                                | PASS; no matching rules                                                         |
+| `pnpm exec tsx scripts/ci/migration-reversibility-gate.ts --base origin/main --json`                                                | PASS; checked 1, passed 1, failed 0                                             |
 
-## Merge SHA Binding
+Local output: `/tmp/utv2-1981-*.log`; aggregate commands finished; SHA-256 log digests are recorded in evidence.json.
+The focused suite exercises existing keyset guard semantics and migration-gate
+adversarial cases; it does not establish PostgreSQL index validity or performance.
+No runtime code, test count, or `any` casts changed.
 
-Merge SHA: pending merge
-PR: pending
+## Writable DB deferral
+
+The packet reports host=unparseable. The actual local assertion reported:
+
+```text
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1).
+Writable DB verification requires xskgrzbteyqdufktjrjx.
+Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
+```
+
+No guard bypass, credential-file copy, live DDL, production write, or migration
+history repair performed. Generated types do not change for an index-only DDL;
+regeneration could not run without a linked project and remains deferred.
+
+## Evidence limits and remaining gates
+
+The versioned proof-binding validator correctly rejects missing exact CI run/job
+receipts for refusal/empty-scratch, apply/rollback/reapply, staging writable proof,
+and live schema parity. None is asserted as passed. An initial validation also
+reported an outdated source binding; it is rebound to the substantive SHA above.
+The auxiliary `pnpm ops:proof-check UTV2-1981 --json` rejected the bundle because
+it expects flat PR/reviewer/gate fields; this bundle uses the migration-profile
+schema-v2 binding shape generated by `ops:proof-generate`. No reviewer approval is
+inferred from executor-authored evidence.
+
+Before production authorization: collect representative before/after plans and
+actual guard request timings at the normal 8-second authenticator budget using
+the named production apply design. Before merge: obtain successful required CI
+receipts and PM approval through the serialized governance flow.
+
+Draft review only. Governed merge, lane finalization, orchestration reconciliation,
+post-merge truth, and production DDL remain pending outside this executor.
+
+Static command-manifest verification passed (14 commands), migration versions passed
+(140 files), and migration lint passed (139 forward migrations, no findings).
+Smart Form browser e2e was not enabled by the standard static gate. Existing
+wiring-baseline expiry/glob warnings were emitted without failing that gate.
