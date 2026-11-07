@@ -1,6 +1,6 @@
 # PROOF: WORK-2026110704
 
-MERGE_SHA: 25f066444cc43fb98c7f43295f989034a1fe6f74
+MERGE_SHA: pending merge
 
 Evidence bundle v1 (tier T1, lane type runtime).
 
