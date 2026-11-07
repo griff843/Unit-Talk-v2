@@ -11,7 +11,7 @@
 | Date | 2026-11-07 |
 | Verifier Identity | codex-cli/WORK-2026110704 |
 | Commit SHA(s) | c2130be76c7f1beaea49189649ec69027e52e4b0 (implementation) |
-| Related PRs | PR_PENDING |
+| Related PRs | https://github.com/griff843/Unit-Talk-v2/pull/1837 |
 
 ## Scope
 
@@ -431,4 +431,4 @@ Writable DB proof: blocked/deferred to staging-ci.
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: PR_PENDING
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1837

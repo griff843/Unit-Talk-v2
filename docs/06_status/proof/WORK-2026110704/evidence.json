@@ -36,5 +36,6 @@
   "blockers": [
     "Authorize package.json only to add grading-cron-health.test.ts to test:apps-api-agent; outside current packet scope.",
     "Writable live DB proof deferred to staging-ci CI_SUPABASE_* credentials."
-  ]
+  ],
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1837"
 }
