@@ -5,10 +5,10 @@
   "lane_type": "migration",
   "proof_profile": "migration",
   "status": "pre_merge",
-  "generated_at": "2026-11-07T05:35:28.064050+00:00",
+  "generated_at": "2026-11-07T06:07:12.403046+00:00",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "c8820ba7a21034475bcadb57f0454e7eb4083fc6",
+    "verified_source_sha": "1741d71b9ce5b640a179f83412cccdc20d1d0e5d",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -27,7 +27,8 @@
       "tests": 7881,
       "passed": 7868,
       "failed": 0,
-      "skipped": 13
+      "skipped": 13,
+      "execution": "pnpm test child of pnpm verify:static"
     },
     "precondition_tooling_tests": {
       "status": "pass",
@@ -40,90 +41,139 @@
     },
     "verify_static": {
       "status": "pass",
-      "exit_code": 0
+      "exit_code": 0,
+      "execution": "pnpm verify:static child of pnpm verify; all static stages completed before live identity refusal"
     },
     "verify": {
       "status": "blocked",
       "exit_code": 1,
       "reason": "Static stage passed; writable staging identity assertion refused host=127.0.0.1."
+    },
+    "proof_binding": {
+      "status": "blocked",
+      "exit_code": 1,
+      "reason": "Only remaining violation: runtime_proof.writable_db_proof_staging requires a passing exact run/job receipt; actual exact-head job FAIL."
     }
   },
   "runtime_proof": {
     "status": "blocked",
     "queries": [],
     "row_counts": {},
-    "reason": "Writable DB proof deferred to staging-ci with CI_SUPABASE_* credentials for xskgrzbteyqdufktjrjx. Actual local guard refusal: host=127.0.0.1, ref=unidentified. Packet originally reported host=unparseable. No live DDL or DB writes performed.",
-    "head": "c8820ba7a21034475bcadb57f0454e7eb4083fc6",
+    "reason": "Local writable DB proof refused unidentified target (127.0.0.1; packet originally host=unparseable). Exact-head staging-ci job with CI_SUPABASE_* credentials ran and FAILED on WORK0307 listByLifecycleStates statement timeout. No executor staging/production DDL; index apply and performance proof deferred to authorized path.",
+    "head": "1741d71b9ce5b640a179f83412cccdc20d1d0e5d",
     "precondition_drill": {
-      "status": "not_run",
-      "run_id": null,
-      "job_id": null
+      "result": "PASS",
+      "run": 42345350961,
+      "job": 128321773869,
+      "cases": [
+        "refuses decoy with SQLSTATE 42P07",
+        "schema fingerprint unchanged on refusal",
+        "applies on an empty scratch schema"
+      ]
     },
     "schema_roundtrip_drill": {
-      "status": "not_run",
-      "run_id": null,
-      "job_id": null
+      "result": "PASS",
+      "run": 42345350961,
+      "job": 128321773808,
+      "pre_up_hash": "1f5dd57add8cb9758b8aa13d13ce408a0ceacd87b70d5c01fb449c2a10067b44",
+      "post_down_hash": "1f5dd57add8cb9758b8aa13d13ce408a0ceacd87b70d5c01fb449c2a10067b44",
+      "post_up_hash": "a00dab7d08e881476261acb2140bccea03ebe80c68ca2981a8391d104fb76386",
+      "post_reup_hash": "a00dab7d08e881476261acb2140bccea03ebe80c68ca2981a8391d104fb76386"
     },
     "writable_db_proof_staging": {
-      "status": "blocked",
-      "run_id": null,
-      "job_id": null
+      "result": "FAIL",
+      "run": 42345350967,
+      "job": 128321774196,
+      "reason": "WORK0307 staging: complete readers and duplicate timestamp boundary mutations failed: Failed to listByLifecycleStates: canceling statement due to statement timeout; apps/api/src/t1-proof-work-2026110307-keyset-paging-live.test.ts:44."
     },
     "live_schema_parity": {
-      "status": "not_run",
-      "run_id": null,
-      "job_id": null
+      "result": "PENDING_POST_DEPLOY",
+      "observed_result": "FAIL",
+      "run": 42345350987,
+      "job": 128321796557,
+      "production_ddl_applied": false,
+      "required_phase": "post-deploy-before-lane-close",
+      "reason": "Exact-head Live Schema Parity reported indexes missing_in_actual public.picks.picks_updated_at_idx. Separate authorized production CIC and guarded ledger apply are required after merge; no executor production DDL."
     }
   },
   "production_authorization": "separate Griff packet required",
   "pm_approval": "pending",
   "ready_for_review_attestation": "not_published",
   "command_logs": {
-    "static": {
-      "path": "/tmp/utv2-1981-static.log",
-      "sha256": "9236dc7a914f02d1808864807474e3586c7e6e577696be37e50afcd9d72d6104"
-    },
     "verify": {
-      "path": "/tmp/utv2-1981-verify.log",
-      "sha256": "a8d21a67692a4e6add0c687dce3859b020bff85645facdbb94e59c2c70c13c29"
-    },
-    "test": {
-      "path": "/tmp/utv2-1981-test.log",
-      "sha256": "8e333cc4363797b023f88ce6727e5da02629f81748e08199a40bc44696cead90"
-    },
-    "typecheck": {
-      "path": "/tmp/utv2-1981-typecheck.log",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      "path": "/tmp/utv2-1981-a2-verify.log",
+      "sha256": "6a651b6157ba10db376c732f7fe732862b0acf9e444a5bf013a9accdbc3b0b4d"
     },
     "focused": {
-      "path": "/tmp/utv2-1981-focused.log",
-      "sha256": "ccd1d9fb9145125089cb6957273721174364542e160865016c375f1ea551e42c"
+      "path": "/tmp/utv2-1981-a2-focused.log",
+      "sha256": "3be79589968542ee4b02858d2c8e7a006ba3d73b344a97864e69e2d1daf7b4f1"
     },
-    "precondition-tests": {
-      "path": "/tmp/utv2-1981-precondition-tests.log",
-      "sha256": "c04894e7ec28cc7b4403a328bc8739291de8b6df38bbc00b0e815ef79a8cf5ee"
+    "typecheck": {
+      "path": "/tmp/utv2-1981-a2-typecheck.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     "db": {
-      "path": "/tmp/utv2-1981-db.log",
+      "path": "/tmp/utv2-1981-a2-db.log",
       "sha256": "c16a495ae6ee7511695a6d68e9bab77c5934b6a6eeb85a61c67cde97f6584086"
     },
-    "types": {
-      "path": "/tmp/utv2-1981-types.log",
-      "sha256": "e3e726f362e51de720416cb25b05f22b39e1ca99d8131119a9ef6b355be4bd7f"
-    },
     "rlevel": {
-      "path": "/tmp/utv2-1981-rlevel.log",
-      "sha256": "ec9102c3ed5cb6a12edde4af373a6416e8d8665583dcf722bf44b6bf6476df66"
+      "path": "/tmp/utv2-1981-a2-rlevel.log",
+      "sha256": "f8b27a67b0447612ff4d5d3e6dd24ea28cd0f123027c8ca0b5901fc38ecbdd58"
     },
     "reversibility": {
-      "path": "/tmp/utv2-1981-reversibility.log",
+      "path": "/tmp/utv2-1981-a2-reversibility.log",
       "sha256": "93b7eaf06fe67f82aa16c9ae979e967ea379453203eb01a9ca5d28f46e375569"
+    },
+    "scratch": {
+      "path": "/tmp/utv2-1981-a2-scratch.log",
+      "sha256": "9b93baa42eff059bc92a5dea199cd7f5e7c8d933495488d758c7b72aba33faa7"
+    },
+    "precondition-ci": {
+      "path": "/tmp/utv2-1981-a2-precondition-ci.log",
+      "sha256": "47bc5754fe1ca762bd3185654c2553f57bfcddc8d94a4eec085ea5b779d59ed1"
+    },
+    "roundtrip-ci": {
+      "path": "/tmp/utv2-1981-a2-roundtrip-ci.log",
+      "sha256": "ee68802dba7825dcadf147f8108fffa9511f2bc943793323cc80b806d244eef2"
+    },
+    "parity-ci": {
+      "path": "/tmp/utv2-1981-a2-parity-ci.log",
+      "sha256": "4e9d903c19f1ed366f790e547e52994b22baa08c920b8290027da9dc5f437e1c"
+    },
+    "staging-ci": {
+      "path": "/tmp/utv2-1981-a2-staging-ci.log",
+      "sha256": "caf0b9f63452d5a3614e40509dc1f047c28bc9a8be3c02c87283243cb01b2d3b"
+    },
+    "proof-binding": {
+      "path": "/tmp/utv2-1981-a2-binding-final.log",
+      "sha256": "7e33fe203f30ad7dd00f3c3ed101709c016a51064d99a84fd8590e270bc0c301"
     }
   },
   "limitations": [
-    "No live migration apply, refusal/empty-scratch drill, roundtrip, or staging performance measurements; CI receipts are pending.",
-    "Smart Form browser e2e was not enabled by the standard static gate.",
-    "Initial lane sync modification remains preserved and uncommitted outside executor file scope."
+    "Local test:db refuses unidentified target. Exact-head staging writable CI job FAILED on WORK0307 listByLifecycleStates statement timeout; no successful writable proof is claimed.",
+    "Staging index apply, before/after performance, under-load comparison, write costs, HOT ratio, build size and duration remain not proven.",
+    "No production or staging DDL by executor; production parity must pass after separate authorized deployment.",
+    "No generated type edits; index has no TypeScript schema shape; regeneration deferred.",
+    "No READY_FOR_REVIEW attestation, PM approval, merge or lane finalization."
   ],
-  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1834"
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1834",
+  "scratch_postgres": {
+    "result": "PASS",
+    "version": "17.6",
+    "target": "isolated loopback port 55481; no live project credentials",
+    "refused_sqlstate": "42P07",
+    "refused_cases": [
+      "INVALID",
+      "wrong column",
+      "partial",
+      "not ready",
+      "unique",
+      "expression",
+      "included column",
+      "wrong table"
+    ],
+    "accepted_cases": ["absent index", "valid matching index no-op"],
+    "up_down_up": "PASS",
+    "transcript": "verification.md"
+  }
 }

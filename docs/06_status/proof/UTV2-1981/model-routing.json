@@ -7,7 +7,7 @@
   "policy_version": "3.0.0",
   "selected_by": "three-brain",
   "override_used": false,
-  "execution_sha": "c8820ba7a21034475bcadb57f0454e7eb4083fc6",
+  "execution_sha": "1741d71b9ce5b640a179f83412cccdc20d1d0e5d",
   "execution_verification": "unverified-external-session",
   "source": "Lane manifest and executor launch configuration; no independent model-provider attestation",
   "subagents_used": false

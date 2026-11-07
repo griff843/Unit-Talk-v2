@@ -1,29 +1,28 @@
 # UTV2-1981 — diff summary
 
-Execution SHA: `c8820ba7a21034475bcadb57f0454e7eb4083fc6`. Merge SHA: pending governed merge.
+Execution SHA: `1741d71b9ce5b640a179f83412cccdc20d1d0e5d`. Merge SHA: pending governed merge.
 
-Adds one standalone `CREATE INDEX CONCURRENTLY picks_updated_at_idx ON
-public.picks USING btree (updated_at)` and a concurrent down script. Native
-name-collision failure avoids silently accepting a wrong or invalid index.
-No application behavior, retry policy, timeouts, contracts, or pick data change.
-No new tests or `any` casts; no tests removed.
+The repo migration now guards the index name before DDL, then runs ordinary
+`CREATE INDEX IF NOT EXISTS picks_updated_at_idx ON public.picks (updated_at)`.
+It accepts only a valid, ready, live, nonunique btree with exactly one column,
+updated_at, no expression or predicate. Collisions raise SQLSTATE 42P07. The down
+script is exactly `DROP INDEX IF EXISTS public.picks_updated_at_idx;`.
 
-The production apply design requires standalone autocommit, explicit target
-identity, valid/ready catalog proof, representative before/after plans, actual
-8-second-budget PostgREST guard runs, and separate Griff production authorization.
-Live proof is deferred; no production or staging DDL executed.
+Production builds the index first out of band with CIC under Griff's separate
+authorization, then the repo migration validates it as a no-op and records history.
+The production apply packet contains session budgets, catalog checks, locks,
+monitoring, failure cleanup, concurrent rollback and post-deploy parity ordering.
 
-Files authored: the migration, its rollback, `.ops/work/UTV2-1981.md`, the production
-apply packet and the four required proof artifacts in this directory. The branch
-already contains lane setup metadata; its initial dirty sync edit is preserved
-and excluded from implementation commits. Captured packet hash:
-`94b1284e5d9506043b30d4d7a861b5b2b4328204ddcc0ec311465f000cdfe27b`.
+Restored `.ops/work/UTV2-1981.md` byte-for-byte from `9ac405e77` and preserved the
+ratified sync manifest at `851b17faf`. No application code, retry policy, timeout,
+test file, generated type, drill, gate or proof schema changed. No tests removed
+or new any casts. Existing lane metadata remains in the branch.
 
-R-level rules inspected: no matching paths in
-`docs/05_operations/r1-r5-rules.json`; required check passed. Down-script presence
-passed for one migration. Focused suite passed 135/135; see verification.md for
-aggregate results and environmental blockers.
+CI scratch precondition and schema round-trip jobs pass at the implementation SHA.
+Local scratch PostgreSQL additionally refuses INVALID, wrong-column, partial,
+unready, unique, expression, included-column and wrong-table indexes, and accepts
+a valid matching index as a no-op. Exact commands and results: `verification.md`.
 
-Final static verification: `pnpm verify:static` PASS, `pnpm type-check` PASS,
-`pnpm test` PASS (7,868 passed, 13 skipped, 0 failed). Full `pnpm verify`
-BLOCKED after its passing static stage by the staging identity guard.
+Live DDL, staging performance evidence, PM approvals, merge and lane finalization
+remain outside executor completion. See `evidence.json` and `verification.md` for
+measured gate status and exact CI receipts; no READY_FOR_REVIEW is published.

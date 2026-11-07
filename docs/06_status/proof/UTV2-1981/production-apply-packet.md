@@ -85,12 +85,12 @@ Expected plans are an Index Only Scan Backward for the watermark and an index
 range scan for check 2, with `created_at` as a residual filter. Record actual plans,
 rows, buffers and times; do not force planner choices. Compare the first PR CI
 under-load sample to a later lane CI run after the authorized staging apply.
-Measure insert/update costs before/after with pg_stat_statements deltas or a bounded
+Measure insert/update costs before/after with pg*stat_statements deltas or a bounded
 probe, HOT ratio (`n_tup_hot_upd/n_tup_upd`), index count and size. Every update to
 updated_at incurs index maintenance and can prevent HOT updates. The index does
 not prove slow phases end: existing indexed readers reached 7.7–7.8 seconds.
 Record unmeasured figures as not proven. Existing staging-only indexes are out of
-scope: `picks_staging_*`, `picks_open_states_created_idx`,
+scope: `picks_staging*\*`, `picks_open_states_created_idx`,
 `picks_track_only_validated_created_idx`.
 
 After production catalog and both EXPLAIN checks succeed, run the approved
