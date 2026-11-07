@@ -454,3 +454,9 @@ PR: https://github.com/griff843/Unit-Talk-v2/pull/1837
 ### E6/E7 Exact-head CI proof (supersedes the earlier FAIL notes above)
 
 
+```text
+pnpm verify:static (local, after folding the liveness test into the wired suite) -> exit 0
+ci.yml run 42398274218 attempt 1, head_sha 25f066444cc43fb98c7f43295f989034a1fe6f74
+  Writable DB proof (staging only), job 128480271583 -> success (staging project xskgrzbteyqdufktjrjx)
+  verify, job 128484817833 -> see PR check state at merge time
+```
