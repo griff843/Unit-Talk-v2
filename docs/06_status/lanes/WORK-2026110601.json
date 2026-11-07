@@ -21,9 +21,9 @@
     "docs/06_status/proof/WORK-2026110601/verification.md",
     "docs/06_status/proof/WORK-2026110601/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "parked",
   "started_at": "2026-11-06T17:59:45.248Z",
-  "heartbeat_at": "2026-11-06T18:13:02.490Z",
+  "heartbeat_at": "2026-11-07T05:00:25.004Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026110601-guard-statement-retry.json",
