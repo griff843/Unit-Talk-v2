@@ -22,9 +22,9 @@
     "docs/06_status/proof/UTV2-1981/verification.md",
     "docs/06_status/proof/UTV2-1981/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "parked",
   "started_at": "2026-11-07T05:17:01.742Z",
-  "heartbeat_at": "2026-11-07T05:37:06.178Z",
+  "heartbeat_at": "2026-11-07T16:20:09.610Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1981-picks-updated-at-index.json",
