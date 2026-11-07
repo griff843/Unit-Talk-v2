@@ -29,7 +29,7 @@ Live DB proof, PM approval, merge, merge-SHA binding and post-merge closeout rem
 |---|---|---|---|---|---|
 | 1 | All three bookkeeping faults recover and reset the consecutive budget | test | grading-cron.test.ts | PASS | [E1](#e1-failure-injection-transcript) |
 | 2 | Continuous faults cap attempts/backoff, alert, reject, exit 1 and leave a stale marker | test | grading-cron.test.ts | PASS | [E2](#e2-terminal-failures) |
-| 3 | Missing/stale markers are unhealthy; fresh markers are healthy | test | grading-cron-health.test.ts | PASS | [E3](#e3-freshness) |
+| 3 | Missing/stale markers are unhealthy; fresh markers are healthy | test | grading-cron.test.ts | PASS | [E3](#e3-freshness) |
 | 4 | Removing the outer try/catch breaks transient recovery | test | isolated mutation | PASS | [E4](#e4-mutation) |
 | 5 | Only grading-cron healthcheck changed in deploy config | git-artifact | git diff | PASS | [E5](#e5-scope) |
 | 6 | Required static verification passes | test | pnpm verify:static | FAIL | [E6](#e6-static-verification) |
@@ -39,7 +39,7 @@ Live DB proof, PM approval, merge, merge-SHA binding and post-merge closeout rem
 
 ### E1 Failure-injection transcript
 
-Command: `pnpm exec tsx --test apps/api/src/grading-cron-health.test.ts apps/api/src/grading-cron.test.ts`
+Command: `pnpm exec tsx --test apps/api/src/grading-cron.test.ts (grading-cron-health: test) apps/api/src/grading-cron.test.ts`
 
 ```text
 TAP version 13
@@ -201,9 +201,9 @@ Test: `apps/api/src/grading-cron.test.ts`; command: `tsx --test apps/api/src/gra
 
 ### E3 Freshness
 
-See E1 `apps/api/src/grading-cron-health.test.ts` test:
+See E1 `apps/api/src/grading-cron.test.ts (grading-cron-health: test)` test:
 `liveness is unhealthy when missing, expired, malformed or future; healthy within three polls`.
-Command: `tsx --test apps/api/src/grading-cron-health.test.ts`.
+Command: `tsx --test apps/api/src/grading-cron.test.ts (grading-cron-health: test)`.
 The inclusive bound is three poll intervals; the next millisecond is unhealthy.
 
 ### E4 Mutation
@@ -317,7 +317,7 @@ No new `any` casts. All changed paths are authorized implementation or explicitl
 fixed by using `createInMemoryRepositoryBundle`; the final type-check passes.
 
 `pnpm test`: PASS (serial exit 0; 7890 test executions in TAP summaries, 13 skipped); completed batch counts at capture: 7890.
-`pnpm verify` invokes `pnpm verify:static` then live DB proof. FAIL: WIRING_TEST_UNWIRED_NEW; grading-cron-health.test.ts needs package.json test-script wiring, outside the authorized file scope. Scope addition requested.
+`pnpm verify` invokes `pnpm verify:static` then live DB proof. FAIL: WIRING_TEST_UNWIRED_NEW; grading-cron.test.ts needs package.json test-script wiring, outside the authorized file scope. Scope addition requested.
 
 ```text
 [WARN] WIRING_BASELINE_TEST_ENTRY_EXPIRED scripts/provider-offer-history-retention-summarize.test.ts - baseline entry expired on 2026-10-31; wire it, re-quarantine it with a new expiry, or remove it
@@ -405,7 +405,7 @@ No override or attempt to bypass staging identity was made.
 ## Stop Conditions Encountered
 
 The final serial `pnpm verify` fails early at `WIRING_TEST_UNWIRED_NEW` for
-`apps/api/src/grading-cron-health.test.ts`. A one-line addition to
+`apps/api/src/grading-cron.test.ts (grading-cron-health: test)`. A one-line addition to
 `package.json` `test:apps-api-agent` is required, but `package.json` is outside
 the packet allowed scope. The exact scope addition was requested; no approval has been received
 and no out-of-scope edit was made. This is a blocked draft, not a completed verification gate.
@@ -424,7 +424,7 @@ The authorized post-executor path owns lane-finalize and subsequent orchestratio
 
 ## Verification
 
-`pnpm type-check` PASS. `pnpm test` PASS (serial exit 0; 7890 test executions in TAP summaries, 13 skipped). `pnpm verify` FAIL: WIRING_TEST_UNWIRED_NEW; grading-cron-health.test.ts needs package.json test-script wiring, outside the authorized file scope. Scope addition requested..
+`pnpm type-check` PASS. `pnpm test` PASS (serial exit 0; 7890 test executions in TAP summaries, 13 skipped). `pnpm verify` FAIL: WIRING_TEST_UNWIRED_NEW; grading-cron.test.ts needs package.json test-script wiring, outside the authorized file scope. Scope addition requested..
 Focused tests: 23/23 PASS. Mutation: expected 3/3 failures without the handler. R-level: PASS.
 Writable DB proof: blocked/deferred to staging-ci.
 
@@ -432,3 +432,8 @@ Writable DB proof: blocked/deferred to staging-ci.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1837
+
+## Orchestrator amendment (post-Codex review)
+
+- WIRING_TEST_UNWIRED_NEW resolved without a scope change: the liveness-freshness test was folded into the already-wired `apps/api/src/grading-cron.test.ts`; the separate unwired test file was removed. `package.json` is untouched. The "scope addition requested" lines above are superseded.
+- Healthcheck changed from `tsx grading-cron-health.ts` (measured ~190 MB peak RSS, vs ~59 MB bare node) to a plain `node -e` probe applying the same freshness rule (marker present, not future, age <= 15 min), because a tsx probe beside the cron inside the 256m container limit risks OOM. The probe honours the default 5-minute poll only; `UNIT_TALK_GRADING_CRON_POLL_MS` overrides apply to the TS helper, not the compose probe.
