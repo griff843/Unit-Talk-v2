@@ -162,7 +162,7 @@ operator may actually do during an incident is:
 
 | Concern | Doc |
 |---|---|
-| Current program status | `docs/06_status/CURRENT_STATE.md` |
+| Program status snapshot (dated; see its "Last verified" line) | `docs/06_status/CURRENT_STATE.md` |
 | Program status before 2026-05-20 (**superseded, audit history only**) | `docs/06_status/PROGRAM_STATUS.md` |
 | Known debt | `docs/06_status/KNOWN_DEBT.md` |
 | Current execution plan | `docs/mission/plan.md` |
