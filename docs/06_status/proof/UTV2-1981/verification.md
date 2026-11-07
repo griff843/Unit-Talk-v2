@@ -7,9 +7,11 @@ No READY_FOR_REVIEW attestation, PM approval, merge, live DDL or lane finalizati
 
 ## ASSERTIONS:
 
-- The migration refuses a same-named index that is not a valid, ready, non-unique btree on `public.picks(updated_at)` (SQLSTATE `42P07`), and otherwise creates it with `IF NOT EXISTS`; the repo file carries no `CONCURRENTLY`.
-- The down script is exactly `DROP INDEX IF EXISTS public.picks_updated_at_idx;` and survives an up, down, up round trip.
-- Staging writable-DB proof, and parity against production, are NOT yet passing; both are recorded as such below and nothing here claims them.
+- [x] The migration refuses a same-named index that is not a valid, ready, non-unique btree on `public.picks(updated_at)` (SQLSTATE `42P07`), and otherwise creates it with `IF NOT EXISTS`; the repo file carries no `CONCURRENTLY`.
+- [x] The down script is exactly `DROP INDEX IF EXISTS public.picks_updated_at_idx;` and survives an up, down, up round trip.
+- [x] Staging writable-DB proof passed at the verified source SHA `07107d11d` (run 42349510567 job 128334429172).
+- [ ] Staging writable-DB proof at the current head: FAILED at `4ba93c913` and `82e64ada6` on an intermittent `listByLifecycleStates` statement timeout (recorded below); not claimed.
+- [ ] Live schema parity against production: `PENDING_POST_DEPLOY`; not claimed.
 
 ## EVIDENCE:
 
@@ -248,6 +250,13 @@ application code changed between the passing and failing runs. This is a second 
 instance of the intermittent staging timeout the index targets; it is not evidence that
 the index works or fails. Parity at this head is still `PENDING_POST_DEPLOY`
 (`missing_in_actual public.picks.picks_updated_at_idx`).
+
+Head `82e64ada6d909991f6cab3d97e52f896881388be`: run 42351866879 job 128341534436 FAILED
+again, this time in `WORK-2026101401: repaired performance readers reconcile with exact live
+PostgREST counts` with `Failed to listByLifecycleStates: canceling statement due to statement
+timeout`. Across four exact-head runs the writable job passed once (`07107d11d`) and failed
+three times, always in the reader the index targets. No code changed between them. Whether
+the index fixes this is not proven.
 
 ## Merge SHA Binding
 
