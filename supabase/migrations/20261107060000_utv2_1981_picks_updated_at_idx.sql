@@ -5,4 +5,5 @@
 -- Production execution requires a separate Griff authorization packet.
 -- Deliberately fail on name collision: IF NOT EXISTS could hide an invalid or
 -- differently defined index left by a failed concurrent build. Inspect first.
+-- FAIL-CLOSED-PRECONDITION: public.picks_updated_at_idx
 CREATE INDEX CONCURRENTLY picks_updated_at_idx ON public.picks USING btree (updated_at);
