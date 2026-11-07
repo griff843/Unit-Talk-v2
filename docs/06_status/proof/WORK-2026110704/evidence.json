@@ -7,12 +7,12 @@
   "source_sha": "f473dc0d084e3b8afa466f279f42845b0f815d20",
   "status": "pre_merge_live_proof_passed",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "29561f7fb478fa1f37fbb3d1a8dbdefd512fc108",
     "verified_source_sha": "f473dc0d084e3b8afa466f279f42845b0f815d20",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "execution_sha",
-    "bound_at": "2026-11-07T18:09:12.000Z"
+    "sha_type": "merge_sha",
+    "bound_at": "2026-11-07T21:31:51.893Z"
   },
   "static_proof": {
     "status": "pass",

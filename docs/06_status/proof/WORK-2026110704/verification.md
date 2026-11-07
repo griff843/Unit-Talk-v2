@@ -1,6 +1,6 @@
 # PROOF: WORK-2026110704
 
-MERGE_SHA: pending merge
+MERGE_SHA: 29561f7fb478fa1f37fbb3d1a8dbdefd512fc108
 
 Evidence bundle v1 (tier T1, lane type runtime).
 
@@ -14,7 +14,7 @@ Evidence bundle v1 (tier T1, lane type runtime).
 | Owner | codex-cli/WORK-2026110704 |
 | Date | 2026-11-07 |
 | Verifier Identity | codex-cli/WORK-2026110704 |
-| Commit SHA(s) | c2130be76c7f1beaea49189649ec69027e52e4b0 (implementation) |
+| Commit SHA(s) | `29561f7fb478fa1f37fbb3d1a8dbdefd512fc108` (merge SHA) |
 | Related PRs | https://github.com/griff843/Unit-Talk-v2/pull/1837 |
 
 ## Scope

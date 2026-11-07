@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110704/.out/worktrees/codex__work-2026110704-grading-cron-resilience",
   "branch": "codex/work-2026110704-grading-cron-resilience",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "29561f7fb478fa1f37fbb3d1a8dbdefd512fc108",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1837",
   "files_changed": [],
   "file_scope_lock": [
@@ -24,14 +24,22 @@
     "docs/06_status/proof/WORK-2026110704/verification.md",
     "docs/06_status/proof/WORK-2026110704/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-11-07T17:10:18.388Z",
-  "heartbeat_at": "2026-11-07T17:30:23.419Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-11-07T21:31:56.346Z",
+  "closed_at": "2026-11-07T21:31:56.346Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026110704-grading-cron-resilience.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-11-07T21:31:53.632Z",
+      "verdict": "pass",
+      "merge_sha": "29561f7fb478fa1f37fbb3d1a8dbdefd512fc108",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-medium",
