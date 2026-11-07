@@ -1,0 +1,31 @@
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9147499Z # Subtest: WORK0307 staging: complete readers and duplicate timestamp boundary mutations
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9158486Z not ok 1 - WORK0307 staging: complete readers and duplicate timestamp boundary mutations
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9160432Z   ---
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9160837Z   duration_ms: 31091.848355
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9161294Z   type: 'test'
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9162156Z   location: '/home/runner/work/Unit-Talk-v2/Unit-Talk-v2/apps/api/src/t1-proof-work-2026110307-keyset-paging-live.test.ts:1:680'
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9162900Z   failureType: 'testCodeFailure'
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9163771Z   error: 'Failed to listByLifecycleStates: guard statement failed after 3 tries: canceling statement due to statement timeout [57014] [HTTP 500]'
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9164530Z   code: 'ERR_TEST_FAILURE'
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9164967Z   stack: |-
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9165639Z     readPopulationGuardStatement (/home/runner/work/Unit-Talk-v2/Unit-Talk-v2/packages/db/src/runtime-repositories.ts:3136:9)
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9166482Z     process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9167413Z     async DatabasePickRepository.listByLifecycleStates (/home/runner/work/Unit-Talk-v2/Unit-Talk-v2/packages/db/src/runtime-repositories.ts:3591:24)
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9168839Z     async TestContext.<anonymous> (/home/runner/work/Unit-Talk-v2/Unit-Talk-v2/apps/api/src/t1-proof-work-2026110307-keyset-paging-live.test.ts:44:9)
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9169643Z     async Test.run (node:internal/test_runner/test:1054:7)
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9170284Z     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9170797Z   ...
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9302600Z 1..1
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9303362Z # tests 1
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9303858Z # suites 0
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9304465Z # pass 0
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9305409Z # fail 1
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9306304Z # cancelled 0
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9306892Z # skipped 0
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9308169Z # todo 0
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9309258Z # duration_ms 31508.326482
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9540680Z  ELIFECYCLE  Command failed with exit code 1.
+Writable DB proof (staging only)	Run the T1 live proof suites against staging	2026-11-06T18:24:05.9713763Z ##[error]Process completed with exit code 1.
+Writable DB proof (staging only)	Scrub credentials	﻿2026-11-06T18:24:05.9973205Z ##[group]Run rm -f local.env
+Writable DB proof (staging only)	Scrub credentials	2026-11-06T18:24:05.9973537Z ^[[36;1mrm -f local.env^[[0m
+Writable DB proof (staging only)	Scrub credentials	2026-11-06T18:24:06.0004678Z shell: /usr/bin/bash -e {0}
