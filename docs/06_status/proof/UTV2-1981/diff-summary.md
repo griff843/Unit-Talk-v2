@@ -1,5 +1,7 @@
 # UTV2-1981 — diff summary
 
+MERGE_SHA: pending merge
+
 Execution SHA: `1741d71b9ce5b640a179f83412cccdc20d1d0e5d`. Merge SHA: pending governed merge.
 
 The repo migration now guards the index name before DDL, then runs ordinary

@@ -1,9 +1,19 @@
-# UTV2-1981 — executor verification (attempt 2)
+# PROOF: UTV2-1981 — executor verification (attempt 2)
 
 MERGE_SHA: pending merge
 
 Execution SHA: 1741d71b9ce5b640a179f83412cccdc20d1d0e5d. Draft PR: https://github.com/griff843/Unit-Talk-v2/pull/1834.
 No READY_FOR_REVIEW attestation, PM approval, merge, live DDL or lane finalization.
+
+## ASSERTIONS:
+
+- The migration refuses a same-named index that is not a valid, ready, non-unique btree on `public.picks(updated_at)` (SQLSTATE `42P07`), and otherwise creates it with `IF NOT EXISTS`; the repo file carries no `CONCURRENTLY`.
+- The down script is exactly `DROP INDEX IF EXISTS public.picks_updated_at_idx;` and survives an up, down, up round trip.
+- Staging writable-DB proof, and parity against production, are NOT yet passing; both are recorded as such below and nothing here claims them.
+
+## EVIDENCE:
+
+The sections that follow hold the evidence: focused and root test results, exact-head CI receipts, the scratch PostgreSQL transcript, and the staging failure.
 
 ## Verification
 

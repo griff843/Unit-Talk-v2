@@ -1,5 +1,7 @@
 # UTV2-1981 — production apply design
 
+MERGE_SHA: pending merge
+
 Draft for Griff; nothing in this packet has been executed. Separate Griff production
 authorization is required after PM review, governed merge, and staging evidence.
 No staging or production DDL is authorized for this executor.
