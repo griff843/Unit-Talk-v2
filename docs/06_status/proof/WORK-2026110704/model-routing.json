@@ -1,0 +1,14 @@
+{
+  "issue_id": "WORK-2026110704",
+  "profile": "codex-sol-medium",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "medium",
+  "selected_by": "three-brain",
+  "policy_version": "3.0.0",
+  "model_profile": "codex-sol-medium",
+  "override_used": false,
+  "execution_sha": "c2130be76c7f1beaea49189649ec69027e52e4b0",
+  "provenance_source": "Lane manifest declaration; outer executor wrapper owns verified execution provenance.",
+  "observed_model": "unavailable",
+  "observed_reasoning_effort": "unavailable"
+}

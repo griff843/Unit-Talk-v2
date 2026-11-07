@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "issue_id": "WORK-2026110704",
+  "verifier": {
+    "identity": "codex-cli/WORK-2026110704"
+  },
+  "execution_sha": "c2130be76c7f1beaea49189649ec69027e52e4b0",
+  "static_proof": {
+    "pnpm_verify": "fail: WIRING_TEST_UNWIRED_NEW; required package.json test wiring is outside allowed scope",
+    "type_check": "pass",
+    "tests": "pass; serial pnpm test exit 0; 7890 test executions, 13 skipped; focused tests 23/23 pass",
+    "mutation": "pass; removed handler produces 3 expected transient recovery failures",
+    "r_level_check": "pass",
+    "pnpm_verify_static": "fail: WIRING_TEST_UNWIRED_NEW"
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "blocked/deferred",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "reason": "Staging identity guard refused local host 127.0.0.1; requires staging-ci CI_SUPABASE_* credentials.",
+    "queries": [],
+    "row_counts": [],
+    "failure_injection": "23/23 focused tests pass; synthetic only"
+  },
+  "sha_binding": {
+    "verified_source_sha": "c2130be76c7f1beaea49189649ec69027e52e4b0",
+    "sha_type": "execution_sha",
+    "bound_at": "2026-11-07T17:29:32.258261+00:00",
+    "merge_sha": null
+  },
+  "post_merge_pending": [
+    "PM approval and governed merge",
+    "final evidence binding to merge SHA",
+    "ops:lane-finalize",
+    "ops:orchestration-reconcile"
+  ],
+  "blockers": [
+    "Authorize package.json only to add grading-cron-health.test.ts to test:apps-api-agent; outside current packet scope.",
+    "Writable live DB proof deferred to staging-ci CI_SUPABASE_* credentials."
+  ]
+}
