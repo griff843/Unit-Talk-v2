@@ -96,6 +96,10 @@ export async function startGradingCronLoop(
   let cycle = 0;
   let runGapAlertOpen = false;
   let consecutiveFailures = 0;
+  // Set when a failed grading pass could not be evaluated for a health alert
+  // (e.g. the run listing itself failed); the next successful cycle must still
+  // evaluate it even if the newest persisted run is a no-op.
+  let healthEvaluationPending = false;
   const failureBudget = options.maxConsecutiveFailures ?? 5;
   const retryBaseMs = options.retryBaseMs ?? 1_000;
   const retryMaxMs = options.retryMaxMs ?? 30_000;
@@ -111,6 +115,22 @@ export async function startGradingCronLoop(
     throw new Error('Invalid grading cron retry policy');
   }
 
+  const emitHealthTransition = (
+    transition: GradingHealthAlertTransition | null,
+  ): void => {
+    if (!transition) return;
+    if (transition.kind === 'open') {
+      options.logger?.error?.(transition.message);
+    } else {
+      options.logger?.info?.(transition.message);
+    }
+    if (options.onStalenessAlert) {
+      void options.onStalenessAlert(transition.message).catch(() => {
+        /* fire-and-forget */
+      });
+    }
+  };
+
   while (true) {
     cycle += 1;
     try {
@@ -123,6 +143,19 @@ export async function startGradingCronLoop(
       });
 
       if (summary.error) {
+        // A failed grading pass persists a grading.run row with outcome
+        // 'failed' before it throws. Evaluate it now: the throw skips the
+        // normal evaluator below, and a later no-work cycle would not reopen it.
+        try {
+          const failedRuns = await options.repositories.runs.listByType(
+            'grading.run',
+            20,
+          );
+          emitHealthTransition(evaluateGradingHealthAlertTransition(failedRuns));
+          healthEvaluationPending = false;
+        } catch {
+          healthEvaluationPending = true;
+        }
         throw new Error(summary.error);
       } else if (summary.result) {
         options.logger?.info?.(
@@ -171,20 +204,11 @@ export async function startGradingCronLoop(
         }
       }
 
-      const outcomeTransition =
-        evaluateGradingHealthAlertTransition(recentRuns);
-      if (outcomeTransition) {
-        if (outcomeTransition.kind === 'open') {
-          options.logger?.error?.(outcomeTransition.message);
-        } else {
-          options.logger?.info?.(outcomeTransition.message);
-        }
-        if (options.onStalenessAlert) {
-          void options.onStalenessAlert(outcomeTransition.message).catch(() => {
-            /* fire-and-forget */
-          });
-        }
-      }
+      const evaluatedRuns = healthEvaluationPending
+        ? dropLeadingNonDecisiveRuns(recentRuns)
+        : recentRuns;
+      emitHealthTransition(evaluateGradingHealthAlertTransition(evaluatedRuns));
+      healthEvaluationPending = false;
 
       await refreshLiveness();
       consecutiveFailures = 0;
@@ -256,6 +280,20 @@ function readOutcomeClass(run: SystemRunRecord | undefined): string | null {
   }
   const outcomeClass = (details as Record<string, unknown>)['outcome_class'];
   return typeof outcomeClass === 'string' ? outcomeClass : null;
+}
+
+function dropLeadingNonDecisiveRuns(
+  runs: readonly SystemRunRecord[],
+): readonly SystemRunRecord[] {
+  const index = runs.findIndex((run) => {
+    const outcome = readOutcomeClass(run);
+    return (
+      outcome === 'succeeded_with_work' ||
+      outcome === 'degraded_stale_input' ||
+      outcome === 'failed'
+    );
+  });
+  return index < 0 ? [] : runs.slice(index);
 }
 
 /**

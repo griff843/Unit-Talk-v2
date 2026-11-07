@@ -677,3 +677,99 @@ test('grading-cron-health: liveness is unhealthy when missing, expired, malforme
   }
   assert.equal(await isGradingCronFresh(path, 0), false);
 });
+
+type ScriptedPass = 'fail' | 'noop' | 'work';
+
+/**
+ * Drives the real loop with passes that persist a grading.run row exactly as
+ * runGradingPass does (a failed pass persists outcome 'failed' and throws).
+ */
+async function runScriptedGradingLoop(
+  script: ScriptedPass[],
+  runs: InMemorySystemRunRepository,
+): Promise<string[]> {
+  const alerts: string[] = [];
+  let index = 0;
+  let lastSucceeded = false;
+  // The in-memory repo sorts by millisecond timestamp, so same-millisecond runs
+  // come back oldest-first. Real storage is newest-first; make that deterministic.
+  const listByTypeRaw = runs.listByType.bind(runs);
+  const idOf = (run: SystemRunRecord) => Number(run.id.replace('run_', ''));
+  Object.assign(runs, {
+    listByType: async (runType: string, limit = 50) =>
+      (await listByTypeRaw(runType, 10_000)).sort((a, b) => idOf(b) - idOf(a)).slice(0, limit),
+  });
+  const stop = new Error('script complete');
+  const persist = async (outcome: string, status: 'failed' | 'succeeded') => {
+    const run = await runs.startRun({ runType: 'grading.run', details: { outcome_class: 'failed' } });
+    await runs.completeRun({
+      runId: run.id,
+      status,
+      details: { outcome_class: outcome, graded_count: outcome === 'succeeded_with_work' ? 2 : 0 },
+    });
+  };
+  await assert.rejects(
+    startGradingCronLoop({
+      repositories: { ...createInMemoryRepositoryBundle(), runs },
+      maxConsecutiveFailures: 5,
+      pollIntervalMs: 10,
+      retryBaseMs: 1,
+      retryMaxMs: 2,
+      refreshLiveness: async () => {},
+      logger: quietLogger,
+      onStalenessAlert: async (message) => {
+        alerts.push(message);
+      },
+      runGradingPass: async () => {
+        const step = script[index++];
+        lastSucceeded = step !== 'fail';
+        if (step === 'fail') {
+          await persist('failed', 'failed');
+          throw new Error('injected grading pass failure');
+        }
+        if (step === 'work') await persist('succeeded_with_work', 'succeeded');
+        else await persist('no_op_no_input', 'succeeded');
+        return { attempted: 0, graded: 0, skipped: 0, errors: 0, details: [] };
+      },
+      sleep: async () => {
+        if (index >= script.length && lastSucceeded) throw stop;
+      },
+    }),
+    (error) => error === stop,
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  return alerts;
+}
+
+test('a failed grading pass followed by a no-work cycle still raises the grading-health alert once', async () => {
+  const alerts = await runScriptedGradingLoop(['fail', 'noop'], new InMemorySystemRunRepository());
+  assert.equal(alerts.length, 1);
+  assert.match(alerts[0] ?? '', /ALERT OPEN: grading outcome=failed/);
+});
+
+test('repeated failed passes deduplicate to one alert and fresh work clears it', async () => {
+  const alerts = await runScriptedGradingLoop(
+    ['fail', 'fail', 'noop', 'work'],
+    new InMemorySystemRunRepository(),
+  );
+  assert.equal(alerts.length, 2);
+  assert.match(alerts[0] ?? '', /ALERT OPEN/);
+  assert.match(alerts[1] ?? '', /ALERT CLEARED/);
+});
+
+test('an alert missed because the failure-path run listing failed is still raised after a no-work cycle', async () => {
+  const runs = new InMemorySystemRunRepository();
+  const original = runs.listByType.bind(runs);
+  let listCalls = 0;
+  Object.assign(runs, {
+    listByType: async (...args: Parameters<typeof original>) => {
+      listCalls += 1;
+      // Call 1 is the failure-path evaluation; fail it so the alert is pending.
+      if (listCalls === 1) throw new Error('injected listByType failure');
+      return Reflect.apply(original, runs, args);
+    },
+  });
+  const alerts = await runScriptedGradingLoop(['fail', 'noop'], runs);
+  assert.equal(alerts.length, 1);
+  assert.match(alerts[0] ?? '', /ALERT OPEN: grading outcome=failed/);
+});
