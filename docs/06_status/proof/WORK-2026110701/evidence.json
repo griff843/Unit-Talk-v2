@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110701",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "0dd2fb9ca065d55f086536a8566dca8e7b5c9ba4",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm test",
+    "conclusion": "success",
+    "verified_source_sha": "0dd2fb9ca065d55f086536a8566dca8e7b5c9ba4",
+    "full_suite": { "command": "pnpm test", "pass": 7868, "fail": 0, "skipped": 13, "exit_code": 0 },
+    "type_check": "pnpm type-check exit 0",
+    "r_level": "PASS",
+    "note": "Documentation-only lane. Local pnpm verify is not claimed; the PR's required verify check is the authority."
+  }
+}
