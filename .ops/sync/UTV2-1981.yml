@@ -297,4 +297,4 @@ task_contract:
       - docs/06_status/proof/UTV2-1981/production-apply-packet.md
     captured_at: 2026-11-07T05:16:48.499Z
     description_sha256: 5683de28d6b3405dac45fb5c1f646b053767f2d1f65dee44e4d43a239ec05655
-  contract_hash: 59d8f420835f3bf6fb964d7ddbe31b396ae4ff344dbbeb4da7a2dfc3e20dd1b7
+  contract_hash: 679e742c09ca0c6076bca7305fe3c5c7649b0a1094da2c092c06f2c12d9d5a33
