@@ -12,3 +12,5 @@
 Implementation SHA: c2130be76c7f1beaea49189649ec69027e52e4b0
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1837
+
+Compose healthcheck is a plain node probe (not tsx) that reads UNIT_TALK_GRADING_CRON_POLL_MS from the container env; see FINAL VERDICT in verification.md.

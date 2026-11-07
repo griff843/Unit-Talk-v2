@@ -10,7 +10,7 @@ Evidence bundle v1 (tier T1, lane type runtime).
 |---|---|
 | Issue ID | WORK-2026110704 |
 | Tier | T1 |
-| Phase / Gate | Blocked executor draft review candidate |
+| Phase / Gate | T1 review candidate; final verdict in "FINAL VERDICT" below |
 | Owner | codex-cli/WORK-2026110704 |
 | Date | 2026-11-07 |
 | Verifier Identity | codex-cli/WORK-2026110704 |
@@ -300,7 +300,7 @@ not ok 3 - loop recovers from transient listByType failures and resets the conse
 # duration_ms 1838.392654
 ```
 
-### E5 Scope
+### E5 Scope (HISTORICAL: diff shown predates the node probe; see FINAL VERDICT)
 
 Command: `git diff origin/main -- deploy/production/docker-compose.yml`
 
@@ -323,7 +323,7 @@ index d729db6a0..ab3ee9212 100644
 No existing tests were removed. Nine cron cases plus one health case were added.
 No new `any` casts. All changed paths are authorized implementation or explicitly required proof artifacts.
 
-### E6 Static verification
+### E6 Static verification (HISTORICAL: records the pre-fold FAIL, superseded by FINAL VERDICT)
 
 `pnpm type-check`: PASS (exit 0). Initial TS2352 errors in incomplete new test repositories were
 fixed by using `createInMemoryRepositoryBundle`; the final type-check passes.
@@ -388,7 +388,7 @@ Rules matched: (none) — no R-level artifacts required for this diff
 
 No R1–R5 path rules match this change. Final tracked-file system alignment check: PASS.
 
-### E7 Live DB deferred
+### E7 Live DB deferred (HISTORICAL: superseded by exact-head CI proof in FINAL VERDICT)
 
 Command: `pnpm test:db` (exit 1 before any writable test).
 
@@ -414,49 +414,22 @@ No override or attempt to bypass staging identity was made.
 | No grading-service/settlement-service/packages/workflow edits | E5 |
 | Mutation proof | 4 / E4 |
 
-## Stop Conditions Encountered
+## FINAL VERDICT
 
-The final serial `pnpm verify` fails early at `WIRING_TEST_UNWIRED_NEW` for
-`apps/api/src/grading-cron.test.ts (grading-cron-health: test)`. A one-line addition to
-`package.json` `test:apps-api-agent` is required, but `package.json` is outside
-the packet allowed scope. The exact scope addition was requested; no approval has been received
-and no out-of-scope edit was made. This is a blocked draft, not a completed verification gate.
+This section is authoritative. Where an earlier section (E5, E6, E7, or the first-draft wording) conflicts with it, this section wins; those earlier sections are kept only as history.
 
-Initial concurrent `pnpm test` and `pnpm verify` collided on shared temporary branches/manifests.
-The final standalone `pnpm test` ran serially and passed; no baseline repairs were made.
-
-Writable live DB proof is deferred to CI by the staging identity guard. No baseline repairs made.
-Remote runtime reads in the full ops brief failed with fetch errors; no live runtime claim is made.
-
-## Sign-off
-
-Executor evidence only. PM approval, governed merge and the final merge-SHA-bound evidence are pending.
-No executor-result/v1 READY_FOR_REVIEW attestation is published by this executor.
-The authorized post-executor path owns lane-finalize and subsequent orchestration-reconcile.
-
-## Verification
-
-`pnpm type-check` PASS. `pnpm test` PASS (serial exit 0; 7890 test executions in TAP summaries, 13 skipped). `pnpm verify` FAIL: WIRING_TEST_UNWIRED_NEW; grading-cron.test.ts needs package.json test-script wiring, outside the authorized file scope. Scope addition requested..
-Focused tests: 23/23 PASS. Mutation: expected 3/3 failures without the handler. R-level: PASS.
-Writable DB proof: blocked/deferred to staging-ci.
+| Item | Final state |
+|---|---|
+| Failure-injection (E1-E4) | PASS: apps/api/src/grading-cron.test.ts 23/23; mutation (outer try/catch removed) fails the 3 transient-recovery tests |
+| Static verification | PASS: the WIRING_TEST_UNWIRED_NEW failure was resolved without a scope change by folding the liveness test into the already-wired grading-cron.test.ts; package.json untouched; `pnpm verify:static` exit 0 |
+| Live DB proof | PASS in CI against staging (xskgrzbteyqdufktjrjx): run 42398274218 attempt 1, head 25f066444cc43fb98c7f43295f989034a1fe6f74, `pnpm test:db` exit 0, 9/9. This is the generic DB smoke suite; it does not run the cron loop. Re-confirm on the final head in the PR checks |
+| Healthcheck | Plain `node -e` probe (about 59 MB; the replaced tsx probe peaked about 190 MB). Rule: marker present, not in the future, age <= 3 x poll. Poll read from the container's own UNIT_TALK_GRADING_CRON_POLL_MS, positive integer, default 300000, identical to grading-cron.ts parsing |
+| Deployed poll config | Repository sets no UNIT_TALK_GRADING_CRON_POLL_MS (compose has no override; .env.production is host-side and was not read), so the default 300000 ms applies unless the host file overrides it; either way the probe follows the container's value. Verified by running the probe at 400 s and 1000 s marker age with default and 600000 ms poll |
+| Restart behavior | Cron exits 1 after 5 consecutive failures (entrypoint test); compose `restart: unless-stopped` restarts it. An unhealthy healthcheck alone does NOT restart a container under plain compose, so a hung (not failing) loop is reported unhealthy but not self-healed; that gap is out of this lane's scope and not claimed fixed |
+| Resource limits | grading-cron service limits unchanged: memory 256m, cpus 0.25 |
+| Not done / reserved | No deploy, restart, provider change, data mutation or kill-switch change. The compose healthcheck only takes effect after a Griff-dispatched deploy. T1 approval (t1-approved label and pm-verdict/v1) is independent and pending |
 
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1837
-
-## Orchestrator amendment (post-Codex review)
-
-- WIRING_TEST_UNWIRED_NEW resolved without a scope change: the liveness-freshness test was folded into the already-wired `apps/api/src/grading-cron.test.ts`; the separate unwired test file was removed. `package.json` is untouched. The "scope addition requested" lines above are superseded.
-- Healthcheck changed from `tsx grading-cron-health.ts` (measured ~190 MB peak RSS, vs ~59 MB bare node) to a plain `node -e` probe applying the same freshness rule (marker present, not future, age <= 15 min), because a tsx probe beside the cron inside the 256m container limit risks OOM. The probe honours the default 5-minute poll only; `UNIT_TALK_GRADING_CRON_POLL_MS` overrides apply to the TS helper, not the compose probe.
-
-
-### E6/E7 Exact-head CI proof (supersedes the earlier FAIL notes above)
-
-
-```text
-pnpm verify:static (local, after folding the liveness test into the wired suite) -> exit 0
-ci.yml run 42398274218 attempt 1, head_sha 25f066444cc43fb98c7f43295f989034a1fe6f74
-  Writable DB proof (staging only), job 128480271583 -> success (staging project xskgrzbteyqdufktjrjx)
-  verify, job 128484817833 -> see PR check state at merge time
-```

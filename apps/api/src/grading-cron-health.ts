@@ -39,7 +39,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     10,
   );
   const pollIntervalMs =
-    Number.isFinite(configuredPoll) && configuredPoll >= 0
+    Number.isFinite(configuredPoll) && configuredPoll > 0
       ? configuredPoll
       : 300_000;
   void isGradingCronFresh(GRADING_CRON_LIVENESS_PATH, pollIntervalMs).then(
