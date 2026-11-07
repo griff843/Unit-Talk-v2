@@ -4,11 +4,11 @@
   "tier": "T1",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
-  "source_sha": "25f066444cc43fb98c7f43295f989034a1fe6f74",
+  "source_sha": "f473dc0d084e3b8afa466f279f42845b0f815d20",
   "status": "pre_merge_live_proof_passed",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "25f066444cc43fb98c7f43295f989034a1fe6f74",
+    "verified_source_sha": "f473dc0d084e3b8afa466f279f42845b0f815d20",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "execution_sha",
@@ -18,8 +18,8 @@
     "status": "pass",
     "command": "pnpm verify:static",
     "type_check": "pass",
-    "test": "pass; focused apps/api/src/grading-cron.test.ts 23/23",
-    "mutation": "pass; removing the outer try/catch fails 3 transient-recovery tests",
+    "test": "pass; focused apps/api/src/grading-cron.test.ts 26/26",
+    "mutation": "pass; removing the outer try/catch fails 3 transient-recovery tests; removing the failure-path health evaluation fails 2 alert regression tests",
     "r_level": "PASS"
   },
   "runtime_proof": {
@@ -27,15 +27,15 @@
     "command": "pnpm test:db (CI Writable DB proof (staging only))",
     "ci_exact_head": {
       "workflow": "ci.yml",
-      "run_id": 42398274218,
+      "run_id": 42408822349,
       "attempt": 1,
-      "head_sha": "25f066444cc43fb98c7f43295f989034a1fe6f74",
-      "staging_db_job_id": 128480271583,
+      "head_sha": "f473dc0d084e3b8afa466f279f42845b0f815d20",
+      "staging_db_job_id": 128512357292,
       "staging_db_job": "success",
       "staging_project": "xskgrzbteyqdufktjrjx",
-      "receipt_artifact": "utv2-1630-db-proof-receipt-42398274218-1 (ci-db-proof-receipt/v2: exit_code 0, tap 9/9 pass, observed project xskgrzbteyqdufktjrjx)"
+      "receipt_artifact": "utv2-1630-db-proof-receipt-42408822349-1 (ci-db-proof-receipt/v2: exit_code 0, tap 9/9 pass, observed project xskgrzbteyqdufktjrjx)"
     },
-    "failure_injection": "23/23 focused tests pass; synthetic fault injection, no production restart or data writes",
+    "failure_injection": "26/26 focused tests pass; synthetic fault injection, no production restart or data writes",
     "queries": [
       {
         "table": "picks,settlement_records,pick_lifecycle,audit_log",
@@ -51,7 +51,7 @@
       },
       {
         "table": "provider_offers",
-        "description": "ok 1/2 - canonical freshness SELECT executes against staging (latestOfferUpdatedAt=2026-11-07T17:34:02.404+00:00)"
+        "description": "ok 1/2 - canonical freshness SELECT executes against staging (latestOfferUpdatedAt=2026-11-07T19:10:06.168+00:00)"
       }
     ],
     "row_counts": [

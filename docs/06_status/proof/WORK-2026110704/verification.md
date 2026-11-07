@@ -29,13 +29,13 @@ Live DB proof, PM approval, merge, merge-SHA binding and post-merge closeout rem
 
 ## ASSERTIONS:
 
-- [x] Transient bookkeeping failures recover and reset the consecutive-failure budget (E1, 23/23 focused tests).
+- [x] Transient bookkeeping failures recover and reset the consecutive-failure budget (E1, 26/26 focused tests).
 - [x] Continuous failures exhaust the bounded budget, alert within 5 s, reject and exit 1 (E2).
 - [x] Missing, stale, malformed or future liveness markers are unhealthy (E3).
 - [x] Removing the outer try/catch fails the recovery tests (E4, mutation).
 - [x] Only the grading-cron healthcheck changed in deploy config (E5).
-- [x] Static verification passes on exact head 25f066444cc43fb98c7f43295f989034a1fe6f74 (E6).
-- [x] Writable live-DB proof passes on exact head 25f066444cc43fb98c7f43295f989034a1fe6f74 in CI against staging (E7).
+- [x] Static verification passes on exact head f473dc0d084e3b8afa466f279f42845b0f815d20 (E6).
+- [x] Writable live-DB proof passes on exact head f473dc0d084e3b8afa466f279f42845b0f815d20 in CI against staging (E7).
 
 | # | Assertion | Evidence Type | Source | Result | Evidence Ref |
 |---|---|---|---|---|---|
@@ -420,9 +420,10 @@ This section is authoritative. Where an earlier section (E5, E6, E7, or the firs
 
 | Item | Final state |
 |---|---|
-| Failure-injection (E1-E4) | PASS: apps/api/src/grading-cron.test.ts 23/23; mutation (outer try/catch removed) fails the 3 transient-recovery tests |
+| Grading-health alert on failed pass (PM review 2026-11-07, Codex thread grading-cron.ts:159) | FIXED: a failed pass now evaluates the persisted `failed` grading.run before throwing (pending flag if the listing fails). Regression tests in grading-cron.test.ts: failed pass then no-work cycle raises exactly one ALERT OPEN; repeated failures deduplicate to one alert and fresh work emits ALERT CLEARED; a missed evaluation (listing failure) is still raised after a no-work cycle. Mutation: disabling the failure-path evaluation fails the first two. Existing dedup/recovery evaluator tests unchanged and passing |
+| Failure-injection (E1-E4) | PASS: apps/api/src/grading-cron.test.ts 26/26; mutation (outer try/catch removed) fails the 3 transient-recovery tests |
 | Static verification | PASS: the WIRING_TEST_UNWIRED_NEW failure was resolved without a scope change by folding the liveness test into the already-wired grading-cron.test.ts; package.json untouched; `pnpm verify:static` exit 0 |
-| Live DB proof | PASS in CI against staging (xskgrzbteyqdufktjrjx): run 42398274218 attempt 1, head 25f066444cc43fb98c7f43295f989034a1fe6f74, `pnpm test:db` exit 0, 9/9. This is the generic DB smoke suite; it does not run the cron loop. Re-confirm on the final head in the PR checks |
+| Live DB proof | PASS in CI against staging (xskgrzbteyqdufktjrjx): run 42408822349 attempt 1, head f473dc0d084e3b8afa466f279f42845b0f815d20, `pnpm test:db` exit 0, 9/9. This is the generic DB smoke suite; it does not run the cron loop. Re-confirm on the final head in the PR checks |
 | Healthcheck | Plain `node -e` probe (about 59 MB; the replaced tsx probe peaked about 190 MB). Rule: marker present, not in the future, age <= 3 x poll. Poll read from the container's own UNIT_TALK_GRADING_CRON_POLL_MS, positive integer, default 300000, identical to grading-cron.ts parsing |
 | Deployed poll config | Repository sets no UNIT_TALK_GRADING_CRON_POLL_MS (compose has no override; .env.production is host-side and was not read), so the default 300000 ms applies unless the host file overrides it; either way the probe follows the container's value. Verified by running the probe at 400 s and 1000 s marker age with default and 600000 ms poll |
 | Restart behavior | Cron exits 1 after 5 consecutive failures (entrypoint test); compose `restart: unless-stopped` restarts it. An unhealthy healthcheck alone does NOT restart a container under plain compose, so a hung (not failing) loop is reported unhealthy but not self-healed; that gap is out of this lane's scope and not claimed fixed |
@@ -435,10 +436,10 @@ The grading cron now survives transient bookkeeping failures: it catches them, r
 
 ## Verification
 
-- Focused failure-injection suite: `pnpm exec tsx --test apps/api/src/grading-cron.test.ts` -> 23 tests, 23 pass, 0 fail (E1-E3).
+- Focused failure-injection suite: `pnpm exec tsx --test apps/api/src/grading-cron.test.ts` -> 26 tests, 26 pass, 0 fail (E1-E3).
 - Mutation: removing the outer try/catch fails the 3 transient-recovery tests (E4).
 - Static: `pnpm verify:static` exit 0 on the folded-test layout; `pnpm type-check` pass.
-- Runtime (live DB): CI Writable DB proof against staging xskgrzbteyqdufktjrjx, run 42398274218 attempt 1, `pnpm test:db` exit 0, 9/9, receipt artifact utv2-1630-db-proof-receipt-42398274218-1. Generic DB smoke suite: it covers settlement idempotency and no-duplicate tests (UTV2-920, UTV2-996) but does not run the cron loop.
+- Runtime (live DB): CI Writable DB proof against staging xskgrzbteyqdufktjrjx, run 42408822349 attempt 1, `pnpm test:db` exit 0, 9/9, receipt artifact utv2-1630-db-proof-receipt-42408822349-1. Generic DB smoke suite: it covers settlement idempotency and no-duplicate tests (UTV2-920, UTV2-996) but does not run the cron loop.
 - Healthcheck probe exercised at 400 s and 1000 s marker age with default and 600000 ms poll, and with a missing marker.
 - Not done, by design: no deploy, restart, provider change, data mutation or kill-switch change.
 
