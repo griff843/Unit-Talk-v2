@@ -1,0 +1,42 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110701",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110701/.out/worktrees/claude__work-2026110701-docs-authority-reconcile",
+  "branch": "claude/work-2026110701-docs-authority-reconcile",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/work/WORK-2026110701.md",
+    "CLAUDE.md",
+    "docs/05_operations/docs_authority_map.md",
+    "docs/06_status/CURRENT_STATE.md",
+    "docs/mission/spec.md",
+    "docs/START_HERE.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026110701/diff-summary.md",
+    "docs/06_status/proof/WORK-2026110701/evidence.json",
+    "docs/06_status/proof/WORK-2026110701/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-11-07T07:38:44.988Z",
+  "heartbeat_at": "2026-11-07T07:38:44.988Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/work-2026110701-docs-authority-reconcile.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110701/.out/worktrees/claude__work-2026110701-docs-authority-reconcile",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
