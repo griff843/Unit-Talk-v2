@@ -1,0 +1,78 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110704",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "source_sha": "f473dc0d084e3b8afa466f279f42845b0f815d20",
+  "status": "pre_merge_live_proof_passed",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "f473dc0d084e3b8afa466f279f42845b0f815d20",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "execution_sha",
+    "bound_at": "2026-11-07T18:09:12.000Z"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm verify:static",
+    "type_check": "pass",
+    "test": "pass; focused apps/api/src/grading-cron.test.ts 26/26",
+    "mutation": "pass; removing the outer try/catch fails 3 transient-recovery tests; removing the failure-path health evaluation fails 2 alert regression tests",
+    "r_level": "PASS"
+  },
+  "runtime_proof": {
+    "status": "pass",
+    "command": "pnpm test:db (CI Writable DB proof (staging only))",
+    "ci_exact_head": {
+      "workflow": "ci.yml",
+      "run_id": 42408822349,
+      "attempt": 1,
+      "head_sha": "f473dc0d084e3b8afa466f279f42845b0f815d20",
+      "staging_db_job_id": 128512357292,
+      "staging_db_job": "success",
+      "staging_project": "xskgrzbteyqdufktjrjx",
+      "receipt_artifact": "utv2-1630-db-proof-receipt-42408822349-1 (ci-db-proof-receipt/v2: exit_code 0, tap 9/9 pass, observed project xskgrzbteyqdufktjrjx)"
+    },
+    "failure_injection": "26/26 focused tests pass; synthetic fault injection, no production restart or data writes",
+    "queries": [
+      {
+        "table": "picks,settlement_records,pick_lifecycle,audit_log",
+        "description": "ok 6 - UTV2-920 invalid atomic settlement writes no settlement, lifecycle event, or audit row"
+      },
+      {
+        "table": "settlement_records",
+        "description": "ok 8 - UTV2-996 re-settling a settled pick creates a correction, no true duplicate base rows"
+      },
+      {
+        "table": "settlement_records",
+        "description": "ok 9 - UTV2-996 correction chain is additive; original settlement row not mutated"
+      },
+      {
+        "table": "provider_offers",
+        "description": "ok 1/2 - canonical freshness SELECT executes against staging (latestOfferUpdatedAt=2026-11-07T19:10:06.168+00:00)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "settlement_records",
+        "count": 0,
+        "status": "asserted by test 6: invalid atomic settlement writes zero rows"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 0,
+        "status": "asserted by test 4: invalid atomic enqueue writes zero rows"
+      }
+    ],
+    "scope_note": "The staging suite is the generic pnpm test:db smoke suite (apps/api/src/database-smoke.test.ts). It does not execute the grading cron loop; cron failure-injection proof is the synthetic unit suite. The DB tests below bound settlement idempotency/duplicate prevention on the staging schema."
+  },
+  "post_merge_pending": [
+    "PM approval (t1-approved label + pm-verdict/v1) and governed merge",
+    "merge-SHA binding",
+    "ops:lane-finalize",
+    "Griff-dispatched deploy (reserved) before the compose healthcheck is live"
+  ],
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1837"
+}

@@ -1,0 +1,260 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026110704
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026110704
+  objective: >-
+    Transient failures in cycle bookkeeping (heartbeat write, staleness read,
+    run start) never terminate the loop. They are caught, logged, and retried
+    with bounded exponential backoff.
+
+    A permanent failure (consecutive-failure budget exhausted) is visible and
+    actionable: an error log with a stable event name, an ops alert through the
+    existing `onStalenessAlert` path, and a non-zero process exit so `restart:
+    unless-stopped` recovers it.
+
+    Heartbeat freshness is monitored: each successful cycle refreshes a local
+    liveness marker; the container healthcheck fails when the marker is older
+    than a bounded multiple of the poll interval.
+
+    Failure-injection tests prove recovery after N transient failures and
+    detection (exit, alert, stale marker) after the budget is exhausted.
+  acceptance_criteria:
+    - A test injects a rejecting `startRun`/`completeRun`/`listByType` for fewer
+      than the budget and asserts the loop keeps cycling and later cycles
+      succeed.
+    - "A test injects continuous failure and asserts: bounded attempts and
+      bounded backoff, an alert is sent, and the failure surfaces as a rejected
+      loop promise that the entrypoint converts to `process.exit(1)` (entrypoint
+      exit logic unit-tested through an injectable exit function)."
+    - A test proves the freshness check returns unhealthy when the marker is
+      missing or older than the bound, and healthy when fresh.
+    - Existing grading, settlement, retry-state and staleness-alert behavior and
+      tests are unchanged and pass.
+    - The compose healthcheck is the only deploy-config change; no other
+      service, env var, secret, kill switch, schedule, provider setting or
+      containment mode changes.
+    - No change to `grading-service.ts`, `settlement-service.ts`, `packages/**`,
+      `.github/workflows/**`.
+  guardrails:
+    - No production restart, deployment or host change is part of this lane.
+      Shipping the fix is a separate deployment dispatch reserved to Griff.
+    - Do not touch the 7,306 historical picks, pick `706b136b`, stranded canary
+      rows, cron job 5, or any kill switch.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026110704 — Grading cron survives transient failures and reports
+      real liveness
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex-cli (profile codex-sol-medium)
+
+
+      Supersedes WORK-2026110703 (cancelled: started with executor claude by
+      mistake; PM directive 2026-11-07 requires Codex to implement).
+
+
+      Source: PM directive of 2026-11-07 (grading-cron reliability is a genuine
+      production-readiness issue). Evidence, read-only, 2026-11-07:
+      `grading.cron.heartbeat` last written 2026-11-05 11:33Z and `grading.run`
+      last 2026-11-05 11:21Z (72 failed runs in the preceding window); container
+      `unit-talk-grading-cron-1` still reports `healthy`; its last log line
+      (2026-11-05 11:38Z) is `Failed to start system run: TypeError: fetch
+      failed`.
+
+
+      ## Tier rationale
+
+
+      Declared T1, above the mechanical floor (T3 for every file in scope).
+      `DELEGATION_POLICY.md` ("Scheduled jobs / cron / retention") classifies
+      scheduled jobs as Tier C, and the change alters runtime health semantics
+      and the production compose healthcheck. PM to confirm or lower.
+
+
+      ## Root cause (code, `apps/api/src/grading-cron.ts`)
+
+
+      `startGradingCronLoop` awaits the per-cycle bookkeeping
+      (`runs.startRun`/`completeRun` heartbeat, `runs.listByType` staleness
+      read) outside any try/catch. One transient network rejection leaves the
+      `while (true)` loop; the top-level `.catch` logs and sets
+      `process.exitCode = 1` but does not exit, so the process lives on doing
+      nothing. The compose healthcheck is `pgrep -f 'grading-cron'`, which only
+      proves the process exists. `restart: unless-stopped` can recover an exit,
+      never a zombie.
+
+
+      ## Allowed file scope
+
+
+      - `apps/api/src/grading-cron.ts`, `apps/api/src/grading-cron.test.ts`
+
+      - new `apps/api/src/grading-cron-health.ts` and its test (liveness marker
+      write and freshness check; no new dependency)
+
+      - `deploy/production/docker-compose.yml`: the `grading-cron` service
+      `healthcheck` block only
+
+      - `.ops/work/WORK-2026110704.md`, `docs/06_status/proof/WORK-2026110704/`
+
+
+      ## Required Evidence (T1)
+
+
+      - `pnpm type-check`, `pnpm test`, `pnpm test:db`, and an evidence bundle
+      v1 tied to the merge SHA.
+
+      - Mutation proof: reverting the try/catch makes the transient-failure test
+      fail.
+
+      - A transcript of the failure-injection tests.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026110704.md
+    title: WORK-2026110704 — Grading cron survives transient failures and reports
+      real liveness
+    description: >-
+      # WORK-2026110704 — Grading cron survives transient failures and reports
+      real liveness
+
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex-cli (profile codex-sol-medium)
+
+
+      Supersedes WORK-2026110703 (cancelled: started with executor claude by
+      mistake; PM directive 2026-11-07 requires Codex to implement).
+
+
+      Source: PM directive of 2026-11-07 (grading-cron reliability is a genuine
+      production-readiness issue). Evidence, read-only, 2026-11-07:
+      `grading.cron.heartbeat` last written 2026-11-05 11:33Z and `grading.run`
+      last 2026-11-05 11:21Z (72 failed runs in the preceding window); container
+      `unit-talk-grading-cron-1` still reports `healthy`; its last log line
+      (2026-11-05 11:38Z) is `Failed to start system run: TypeError: fetch
+      failed`.
+
+
+      ## Tier rationale
+
+
+      Declared T1, above the mechanical floor (T3 for every file in scope).
+      `DELEGATION_POLICY.md` ("Scheduled jobs / cron / retention") classifies
+      scheduled jobs as Tier C, and the change alters runtime health semantics
+      and the production compose healthcheck. PM to confirm or lower.
+
+
+      ## Root cause (code, `apps/api/src/grading-cron.ts`)
+
+
+      `startGradingCronLoop` awaits the per-cycle bookkeeping
+      (`runs.startRun`/`completeRun` heartbeat, `runs.listByType` staleness
+      read) outside any try/catch. One transient network rejection leaves the
+      `while (true)` loop; the top-level `.catch` logs and sets
+      `process.exitCode = 1` but does not exit, so the process lives on doing
+      nothing. The compose healthcheck is `pgrep -f 'grading-cron'`, which only
+      proves the process exists. `restart: unless-stopped` can recover an exit,
+      never a zombie.
+
+
+      ## Objective
+
+
+      1. Transient failures in cycle bookkeeping (heartbeat write, staleness
+      read, run start) never terminate the loop. They are caught, logged, and
+      retried with bounded exponential backoff.
+
+      2. A permanent failure (consecutive-failure budget exhausted) is visible
+      and actionable: an error log with a stable event name, an ops alert
+      through the existing `onStalenessAlert` path, and a non-zero process exit
+      so `restart: unless-stopped` recovers it.
+
+      3. Heartbeat freshness is monitored: each successful cycle refreshes a
+      local liveness marker; the container healthcheck fails when the marker is
+      older than a bounded multiple of the poll interval.
+
+      4. Failure-injection tests prove recovery after N transient failures and
+      detection (exit, alert, stale marker) after the budget is exhausted.
+
+
+      ## Allowed file scope
+
+
+      - `apps/api/src/grading-cron.ts`, `apps/api/src/grading-cron.test.ts`
+
+      - new `apps/api/src/grading-cron-health.ts` and its test (liveness marker
+      write and freshness check; no new dependency)
+
+      - `deploy/production/docker-compose.yml`: the `grading-cron` service
+      `healthcheck` block only
+
+      - `.ops/work/WORK-2026110704.md`, `docs/06_status/proof/WORK-2026110704/`
+
+
+      ## Acceptance Criteria
+
+
+      - A test injects a rejecting `startRun`/`completeRun`/`listByType` for
+      fewer than the budget and asserts the loop keeps cycling and later cycles
+      succeed.
+
+      - A test injects continuous failure and asserts: bounded attempts and
+      bounded backoff, an alert is sent, and the failure surfaces as a rejected
+      loop promise that the entrypoint converts to `process.exit(1)` (entrypoint
+      exit logic unit-tested through an injectable exit function).
+
+      - A test proves the freshness check returns unhealthy when the marker is
+      missing or older than the bound, and healthy when fresh.
+
+      - Existing grading, settlement, retry-state and staleness-alert behavior
+      and tests are unchanged and pass.
+
+      - The compose healthcheck is the only deploy-config change; no other
+      service, env var, secret, kill switch, schedule, provider setting or
+      containment mode changes.
+
+      - No change to `grading-service.ts`, `settlement-service.ts`,
+      `packages/**`, `.github/workflows/**`.
+
+
+      ## Guardrails
+
+
+      - No production restart, deployment or host change is part of this lane.
+      Shipping the fix is a separate deployment dispatch reserved to Griff.
+
+      - Do not touch the 7,306 historical picks, pick `706b136b`, stranded
+      canary rows, cron job 5, or any kill switch.
+
+
+      ## Required Evidence (T1)
+
+
+      - `pnpm type-check`, `pnpm test`, `pnpm test:db`, and an evidence bundle
+      v1 tied to the merge SHA.
+
+      - Mutation proof: reverting the try/catch makes the transient-failure test
+      fail.
+
+      - A transcript of the failure-injection tests.
+    captured_at: 2026-11-07T17:10:08.576Z
+    description_sha256: a306221b70a1b65ce8f0a4ad0d493c93dca395c09d6facf8e7b9298f57a9120c
+  contract_hash: 7da2bd9630e723bf4970198250cafcc2ddbeea4011f1bad1683be1c64406dc18

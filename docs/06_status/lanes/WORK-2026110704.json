@@ -1,0 +1,51 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110704",
+  "lane_type": "runtime",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110704/.out/worktrees/codex__work-2026110704-grading-cron-resilience",
+  "branch": "codex/work-2026110704-grading-cron-resilience",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1837",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/grading-cron-health.test.ts",
+    "apps/api/src/grading-cron-health.ts",
+    "apps/api/src/grading-cron.test.ts",
+    "apps/api/src/grading-cron.ts",
+    "deploy/production/docker-compose.yml",
+    "docs/06_status/proof/WORK-2026110704/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026110704/diff-summary.md",
+    "docs/06_status/proof/WORK-2026110704/evidence.json",
+    "docs/06_status/proof/WORK-2026110704/verification.md",
+    "docs/06_status/proof/WORK-2026110704/model-routing.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-11-07T17:10:18.388Z",
+  "heartbeat_at": "2026-11-07T17:30:23.419Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/work-2026110704-grading-cron-resilience.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-medium",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "3.0.0"
+  },
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110704/.out/worktrees/codex__work-2026110704-grading-cron-resilience",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
