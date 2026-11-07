@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110701/.out/worktrees/claude__work-2026110701-docs-authority-reconcile",
   "branch": "claude/work-2026110701-docs-authority-reconcile",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "2cad6096a25c5094e44de9a55e1382479dc9272b",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1835",
   "files_changed": [],
   "file_scope_lock": [
@@ -23,14 +23,22 @@
     "docs/06_status/proof/WORK-2026110701/evidence.json",
     "docs/06_status/proof/WORK-2026110701/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-11-07T07:38:44.988Z",
-  "heartbeat_at": "2026-11-07T07:39:54.437Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-11-07T14:44:35.612Z",
+  "closed_at": "2026-11-07T14:44:35.612Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026110701-docs-authority-reconcile.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-11-07T14:44:33.531Z",
+      "verdict": "pass",
+      "merge_sha": "2cad6096a25c5094e44de9a55e1382479dc9272b",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

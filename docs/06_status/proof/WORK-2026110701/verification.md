@@ -1,6 +1,6 @@
 # PROOF: WORK-2026110701
 
-MERGE_SHA: pending merge
+MERGE_SHA: 2cad6096a25c5094e44de9a55e1382479dc9272b
 
 Issue: WORK-2026110701
 Tier: T2
@@ -49,8 +49,7 @@ Run on d2d807059d6fe53448a12d902e21e4a094c7d49a (the docs commit is 8561549ec3a6
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `2cad6096a25c5094e44de9a55e1382479dc9272b`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1835
-
 ## Rebind note (verified source moved to the main-merge head)
 Branch refresh by the merge wrapper (pr-update-branch) created merge commit d2d807059d6fe53448a12d902e21e4a094c7d49a, which brings in main's bot commit c26be5a64 (ops(readiness): refresh ledger, docs/06_status/readiness/readiness-score.json). That file is not in this PR's changed-file set (10 files vs base) but sits between the earlier verified source 0dd2fb9ca and the new head, which proof-binding rule 4 forbids. The five documentation files are byte-identical to what was verified on 0dd2fb9ca (git diff 0dd2fb9ca..d2d807059d6fe53448a12d902e21e4a094c7d49a touches only proof files and the ledger). The measurements above were re-run on d2d807059d6fe53448a12d902e21e4a094c7d49a: r-level-check PASS (10 changed files, no R-level artifacts required), pnpm type-check exit 0, pnpm test exit 0 with 7881 tests, 7868 pass, 0 fail, 13 skipped (summed across the runner's sub-runs). Local pnpm verify is still not claimed.
