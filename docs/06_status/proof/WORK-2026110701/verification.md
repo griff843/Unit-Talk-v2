@@ -4,7 +4,7 @@ MERGE_SHA: pending merge
 
 Issue: WORK-2026110701
 Tier: T2
-result: documentation-only change verified on 0dd2fb9ca065d55f086536a8566dca8e7b5c9ba4; local `pnpm verify` is not claimed (the PR's required `verify` check is the authority).
+result: documentation-only change verified on d2d807059d6fe53448a12d902e21e4a094c7d49a; local `pnpm verify` is not claimed (the PR's required `verify` check is the authority).
 
 ## ASSERTIONS:
 
@@ -16,7 +16,7 @@ result: documentation-only change verified on 0dd2fb9ca065d55f086536a8566dca8e7b
 
 ## EVIDENCE:
 
-Measured output on 0dd2fb9ca065d55f086536a8566dca8e7b5c9ba4:
+Measured output on d2d807059d6fe53448a12d902e21e4a094c7d49a:
 
 ```text
 $ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
@@ -39,7 +39,7 @@ Diff scope: 5 content files, 9 insertions, 6 deletions (see diff-summary.md). Ou
 
 ## Verification
 
-Run on 0dd2fb9ca065d55f086536a8566dca8e7b5c9ba4 (the docs commit is 8561549ec3a654d11c270429a152ccaba3629fc1; the later commit only binds the lane manifest to the PR):
+Run on d2d807059d6fe53448a12d902e21e4a094c7d49a (the docs commit is 8561549ec3a654d11c270429a152ccaba3629fc1; the later commit only binds the lane manifest to the PR):
 
 - [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: `Verdict: PASS`, `Rules matched: (none) — no R-level artifacts required for this diff`.
 - [x] `pnpm type-check`: exit 0.
@@ -51,3 +51,6 @@ Run on 0dd2fb9ca065d55f086536a8566dca8e7b5c9ba4 (the docs commit is 8561549ec3a6
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1835
+
+## Rebind note (verified source moved to the main-merge head)
+Branch refresh by the merge wrapper (pr-update-branch) created merge commit d2d807059d6fe53448a12d902e21e4a094c7d49a, which brings in main's bot commit c26be5a64 (ops(readiness): refresh ledger, docs/06_status/readiness/readiness-score.json). That file is not in this PR's changed-file set (10 files vs base) but sits between the earlier verified source 0dd2fb9ca and the new head, which proof-binding rule 4 forbids. The five documentation files are byte-identical to what was verified on 0dd2fb9ca (git diff 0dd2fb9ca..d2d807059d6fe53448a12d902e21e4a094c7d49a touches only proof files and the ledger). The measurements above were re-run on d2d807059d6fe53448a12d902e21e4a094c7d49a: r-level-check PASS (10 changed files, no R-level artifacts required), pnpm type-check exit 0, pnpm test exit 0 with 7881 tests, 7868 pass, 0 fail, 13 skipped (summed across the runner's sub-runs). Local pnpm verify is still not claimed.

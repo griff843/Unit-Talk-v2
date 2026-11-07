@@ -7,7 +7,7 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "0dd2fb9ca065d55f086536a8566dca8e7b5c9ba4",
+    "verified_source_sha": "d2d807059d6fe53448a12d902e21e4a094c7d49a",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -15,7 +15,7 @@
     "status": "pass",
     "command": "pnpm test",
     "conclusion": "success",
-    "verified_source_sha": "0dd2fb9ca065d55f086536a8566dca8e7b5c9ba4",
+    "verified_source_sha": "d2d807059d6fe53448a12d902e21e4a094c7d49a",
     "full_suite": { "command": "pnpm test", "pass": 7868, "fail": 0, "skipped": 13, "exit_code": 0 },
     "type_check": "pnpm type-check exit 0",
     "r_level": "PASS",
