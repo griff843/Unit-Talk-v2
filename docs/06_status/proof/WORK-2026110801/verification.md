@@ -40,7 +40,14 @@ Mutation (start refresh removed)               -> tests 31, pass 22, fail 9
 
 ## Verification
 
-Commands run on the code commit: the three commands above. `pnpm verify` and the full test suite run in CI on the exact PR head; see the PR checks and the executor-result comment.
+Code commit: `a48dccf93a3db3d618c4bb688843689d24df0188` (PR head at CI time `b8d9c5bd8350b270650e07eea7f172c4ed45ee53`, which adds only the lane-binding bot commit).
+
+- `pnpm type-check`: exit 0.
+- `pnpm test`: exit 0; 7899 tests, 7886 pass, 0 fail, 13 skipped.
+- `tsx --test apps/api/src/grading-cron.test.ts`: 31/31.
+- R-level command: `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` -> Verdict PASS, no R-level artifacts required for this diff.
+- CI on `b8d9c5bd8`: `verify` pass; Writable DB proof (staging only) pass, 9/9 against staging `xskgrzbteyqdufktjrjx` (generic smoke suite; it does not exercise the cron loop).
+- Executor: the lane manifest declares codex-cli routing; the implementation was written directly by the Claude orchestrator and codex-cli was not run. `model-routing.json` records the declared routing and `not_observed`.
 
 ## Merge SHA Binding
 
