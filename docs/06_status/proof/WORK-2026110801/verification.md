@@ -46,6 +46,7 @@ Code commit: `a48dccf93a3db3d618c4bb688843689d24df0188` (PR head at CI time `b8d
 - `pnpm test`: exit 0; 7899 tests, 7886 pass, 0 fail, 13 skipped.
 - `tsx --test apps/api/src/grading-cron.test.ts`: 31/31.
 - R-level command: `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` -> Verdict PASS, no R-level artifacts required for this diff.
+- `pnpm verify` (local, at `78b8e2f07`): the `verify:static` half passed in full (db-client-boundary, ops checks, env:check, lint, type-check, build, test, production-post-migration 14/14, smart-form 227/227, verify:commands). The `test:live-db` half stopped at `ci:assert-staging`, which refuses a local 127.0.0.1 target by design (requires staging `xskgrzbteyqdufktjrjx`); that stage is covered by CI's Writable DB proof (staging only) and is not a result of this change. Overall local `pnpm verify` exit: 1 for that reason only.
 - CI on `b8d9c5bd8`: `verify` pass; Writable DB proof (staging only) pass, 9/9 against staging `xskgrzbteyqdufktjrjx` (generic smoke suite; it does not exercise the cron loop).
 - Executor: the lane manifest declares codex-cli routing; the implementation was written directly by the Claude orchestrator and codex-cli was not run. `model-routing.json` records the declared routing and `not_observed`.
 
