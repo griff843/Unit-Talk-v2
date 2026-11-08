@@ -559,11 +559,13 @@ for (const method of ['startRun', 'completeRun', 'listByType'] as const) {
       logger: quietLogger,
       sleep: async (ms) => {
         sleeps.push(ms);
-        if (freshCycles === 2) throw stop;
+        if (sleeps.length === 6) throw stop;
       },
     }), (error) => error === stop);
     assert.equal(attempts, 6);
-    assert.equal(freshCycles, 2);
+    // One start-of-cycle refresh per loop iteration (6, one per sleep) plus one
+    // end-of-cycle refresh for each of the 2 successful cycles.
+    assert.equal(freshCycles, 8);
     assert.deepEqual(sleeps, [10, 20, 100, 10, 20, 100]);
   });
 
@@ -608,7 +610,11 @@ for (const method of ['startRun', 'completeRun', 'listByType'] as const) {
     assert.equal(alerts.length, 1);
     assert.match(alerts[0]!, /grading.cron.failure_budget_exhausted/);
     assert.equal(errors.filter((msg) => msg.includes('failure_budget_exhausted')).length, 1);
-    assert.equal(await isGradingCronFresh(path, 10, now), false);
+    // The start-of-cycle refresh stamps each attempt, so the marker is only as
+    // fresh as the last attempt (the process exits right after). Once three
+    // polls pass with no further refresh it is stale: a dead loop never reads
+    // healthy for longer than the freshness bound.
+    assert.equal(await isGradingCronFresh(path, 10, now + 31), false);
   });
 }
 
@@ -640,7 +646,7 @@ test('a hung ops alert cannot keep an exhausted loop alive', async () => {
   assert.deepEqual(exits, [1]);
 });
 
-test('liveness write failures use the same bounded recovery policy', async () => {
+test('liveness write failures at cycle start use the same bounded recovery policy', async () => {
   let writes = 0;
   const stop = new Error('test complete');
   const sleeps: number[] = [];
@@ -654,11 +660,128 @@ test('liveness write failures use the same bounded recovery policy', async () =>
     },
     sleep: async (ms) => {
       sleeps.push(ms);
-      if (writes === 3) throw stop;
+      // writes: 1 and 2 fail at cycle start, 3 (start) and 4 (end) succeed.
+      if (writes === 4) throw stop;
     },
   }), (error) => error === stop);
   assert.deepEqual(sleeps, [1_000, 2_000, 300_000]);
-  assert.equal(writes, 3);
+  assert.equal(writes, 4);
+});
+
+test('liveness write failures at cycle end use the same bounded recovery policy', async () => {
+  let writes = 0;
+  const stop = new Error('test complete');
+  const sleeps: number[] = [];
+  await assert.rejects(startGradingCronLoop({
+    repositories: createInMemoryRepositoryBundle(),
+    runGradingPass: emptyGradingPass,
+    logger: quietLogger,
+    refreshLiveness: async () => {
+      writes += 1;
+      // Even-numbered writes are the end-of-cycle refresh.
+      if (writes === 2 || writes === 4) throw new Error('disk unavailable');
+    },
+    sleep: async (ms) => {
+      sleeps.push(ms);
+      if (writes === 6) throw stop;
+    },
+  }), (error) => error === stop);
+  assert.deepEqual(sleeps, [1_000, 2_000, 300_000]);
+  assert.equal(writes, 6);
+});
+
+test('WORK-2026110801: liveness is refreshed before the grading pass in every cycle', async () => {
+  const events: string[] = [];
+  const stop = new Error('test complete');
+  let sleeps = 0;
+  await assert.rejects(startGradingCronLoop({
+    repositories: createInMemoryRepositoryBundle(),
+    runGradingPass: async () => {
+      events.push('pass');
+      return { attempted: 0, graded: 0, skipped: 0, errors: 0, details: [] };
+    },
+    logger: quietLogger,
+    refreshLiveness: async () => { events.push('refresh'); },
+    sleep: async () => { sleeps += 1; if (sleeps === 2) throw stop; },
+  }), (error) => error === stop);
+  assert.deepEqual(events, ['refresh', 'pass', 'refresh', 'refresh', 'pass', 'refresh']);
+});
+
+test('WORK-2026110801: a failing pass still leaves the start-of-cycle refresh recorded, and #1837 failure handling is unchanged', async () => {
+  const events: string[] = [];
+  const sleeps: number[] = [];
+  const alerts: string[] = [];
+  await assert.rejects(startGradingCronLoop({
+    repositories: createInMemoryRepositoryBundle(),
+    runGradingPass: async () => {
+      events.push('pass');
+      throw new Error('injected grading pass failure');
+    },
+    maxConsecutiveFailures: 2,
+    retryBaseMs: 10,
+    retryMaxMs: 20,
+    logger: quietLogger,
+    refreshLiveness: async () => { events.push('refresh'); },
+    sleep: async (ms) => { sleeps.push(ms); },
+    onStalenessAlert: async (message) => { alerts.push(message); },
+  }), (error) => /failure_budget_exhausted/.test(String(error)));
+  // Every attempt is stamped before it runs; no end-of-cycle refresh on failure.
+  assert.deepEqual(events, ['refresh', 'pass', 'refresh', 'pass']);
+  // Existing bounded backoff and exhaustion alert behaviour is unchanged.
+  assert.deepEqual(sleeps, [10]);
+  assert.equal(alerts.filter((message) => /failure_budget_exhausted/.test(message)).length, 1);
+});
+
+/**
+ * Real marker file + injected clock, read with the same isGradingCronFresh rule
+ * the compose probe implements (age <= 3 x poll, polled every minute).
+ */
+async function sampleLivenessTimeline(passMinutes: number, cycles: number) {
+  const dir = await mkdtemp(join(tmpdir(), 'grading-timeline-'));
+  const path = join(dir, 'marker');
+  const poll = 300_000;
+  const minute = 60_000;
+  let now = 1_000_000;
+  const stale: number[] = [];
+  const stop = new Error('timeline complete');
+  let completed = 0;
+  try {
+    await assert.rejects(startGradingCronLoop({
+      repositories: createInMemoryRepositoryBundle(),
+      pollIntervalMs: poll,
+      logger: quietLogger,
+      refreshLiveness: () => refreshGradingCronLiveness(path, now),
+      runGradingPass: async () => {
+        for (let m = 1; m <= passMinutes; m += 1) {
+          now += minute;
+          if (!(await isGradingCronFresh(path, poll, now))) stale.push(m);
+        }
+        return { attempted: 0, graded: 0, skipped: 0, errors: 0, details: [] };
+      },
+      sleep: async (ms) => {
+        // Sample the idle poll gap minute by minute too.
+        for (let waited = 0; waited < ms; waited += minute) {
+          now += Math.min(minute, ms - waited);
+          if (!(await isGradingCronFresh(path, poll, now))) stale.push(-1);
+        }
+        completed += 1;
+        if (completed === cycles) throw stop;
+      },
+    }), (error) => error === stop);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+  return stale;
+}
+
+test('WORK-2026110801: a normal 12 min pass with a 5 min poll stays healthy through every cycle', async () => {
+  assert.deepEqual(await sampleLivenessTimeline(12, 4), []);
+});
+
+test('WORK-2026110801: a pass at the 3 x poll bound is healthy; one over it, and so a hung pass, reads unhealthy', async () => {
+  assert.deepEqual(await sampleLivenessTimeline(15, 2), [], 'age == 15 min is still healthy');
+  const overBound = await sampleLivenessTimeline(17, 1);
+  assert.deepEqual(overBound, [16, 17], 'minutes past 15 without a refresh read unhealthy');
 });
 
 test('grading-cron-health: liveness is unhealthy when missing, expired, malformed or future; healthy within three polls', async (t) => {
