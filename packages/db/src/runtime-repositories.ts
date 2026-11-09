@@ -69,6 +69,7 @@ import type {
   ConfirmDeliveryAtomicInput,
   ConfirmDeliveryAtomicResult,
   EventBrowseResult,
+  EventOffersState,
   EventOfferBrowseResult,
   EventParticipantBrowseResult,
   EnqueueDistributionAtomicInput,
@@ -5902,25 +5903,44 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     since: string,
     limit = 10_000,
   ): Promise<ProviderOfferRecord[]> {
-    const { data, error } = await (fromUntyped(
-      this.client,
-      'provider_offer_history',
-    )
-      .select('*')
-      .gte('snapshot_at', since)
-      .order('snapshot_at', { ascending: false })
-      .limit(limit) as unknown as Promise<{
-      data: ProviderOfferRecord[] | null;
-      error: { message: string } | null;
-    }>);
+    // PostgREST clamps every response to `max_rows` (1000 in supabase/config.toml),
+    // silently, regardless of `.limit()`. Page with `.range()` so the documented
+    // `limit` is honoured and callers can rely on `rows.length >= limit` meaning
+    // "truncated at the caller's cap" rather than "clipped by the server".
+    // `id` is the tiebreaker so rows sharing a snapshot_at never skip or repeat
+    // across pages.
+    const PAGE = 1000;
+    const all: ProviderOfferRecord[] = [];
+    while (all.length < limit) {
+      const from = all.length;
+      const to = Math.min(from + PAGE, limit) - 1;
+      const { data, error } = await (fromUntyped(
+        this.client,
+        'provider_offer_history',
+      )
+        .select('*')
+        .gte('snapshot_at', since)
+        .order('snapshot_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, to) as unknown as Promise<{
+        data: ProviderOfferRecord[] | null;
+        error: { message: string } | null;
+      }>);
 
-    if (error) {
-      throw new Error(
-        `Failed to list recent provider offers: ${error.message}`,
-      );
+      if (error) {
+        throw new Error(
+          `Failed to list recent provider offers: ${error.message}`,
+        );
+      }
+
+      const page = data ?? [];
+      all.push(...page);
+      if (page.length < to - from + 1) {
+        break;
+      }
     }
 
-    return data ?? [];
+    return all;
   }
 
   async listClosingOffers(since: string): Promise<ProviderOfferRecord[]> {
@@ -7446,7 +7466,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
         )
         .find((value) => value !== null) ?? null;
 
-    const browseResult: EventBrowseResult & { offersState: EventOffersState } = {
+    const browseResult: EventBrowseResult = {
       eventId: event.id as string,
       externalId: (event.external_id as string | null) ?? null,
       eventName: event.event_name as string,
@@ -7986,7 +8006,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     if (!providerEventId) {
       return {
         offers: [],
-        state: { status: 'empty', newestObservedAt: null, freshSince: recentSince },
+        state: { status: 'empty', newestObservedAt: null, freshSince: recentSince, truncated: false },
       };
     }
 
@@ -8237,18 +8257,6 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
   }
 }
 
-/**
- * Explicit freshness state of the canonical current-offer projection for one
- * event. `empty` = no rows at all; `stale` = rows exist but none are newer than
- * `freshSince`; `fresh` = at least one row observed at/after `freshSince`.
- * Consumers must not treat `stale`/`empty` as "no data was ever recorded".
- */
-export interface EventOffersState {
-  status: 'fresh' | 'stale' | 'empty';
-  newestObservedAt: string | null;
-  freshSince: string;
-}
-
 export type CurrentOfferRow = Database['public']['Tables']['provider_offer_current']['Row'];
 
 /**
@@ -8258,6 +8266,9 @@ export type CurrentOfferRow = Database['public']['Tables']['provider_offer_curre
  * `recentSince` are never returned as current; when only older rows exist the
  * state is `stale`. A read error throws (never a silent empty list).
  */
+/** PostgREST `max_rows` ceiling (supabase/config.toml); a full page may be clipped. */
+const CURRENT_OFFER_PAGE_LIMIT = 1000;
+
 export async function fetchCurrentEventOffers(
   client: UnitTalkSupabaseClient,
   providerEventId: string,
@@ -8270,14 +8281,14 @@ export async function fetchCurrentEventOffers(
       .eq('provider_event_id', providerEventId)
       .is('provider_participant_id', null)
       .order('snapshot_at', { ascending: false })
-      .limit(1000),
+      .limit(CURRENT_OFFER_PAGE_LIMIT),
     client
       .from('provider_offer_current')
       .select('*')
       .eq('provider_event_id', providerEventId)
       .not('provider_participant_id', 'is', null)
       .order('snapshot_at', { ascending: false })
-      .limit(1000),
+      .limit(CURRENT_OFFER_PAGE_LIMIT),
   ]);
 
   if (gameLevelResult.error) {
@@ -8307,7 +8318,16 @@ export async function fetchCurrentEventOffers(
     all.length === 0 ? 'empty' : fresh.length === 0 ? 'stale' : 'fresh';
   return {
     rows: fresh,
-    state: { status, newestObservedAt, freshSince: recentSince },
+    state: {
+      status,
+      newestObservedAt,
+      freshSince: recentSince,
+      // Either query returning a full page means the PostgREST row cap may have
+      // clipped the set: the offers are a sample, not the full event.
+      truncated:
+        (gameLevelResult.data?.length ?? 0) >= CURRENT_OFFER_PAGE_LIMIT ||
+        (playerPropResult.data?.length ?? 0) >= CURRENT_OFFER_PAGE_LIMIT,
+    },
   };
 }
 

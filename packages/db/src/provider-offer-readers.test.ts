@@ -19,6 +19,7 @@ import test from 'node:test';
 
 import {
   DatabaseExecutionQualityRepository,
+  DatabaseProviderOfferRepository,
   fetchCurrentEventOffers,
 } from './runtime-repositories.js';
 import type { UnitTalkSupabaseClient } from './client.js';
@@ -147,14 +148,84 @@ test('WORK-2026110705 proof 2: historical opening/closing reads keep history sem
   assert.ok(!touched.includes('provider_offers'));
 });
 
-test('WORK-2026110705 proof 2b: the history reader used by config/CLV is still provider_offer_history (unchanged semantics)', async () => {
-  const { readFileSync } = await import('node:fs');
-  const source = readFileSync(new URL('./runtime-repositories.ts', import.meta.url), 'utf8');
-  const start = source.indexOf('async listRecentOffers(\n    since: string,\n    limit = 10_000,\n  ): Promise<ProviderOfferRecord[]> {\n    const { data, error } = await (fromUntyped(');
-  assert.ok(start > 0, 'database listRecentOffers located');
-  const body = source.slice(start, start + 500);
-  assert.match(body, /'provider_offer_history'/);
-  assert.doesNotMatch(body, /provider_offers/);
+/**
+ * PostgREST fake that, like the real server, silently clamps every response to
+ * `maxRows` (supabase/config.toml max_rows = 1000) whatever the caller asked for.
+ */
+/** The repository constructor opens a privileged connection; inject the fake client instead. */
+function offerRepoOver(client: UnitTalkSupabaseClient) {
+  const repo = Object.create(DatabaseProviderOfferRepository.prototype) as DatabaseProviderOfferRepository;
+  (repo as unknown as { client: UnitTalkSupabaseClient }).client = client;
+  return repo;
+}
+
+function clampingHistoryClient(total: number, maxRows = 1000) {
+  const touched: string[] = [];
+  const rows = Array.from({ length: total }, (_, i) => ({
+    id: `row-${String(i).padStart(6, '0')}`,
+    snapshot_at: new Date(Date.UTC(2026, 10, 8) - i * 1000).toISOString(),
+  }));
+  const client = {
+    from(table: string) {
+      touched.push(table);
+      let from = 0;
+      let to = Number.MAX_SAFE_INTEGER;
+      const builder: Record<string, unknown> = {
+        select: () => builder,
+        gte: () => builder,
+        order: () => builder,
+        limit: (n: number) => ((to = n - 1), builder),
+        range: (f: number, t: number) => ((from = f), (to = t), builder),
+        then: (resolve: (value: unknown) => unknown) =>
+          resolve({
+            data: rows.slice(from, Math.min(to + 1, from + maxRows)),
+            error: null,
+          }),
+      };
+      return builder;
+    },
+  };
+  return { client: client as unknown as UnitTalkSupabaseClient, touched };
+}
+
+test('WORK-2026110705 proof 2b: listRecentOffers reads provider_offer_history and returns up to the caller cap despite the 1000-row server clamp', async () => {
+  const { client, touched } = clampingHistoryClient(2600);
+  const repo = offerRepoOver(client);
+
+  // A single clamped request would silently return 1000 rows for a 2500 ask.
+  const rows = await repo.listRecentOffers('2026-11-01T00:00:00.000Z', 2500);
+  assert.equal(rows.length, 2500);
+  assert.equal(new Set(rows.map((r) => (r as { id: string }).id)).size, 2500, 'no repeated rows across pages');
+  assert.ok(touched.length > 1 && touched.every((t) => t === 'provider_offer_history'), `touched: ${touched.join(',')}`);
+
+  // Fewer rows than the cap: returned in full, not reported as capped.
+  const small = await offerRepoOver(clampingHistoryClient(1200).client).listRecentOffers(
+    '2026-11-01T00:00:00.000Z',
+    10_000,
+  );
+  assert.equal(small.length, 1200);
+});
+
+test('WORK-2026110705 proof 5: a current-offer read that fills a PostgREST page is flagged truncated, not presented as complete', async () => {
+  const many = Array.from({ length: 1000 }, (_, i) => ({
+    ...CURRENT_ROWS[0]!,
+    identity_key: `bulk-${i}`,
+    provider_participant_id: `P_${i}`,
+    snapshot_at: '2026-06-30T12:00:00.000Z',
+  }));
+  const truncated = await fetchCurrentEventOffers(
+    fakeClient({ provider_offer_current: many }).client,
+    EVENT,
+    FRESH_SINCE,
+  );
+  assert.equal(truncated.state.truncated, true);
+
+  const whole = await fetchCurrentEventOffers(
+    fakeClient({ provider_offer_current: CURRENT_ROWS }).client,
+    EVENT,
+    FRESH_SINCE,
+  );
+  assert.equal(whole.state.truncated, false);
 });
 
 test('WORK-2026110705 proof 3: stale canonical data returns an explicit stale state, no offers, and no quarantine fallback', async () => {

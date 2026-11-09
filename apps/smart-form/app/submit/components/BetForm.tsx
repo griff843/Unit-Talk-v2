@@ -32,6 +32,7 @@ import {
 import {
   buildManualEnteredParticipants,
   buildSubmissionPayload,
+  describeOffersState,
   easternDateIso,
   evaluateSubmissionGuards,
   getMarketTypesForSport,
@@ -288,6 +289,11 @@ function isOfferSnapshotStale(snapshotAt: string | null) {
 
 function buildOfferStatus(eventBrowse: EventBrowseResult | null, filteredCount?: number) {
   if (!eventBrowse || eventBrowse.offers.length === 0) {
+    // WORK-2026110705: stale (with its last-observed time) is not the same as no offers.
+    const notice = describeOffersState(eventBrowse?.offersState);
+    if (notice) {
+      return { tone: notice.tone, label: notice.label };
+    }
     return { tone: 'none' as const, label: 'No live offers' };
   }
 
@@ -1214,6 +1220,7 @@ export function BetForm({
     ];
   }, [availableStatTypes, eventBrowse, selectedMarketType, selectedOfferParticipantId]);
   const offerStatus = buildOfferStatus(eventBrowse, filteredOffers.length);
+  const offersStateNotice = describeOffersState(eventBrowse?.offersState);
   const latestOfferSnapshotAt = getLatestOfferSnapshotAt(eventBrowse);
   const isLatestOfferSnapshotStale = isOfferSnapshotStale(latestOfferSnapshotAt);
   const selectedMarketLabel = selectedMarketType ? getMarketTypeLabel(selectedMarketType) : null;
@@ -2545,6 +2552,15 @@ export function BetForm({
             </div>
 
             {eventBrowseError ? <p className="text-sm text-destructive">{eventBrowseError}</p> : null}
+
+            {offersStateNotice && offersStateNotice.tone === 'stale' ? (
+              <div
+                role="status"
+                className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-200"
+              >
+                {offersStateNotice.label}
+              </div>
+            ) : null}
 
             {isLatestOfferSnapshotStale && latestOfferSnapshotAt ? (
               <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-200">
