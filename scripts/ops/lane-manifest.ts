@@ -1,4 +1,6 @@
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   type LaneManifest,
@@ -12,6 +14,7 @@ import {
   normalizeFileScope,
   normalizeRepoRelativePaths,
   parseArgs,
+  ROOT,
   readManifest,
   relativeToRoot,
   validateBranchName,
@@ -24,10 +27,12 @@ import {
 import { buildLaneExecutionLocation } from './lane-execution.js';
 import {
   UNAVAILABLE_ROUTING_VALUE,
+  buildReconciledModelRoutingSidecar,
   reconcileObservedModelRouting,
   reResolveModelRouting,
   resolveModelProfile,
   verifyRoutingApproval,
+  verifyStoredRoutingApproval,
   type ModelRoutingBlock,
   type RoutingApprovalComment,
 } from './model-routing.js';
@@ -72,6 +77,9 @@ export function main(argv = process.argv.slice(2)): number {
         return scopeReleaseCommand(positionals[1], flags, bools.has('json'));
       case 'reconcile-routing':
         reconcileRoutingCommand(positionals[1], flags, bools, bools.has('json'));
+        return 0;
+      case 'write-reconciled-sidecar':
+        writeReconciledSidecarCommand(positionals[1], bools.has('json'));
         return 0;
       case 're-resolve-routing':
         reResolveRoutingCommand(positionals[1], bools.has('json'));
@@ -349,6 +357,122 @@ export function reconcileRoutingCommand(
     console.log(`${id}: model_routing reconciled to ${next.model_routing!.model} (unverified external session)`);
   }
   return next;
+}
+
+export interface WriteReconciledSidecarGitHub extends ReconcileRoutingGitHub {
+  /** True when `sha` is a commit in the PR's history (its current head included). */
+  prHasCommit(prNumber: number, sha: string): boolean;
+}
+
+const ghWriteReconciledSidecar: WriteReconciledSidecarGitHub = {
+  ...ghReconcileRouting,
+  prHasCommit(prNumber, sha) {
+    if (ghReconcileRouting.fetchPrHeadSha(prNumber) === sha) return true;
+    return runGh(['api', `repos/{owner}/{repo}/pulls/${prNumber}/commits`, '--paginate', '-q', '.[].sha'])
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .includes(sha);
+  },
+};
+
+/**
+ * Write the model-routing.json sidecar a reconciled lane needs (WORK-2026110803).
+ * The sidecar is derived from the reconciled manifest only. The recorded approval is
+ * re-fetched and re-verified against the head it named at reconciliation; the PR may
+ * have moved on since, but that head must still be in the PR's history. Nothing about
+ * Codex execution is written because none occurred.
+ */
+export function writeReconciledSidecarCommand(
+  issueId: string | undefined,
+  json: boolean,
+  github: WriteReconciledSidecarGitHub = ghWriteReconciledSidecar,
+  now = new Date().toISOString(),
+  root = ROOT,
+): string {
+  if (!issueId) {
+    throw new Error('write-reconciled-sidecar is missing <issue id>. Usage: write-reconciled-sidecar <ID> [--json]');
+  }
+  const id = issueId.toUpperCase();
+  if (!manifestExists(id)) {
+    throw new Error(`Manifest not found for ${id}`);
+  }
+  const manifest = readManifest(id);
+  if (manifest.executor !== 'codex-cli' && manifest.executor !== 'codex-cloud') {
+    throw new Error(`write-reconciled-sidecar refused: ${id} executor is "${manifest.executor ?? 'unset'}"; model_routing is Codex-only`);
+  }
+  if (!manifest.model_routing) {
+    throw new Error(`write-reconciled-sidecar refused: ${id} has no model_routing`);
+  }
+  if (manifest.status === 'done') {
+    throw new Error(`write-reconciled-sidecar refused: ${id} is done; its proof is already bound`);
+  }
+  const routing = manifest.model_routing;
+  if (!routing.override?.declared) {
+    throw new Error(`write-reconciled-sidecar refused: ${id} was not reconciled (run reconcile-routing first)`);
+  }
+  const prNumber = Number(/\/pull\/(\d+)$/.exec(manifest.pr_url ?? '')?.[1]);
+  if (!Number.isInteger(prNumber) || prNumber <= 0) {
+    throw new Error(`write-reconciled-sidecar refused: ${id} has no pr_url; the approval must be on the lane's own PR`);
+  }
+  const stored = routing.override.approval;
+  if (!stored) {
+    throw new Error(`write-reconciled-sidecar refused: ${id} records no routing approval to re-verify`);
+  }
+  const commentId = /(\d+)$/.exec(stored.comment_url)?.[1];
+  if (!commentId) {
+    throw new Error('write-reconciled-sidecar refused: the stored approval comment_url does not end in a comment id');
+  }
+  verifyStoredRoutingApproval(github.fetchComment(commentId), {
+    repository: github.repository(),
+    issueId: id,
+    prNumber,
+    routing,
+  });
+  if (!github.prHasCommit(prNumber, stored.head_sha)) {
+    throw new Error(
+      `write-reconciled-sidecar refused: approval head ${stored.head_sha} is not in the history of PR #${prNumber}`,
+    );
+  }
+
+  const sidecar = buildReconciledModelRoutingSidecar({
+    issueId: id,
+    manifestSchemaVersion: manifest.schema_version,
+    routing,
+    now,
+  });
+  const dir = path.join(root, 'docs', '06_status', 'proof', id);
+  const target = path.join(dir, 'model-routing.json');
+  let outcome: 'written' | 'unchanged' = 'written';
+  if (fs.existsSync(target)) {
+    let existing: Record<string, unknown>;
+    try {
+      existing = JSON.parse(fs.readFileSync(target, 'utf8')) as Record<string, unknown>;
+    } catch {
+      throw new Error(`write-reconciled-sidecar refused: existing ${relativeToRoot(target)} is not valid JSON`);
+    }
+    const strip = (value: Record<string, unknown>) => {
+      const { generated_at: _generatedAt, ...rest } = value;
+      return JSON.stringify(rest);
+    };
+    if (strip(existing) !== strip(sidecar as unknown as Record<string, unknown>)) {
+      throw new Error(
+        `write-reconciled-sidecar refused: ${relativeToRoot(target)} already exists with different content; it will not be overwritten`,
+      );
+    }
+    outcome = 'unchanged';
+  } else {
+    fs.mkdirSync(dir, { recursive: true });
+    const tmp = `${target}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, `${JSON.stringify(sidecar, null, 2)}\n`, 'utf8');
+    fs.renameSync(tmp, target);
+  }
+
+  if (json) {
+    emitJson({ ok: true, code: `reconciled_sidecar_${outcome}`, issue_id: id, path: relativeToRoot(target), sidecar });
+  } else {
+    console.log(`${id}: ${relativeToRoot(target)} ${outcome} (unverified external session)`);
+  }
+  return target;
 }
 
 /**
@@ -639,6 +763,7 @@ function usage(): void {
   console.error('  pnpm ops:lane-manifest -- read UTV2-123 [--json]');
   console.error('  pnpm ops:lane-manifest -- update UTV2-123 [--status merged] [--pr-url ...] [--commit-sha ...] [--files-changed path]');
   console.error('  pnpm ops:lane-manifest -- re-resolve-routing UTV2-123 [--json]');
+  console.error('  pnpm ops:lane-manifest -- write-reconciled-sidecar UTV2-123 [--json]');
   console.error('  pnpm ops:lane-manifest -- reconcile-routing UTV2-123 --profile <p> --model <m> (--reasoning-effort <e> | --reasoning-effort-unavailable) --source <where observed> --approval-comment <id-or-url> [--json]');
   console.error('  pnpm ops:lane-manifest -- record-merge UTV2-123 --pr <url-or-number> [--json]');
   console.error('  pnpm ops:lane-manifest -- scope-release UTV2-123 --pr 456 --expected-head-sha <sha> --expected-lock-hash <sha256> --release-path <path> [--release-path <path>] --actor <who> --reason <why> [--json]');

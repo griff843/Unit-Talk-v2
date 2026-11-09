@@ -666,3 +666,131 @@ export function resolveLegacyModelRouting(tier: string, policy?: ModelRoutingPol
 export function buildCodexModelArgs(modelRouting: Pick<ModelRoutingBlock, 'model' | 'reasoning_effort'>): string[] {
   return ['--model', modelRouting.model, '-c', `model_reasoning_effort=${modelRouting.reasoning_effort}`];
 }
+
+// WORK-2026110803: sidecar for a reconciled lane.
+//
+// `reconcile-routing` records the observed routing in the manifest only. The pre-merge
+// contract (validatePreMergeModelRoutingEvidence) already says what a reconciled lane's
+// sidecar must carry, but the only writer of model-routing.json is codex-exec, which would
+// manufacture Codex execution telemetry for work Codex did not run. The functions below
+// derive the sidecar from the reconciled manifest alone and invent nothing.
+
+export const RECONCILED_ROUTING_SOURCE = 'reconciled-observation';
+
+export interface ReconciledModelRoutingSidecar {
+  issue_id: string;
+  manifest_schema_version: number;
+  model_profile: string;
+  model: string;
+  reasoning_effort: string;
+  policy_version: string;
+  override_used: true;
+  override_authorized_by: string;
+  execution_verification: typeof UNVERIFIED_EXTERNAL_SESSION;
+  unavailable_fields: string[];
+  /** The routing fields above are the observed routing, reconciled under a PM approval. */
+  routing_source: typeof RECONCILED_ROUTING_SOURCE;
+  /** The routing the lane declared at lane-start, kept apart from the observed fields. */
+  declared_routing: DeclaredModelRouting;
+  observation_source: string;
+  approval: RoutingApproval;
+  generated_at: string;
+}
+
+/**
+ * Re-verify the approval a manifest recorded at reconciliation. The comment is checked
+ * against the head it named then (the stored head_sha), not the PR's current head, so an
+ * ordinary later push does not invalidate a reconciliation whose routing and approval
+ * provenance are unchanged. Anything GitHub reports that differs from what the manifest
+ * stored (author, comment URL, PR, head) is refused.
+ */
+export function verifyStoredRoutingApproval(
+  comment: RoutingApprovalComment,
+  context: { repository: string; issueId: string; prNumber: number; routing: ModelRoutingBlock },
+): RoutingApproval {
+  const stored = context.routing.override?.approval;
+  if (!stored) {
+    throw new Error('write-reconciled-sidecar refused: the manifest records no routing approval to re-verify');
+  }
+  if (stored.pr_number !== context.prNumber) {
+    throw new Error(
+      `write-reconciled-sidecar refused: stored approval is for PR #${stored.pr_number}, not the lane's PR #${context.prNumber}`,
+    );
+  }
+  if (context.routing.override?.authorized_by !== stored.reviewer) {
+    throw new Error(
+      'write-reconciled-sidecar refused: override.authorized_by does not match the stored approval reviewer',
+    );
+  }
+  let verified: RoutingApproval;
+  try {
+    verified = verifyRoutingApproval(comment, {
+      repository: context.repository,
+      issueId: context.issueId,
+      prNumber: context.prNumber,
+      headSha: stored.head_sha,
+      model: context.routing.model,
+      reasoningEffort: context.routing.reasoning_effort,
+    });
+  } catch (error) {
+    throw new Error(
+      `write-reconciled-sidecar refused: stored approval no longer verifies: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (
+    verified.comment_url !== stored.comment_url ||
+    verified.reviewer !== stored.reviewer ||
+    verified.pr_number !== stored.pr_number ||
+    verified.head_sha !== stored.head_sha
+  ) {
+    throw new Error('write-reconciled-sidecar refused: the approval GitHub returns differs from the stored identity');
+  }
+  return verified;
+}
+
+/** Build the sidecar from the reconciled manifest block alone, then hold it to the pre-merge contract. */
+export function buildReconciledModelRoutingSidecar(input: {
+  issueId: string;
+  manifestSchemaVersion: number;
+  routing: ModelRoutingBlock;
+  now: string;
+}): ReconciledModelRoutingSidecar {
+  const { routing } = input;
+  const override = routing.override;
+  if (
+    !override ||
+    !override.declared ||
+    !override.observation ||
+    !override.approval ||
+    routing.selected_by !== 'manual-override'
+  ) {
+    throw new Error(
+      'write-reconciled-sidecar refused: the lane was not reconciled (no declared routing, observation and approval in model_routing.override)',
+    );
+  }
+  const sidecar: ReconciledModelRoutingSidecar = {
+    issue_id: input.issueId,
+    manifest_schema_version: input.manifestSchemaVersion,
+    model_profile: routing.profile,
+    model: routing.model,
+    reasoning_effort: routing.reasoning_effort,
+    policy_version: routing.policy_version,
+    override_used: true,
+    override_authorized_by: override.authorized_by,
+    execution_verification: override.observation.verification,
+    unavailable_fields: [...override.observation.unavailable_fields],
+    routing_source: RECONCILED_ROUTING_SOURCE,
+    declared_routing: { ...override.declared },
+    observation_source: override.observation.source,
+    approval: { ...override.approval },
+    generated_at: input.now,
+  };
+  const contract = validatePreMergeModelRoutingEvidence(sidecar, {
+    expectedIssueId: input.issueId,
+    manifestRouting: routing,
+  });
+  if (!contract.valid) {
+    throw new Error(`write-reconciled-sidecar refused: sidecar violates the pre-merge contract (${contract.violations.join('; ')})`);
+  }
+  return sidecar;
+}

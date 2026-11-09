@@ -420,6 +420,18 @@ The original routing is kept in `override.declared`, and a second reconciliation
 
 So a sidecar cannot present the report as verified execution or claim an exact reasoning effort the manifest records as unavailable.
 
+**Writing the sidecar (WORK-2026110803).** `reconcile-routing` records the observation in the manifest only; the sidecar is produced by:
+
+```bash
+pnpm ops:lane-manifest write-reconciled-sidecar <ID> [--json]
+```
+
+It writes `docs/06_status/proof/<ID>/model-routing.json` from the reconciled manifest `model_routing` and nothing else, so no Codex execution is claimed: `codex_cli_version`, exit code, token usage, wall time, prompt bytes, `closeout_binding` and `merge_sha` are absent. The file carries the observed routing (`model`, `reasoning_effort`, `model_profile`, `policy_version`), `override_used: true`, `override_authorized_by`, `execution_verification: "unverified-external-session"`, the manifest's `unavailable_fields`, `routing_source: "reconciled-observation"`, the original routing under `declared_routing`, `observation_source` and the `approval` identity.
+
+- **Approval.** The command re-fetches the comment recorded in `override.approval` and re-verifies it as `reconcile-routing` did, against the head SHA the manifest stored at reconciliation. It does not require that head to be the PR's current head: an ordinary later push keeps the reconciliation valid, provided the stored head is still a commit in the PR's history. The approval GitHub returns must equal the stored comment URL, reviewer, PR and head.
+- **Refused:** a lane that was not reconciled, a non-Codex executor, a `done` lane, a missing approval record, an approval for a different PR or reviewer, an approval that no longer verifies, a stored head that is not in the PR history, and an existing sidecar whose content differs. An identical existing sidecar is left untouched.
+- **Validation.** The sidecar is checked with `validatePreMergeModelRoutingEvidence` (manifest routing and issue id) before an atomic write. Proof generation, closeout binding and merge controls are unchanged.
+
 **Limits:**
 - Reconciliation authorizes no execution. `validatePersistedModelRouting` returns `RECONCILED_OBSERVATION`, so `codex-exec` refuses a reconciled lane.
 - The approval is verified when the command runs. A later hand edit of the manifest shows up in the PR diff and can be re-checked against `override.approval.comment_url`.

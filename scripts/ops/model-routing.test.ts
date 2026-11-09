@@ -627,3 +627,47 @@ test('re-resolve refuses a reconciled lane and a lane already on the current pol
   assert.throws(() => reResolveModelRouting(reconciled, 'T2', NOW, nextPolicy()), /reconciled to an observed execution/);
   assert.throws(() => reResolveModelRouting(PINNED_V1, 'T2', NOW, fixturePolicy()), /already on policy version 1\.0\.0/);
 });
+
+// ── WORK-2026110803: reconciled sidecar builder ───────────────────────────────
+
+import { buildReconciledModelRoutingSidecar } from './model-routing.js';
+
+const RECONCILED_BLOCK = {
+  profile: 'codex-sol-medium',
+  model: 'claude-sonnet-5-5',
+  reasoning_effort: 'medium',
+  selected_by: 'manual-override' as const,
+  policy_version: '3.0.0',
+  override: {
+    authorized_by: 'griff843',
+    reason: 'pm-verdict/v1 APPROVED https://github.com/o/r/pull/1#issuecomment-1',
+    declared: { profile: 'codex-sol-medium', model: 'gpt-6.1-sol', reasoning_effort: 'medium', selected_by: 'three-brain' },
+    observation: { verification: 'unverified-external-session' as const, source: 'transcript', unavailable_fields: ['reasoning_effort'] },
+    approval: { comment_url: 'https://github.com/o/r/pull/1#issuecomment-1', reviewer: 'griff843', pr_number: 1, head_sha: 'a'.repeat(40) },
+  },
+};
+
+test('buildReconciledModelRoutingSidecar carries the manifest unavailable fields and unverified flag', () => {
+  const sidecar = buildReconciledModelRoutingSidecar({
+    issueId: 'WORK-1',
+    manifestSchemaVersion: 2,
+    routing: { ...RECONCILED_BLOCK, reasoning_effort: 'unavailable' },
+    now: '2026-11-09T00:00:00.000Z',
+  });
+  assert.deepStrictEqual(sidecar.unavailable_fields, ['reasoning_effort']);
+  assert.strictEqual(sidecar.execution_verification, 'unverified-external-session');
+  assert.strictEqual(sidecar.declared_routing.model, 'gpt-6.1-sol');
+});
+
+test('buildReconciledModelRoutingSidecar refuses a block that was never reconciled', () => {
+  assert.throws(
+    () =>
+      buildReconciledModelRoutingSidecar({
+        issueId: 'WORK-1',
+        manifestSchemaVersion: 2,
+        routing: { ...RECONCILED_BLOCK, selected_by: 'three-brain' as const, override: undefined },
+        now: '2026-11-09T00:00:00.000Z',
+      }),
+    /was not reconciled/,
+  );
+});
