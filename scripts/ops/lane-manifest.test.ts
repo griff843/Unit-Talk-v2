@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
@@ -9,7 +10,9 @@ import {
   main,
   reconcileRoutingCommand,
   reResolveRoutingCommand,
+  writeReconciledSidecarCommand,
   type ReconcileRoutingGitHub,
+  type WriteReconciledSidecarGitHub,
 } from './lane-manifest.js';
 import {
   type ScopeReleaseContext,
@@ -18,7 +21,7 @@ import {
   evaluateScopeRelease,
   runScopeRelease,
 } from './scope-release.js';
-import { loadModelRoutingPolicy, validatePersistedModelRouting } from './model-routing.js';
+import { loadModelRoutingPolicy, validatePersistedModelRouting, validatePreMergeModelRoutingEvidence } from './model-routing.js';
 import {
   type LaneManifest,
   ROOT,
@@ -1072,4 +1075,236 @@ test('mutation control: every refusal is load-bearing', async () => {
       fs.rmSync(mutantPath, { force: true });
     }
   }
+});
+
+// ── WORK-2026110803: write-reconciled-sidecar ─────────────────────────────────
+
+const SIDECAR_ISSUE = 'WORK-9905';
+const APPROVAL_HEAD = 'a'.repeat(40);
+const ADVANCED_HEAD = 'b'.repeat(40);
+const APPROVAL_URL = 'https://github.com/o/r/pull/1800#issuecomment-88';
+
+function reconciledRouting(overrides: Record<string, unknown> = {}) {
+  return {
+    profile: 'codex-sol-medium',
+    model: 'claude-sonnet-5-5',
+    reasoning_effort: 'medium',
+    selected_by: 'manual-override' as const,
+    policy_version: '3.0.0',
+    override: {
+      authorized_by: 'griff843',
+      reason: `pm-verdict/v1 APPROVED ${APPROVAL_URL}`,
+      at: '2026-11-09T03:52:01.103Z',
+      declared: {
+        profile: 'codex-sol-medium',
+        model: 'gpt-6.1-sol',
+        reasoning_effort: 'medium',
+        selected_by: 'three-brain',
+      },
+      observation: {
+        verification: 'unverified-external-session' as const,
+        source: 'claude-code-subagent-transcript:example',
+        unavailable_fields: [] as string[],
+      },
+      approval: { comment_url: APPROVAL_URL, reviewer: 'griff843', pr_number: 1800, head_sha: APPROVAL_HEAD },
+      ...overrides,
+    },
+  };
+}
+
+function sidecarGitHub(
+  opts: { history?: string[]; head?: string; body?: string; login?: string } = {},
+): WriteReconciledSidecarGitHub {
+  const head = opts.head ?? ADVANCED_HEAD;
+  const history = opts.history ?? [APPROVAL_HEAD, head];
+  return {
+    repository: () => 'o/r',
+    fetchComment: () => ({
+      html_url: APPROVAL_URL,
+      issue_url: 'https://api.github.com/repos/o/r/issues/1800',
+      user: { login: opts.login ?? 'griff843', type: 'User' },
+      body:
+        opts.body ??
+        ['PM_VERDICT: APPROVED', 'schema: pm-verdict/v1', `Issue: ${SIDECAR_ISSUE}`, 'PR: 1800',
+          `Head SHA: ${APPROVAL_HEAD}`, 'Routing reconciliation: claude-sonnet-5-5 / medium'].join('\n'),
+    }),
+    fetchPrHeadSha: () => head,
+    prHasCommit: (_pr, sha) => sha === head || history.includes(sha),
+  };
+}
+
+function withSidecarManifest(
+  overrides: Partial<LaneManifest>,
+  body: (root: string) => void,
+): void {
+  const manifestPath = issueToManifestPath(SIDECAR_ISSUE);
+  const tokenPath = '.out/ops/preflight/codex/work-9905-sidecar.json';
+  const tokenAbsolutePath = path.join(ROOT, tokenPath);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'reconciled-sidecar-'));
+  fs.mkdirSync(path.dirname(tokenAbsolutePath), { recursive: true });
+  fs.writeFileSync(tokenAbsolutePath, '{"fixture":true}', 'utf8');
+  writeManifest(
+    manifest({
+      issue_id: SIDECAR_ISSUE,
+      branch: 'codex/work-9905-sidecar',
+      worktree_path: worktreePathForBranch('codex/work-9905-sidecar'),
+      expected_proof_paths: defaultProofPaths(SIDECAR_ISSUE, 'T1'),
+      preflight_token: tokenPath,
+      pr_url: 'https://github.com/o/r/pull/1800',
+      status: 'started',
+      schema_version: 2,
+      executor: 'codex-cli',
+      model_routing: reconciledRouting(),
+      ...overrides,
+    }),
+  );
+  try {
+    body(root);
+  } finally {
+    fs.rmSync(manifestPath, { force: true });
+    fs.rmSync(tokenAbsolutePath, { force: true });
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+function sidecarPath(root: string): string {
+  return path.join(root, 'docs', '06_status', 'proof', SIDECAR_ISSUE, 'model-routing.json');
+}
+
+const NOW = '2026-11-09T04:00:00.000Z';
+
+test('write-reconciled-sidecar derives the sidecar from the reconciled manifest and invents no telemetry', () => {
+  withSidecarManifest({}, (root) => {
+    writeReconciledSidecarCommand(SIDECAR_ISSUE, false, sidecarGitHub({ head: APPROVAL_HEAD }), NOW, root);
+    const sidecar = JSON.parse(fs.readFileSync(sidecarPath(root), 'utf8')) as Record<string, unknown>;
+    assert.strictEqual(sidecar['issue_id'], SIDECAR_ISSUE);
+    assert.strictEqual(sidecar['model'], 'claude-sonnet-5-5');
+    assert.strictEqual(sidecar['reasoning_effort'], 'medium');
+    assert.strictEqual(sidecar['model_profile'], 'codex-sol-medium');
+    assert.strictEqual(sidecar['override_used'], true);
+    assert.strictEqual(sidecar['override_authorized_by'], 'griff843');
+    assert.strictEqual(sidecar['execution_verification'], 'unverified-external-session');
+    assert.deepStrictEqual(sidecar['unavailable_fields'], []);
+    assert.strictEqual(sidecar['routing_source'], 'reconciled-observation');
+    assert.deepStrictEqual(sidecar['declared_routing'], {
+      profile: 'codex-sol-medium',
+      model: 'gpt-6.1-sol',
+      reasoning_effort: 'medium',
+      selected_by: 'three-brain',
+    });
+    for (const forbidden of [
+      'codex_cli_version', 'codex_exit_code', 'prompt_bytes', 'estimated_prompt_tokens', 'wall_time_ms',
+      'token_usage', 'closeout_binding', 'merge_sha', 'observation',
+    ]) {
+      assert.ok(!(forbidden in sidecar), `${forbidden} must be absent`);
+    }
+    assert.deepStrictEqual(
+      validatePreMergeModelRoutingEvidence(sidecar, {
+        expectedIssueId: SIDECAR_ISSUE,
+        manifestRouting: (JSON.parse(fs.readFileSync(issueToManifestPath(SIDECAR_ISSUE), 'utf8')) as LaneManifest).model_routing,
+      }),
+      { valid: true, violations: [] },
+    );
+  });
+});
+
+test('write-reconciled-sidecar still accepts the reconciliation after the PR head advanced', () => {
+  withSidecarManifest({}, (root) => {
+    writeReconciledSidecarCommand(SIDECAR_ISSUE, false, sidecarGitHub({ head: ADVANCED_HEAD }), NOW, root);
+    assert.ok(fs.existsSync(sidecarPath(root)));
+  });
+});
+
+test('adversarial: write-reconciled-sidecar refuses when the approval head is not in the PR history', () => {
+  withSidecarManifest({}, (root) => {
+    assert.throws(
+      () => writeReconciledSidecarCommand(SIDECAR_ISSUE, false, sidecarGitHub({ head: ADVANCED_HEAD, history: [ADVANCED_HEAD] }), NOW, root),
+      /not in the history of PR #1800/,
+    );
+    assert.ok(!fs.existsSync(sidecarPath(root)));
+  });
+});
+
+test('adversarial: write-reconciled-sidecar refuses an unreconciled, non-Codex or done lane', () => {
+  withSidecarManifest(
+    { model_routing: { ...reconciledRouting(), selected_by: 'three-brain' as const, override: undefined } },
+    (root) => {
+      assert.throws(() => writeReconciledSidecarCommand(SIDECAR_ISSUE, false, sidecarGitHub(), NOW, root), /was not reconciled/);
+    },
+  );
+  withSidecarManifest({ status: 'done' }, (root) => {
+    assert.throws(() => writeReconciledSidecarCommand(SIDECAR_ISSUE, false, sidecarGitHub(), NOW, root), /is done/);
+  });
+  withSidecarManifest({ executor: 'claude', model_routing: undefined }, (root) => {
+    assert.throws(() => writeReconciledSidecarCommand(SIDECAR_ISSUE, false, sidecarGitHub(), NOW, root), /Codex-only/);
+  });
+});
+
+test('adversarial: write-reconciled-sidecar refuses a missing or altered approval identity', () => {
+  withSidecarManifest({ model_routing: { ...reconciledRouting(), override: { ...reconciledRouting().override, approval: undefined } } }, (root) => {
+    assert.throws(() => writeReconciledSidecarCommand(SIDECAR_ISSUE, false, sidecarGitHub(), NOW, root), /no routing approval/);
+  });
+  withSidecarManifest(
+    { model_routing: reconciledRouting({ approval: { comment_url: APPROVAL_URL, reviewer: 'griff843', pr_number: 1801, head_sha: APPROVAL_HEAD } }) },
+    (root) => {
+      assert.throws(() => writeReconciledSidecarCommand(SIDECAR_ISSUE, false, sidecarGitHub(), NOW, root), /stored approval is for PR #1801/);
+    },
+  );
+  withSidecarManifest(
+    { model_routing: reconciledRouting({ approval: { comment_url: APPROVAL_URL, reviewer: 'griff843', pr_number: 1800, head_sha: ADVANCED_HEAD } }) },
+    (root) => {
+      assert.throws(() => writeReconciledSidecarCommand(SIDECAR_ISSUE, false, sidecarGitHub(), NOW, root), /no longer verifies/);
+    },
+  );
+  withSidecarManifest({}, (root) => {
+    assert.throws(
+      () => writeReconciledSidecarCommand(SIDECAR_ISSUE, false, sidecarGitHub({ login: 'mallory' }), NOW, root),
+      /no longer verifies/,
+    );
+    assert.throws(
+      () => writeReconciledSidecarCommand(SIDECAR_ISSUE, false, sidecarGitHub({ body: 'PM_VERDICT: APPROVED\nschema: pm-verdict/v1\nIssue: WORK-9905\nPR: 1800\nHead SHA: ' + APPROVAL_HEAD + '\nRouting reconciliation: other-model / medium' }), NOW, root),
+      /no longer verifies/,
+    );
+    assert.ok(!fs.existsSync(sidecarPath(root)));
+  });
+});
+
+test('write-reconciled-sidecar is idempotent and never overwrites a conflicting sidecar', () => {
+  withSidecarManifest({}, (root) => {
+    writeReconciledSidecarCommand(SIDECAR_ISSUE, false, sidecarGitHub(), NOW, root);
+    const first = fs.readFileSync(sidecarPath(root), 'utf8');
+    writeReconciledSidecarCommand(SIDECAR_ISSUE, false, sidecarGitHub(), '2026-11-10T00:00:00.000Z', root);
+    assert.strictEqual(fs.readFileSync(sidecarPath(root), 'utf8'), first, 'identical content is a no-op');
+    const conflicting = JSON.stringify({ ...JSON.parse(first), model: 'something-else' });
+    fs.writeFileSync(sidecarPath(root), conflicting, 'utf8');
+    assert.throws(() => writeReconciledSidecarCommand(SIDECAR_ISSUE, false, sidecarGitHub(), NOW, root), /already exists with different content/);
+    assert.strictEqual(fs.readFileSync(sidecarPath(root), 'utf8'), conflicting);
+  });
+});
+
+test('adversarial: write-reconciled-sidecar refuses when the stored approval no longer matches what GitHub returns', () => {
+  // override.authorized_by disagrees with the stored approval reviewer.
+  withSidecarManifest({ model_routing: reconciledRouting({ authorized_by: 'someone-else' }) }, (root) => {
+    assert.throws(() => writeReconciledSidecarCommand(SIDECAR_ISSUE, false, sidecarGitHub(), NOW, root), /authorized_by does not match/);
+  });
+  // The stored comment URL names a different comment than the one GitHub returned for that id.
+  withSidecarManifest(
+    {
+      model_routing: reconciledRouting({
+        approval: {
+          comment_url: 'https://github.com/o/r/pull/1800#issuecomment-99',
+          reviewer: 'griff843',
+          pr_number: 1800,
+          head_sha: APPROVAL_HEAD,
+        },
+      }),
+    },
+    (root) => {
+      assert.throws(
+        () => writeReconciledSidecarCommand(SIDECAR_ISSUE, false, sidecarGitHub(), NOW, root),
+        /differs from the stored identity/,
+      );
+      assert.ok(!fs.existsSync(sidecarPath(root)));
+    },
+  );
 });
