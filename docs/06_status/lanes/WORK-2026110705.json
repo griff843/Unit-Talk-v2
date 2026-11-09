@@ -31,7 +31,7 @@
   ],
   "status": "in_review",
   "started_at": "2026-11-08T18:40:55.147Z",
-  "heartbeat_at": "2026-11-09T00:18:39.297Z",
+  "heartbeat_at": "2026-11-09T03:52:01.103Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026110705-provider-offer-reader-correction.json",
@@ -40,10 +40,32 @@
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-medium",
-    "model": "gpt-6.1-sol",
+    "model": "claude-sonnet-5-5",
     "reasoning_effort": "medium",
-    "selected_by": "three-brain",
-    "policy_version": "3.0.0"
+    "selected_by": "manual-override",
+    "policy_version": "3.0.0",
+    "override": {
+      "authorized_by": "griff843",
+      "reason": "pm-verdict/v1 APPROVED https://github.com/griff843/Unit-Talk-v2/pull/1839#issuecomment-6731792481",
+      "at": "2026-11-09T03:52:01.103Z",
+      "declared": {
+        "profile": "codex-sol-medium",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "medium",
+        "selected_by": "three-brain"
+      },
+      "observation": {
+        "verification": "unverified-external-session",
+        "source": "claude-code-subagent-transcript:ae612aa6e21a8aae1 (~/.claude/projects/-home-griff843/1e73f38f-3977-4494-a8d9-59cad60c1f90/subagents/agent-ae612aa6e21a8aae1.jsonl)",
+        "unavailable_fields": []
+      },
+      "approval": {
+        "comment_url": "https://github.com/griff843/Unit-Talk-v2/pull/1839#issuecomment-6731792481",
+        "reviewer": "griff843",
+        "pr_number": 1839,
+        "head_sha": "ca4d881925b074dea00928ca688b4d4870f43684"
+      }
+    }
   },
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {

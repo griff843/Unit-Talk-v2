@@ -1,0 +1,27 @@
+{
+  "issue_id": "WORK-2026110705",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-medium",
+  "model": "claude-sonnet-5-5",
+  "reasoning_effort": "medium",
+  "policy_version": "3.0.0",
+  "override_used": true,
+  "override_authorized_by": "griff843",
+  "execution_verification": "unverified-external-session",
+  "unavailable_fields": [],
+  "routing_source": "reconciled-observation",
+  "declared_routing": {
+    "profile": "codex-sol-medium",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain"
+  },
+  "observation_source": "claude-code-subagent-transcript:ae612aa6e21a8aae1 (~/.claude/projects/-home-griff843/1e73f38f-3977-4494-a8d9-59cad60c1f90/subagents/agent-ae612aa6e21a8aae1.jsonl)",
+  "approval": {
+    "comment_url": "https://github.com/griff843/Unit-Talk-v2/pull/1839#issuecomment-6731792481",
+    "reviewer": "griff843",
+    "pr_number": 1839,
+    "head_sha": "ca4d881925b074dea00928ca688b4d4870f43684"
+  },
+  "generated_at": "2026-11-09T14:11:17.327Z"
+}
