@@ -1,6 +1,6 @@
 # PROOF: WORK-2026110803
 
-MERGE_SHA: pending merge
+MERGE_SHA: a699780eff056e48ad9641d00fd4915677d2b53a
 
 > Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command
 > actually executed and its real result before review. `post-merge-lane-close.yml`
@@ -89,7 +89,7 @@ The live-DB step is deferred to staging CI (Writable DB proof) under the PT1 rou
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: a699780eff056e48ad9641d00fd4915677d2b53a
 PR: pending
 Execution SHA: 01637c26a6b53b1ac32fb3a25049c7b712717d02
 
