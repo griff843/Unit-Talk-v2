@@ -134,6 +134,18 @@ export async function startGradingCronLoop(
   while (true) {
     cycle += 1;
     try {
+      // Refresh the liveness marker BEFORE the pass as well as after it, so the
+      // marker's age while a pass runs is the pass duration, not pass + poll.
+      // The healthcheck reads the marker as stale beyond 3 x poll, so a
+      // 12 min pass with a 5 min poll (17 min between end-of-cycle refreshes)
+      // otherwise read unhealthy for ~2 min per cycle with nothing wrong.
+      //
+      // Deliberately NOT refreshed during the pass (no timer): a hung await
+      // must stop refreshing so it is reported unhealthy. Bound: a pass that
+      // legitimately runs longer than 3 x poll (15 min at the default poll) is
+      // indistinguishable from a hang and reads unhealthy by design. A failure
+      // here follows the same bounded-retry policy as the end-of-cycle refresh.
+      await refreshLiveness();
       const summary = await runGradingCronCycle({
         cycle,
         repositories: options.repositories,

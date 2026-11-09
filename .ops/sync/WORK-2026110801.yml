@@ -1,0 +1,280 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026110801
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026110801
+  objective: The liveness marker is refreshed at the start of every cycle as well
+    as at the end, so its maximum age is max(pass duration, poll interval)
+    instead of pass + poll, while a genuinely hung pass is still reported
+    unhealthy once it exceeds 3 x poll.
+  acceptance_criteria:
+    - "AC1: `refreshLiveness()` runs at the start of every cycle, before
+      `runGradingPass`, in addition to the existing end-of-cycle refresh."
+    - "AC2: A failing pass still leaves the start-of-cycle refresh recorded, and
+      the existing retry/backoff, failure budget, alert and exit behaviour is
+      unchanged."
+    - "AC3: A failure of the start-of-cycle refresh is handled exactly like a
+      failure of the existing end-of-cycle refresh (no new crash path)."
+    - "AC4: No in-pass timer or heartbeat is added; a pass longer than 3 x poll
+      still reads unhealthy, and the code comment states this is intended hang
+      detection."
+    - "AC5: Tests prove ordering (refresh before pass) and the failing-pass
+      case, and a mutation check shows removing the start refresh fails the
+      ordering test."
+    - "AC6: No change to the healthcheck definition, env, schema, delivery, kill
+      switches or provider configuration."
+  guardrails:
+    - No deployment is part of this lane. Dispatching `deploy.yml` stays Griff's
+      reserved decision; the merged SHA is only reported for the next deploy
+      recommendation.
+    - No production DDL or data change, no kill-switch or containment change, no
+      SGO or provider activation.
+  non_goals: []
+  required_evidence:
+    - "`tsx --test apps/api/src/grading-cron.test.ts`, `pnpm type-check`, `pnpm
+      lint`, exact-head CI."
+    - Diff summary and verification log in
+      `docs/06_status/proof/WORK-2026110801/`.
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026110801 — Grading-cron liveness marker refresh at cycle start
+
+      Tier: T2
+
+      Lane type: runtime
+
+      Executor: codex-cli (profile codex-sol-medium)
+
+
+      Source: production runtime acceptance of the 2026-11-08 release (Deploy
+      run 42418995085, SHA 61cb71c8be65249d3ec3d1388a375d41d763abdd).
+      PM-directed follow-up; authorized by Griff 2026-11-08.
+
+
+      ## Tier rationale
+
+
+      T2: a bounded change to one app-level loop
+      (`apps/api/src/grading-cron.ts`) and its test. It touches no Tier C
+      sensitive path in `DELEGATION_POLICY.md` (no migration, no
+      contracts/domain, no `runtime-repositories.ts`, no
+      distribution/auth/settlement code, no env or default change, no delivery
+      routing). "Scheduled jobs / cron / retention (`pg_cron`, cleanup jobs)" in
+      the sensitive-path matrix refers to database-scheduled jobs and data
+      lifecycle; this change touches neither pg_cron nor any data. It writes
+      only the existing local liveness marker file. If a reviewer reads that row
+      as covering the app-level grading loop, re-tier to T1 before merge
+      (re-tiering up is always permitted).
+
+
+      ## Production observations (read-only, 2026-11-08T17:45Z)
+
+
+      - `grading.cron.heartbeat` cycles 1-8 landed at 15:39:51, 15:56:40,
+      16:13:47, 16:30:53, 16:47:58, 17:05:14, 17:22:20, 17:39:23 UTC: a period
+      of about 17.1 min.
+
+      - Each `grading.run` takes about 12 min (rows_scanned 22,296, all skipped,
+      `degraded_stale_input`), followed by the 5 min poll.
+
+      - Not observed from this session: container health states (no host
+      access).
+
+
+      ## Code findings
+
+
+      - `startGradingCronLoop` (`apps/api/src/grading-cron.ts`) calls
+      `refreshLiveness()` only at the end of a successful cycle (after the
+      health evaluation).
+
+      - The compose healthcheck and `isGradingCronFresh` treat the marker as
+      stale when older than 3 x `UNIT_TALK_GRADING_CRON_POLL_MS` (default
+      300000) = 15 min.
+
+      - With a ~17.1 min cycle the marker is stale for about 2 min per cycle, so
+      the container can flap `unhealthy` (interval 60s, retries 3) with no
+      actual fault.
+
+
+      ## Allowed file scope
+
+
+      - `apps/api/src/grading-cron.ts` (liveness refresh at cycle start only)
+
+      - `apps/api/src/grading-cron.test.ts`
+
+      - `.ops/work/WORK-2026110801.md`, `docs/06_status/proof/WORK-2026110801/`
+
+
+      Out of scope: `grading-cron-health.ts`,
+      `deploy/production/docker-compose.yml`, the poll interval, any in-pass
+      timer or heartbeat (it would mask a hung await), and the 12-minute
+      stale-input rescan itself (separate follow-up).
+
+
+      ## Required regression proof (named tests)
+
+
+      1. Liveness is refreshed before the grading pass runs, in every cycle.
+
+      2. A failing pass still has the start-of-cycle refresh recorded.
+
+      3. Mutation check: with the start refresh removed, test 1 fails.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026110801.md
+    title: WORK-2026110801 — Grading-cron liveness marker refresh at cycle start
+    description: >-
+      # WORK-2026110801 — Grading-cron liveness marker refresh at cycle start
+
+
+      Tier: T2
+
+      Lane type: runtime
+
+      Executor: codex-cli (profile codex-sol-medium)
+
+
+      Source: production runtime acceptance of the 2026-11-08 release (Deploy
+      run 42418995085, SHA 61cb71c8be65249d3ec3d1388a375d41d763abdd).
+      PM-directed follow-up; authorized by Griff 2026-11-08.
+
+
+      ## Tier rationale
+
+
+      T2: a bounded change to one app-level loop
+      (`apps/api/src/grading-cron.ts`) and its test. It touches no Tier C
+      sensitive path in `DELEGATION_POLICY.md` (no migration, no
+      contracts/domain, no `runtime-repositories.ts`, no
+      distribution/auth/settlement code, no env or default change, no delivery
+      routing). "Scheduled jobs / cron / retention (`pg_cron`, cleanup jobs)" in
+      the sensitive-path matrix refers to database-scheduled jobs and data
+      lifecycle; this change touches neither pg_cron nor any data. It writes
+      only the existing local liveness marker file. If a reviewer reads that row
+      as covering the app-level grading loop, re-tier to T1 before merge
+      (re-tiering up is always permitted).
+
+
+      ## Production observations (read-only, 2026-11-08T17:45Z)
+
+
+      - `grading.cron.heartbeat` cycles 1-8 landed at 15:39:51, 15:56:40,
+      16:13:47, 16:30:53, 16:47:58, 17:05:14, 17:22:20, 17:39:23 UTC: a period
+      of about 17.1 min.
+
+      - Each `grading.run` takes about 12 min (rows_scanned 22,296, all skipped,
+      `degraded_stale_input`), followed by the 5 min poll.
+
+      - Not observed from this session: container health states (no host
+      access).
+
+
+      ## Code findings
+
+
+      - `startGradingCronLoop` (`apps/api/src/grading-cron.ts`) calls
+      `refreshLiveness()` only at the end of a successful cycle (after the
+      health evaluation).
+
+      - The compose healthcheck and `isGradingCronFresh` treat the marker as
+      stale when older than 3 x `UNIT_TALK_GRADING_CRON_POLL_MS` (default
+      300000) = 15 min.
+
+      - With a ~17.1 min cycle the marker is stale for about 2 min per cycle, so
+      the container can flap `unhealthy` (interval 60s, retries 3) with no
+      actual fault.
+
+
+      ## Objective
+
+
+      The liveness marker is refreshed at the start of every cycle as well as at
+      the end, so its maximum age is max(pass duration, poll interval) instead
+      of pass + poll, while a genuinely hung pass is still reported unhealthy
+      once it exceeds 3 x poll.
+
+
+      ## Allowed file scope
+
+
+      - `apps/api/src/grading-cron.ts` (liveness refresh at cycle start only)
+
+      - `apps/api/src/grading-cron.test.ts`
+
+      - `.ops/work/WORK-2026110801.md`, `docs/06_status/proof/WORK-2026110801/`
+
+
+      Out of scope: `grading-cron-health.ts`,
+      `deploy/production/docker-compose.yml`, the poll interval, any in-pass
+      timer or heartbeat (it would mask a hung await), and the 12-minute
+      stale-input rescan itself (separate follow-up).
+
+
+      ## Acceptance Criteria
+
+
+      - AC1: `refreshLiveness()` runs at the start of every cycle, before
+      `runGradingPass`, in addition to the existing end-of-cycle refresh.
+
+      - AC2: A failing pass still leaves the start-of-cycle refresh recorded,
+      and the existing retry/backoff, failure budget, alert and exit behaviour
+      is unchanged.
+
+      - AC3: A failure of the start-of-cycle refresh is handled exactly like a
+      failure of the existing end-of-cycle refresh (no new crash path).
+
+      - AC4: No in-pass timer or heartbeat is added; a pass longer than 3 x poll
+      still reads unhealthy, and the code comment states this is intended hang
+      detection.
+
+      - AC5: Tests prove ordering (refresh before pass) and the failing-pass
+      case, and a mutation check shows removing the start refresh fails the
+      ordering test.
+
+      - AC6: No change to the healthcheck definition, env, schema, delivery,
+      kill switches or provider configuration.
+
+
+      ## Required regression proof (named tests)
+
+
+      1. Liveness is refreshed before the grading pass runs, in every cycle.
+
+      2. A failing pass still has the start-of-cycle refresh recorded.
+
+      3. Mutation check: with the start refresh removed, test 1 fails.
+
+
+      ## Guardrails
+
+
+      - No deployment is part of this lane. Dispatching `deploy.yml` stays
+      Griff's reserved decision; the merged SHA is only reported for the next
+      deploy recommendation.
+
+      - No production DDL or data change, no kill-switch or containment change,
+      no SGO or provider activation.
+
+
+      ## Required Evidence
+
+
+      - `tsx --test apps/api/src/grading-cron.test.ts`, `pnpm type-check`, `pnpm
+      lint`, exact-head CI.
+
+      - Diff summary and verification log in
+      `docs/06_status/proof/WORK-2026110801/`.
+    captured_at: 2026-11-08T18:12:48.732Z
+    description_sha256: cf14505a26d19505a0d2c33449ba73f2a13d542eb7b5e23fc752719d507fb266
+  contract_hash: 4c503ef908d3feea54434c4c15f6bbeec576f5f93b2bda995922aab091c4c86c
