@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110801/.out/worktrees/codex__work-2026110801-grading-cron-liveness-start",
   "branch": "codex/work-2026110801-grading-cron-liveness-start",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "71ddbd0de05b7059a4797e0eb636e2bd296796fc",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1838",
   "files_changed": [],
   "file_scope_lock": [
@@ -22,14 +22,22 @@
     "docs/06_status/proof/WORK-2026110801/verification.md",
     "docs/06_status/proof/WORK-2026110801/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-11-08T18:13:01.565Z",
-  "heartbeat_at": "2026-11-08T18:21:49.493Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-11-09T00:56:12.075Z",
+  "closed_at": "2026-11-09T00:56:12.075Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026110801-grading-cron-liveness-start.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-11-09T00:56:09.897Z",
+      "verdict": "pass",
+      "merge_sha": "71ddbd0de05b7059a4797e0eb636e2bd296796fc",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-medium",

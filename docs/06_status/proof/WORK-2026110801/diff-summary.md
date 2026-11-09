@@ -11,5 +11,5 @@ Not changed: `grading-cron-health.ts`, `deploy/production/docker-compose.yml`, t
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 71ddbd0de05b7059a4797e0eb636e2bd296796fc
 PR: pending
