@@ -90,6 +90,21 @@ target and this host holds no staging credential. The static half is green; the 
 (`pnpm test:db` + `pnpm test:t1-proof:live`, including the new proof above) runs only in CI's
 staging job, whose exact-head result is the authoritative record.
 
+## CI staging result (exact head b0c9e321ad1cb63c561d2a374e8dab40ffde49ef)
+
+CI run 42752805377, job "Writable DB proof (staging only)" 129620266350: success; `verify`: success.
+`pnpm test:db` 9/9 pass; `pnpm test:t1-proof:live` includes:
+
+```
+ok 1 - WORK0705 staging: provider-offer readers page past the row cap and report explicit freshness state
+# {"namespace":"work0705-utv2-1630-42752805377-1-b72fe807","history":{"fixtureRows":1250,"distinctSnapshotAt":3,"legacySingleQueryRows":1000,"readerRows":1250,"cappedReads":[1000,1001,1100]},"current":{"truncated":{"fixtureRows":1050,"returned":1000,"state":"fresh","flag":true},"fresh":{"returned":3,"state":"fresh"},"stale":{"returned":0,"state":"stale"},"empty":{"returned":0,"state":"empty"}}}
+# tests 1 / pass 1 / fail 0 / skipped 0
+```
+
+`evidence.json` `runtime_proof` was harvested from that run's `ci-db-proof-receipt/v2` and job log
+(see its `harvest_method`). The follow-on commit adding it is proof-only; its own exact-head CI
+re-runs the same staging job.
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
