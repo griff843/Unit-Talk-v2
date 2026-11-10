@@ -55,6 +55,41 @@ exit 0 (both)
 
 Run on code head 5040cddd160009ea4d8845a841765ac6ea77a42d (merge of main into the fix commit a927b25f5); the db tests, smart-form tests and both type-checks above all exited 0. Model routing evidence is the reconciled sidecar written by `ops:lane-manifest write-reconciled-sidecar` (unverified-external-session, approved on PR comment 6731792481). Staging Writable DB proof and `verify` run in CI on the final head.
 
+## Staging live-DB proof (PM Option A)
+
+`apps/api/src/t1-proof-work-2026110705-provider-offer-reader-live.test.ts`, registered in
+`pnpm test:t1-proof:live` (run by CI's "Writable DB proof (staging only)" job) and classified in
+`docs/05_operations/db-writer-classification.json`. It drives the real `listRecentOffers`,
+`fetchCurrentEventOffers` and `describeOffersState` against the staging schema
+(`xskgrzbteyqdufktjrjx`) with run-namespaced fixtures that are deleted in `finally`:
+1,250 `provider_offer_history` rows across 3 shared `snapshot_at` values (paging past the
+1,000-row cap, `id` tie-break order, `limit` 1000/1001/1100 honoured, and a non-vacuity control
+that the pre-fix single `.limit(10000)` query is clipped), plus `provider_offer_current` events
+proving truncated / fresh / stale / empty states and their labels. Locally it skips (no
+`CI_FIXTURE_RUN_ID`); its real result is the CI job log on the PR head.
+
+## pnpm verify (local, literal result)
+
+Command: `pnpm verify` (= `pnpm verify:static && pnpm test:live-db`), run 2026-11-10 on the
+working tree of this commit.
+
+```
+verify:static — env:check, lint, type-check, build and every unit suite passed
+  (122 TAP summaries, all "# fail 0"; no "# fail N>0")
+test:live-db → pnpm test:db → pnpm ci:assert-staging
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1).
+  Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci
+  GitHub environment with CI_SUPABASE_* credentials.
+ELIFECYCLE Command failed with exit code 1.
+EXIT=1
+```
+
+`pnpm verify` therefore exits 1 locally, by design: its live-DB tail refuses any non-staging
+target and this host holds no staging credential. The static half is green; the live-DB half
+(`pnpm test:db` + `pnpm test:t1-proof:live`, including the new proof above) runs only in CI's
+staging job, whose exact-head result is the authoritative record.
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
