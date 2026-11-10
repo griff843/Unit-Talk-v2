@@ -415,6 +415,7 @@ test('WORK-2026100801: refresh broker is default-controlled and rechecks live HE
     'CI',
     'Executor Result Validator',
     'Merge Gate',
+    'Independent Review',
   ]);
   const raw = readWorkflow('required-check-refresh.yml');
   assert.match(raw, /current\.head\?\.sha !== headSha/);

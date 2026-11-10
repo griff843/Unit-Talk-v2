@@ -100,3 +100,13 @@ Building a reliable throughput harness on "rejection counts by gate" / "fallback
 ## 7. Governance change protocol
 
 Operating-model changes (PM-gate triggers, executor defaults, model routing) are proposed, adversarially reviewed, and — if accepted — committed as a real doc/code diff via a governance lane like this one, before they become binding. They do not take effect from a chat directive alone, even when PM-authored. See [[feedback-governance-changes-require-pr-not-chat]].
+
+## 8. Standard / Protected operating model (WORK-2026110804 — inactive until activated)
+
+A mechanical two-class model replaces tier-by-label ceremony **while Griff has lean mode active** (`OPERATING_MODEL=lean` and `LEAN_MODE_ACTIVATED_AT` set). Mode is global: setting the flag to anything else returns every unmerged PR to §§1–7 immediately.
+
+- **Classification** is computed by `scripts/ops/operating-model.cjs` from a Standard **allow-list** (ordinary docs, add-only app/package unit tests, side-effect-free UI components) plus content checks; everything else is Protected. It is never self-declared and can only escalate, including by a trusted reviewer's `RISK-CLASS: PROTECTED`.
+- **Standard:** branch-protected checks (including `verify` and the staging DB proof where required) plus the `Independent Review` check. No lane manifest, preflight token, lease, tier label, scope-override, model-routing sidecar or exact-head `pm-verdict/v1` is required.
+- **Protected:** everything Standard requires plus a head-bound CODEOWNER `pm-verdict/v1` and the `t1-approved` label. Approval of Protected code stays separate from production activation, which remains Griff's decision and is unchanged.
+- **Independent Review** reads only GitHub-trusted artifacts: a clean pass by a trusted reviewer identity bound to the exact head and later than every P0/P1 finding raised on the PR. Resolving or dismissing never clears a finding. It fails closed.
+- Landing (two steps), activation, rollback and known limits are in `LEAN_MODE_ACTIVATION.md`. §3 (PM gates, Rule 9) is not narrowed by this section: merge-authority changes remain reserved for Griff.

@@ -14,7 +14,7 @@ on:
   repository_dispatch:
     types: [required-check-refresh]
   workflow_run:
-    workflows: [CI, Executor Result Validator, Merge Gate]
+    workflows: [CI, Executor Result Validator, Merge Gate, Independent Review]
     types: [completed]
 
 permissions:
@@ -57,6 +57,11 @@ jobs:
                 workflowPath: '.github/workflows/merge-gate.yml',
                 label: 'Merge Gate',
               },
+              independent: {
+                workflowId: 'independent-review.yml',
+                workflowPath: '.github/workflows/independent-review.yml',
+                label: 'Independent Review',
+              },
             };
 
             let prNumber;
@@ -71,6 +76,11 @@ jobs:
               const body = String(context.payload.comment?.body || '');
               if (body.includes('EXECUTOR_RESULT:')) targets.push('executor');
               if (body.includes('PM_VERDICT:')) targets.push('merge');
+              // WORK-2026110804: the review connector's summary comment (created
+              // or edited when a review completes) is the only signal a CLEAN PR
+              // gets. Rerunning is safe for any author: the rerun itself decides
+              // trust from GitHub identity and exact head.
+              if (body.includes('codex-review-state:v1')) targets.push('independent', 'merge');
               if (targets.length === 0) {
                 core.info('Comment contains no recognized refresh signal.');
                 return;
@@ -81,7 +91,7 @@ jobs:
               }
               prNumber = Number(context.payload.client_payload?.pr_number);
               const requested = String(context.payload.client_payload?.target || 'both');
-              if (!['executor', 'merge', 'both'].includes(requested)) {
+              if (!['executor', 'merge', 'independent', 'both'].includes(requested)) {
                 throw new Error(`Unknown manual refresh target ${requested}; refusing refresh.`);
               }
               targets = requested === 'both' ? ['executor', 'merge'] : [requested];
@@ -103,6 +113,10 @@ jobs:
                 'CI': { path: '.github/workflows/ci.yml', event: 'pull_request', conclusion: 'success', targets: ['executor'] },
                 'Executor Result Validator': { path: '.github/workflows/executor-result-validator.yml', event: 'pull_request', conclusion: 'success', targets: ['merge'] },
                 'Merge Gate': { path: '.github/workflows/merge-gate.yml', event: 'pull_request_review', conclusion: null, targets: ['merge'] },
+                // WORK-2026110804: a trusted-reviewer review observed by the
+                // pull_request_review run reruns the native Independent Review
+                // and Merge Gate runs at the exact live head.
+                'Independent Review': { path: '.github/workflows/independent-review.yml', event: 'pull_request_review', conclusion: null, targets: ['independent', 'merge'] },
               };
               const expected = trustedSignals[run.name];
               if (!expected || run.path !== expected.path || run.event !== expected.event) {
