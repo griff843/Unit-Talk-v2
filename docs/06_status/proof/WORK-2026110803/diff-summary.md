@@ -8,5 +8,5 @@
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: a699780eff056e48ad9641d00fd4915677d2b53a
 PR: pending
