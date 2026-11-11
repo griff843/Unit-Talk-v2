@@ -151,6 +151,17 @@ migration and no new write path; the persisted shape was asserted against the re
 
 Execution SHA: b64849542b6964eb7f23fb97ed6c64b06effa317
 
+## CI staging result (PR head 900f46831d2c47d35daa266743f0eaded6f0afb3)
+
+CI run 42968390678, job "Writable DB proof (staging only)" 130351015911: success, against staging
+xskgrzbteyqdufktjrjx. `pnpm test:db`: 9 tests, 9 pass, 0 fail (from the run's `ci-db-proof-receipt/v2`).
+`evidence.json` `runtime_proof` was harvested from that receipt and job log with the exported steps of
+`scripts/ops/ci-db-proof-harvest.ts` (see its `harvest_method`): receipt hash integrity, run identity and
+merge-ref ancestry (merge ref f719cb12ca0279d647fa365e5e1b0d75b88c09c0, second parent the PR head) verified.
+`database-smoke.test.ts` is the repository's standing staging smoke; it does not exercise the manual-player
+path, which adds no table, column or write path. The follow-on commit adding this is proof-only; its own
+exact-head CI re-runs the same staging job.
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
