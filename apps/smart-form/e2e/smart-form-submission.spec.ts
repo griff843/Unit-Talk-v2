@@ -1460,8 +1460,7 @@ test('a structured-fallback player prop with no scheduled event submits', async 
 
   await page.getByRole('button', { name: /PROP Player Prop/i }).first().click();
 
-  await page.getByLabel('Team', { exact: true }).fill('Celtics');
-  await page.getByRole('button', { name: 'Celtics team' }).click();
+  await page.getByTestId('manual-matchup-team-choices').getByRole('button', { name: 'Celtics', exact: true }).click();
 
   await page.getByLabel('Player', { exact: true }).fill('Jays');
   await page.getByRole('button', { name: /^Jayson Tatum/ }).click();
