@@ -132,6 +132,19 @@ Follow-up commit e5789466523e68065526d7a6d9ee7780b32c6101 (Codex P1 and P2 on he
 - `pnpm lint`: exit 0
 - `pnpm type-check`: exit 0
 
+Follow-up commit 5333ea042e1dc3134cda110fc360138806ff19b8 (Codex P1 and P2 on head 274d159e1):
+
+- P1: `required-check-refresh.yml` no longer throws at the first missing or in-flight required target. It records the refusal, requests every rerun it can, then fails the job and lists each refusal. Only a moved PR head aborts at once. In lean only, a completed native `pull_request` Merge Gate run is now a signal. It reruns Merge Gate, Executor Result Validation, Independent Review and Risk Class once when a trusted `RISK-CLASS: PROTECTED` escalation (issue comment, review body or inline review comment) was written or updated at or after the run's `run_started_at`. Independent Review and Merge Gate now share one helper, `signalWrittenSinceRunStart`. The Independent Review recovery also no longer skips a successful run, so a stale pass that missed a newer summary is recomputed too. The recovery is bounded because the rerun starts after the signal. A missing `run_started_at`, or a matching signal without a timestamp, fails closed. Legacy and unset modes still refuse the native Merge Gate event, as before, and never load the module. Permissions are unchanged: `pulls.listReviews` and `pulls.listReviewComments` use the existing `pull-requests: read`.
+- P2: the UI-component rule no longer accepts `@/components/*` or any relative import of a first-party module, so a wrapper around a mutation-capable component (for example `InterventionAction` with `action="requeue_delivery"`) is Protected. Package imports and the named `@/lib` helpers are unchanged. Import-graph analysis is recorded as a possible future refinement in `LEAN_MODE_ACTIVATION.md`.
+- Mutation, P1: throwing at the first refusal again fails the in-flight Merge Gate test (49 pass, 1 fail). Removing the lean native Merge Gate event fails 3 tests (47 pass). Removing the timestamp bound from the shared helper fails both bounded/adversarial tests (48 pass, 2 fail). Restored: 50/50.
+- Mutation, P2: restoring the 274d159e1 `operating-model.cjs` fails the new first-party-import test (38 pass, 1 fail). Restored: 39/39.
+- `npx tsx --test scripts/ops/operating-model.test.ts`: 39/39 pass, exit 0
+- `npx tsx --test scripts/ops/operating-model-workflows.test.ts`: 50/50 pass, exit 0
+- `npx tsx --test scripts/ops/workflow-hardening.test.ts`: 99/99 pass, exit 0
+- `pnpm test:ops`: 3878 tests, 3868 pass, 0 fail, 10 skipped, exit 0
+- `pnpm lint`: exit 0
+- `pnpm type-check`: exit 0
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
