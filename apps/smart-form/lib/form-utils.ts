@@ -814,6 +814,21 @@ export function readManualPlayerCandidates(error: unknown): ManualPlayerCandidat
 }
 
 /**
+ * The matchup side a suggested catalog player belongs to, or null when the player is on neither
+ * side. The 409 candidates are gathered across the whole sport (a similar player on another team
+ * is still a duplicate risk), but only a player on one of the two matchup teams can become this
+ * leg: picking one switches the selected team to that side, and any other candidate is shown but
+ * cannot be picked, because the API refuses a player whose team is not a side of the matchup.
+ */
+export function manualPlayerCandidateSide<Side extends { participantId: string | null }>(
+  candidate: Pick<ManualPlayerCandidate, 'teamId'>,
+  sides: readonly Side[],
+): Side | null {
+  if (!candidate.teamId) return null;
+  return sides.find((side) => side.participantId !== null && side.participantId === candidate.teamId) ?? null;
+}
+
+/**
  * Replace the player of a structured-fallback resolution with a manual player.
  * Teams keep their canonical identities; the canonical `player` is removed,
  * because the API refuses the two together.

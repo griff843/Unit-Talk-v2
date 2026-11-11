@@ -15,6 +15,7 @@ import {
   resolvePlayerPropMarketKey,
   resolveSportsbookId,
   withManualPlayer,
+  manualPlayerCandidateSide,
   type PlayerSearchResolution,
 } from '../lib/form-utils.ts';
 import type { CanonicalParticipantResolution } from '@unit-talk/contracts';
@@ -1091,4 +1092,23 @@ test('WORK-2026110802 confirm: the confirmation rides on manualPlayer only when 
   });
   // An empty confirmation (the "suggestions changed" case) is still sent, as [].
   assert.deepEqual(withManualPlayer(resolution, 'Tyler Herro', []).manualPlayer?.confirmedNotCandidates, []);
+});
+
+test('WORK-2026110802 (Codex P2): a picked candidate maps to its own matchup side, or to none', () => {
+  const sides = [
+    { participantId: 'team-celtics', label: 'Boston Celtics' },
+    { participantId: 'team-knicks', label: 'New York Knicks' },
+  ];
+  // Same side as the selected team: that side (the form keeps it).
+  assert.equal(manualPlayerCandidateSide({ teamId: 'team-knicks' }, sides), sides[1]);
+  // The other matchup side: that side, so the form switches the leg's team to it.
+  assert.equal(manualPlayerCandidateSide({ teamId: 'team-celtics' }, sides), sides[0]);
+  // Neither matchup team, or no team: null, so the candidate cannot be picked.
+  assert.equal(manualPlayerCandidateSide({ teamId: 'team-lakers' }, sides), null);
+  assert.equal(manualPlayerCandidateSide({ teamId: null }, sides), null);
+  // A side without a canonical id never matches, even a candidate without a team.
+  assert.equal(
+    manualPlayerCandidateSide({ teamId: null }, [{ participantId: null, label: 'Unresolved' }, sides[1]!]),
+    null,
+  );
 });

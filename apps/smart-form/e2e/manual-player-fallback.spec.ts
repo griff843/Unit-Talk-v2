@@ -51,9 +51,17 @@ async function assertIsolatedApiReady(request: APIRequestContext) {
   expect(await response.json()).toMatchObject({ service: 'api', persistenceMode: 'in_memory' });
 }
 
-async function searchRows(request: APIRequestContext, kind: 'teams' | 'players', sportId: string, query: string) {
+async function searchRows(
+  request: APIRequestContext,
+  kind: 'teams' | 'players',
+  sportId: string,
+  query: string,
+  teamId?: string,
+) {
   const response = await request.get(
-    `${apiBaseUrl}/api/reference-data/search/${kind}?sport=${sportId}&q=${encodeURIComponent(query)}`,
+    `${apiBaseUrl}/api/reference-data/search/${kind}?sport=${sportId}&q=${encodeURIComponent(query)}${
+      teamId ? `&teamId=${encodeURIComponent(teamId)}` : ''
+    }`,
   );
   expect(response.status(), `${kind} search must return HTTP 200`).toBe(200);
   const payload = await response.json() as { data?: Array<{ participantId: string; displayName: string }> };
@@ -232,9 +240,9 @@ test('WORK-2026110802: a failed player search never offers manual entry and the 
 // PM decision (operator-confirmed unverified player). The fixture is derived from the real local
 // catalog, not mocked: a catalog player's given name with an invented surname is absent from
 // the catalog (so manual entry is offered) but similar to that player (so the API lists it).
-async function similarNameFixture(request: APIRequestContext) {
+async function similarNameFixture(request: APIRequestContext, teamId?: string) {
   for (const probe of ['an', 'er', 'ar', 'on']) {
-    for (const row of await searchRows(request, 'players', 'NBA', probe)) {
+    for (const row of await searchRows(request, 'players', 'NBA', probe, teamId)) {
       const given = row.displayName.split(/\s+/u)[0] ?? '';
       if (!/^[A-Za-z]{3,}$/u.test(given)) continue;
       const name = `${given} Qwyxzer`;
@@ -306,9 +314,12 @@ test('WORK-2026110802: a similar catalog player is offered, and "none of these" 
 
 test('WORK-2026110802: picking a suggested player switches the leg to that canonical player', async ({ page, request }) => {
   await assertIsolatedApiReady(request);
-  const fixture = await similarNameFixture(request);
-  test.skip(!fixture, 'local NBA player catalog has no usable player');
-  const shape = { ...shapes[0]!, player: fixture!.name };
+  // A player on the selected team (Celtics @ Knicks, team Celtics): picking it keeps the team.
+  const [team] = await searchRows(request, 'teams', shapes[1]!.sport, shapes[1]!.teamQuery);
+  test.skip(!team, 'local NBA team catalog lacks the matchup teams');
+  const fixture = await similarNameFixture(request, team!.participantId);
+  test.skip(!fixture, 'local NBA player catalog has no usable player on the selected team');
+  const shape = { ...shapes[1]!, player: fixture!.name };
   let submissions = 0;
   page.on('request', (sent) => {
     if (sent.method() === 'POST' && new URL(sent.url()).pathname === '/api/submissions') submissions += 1;
@@ -328,5 +339,63 @@ test('WORK-2026110802: picking a suggested player switches the leg to that canon
   await expect(page.getByTestId('manual-player-fallback')).toHaveCount(0);
   await expect(page.getByLabel('Player', { exact: true })).toHaveValue(fixture!.row.displayName);
   await expect(page.getByTestId('slip-manual-player')).toHaveCount(0);
+  await expect(page.getByTestId('manual-matchup-team-choices').getByRole('button', { name: new RegExp(shape.teamQuery, 'i') }))
+    .toHaveAttribute('aria-pressed', 'true');
   expect(submissions, 'picking a candidate does not submit by itself').toBe(1);
+});
+
+// Codex P2 (#1841): candidates are gathered across the whole sport, so the picked player may be on
+// the other side of the matchup. The leg's team must follow the player, or the API refuses it.
+test('WORK-2026110802: picking a suggested player from the other side switches the team and saves', async ({ page, request }) => {
+  await assertIsolatedApiReady(request);
+  const shape0 = shapes[0]!; // Celtics @ Knicks, team Knicks
+  const [away] = await searchRows(request, 'teams', shape0.sport, shape0.awayQuery);
+  const [home] = await searchRows(request, 'teams', shape0.sport, shape0.homeQuery);
+  test.skip(!away || !home, 'local NBA team catalog lacks the matchup teams');
+  const fixture = await similarNameFixture(request, away!.participantId);
+  test.skip(!fixture, 'local NBA player catalog has no usable player on the away team');
+  const shape = { ...shape0, player: fixture!.name };
+
+  await openStructuredMatchup(page, shape);
+  await page.getByLabel('Player', { exact: true }).fill(shape.player);
+  await page.getByTestId('manual-player-enter').click();
+  await fillLine(page, shape);
+  const first = await submitAndWait(page, () =>
+    page.locator('[data-testid="smart-form-submit-button"]:visible').first().click());
+  expect(first.status(), await first.text()).toBe(409);
+  const candidates = ((await first.json()) as {
+    error: { details: { candidates: Array<{ participantId: string; displayName: string; teamId: string | null }> } };
+  }).error.details.candidates;
+  const awayCandidate = candidates.find((candidate) => candidate.teamId === away!.participantId);
+  test.skip(!awayCandidate, 'the away-team fixture player did not make the five candidates');
+
+  // A candidate on neither matchup team is listed (it is still a duplicate risk) but cannot be picked.
+  for (const candidate of candidates) {
+    const button = page.locator(`[data-testid="manual-player-candidate"][data-participant-id="${candidate.participantId}"]`);
+    const onSide = candidate.teamId === away!.participantId || candidate.teamId === home!.participantId;
+    if (onSide) await expect(button).toBeEnabled();
+    else await expect(button).toBeDisabled();
+  }
+
+  await page.locator(`[data-testid="manual-player-candidate"][data-participant-id="${awayCandidate!.participantId}"]`).click();
+  const choices = page.getByTestId('manual-matchup-team-choices');
+  await expect(choices.getByRole('button', { name: new RegExp(shape0.awayQuery, 'i') })).toHaveAttribute('aria-pressed', 'true');
+  await expect(choices.getByRole('button', { name: new RegExp(shape0.homeQuery, 'i') })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByLabel('Player', { exact: true })).toHaveValue(awayCandidate!.displayName);
+
+  const second = await submitAndWait(page, () =>
+    page.locator('[data-testid="smart-form-submit-button"]:visible').first().click());
+  expect(second.status(), await second.text()).toBe(201);
+  const submission = (await second.json()) as { data: { pickId: string } };
+  const metadata = (await readPersistedPick(request, submission.data.pickId))['metadata'] as Record<string, unknown>;
+  expect(metadata['playerProvenance']).toBeUndefined();
+  expect(metadata['manualPlayerReview']).toBeUndefined();
+  expect(metadata).toMatchObject({
+    distributionMode: 'track-only',
+    participantResolution: {
+      team: { participantId: away!.participantId },
+      player: { participantId: awayCandidate!.participantId },
+    },
+  });
+  await assertTrackOnlyHasNoOutbox(request, submission.data.pickId);
 });

@@ -43,6 +43,7 @@ import {
   MANUAL_PLAYER_PROVENANCE,
   resolveSportsbookId,
   withManualPlayer,
+  manualPlayerCandidateSide,
   readManualPlayerCandidates,
   type PlayerSearchResolution,
   type SmartFormIdentityMode,
@@ -1077,6 +1078,11 @@ export function BetForm({
     playerSearchResolution,
   });
   const manualPlayerActive = manualPlayerRequested && manualPlayerOffered;
+  // The two structured sides a suggested candidate may belong to (WORK-2026110802).
+  const manualPlayerCandidateSides = [
+    { participantId: awayParticipantId, label: watchedValues.awayParticipantName?.trim() ?? '' },
+    { participantId: homeParticipantId, label: watchedValues.homeParticipantName?.trim() ?? '' },
+  ];
   useEffect(() => {
     setManualPlayerRequested(false);
     setManualPlayerCandidates(null);
@@ -2192,6 +2198,14 @@ export function BetForm({
   // switches to that canonical player and the manual entry is withdrawn. Nothing is submitted
   // until the operator saves again.
   function selectManualPlayerCandidate(candidate: ManualPlayerCandidate) {
+    const side = manualPlayerCandidateSide(candidate, manualPlayerCandidateSides);
+    // Fail closed: a player on neither matchup team cannot become this leg (the button is
+    // disabled; this guards any other caller).
+    if (!side) return;
+    if (side.participantId !== selectedTeamId) {
+      setSelectedTeamId(side.participantId);
+      form.setValue('team', side.label, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+    }
     setManualPlayerCandidates(null);
     setManualPlayerRequested(false);
     setSelectedPlayerId(candidate.participantId);
@@ -3365,21 +3379,27 @@ export function BetForm({
                           ? 'Is this one of these players?'
                           : 'The suggested players changed and none is similar now.'}
                       </p>
-                      {manualPlayerCandidates.map((candidate) => (
-                        <Button
-                          key={candidate.participantId}
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="mr-2"
-                          data-testid="manual-player-candidate"
-                          data-participant-id={candidate.participantId}
-                          onClick={() => selectManualPlayerCandidate(candidate)}
-                        >
-                          {candidate.displayName}
-                          {candidate.teamName ? ` (${candidate.teamName})` : ''}
-                        </Button>
-                      ))}
+                      {manualPlayerCandidates.map((candidate) => {
+                        const inMatchup = manualPlayerCandidateSide(candidate, manualPlayerCandidateSides) !== null;
+                        return (
+                          <Button
+                            key={candidate.participantId}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="mr-2"
+                            data-testid="manual-player-candidate"
+                            data-participant-id={candidate.participantId}
+                            data-in-matchup={inMatchup ? 'true' : 'false'}
+                            disabled={!inMatchup}
+                            title={inMatchup ? undefined : 'On another team, not in this matchup: cannot be picked for this leg'}
+                            onClick={() => selectManualPlayerCandidate(candidate)}
+                          >
+                            {candidate.displayName}
+                            {candidate.teamName ? ` (${candidate.teamName})` : inMatchup ? '' : ' (another team, not in this matchup)'}
+                          </Button>
+                        );
+                      })}
                       <div>
                         <Button
                           type="button"

@@ -336,6 +336,19 @@ candidates (1), malformed candidate skipped rather than refused (1), confirmatio
 fixture was changed so that id order and name order disagree, and so that an unweighted match sorts first,
 after which both were killed.
 
+### Codex P2 (team of a picked candidate), on top of 1917364eb
+
+Picking a 409 candidate now sets the leg's team to the candidate's matchup side
+(`manualPlayerCandidateSide` in `apps/smart-form/lib/form-utils.ts`); a candidate on neither matchup
+team is shown but disabled. The server's candidate set stays sport-wide and the exact-set check is
+unchanged: narrowing it to the matchup would let a duplicate of a player listed under another team be
+recorded as unverified without the operator ever seeing it.
+
+Mutation proofs (each applied alone, file restored): team id not switched (killed by the e2e at
+`manual-player-fallback:349`, `aria-pressed` assertion); team field not updated (killed, same test);
+helper ignores the candidate's team, falls back to a side for an off-matchup player, or accepts a
+null team (each killed by the form-utils unit test).
+
 ## Verification (original, on b64849542)
 
 Command: `pnpm verify` (lane worktree, on the tree later committed as b64849542 except the two
