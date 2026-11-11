@@ -14,7 +14,7 @@ result: not_run
 
 - [x] AC1: with `OPERATING_MODEL` unset or not `lean`, every touched workflow runs its legacy path (tests: bootstrap: with the flag unset the module is never loaded (lazy) and legacy runs unchanged; gate matrix: legacy T1 is evaluated by the unchanged legacy logic (flag=legacy / flag unset); Risk Class / Independent Review: not applicable for legacy).
 - [x] AC2: lazy, `MODULE_NOT_FOUND`-guarded load; any other load error fails closed (tests: bootstrap: every require of operating-model.cjs is lazy and MODULE_NOT_FOUND-guarded; bootstrap (adversarial): base without operating-model.cjs + OPERATING_MODEL=lean => pure legacy in every workflow; bootstrap: a module that exists but throws for another reason fails closed).
-- [x] AC3: Standard allow-list, everything else Protected, sticky `RISK-CLASS: PROTECTED` (tests: classify (adversarial): every sensitive or unknown path is Protected; classify: every merge-risk.ts Tier C exact path and prefix is Protected (parity); escalation: RISK-CLASS: PROTECTED from a trusted reviewer is sticky across heads and sources).
+- [x] AC3: Standard allow-list, everything else Protected, `RISK-CLASS: PROTECTED` sticky across heads and sources while the trusted artifact exists (deleting it clears the escalation at the next recompute, a documented known limit) (tests: classify (adversarial): every sensitive or unknown path is Protected; classify: every merge-risk.ts Tier C exact path and prefix is Protected (parity); escalation: RISK-CLASS: PROTECTED from a trusted reviewer is sticky across heads and sources).
 - [x] AC4: Independent Review passes only on the anchored head-bound clean summary; a P0/P1 at a head blocks that head (tests: review: passes only on the anchored connector summary bound to the exact head; review (adversarial P1-c): a bare bot review object never passes; review (adversarial P1-d): any finding at head H blocks H).
 - [x] AC5: lean Protected still needs `t1-approved` plus a head-bound `pm-verdict/v1` (tests: lean gate: Protected (or any unknown class) additionally needs t1-approved and a head-bound pm-verdict; gate matrix: lean Protected requires t1-approved and a head-bound pm-verdict in addition to review).
 - [x] AC6: runbook present; this lane sets no repository variable and changes no branch protection (only references to `vars.LEAN_MODE_ACTIVATED_AT` and docs exist in the diff).
@@ -116,6 +116,8 @@ Follow-up commit 61aefdf82f04de51a31b285c2c36eb960da0a134 (review-input event au
 - `pnpm test:ops`: 3867 tests, 3857 pass, 0 fail, 10 skipped, exit 0
 - `pnpm lint`: exit 0
 - `pnpm type-check`: exit 0
+
+Truth correction (2026-11-11, docs only, no code change): AC3, `LEAN_MODE_ACTIVATION.md` and `OPERATING_MODEL_SONNET5.md` now describe what the code does. Escalation and findings last while the trusted artifact exists, and deleting it clears them at the next recompute. Dismissal clears a `CHANGES_REQUESTED`-only finding but not a P0/P1 in the review body. Deletion-proof findings and escalation are listed as a known limit pending a separate PM-governed follow-up.
 
 ## Merge SHA Binding
 
