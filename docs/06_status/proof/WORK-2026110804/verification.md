@@ -12,17 +12,67 @@ result: not_run
 
 ## ASSERTIONS:
 
-- [ ] (state each behavior this lane proves, and the test that proves it)
+- [x] AC1: with `OPERATING_MODEL` unset or not `lean`, every touched workflow runs its legacy path (tests: bootstrap: with the flag unset the module is never loaded (lazy) and legacy runs unchanged; gate matrix: legacy T1 is evaluated by the unchanged legacy logic (flag=legacy / flag unset); Risk Class / Independent Review: not applicable for legacy).
+- [x] AC2: lazy, `MODULE_NOT_FOUND`-guarded load; any other load error fails closed (tests: bootstrap: every require of operating-model.cjs is lazy and MODULE_NOT_FOUND-guarded; bootstrap (adversarial): base without operating-model.cjs + OPERATING_MODEL=lean => pure legacy in every workflow; bootstrap: a module that exists but throws for another reason fails closed).
+- [x] AC3: Standard allow-list, everything else Protected, sticky `RISK-CLASS: PROTECTED` (tests: classify (adversarial): every sensitive or unknown path is Protected; classify: every merge-risk.ts Tier C exact path and prefix is Protected (parity); escalation: RISK-CLASS: PROTECTED from a trusted reviewer is sticky across heads and sources).
+- [x] AC4: Independent Review passes only on the anchored head-bound clean summary; a P0/P1 at a head blocks that head (tests: review: passes only on the anchored connector summary bound to the exact head; review (adversarial P1-c): a bare bot review object never passes; review (adversarial P1-d): any finding at head H blocks H).
+- [x] AC5: lean Protected still needs `t1-approved` plus a head-bound `pm-verdict/v1` (tests: lean gate: Protected (or any unknown class) additionally needs t1-approved and a head-bound pm-verdict; gate matrix: lean Protected requires t1-approved and a head-bound pm-verdict in addition to review).
+- [x] AC6: runbook present; this lane sets no repository variable and changes no branch protection (only references to `vars.LEAN_MODE_ACTIVATED_AT` and docs exist in the diff).
+- [x] AC7: focused tests and `test:ops` pass on the lane head.
 
 ## EVIDENCE:
 
-(paste measured output here, in fenced blocks)
+Head under test: 212c813ea44574fdce9e49910b765caa679e05cf (lane worktree, branch `claude/work-2026110804-lean-mode`). Commits were ported from local `scratch/lean-impl` (`76efb7df6`, `98c9bf6a8`, `bf126e4ab`) onto `main` at `a82fd3b16` by clean cherry-pick, with no conflicts.
+
+`npx tsx --test scripts/ops/operating-model.test.ts` totals:
+
+```
+# tests 32
+# pass 32
+# fail 0
+```
+
+`npx tsx --test scripts/ops/operating-model-workflows.test.ts` totals:
+
+```
+# tests 34
+# pass 34
+# fail 0
+```
+
+`npx tsx --test scripts/ops/workflow-hardening.test.ts` totals:
+
+```
+# tests 99
+# pass 99
+# fail 0
+```
+
+`pnpm test:ops` totals:
+
+```
+# tests 3855
+# suites 21
+# pass 3845
+# fail 0
+# cancelled 0
+# skipped 10
+# todo 0
+```
 
 ## Verification
 
-(record every verification command run on the final code commit, with its real result)
+- `npx tsx --test scripts/ops/operating-model.test.ts`: 32/32 pass, exit 0
+- `npx tsx --test scripts/ops/operating-model-workflows.test.ts`: 34/34 pass, exit 0
+- `npx tsx --test scripts/ops/workflow-hardening.test.ts`: 99/99 pass, exit 0
+- `pnpm test:ops`: 3855 tests, 3845 pass, 0 fail, 10 skipped, exit 0
+- `pnpm lint`: exit 0
+- `pnpm type-check`: exit 0
+- `pnpm ops:preflight WORK-2026110804 --tier T1 ...`: VERDICT PASS (42 checks). PB1 `pnpm type-check` and PB2 `pnpm test` passed on `main` + the work order. PT1 reported BLOCKED_BY_CONTAINMENT, and the token records `t1_live_db_precondition: deferred_to_ci` under the ratified PT1 route B (`docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md`).
+- Not run locally: `pnpm test:db` and runtime proof. This lane has no runtime or DB path. The live-DB precondition is deferred to exact-head CI under route B.
 
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: pending
+Execution SHA: 212c813ea44574fdce9e49910b765caa679e05cf
