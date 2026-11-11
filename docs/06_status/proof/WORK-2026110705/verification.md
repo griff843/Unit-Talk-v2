@@ -1,6 +1,6 @@
 # PROOF: WORK-2026110705
 
-MERGE_SHA: pending merge
+MERGE_SHA: 05b8209327e41cafa5a02d1914aad4498180238d
 
 > Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command
 > actually executed and its real result before review. `post-merge-lane-close.yml`
@@ -107,6 +107,6 @@ re-runs the same staging job.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 05b8209327e41cafa5a02d1914aad4498180238d
 PR: pending
 Execution SHA: 5040cddd160009ea4d8845a841765ac6ea77a42d

@@ -23,5 +23,11 @@
     "pr_number": 1839,
     "head_sha": "ca4d881925b074dea00928ca688b4d4870f43684"
   },
-  "generated_at": "2026-11-09T14:11:17.327Z"
+  "generated_at": "2026-11-09T14:11:17.327Z",
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": "05b8209327e41cafa5a02d1914aad4498180238d",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1839",
+    "bound_at": "2026-11-11T02:51:31.700Z"
+  }
 }

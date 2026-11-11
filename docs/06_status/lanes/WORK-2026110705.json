@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110705/.out/worktrees/codex__work-2026110705-provider-offer-reader-correction",
   "branch": "codex/work-2026110705-provider-offer-reader-correction",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "05b8209327e41cafa5a02d1914aad4498180238d",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1839",
   "files_changed": [],
   "file_scope_lock": [
@@ -29,14 +29,22 @@
     "docs/06_status/proof/WORK-2026110705/verification.md",
     "docs/06_status/proof/WORK-2026110705/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-11-08T18:40:55.147Z",
-  "heartbeat_at": "2026-11-09T03:52:01.103Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-11-11T02:51:34.462Z",
+  "closed_at": "2026-11-11T02:51:34.462Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026110705-provider-offer-reader-correction.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-11-11T02:51:31.705Z",
+      "verdict": "pass",
+      "merge_sha": "05b8209327e41cafa5a02d1914aad4498180238d",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-medium",
