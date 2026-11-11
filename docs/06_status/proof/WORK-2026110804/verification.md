@@ -105,6 +105,18 @@ Follow-up commit 7275cc470aa0783f7fb0ffe3fbdc91362edad7de (notes 1 and 2):
 - `pnpm lint`: exit 0
 - `pnpm type-check`: exit 0
 
+Follow-up commit 61aefdf82f04de51a31b285c2c36eb960da0a134 (review-input event audit):
+
+- Inline review-thread comments (`pull_request_review_comment` created, edited, deleted) now run the read-only Independent Review workflow. In lean, its `workflow_run` reruns Independent Review, Merge Gate, Executor Result Validation and Risk Class.
+- Issue comments now also subscribe to `deleted`. In lean, editing or deleting a comment authored by a trusted reviewer login reruns the same four checks. Legacy mode ignores deletions.
+- Review-thread resolve/unresolve has no Actions event, so it is documented as a known limit in `LEAN_MODE_ACTIVATION.md`.
+- `npx tsx --test scripts/ops/operating-model.test.ts`: 35/35 pass, exit 0
+- `npx tsx --test scripts/ops/operating-model-workflows.test.ts`: 43/43 pass, exit 0
+- `npx tsx --test scripts/ops/workflow-hardening.test.ts`: 99/99 pass, exit 0
+- `pnpm test:ops`: 3867 tests, 3857 pass, 0 fail, 10 skipped, exit 0
+- `pnpm lint`: exit 0
+- `pnpm type-check`: exit 0
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
