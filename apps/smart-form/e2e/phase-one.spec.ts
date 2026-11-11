@@ -613,7 +613,8 @@ test('failed participant search is retryable and never offers coverage-gap entry
   await page.getByRole('button', { name: 'NCAAF' }).click();
   await page.getByRole('button', { name: 'Manual entry' }).click();
   await page.getByLabel('Away Team').fill('TCU');
-  await expect(page.getByText('Search failed: Canonical participant search is temporarily unavailable. Try again.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Search failed: Canonical participant search is temporarily unavailable.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Try again', exact: true })).toBeVisible();
   await expect(page.getByTestId('coverage-gap-manual-entry')).toHaveCount(0);
   await expect(page.getByText('Manual team entry', { exact: true })).toHaveCount(0);
 });
@@ -699,7 +700,7 @@ test('non-team sport without a slate remains reachable through explicit manual p
   });
 });
 
-test('editing a selected team as free text clears the dependent canonical player', async ({ page }) => {
+test('changing the selected team clears the dependent canonical player', async ({ page }) => {
   await page.route('**/api/reference-data/catalog', (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -733,15 +734,19 @@ test('editing a selected team as free text clears the dependent canonical player
   await page.getByLabel('Home Team').fill('UNC');
   await page.getByRole('button', { name: /UNC\s+team/i }).first().click();
   await page.getByRole('button', { name: /Player Prop/i }).first().click();
-  await page.getByLabel('Team', { exact: true }).fill('TCU');
-  await page.getByRole('button', { name: /TCU\s+team/i }).last().click();
+  await page.getByTestId('manual-matchup-team-choices').getByRole('button', { name: 'TCU', exact: true }).click();
   await page.getByLabel('Player', { exact: true }).fill('TCU');
   await page.getByRole('button', { name: /TCU Quarterback/i }).click();
   await expect(page.getByLabel('Player', { exact: true })).toHaveValue('TCU Quarterback');
 
-  await page.getByLabel('Team', { exact: true }).fill('UNC');
+  // Since UTV2-1895 the Team field is the matchup's two-team button group, so a team
+  // can no longer be edited into an unresolved free-text value. Switching to the
+  // other canonical team must still drop the player bound to the previous team.
+  const teamChoices = page.getByTestId('manual-matchup-team-choices');
+  await teamChoices.getByRole('button', { name: 'UNC', exact: true }).click();
+  await expect(teamChoices.getByRole('button', { name: 'UNC', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(teamChoices.getByRole('button', { name: 'TCU', exact: true })).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByLabel('Player', { exact: true })).toHaveValue('');
-  await expect(page.getByLabel('Player', { exact: true })).toBeDisabled();
 });
 
 // ---------------------------------------------------------------------------
@@ -804,8 +809,7 @@ test('structured player prop persists its line, stat and canonical player with n
 
   await openManualNbaMatchup(page);
   await page.getByRole('button', { name: /PROP\s*Player Prop/i }).first().click();
-  await page.getByLabel('Team', { exact: true }).fill('Celtics');
-  await page.getByRole('button', { name: /Celtics\s+team/i }).last().click();
+  await page.getByTestId('manual-matchup-team-choices').getByRole('button', { name: 'Celtics', exact: true }).click();
   await page.getByLabel('Player', { exact: true }).fill('Celtics Starter');
   await page.getByRole('button', { name: /^Celtics Starter/ }).click();
   await page.getByRole('combobox', { name: 'Stat Type' }).click();
@@ -864,8 +868,7 @@ test('structured NHL Shots on Goal player prop persists a hockey market and no d
   await page.getByRole('button', { name: /Maple Leafs\s+team/i }).first().click();
   await expect(page.getByText('Bruins @ Maple Leafs', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: /PROP\s*Player Prop/i }).first().click();
-  await page.getByLabel('Team', { exact: true }).fill('Bruins');
-  await page.getByRole('button', { name: /Bruins\s+team/i }).last().click();
+  await page.getByTestId('manual-matchup-team-choices').getByRole('button', { name: 'Bruins', exact: true }).click();
   await page.getByLabel('Player', { exact: true }).fill('Bruins Starter');
   await page.getByRole('button', { name: /^Bruins Starter/ }).click();
   await page.getByRole('combobox', { name: 'Stat Type' }).click();
