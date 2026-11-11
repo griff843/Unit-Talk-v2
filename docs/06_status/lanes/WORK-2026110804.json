@@ -1,0 +1,51 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110804",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110804/.out/worktrees/claude__work-2026110804-lean-mode",
+  "branch": "claude/work-2026110804-lean-mode",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/executor-result-validator.yml",
+    ".github/workflows/independent-review.yml",
+    ".github/workflows/merge-gate.yml",
+    ".github/workflows/post-merge-qa-gate.yml",
+    ".github/workflows/required-check-refresh.yml",
+    ".github/workflows/risk-class.yml",
+    ".ops/work/WORK-2026110804.md",
+    "docs/05_operations/LEAN_MODE_ACTIVATION.md",
+    "docs/05_operations/OPERATING_MODEL_SONNET5.md",
+    "package.json",
+    "scripts/ops/operating-model-workflows.test.ts",
+    "scripts/ops/operating-model.cjs",
+    "scripts/ops/operating-model.test.ts",
+    "scripts/ops/workflow-hardening.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026110804/diff-summary.md",
+    "docs/06_status/proof/WORK-2026110804/evidence.json",
+    "docs/06_status/proof/WORK-2026110804/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-11-11T05:54:14.073Z",
+  "heartbeat_at": "2026-11-11T05:54:14.073Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/work-2026110804-lean-mode.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110804/.out/worktrees/claude__work-2026110804-lean-mode",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

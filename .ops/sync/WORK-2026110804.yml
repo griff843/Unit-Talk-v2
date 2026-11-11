@@ -1,0 +1,290 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026110804
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026110804
+  objective: "Land, inert, a mechanical two-class (Standard / Protected) operating
+    model: `scripts/ops/operating-model.cjs` (classifier, reviewer escalation,
+    Independent Review evaluation), its tests, the CI workflow wiring
+    (lazy-loaded and active only when `OPERATING_MODEL=lean` and
+    `LEAN_MODE_ACTIVATED_AT` is a past ISO-8601 timestamp), and the activation /
+    rollback runbook. Merging changes no behavior for any PR."
+  acceptance_criteria:
+    - "AC1: With `OPERATING_MODEL` unset or not `lean`, every touched workflow
+      follows its pre-existing legacy path; `Risk Class` and `Independent
+      Review` report not applicable. Proven by
+      `operating-model-workflows.test.ts`."
+    - "AC2: Workflows require `operating-model.cjs` lazily, treat
+      `MODULE_NOT_FOUND` for that module as legacy, and fail closed on any other
+      load error."
+    - "AC3: Classification is a Standard allow-list; everything else (including
+      all workflows, scripts, `package.json` and `docs/05_operations/`) is
+      Protected; a trusted `RISK-CLASS: PROTECTED` escalates for good."
+    - "AC4: Independent Review passes only on the trusted connector's anchored
+      head-bound `codex-review-state:v1` summary with no findings; any P0/P1 at
+      a head blocks that head."
+    - "AC5: Protected PRs still need `t1-approved` plus a head-bound CODEOWNER
+      `pm-verdict/v1` in lean mode."
+    - "AC6: `LEAN_MODE_ACTIVATION.md` documents the two-step landing,
+      activation, rollback (with mandatory Merge Gate rerun) and known limits;
+      nothing in this lane activates lean."
+    - "AC7: `scripts/ops/operating-model.test.ts`,
+      `scripts/ops/operating-model-workflows.test.ts` and `pnpm test:ops` pass
+      on the lane head."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026110804 — Lean operating mode (Standard / Protected) candidate,
+      merged inactive
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+      Status: ADMITTED for PR preparation only. Lean activation, merge-authority
+      changes and branch-protection changes are NOT authorized by this work
+      order.
+
+
+      Source: PM architecture proposal for a mechanical Standard / Protected
+      operating model (`OPERATING_MODEL_SONNET5.md` §7 governance change
+      protocol). Implemented locally on `scratch/lean-impl` (commits
+      `76efb7df6`, `98c9bf6a8`, `bf126e4ab` on base `c3168c525`; an earlier
+      superseded WIP was `7834720e5`) and ported onto current `main` in this
+      lane.
+
+
+      ## Authorization (verbatim)
+
+
+      - Griff, in chat, 2026-11-11: "Approve D2 and D3". D3 was: "Approve
+      singleton paths (package.json, .github/workflows/*) and the departure from
+      the global operating mode, so the Lean candidate can open as a PR?"
+
+      - PM, 2026-11-11: "PM recommends Griff approve WORK-2026110804's bounded
+      singleton admission for implementation PR preparation. Lean activation,
+      merge-authority changes and branch-protection changes remain separately
+      governed."
+
+
+      This authorizes `ops:lane-start --singleton-approved` for the declared
+      scope below only. A chat approval is not a merge approval: merge still
+      needs `t1-approved` plus a head-bound CODEOWNERS `pm-verdict/v1` APPROVED
+      comment.
+
+
+      ## Tier rationale
+
+
+      T1: governance. The diff edits merge-authority workflows
+      (`merge-gate.yml`, `executor-result-validator.yml`,
+      `required-check-refresh.yml`) and adds new check workflows;
+      `DELEGATION_POLICY.md` classes governance as T1, and changes to the merge
+      gate and its policy inputs are reserved for Griff (CLAUDE.md reserved item
+      7). No migration, no runtime app path, no production data.
+
+
+      ## Allowed file scope
+
+
+      - `.github/workflows/executor-result-validator.yml`
+
+      - `.github/workflows/independent-review.yml` (new)
+
+      - `.github/workflows/merge-gate.yml`
+
+      - `.github/workflows/post-merge-qa-gate.yml`
+
+      - `.github/workflows/required-check-refresh.yml`
+
+      - `.github/workflows/risk-class.yml` (new)
+
+      - `package.json` (register the two new test files in `test:ops` only)
+
+      - `scripts/ops/operating-model.cjs`,
+      `scripts/ops/operating-model.test.ts`,
+      `scripts/ops/operating-model-workflows.test.ts`
+
+      - `scripts/ops/workflow-hardening.test.ts`
+
+      - `docs/05_operations/LEAN_MODE_ACTIVATION.md`,
+      `docs/05_operations/OPERATING_MODEL_SONNET5.md`
+
+      - `.ops/work/WORK-2026110804.md`, `docs/06_status/proof/WORK-2026110804/`
+
+
+      Out of scope: setting `OPERATING_MODEL`, `LEAN_MODE_ACTIVATED_AT` or
+      `TRUSTED_REVIEWER_LOGINS`; branch protection and required contexts;
+      `CODEOWNERS`; `ops:merge-wrapper` / `pre-merge-authorization.ts`;
+      `CURRENT_STATE.md` / `KNOWN_DEBT.md`.
+
+
+      ## Known open notes
+
+
+      - If the connector's `has_any_findings` is cumulative, a PR that ever had
+      a finding can never pass Independent Review; the remedy is a fresh PR.
+
+      - `docs/06_status/CURRENT_STATE.md` and `docs/06_status/KNOWN_DEBT.md`
+      still classify as Standard under the allow-list.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026110804.md
+    title: WORK-2026110804 — Lean operating mode (Standard / Protected) candidate,
+      merged inactive
+    description: >-
+      # WORK-2026110804 — Lean operating mode (Standard / Protected) candidate,
+      merged inactive
+
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+      Status: ADMITTED for PR preparation only. Lean activation, merge-authority
+      changes and branch-protection changes are NOT authorized by this work
+      order.
+
+
+      Source: PM architecture proposal for a mechanical Standard / Protected
+      operating model (`OPERATING_MODEL_SONNET5.md` §7 governance change
+      protocol). Implemented locally on `scratch/lean-impl` (commits
+      `76efb7df6`, `98c9bf6a8`, `bf126e4ab` on base `c3168c525`; an earlier
+      superseded WIP was `7834720e5`) and ported onto current `main` in this
+      lane.
+
+
+      ## Authorization (verbatim)
+
+
+      - Griff, in chat, 2026-11-11: "Approve D2 and D3". D3 was: "Approve
+      singleton paths (package.json, .github/workflows/*) and the departure from
+      the global operating mode, so the Lean candidate can open as a PR?"
+
+      - PM, 2026-11-11: "PM recommends Griff approve WORK-2026110804's bounded
+      singleton admission for implementation PR preparation. Lean activation,
+      merge-authority changes and branch-protection changes remain separately
+      governed."
+
+
+      This authorizes `ops:lane-start --singleton-approved` for the declared
+      scope below only. A chat approval is not a merge approval: merge still
+      needs `t1-approved` plus a head-bound CODEOWNERS `pm-verdict/v1` APPROVED
+      comment.
+
+
+      ## Tier rationale
+
+
+      T1: governance. The diff edits merge-authority workflows
+      (`merge-gate.yml`, `executor-result-validator.yml`,
+      `required-check-refresh.yml`) and adds new check workflows;
+      `DELEGATION_POLICY.md` classes governance as T1, and changes to the merge
+      gate and its policy inputs are reserved for Griff (CLAUDE.md reserved item
+      7). No migration, no runtime app path, no production data.
+
+
+      ## Objective
+
+
+      Land, inert, a mechanical two-class (Standard / Protected) operating
+      model: `scripts/ops/operating-model.cjs` (classifier, reviewer escalation,
+      Independent Review evaluation), its tests, the CI workflow wiring
+      (lazy-loaded and active only when `OPERATING_MODEL=lean` and
+      `LEAN_MODE_ACTIVATED_AT` is a past ISO-8601 timestamp), and the activation
+      / rollback runbook. Merging changes no behavior for any PR.
+
+
+      ## Allowed file scope
+
+
+      - `.github/workflows/executor-result-validator.yml`
+
+      - `.github/workflows/independent-review.yml` (new)
+
+      - `.github/workflows/merge-gate.yml`
+
+      - `.github/workflows/post-merge-qa-gate.yml`
+
+      - `.github/workflows/required-check-refresh.yml`
+
+      - `.github/workflows/risk-class.yml` (new)
+
+      - `package.json` (register the two new test files in `test:ops` only)
+
+      - `scripts/ops/operating-model.cjs`,
+      `scripts/ops/operating-model.test.ts`,
+      `scripts/ops/operating-model-workflows.test.ts`
+
+      - `scripts/ops/workflow-hardening.test.ts`
+
+      - `docs/05_operations/LEAN_MODE_ACTIVATION.md`,
+      `docs/05_operations/OPERATING_MODEL_SONNET5.md`
+
+      - `.ops/work/WORK-2026110804.md`, `docs/06_status/proof/WORK-2026110804/`
+
+
+      Out of scope: setting `OPERATING_MODEL`, `LEAN_MODE_ACTIVATED_AT` or
+      `TRUSTED_REVIEWER_LOGINS`; branch protection and required contexts;
+      `CODEOWNERS`; `ops:merge-wrapper` / `pre-merge-authorization.ts`;
+      `CURRENT_STATE.md` / `KNOWN_DEBT.md`.
+
+
+      ## Acceptance Criteria
+
+
+      - AC1: With `OPERATING_MODEL` unset or not `lean`, every touched workflow
+      follows its pre-existing legacy path; `Risk Class` and `Independent
+      Review` report not applicable. Proven by
+      `operating-model-workflows.test.ts`.
+
+      - AC2: Workflows require `operating-model.cjs` lazily, treat
+      `MODULE_NOT_FOUND` for that module as legacy, and fail closed on any other
+      load error.
+
+      - AC3: Classification is a Standard allow-list; everything else (including
+      all workflows, scripts, `package.json` and `docs/05_operations/`) is
+      Protected; a trusted `RISK-CLASS: PROTECTED` escalates for good.
+
+      - AC4: Independent Review passes only on the trusted connector's anchored
+      head-bound `codex-review-state:v1` summary with no findings; any P0/P1 at
+      a head blocks that head.
+
+      - AC5: Protected PRs still need `t1-approved` plus a head-bound CODEOWNER
+      `pm-verdict/v1` in lean mode.
+
+      - AC6: `LEAN_MODE_ACTIVATION.md` documents the two-step landing,
+      activation, rollback (with mandatory Merge Gate rerun) and known limits;
+      nothing in this lane activates lean.
+
+      - AC7: `scripts/ops/operating-model.test.ts`,
+      `scripts/ops/operating-model-workflows.test.ts` and `pnpm test:ops` pass
+      on the lane head.
+
+
+      ## Known open notes
+
+
+      - If the connector's `has_any_findings` is cumulative, a PR that ever had
+      a finding can never pass Independent Review; the remedy is a fresh PR.
+
+      - `docs/06_status/CURRENT_STATE.md` and `docs/06_status/KNOWN_DEBT.md`
+      still classify as Standard under the allow-list.
+    captured_at: 2026-11-11T05:54:03.988Z
+    description_sha256: 3ac75ce9b1004275f09b54c39eb12e650ea01b7da113284336cdefc8c32c1119
+  contract_hash: dadb83534494f51c693caa96cb8270dc286408264b76cb932daa12cd91b8ef14
