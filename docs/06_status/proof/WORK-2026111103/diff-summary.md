@@ -7,7 +7,7 @@ Lane type: hygiene
 Branch: claude/work-2026111103-smart-form-e2e-drift
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1844
 Head SHA: 920f411d236215e1cc27af7b3900b008c1492853
-Merge SHA: N/A
+Merge SHA: b73171327f37700d395b911fb1001ef2911c732a
 Diff base: edd4cb47b08cc76ef456e7b3cf716ad3e2dd7439
 Diff target: 920f411d236215e1cc27af7b3900b008c1492853
 
@@ -39,4 +39,4 @@ A	docs/06_status/lanes/WORK-2026111103.json
 
 ## SHA Binding
 Head SHA: 920f411d236215e1cc27af7b3900b008c1492853
-Merge SHA: N/A
+Merge SHA: b73171327f37700d395b911fb1001ef2911c732a

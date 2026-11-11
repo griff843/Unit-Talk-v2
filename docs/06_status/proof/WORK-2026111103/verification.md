@@ -1,6 +1,6 @@
 # PROOF: WORK-2026111103
 
-MERGE_SHA: pending merge
+MERGE_SHA: b73171327f37700d395b911fb1001ef2911c732a
 
 > Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
@@ -60,7 +60,7 @@ The fixture suite runs against the local in-memory API; `run-e2e-gate.mjs` strip
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: b73171327f37700d395b911fb1001ef2911c732a
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1844
 Approved PR head: pending merge
 Execution SHA: 920f411d236215e1cc27af7b3900b008c1492853
