@@ -93,7 +93,7 @@ test('real-reference UI reports the connected environment honestly without refer
   await expect(page.getByText('Manual team entry', { exact: true })).toHaveCount(0);
   await page.screenshot({ path: `${proofDirectory}/real-07-coverage-gap-gated.png`, fullPage: true });
 
-  await expect(page.getByText('Track Only · Internal', { exact: true })).toBeVisible();
+  await expect(page.getByText('Track Only requested', { exact: true })).toBeVisible();
   await page.screenshot({ path: `${proofDirectory}/real-08-track-only.png`, fullPage: true });
 
   await page.setViewportSize({ width: 390, height: 844 });

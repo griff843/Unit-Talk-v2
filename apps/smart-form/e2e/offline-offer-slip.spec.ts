@@ -357,10 +357,11 @@ for (const scenario of cases) {
     const selectionText = ['Fixture Away Football', 'Fixture Away Football -3.5', 'U 47.5', 'Fixture Quarterback Passing Yards O 245.5'][scenario.offerIndex];
     await expect(page.getByText(selectionText, { exact: true }).last()).toBeVisible();
     await page.getByRole('button', { name: '8', exact: true }).click();
-    await expect(page.getByText('Track Only · Internal', { exact: true })).toBeVisible();
+    await expect(page.getByText('Track Only requested', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Submit', exact: true }).click();
     await expect.poll(() => submitted.length).toBe(1);
-    await expect(page.getByText('Pick Saved', { exact: true })).toBeVisible();
+    // The fixture reports no delivery outcome, so the receipt (UTV2-1925) states only that the pick was saved.
+    await expect(page.getByRole('heading', { name: 'Pick saved', exact: true })).toBeVisible();
     const payload = submitted[0];
     const offer = fixture.browse.data.offers[scenario.offerIndex];
     expect(payload).toMatchObject({ source: 'smart-form', submittedBy: 'griff843', market: scenario.market, odds: scenario.odds });
