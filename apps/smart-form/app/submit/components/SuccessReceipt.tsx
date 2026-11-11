@@ -17,6 +17,12 @@ interface SuccessReceiptProps {
    * manual player is shown as manually entered, never as canonical or verified.
    */
   playerProvenance?: typeof MANUAL_PLAYER_PROVENANCE | null;
+  /**
+   * How many suggested catalog players the operator confirmed this player is none of (the 409
+   * confirmation step); 0 when none were suggested. Only a count: the receipt never names a
+   * catalog player beside an unverified one.
+   */
+  rejectedCandidateCount?: number;
 }
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -28,7 +34,13 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function SuccessReceipt({ result, submittedValues, onSubmitAnother, playerProvenance = null }: SuccessReceiptProps) {
+export function SuccessReceipt({
+  result,
+  submittedValues,
+  onSubmitAnother,
+  playerProvenance = null,
+  rejectedCandidateCount = 0,
+}: SuccessReceiptProps) {
   const v = submittedValues;
   // UTV2-1925: read from `result` -- what the SERVER determined -- never from
   // `v.trackOnly`, which is a client form value that defaults to true and knows
@@ -59,10 +71,16 @@ export function SuccessReceipt({ result, submittedValues, onSubmitAnother, playe
         {selection && <Row label="Selection" value={selection} />}
         {playerProvenance === MANUAL_PLAYER_PROVENANCE && v.playerName && (
           <div data-testid="receipt-manual-player" data-player-provenance={playerProvenance} className="space-y-1">
-            <Row label="Player" value={`${v.playerName} (manually entered)`} />
+            <Row label="Player" value={`${v.playerName} (manually entered, unverified)`} />
             <p className="text-xs text-muted-foreground text-right">
-              Manual fallback: not in reference player data, no provider verification, no CLV.
+              Unverified player: not in reference player data, no provider verification, no CLV.
             </p>
+            {rejectedCandidateCount > 0 && (
+              <p className="text-xs text-muted-foreground text-right" data-testid="receipt-manual-player-confirmed">
+                You confirmed this is none of the {rejectedCandidateCount} suggested catalog player
+                {rejectedCandidateCount === 1 ? '' : 's'}.
+              </p>
+            )}
           </div>
         )}
         {v.eventName && <Row label="Matchup" value={v.eventName} />}

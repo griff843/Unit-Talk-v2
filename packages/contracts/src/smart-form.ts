@@ -223,6 +223,42 @@ export interface ManualPlayerCoverageGap {
   displayName: string;
   canonicalParticipantId: null;
   reason: 'canonical-coverage-gap';
+  /**
+   * The operator's confirmation that the player is none of the catalog candidates the API
+   * listed in its 409 `SMART_FORM_MANUAL_PLAYER_CONFIRMATION_REQUIRED` response. The API
+   * recomputes the candidates and accepts only when this is exactly their participant ids.
+   */
+  confirmedNotCandidates?: string[];
+}
+
+/** Error code of the 409 asking the operator to rule out catalog candidates. */
+export const manualPlayerConfirmationRequiredCode = 'SMART_FORM_MANUAL_PLAYER_CONFIRMATION_REQUIRED' as const;
+
+/** At most this many candidates are listed (and must be confirmed). */
+export const manualPlayerMaxCandidates = 5;
+
+/** One catalog player the operator must rule out before an unverified player is recorded. */
+export interface ManualPlayerCandidate {
+  participantId: string;
+  displayName: string;
+  teamId: string | null;
+  /** The team's name when it is one of the submitted matchup's two sides, else null. */
+  teamName: string | null;
+}
+
+/** `details` of the 409 confirmation-required error. */
+export interface ManualPlayerConfirmationDetails {
+  candidates: ManualPlayerCandidate[];
+}
+
+/**
+ * Server-written audit record on a manual-player pick (`metadata.manualPlayerReview`); any
+ * client value is overwritten. `operatorConfirmed` is true when candidates were listed and the
+ * operator confirmed the player is none of them; `rejectedCandidates` are those candidates.
+ */
+export interface ManualPlayerReview {
+  operatorConfirmed: boolean;
+  rejectedCandidates: Array<{ participantId: string; displayName: string }>;
 }
 
 export interface ManualParticipantResolution {

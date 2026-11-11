@@ -1,11 +1,15 @@
 import {
   isHumanCapperDeliveryAuthorized,
+  manualPlayerConfirmationRequiredCode,
+  manualPlayerMaxCandidates,
   manualPlayerProvenance,
   resolveSmartFormPlayerPropMarketKey,
   smartFormPlayerPropMarketKeysForSport,
 } from '@unit-talk/contracts';
 import type {
   CanonicalParticipantIdentity,
+  ManualPlayerCandidate,
+  ManualPlayerReview,
   SmartFormParticipantResolution,
   SubmissionPayload,
 } from '@unit-talk/contracts';
@@ -223,14 +227,18 @@ export async function validateSmartFormRelationships(
     if (!TEAM_SPORTS.has(sportId.toUpperCase())) {
       fail('canonical participant resolution without an event is not verifiable; use explicit manual override');
     }
-    await validateStructuredTeamFallback(payload, resolution, sportId, referenceData, {
+    const rejectedCandidates = await validateStructuredTeamFallback(payload, resolution, sportId, referenceData, {
       perSearchTimeoutMs: options.manualPlayerSearchTimeoutMs ?? MANUAL_PLAYER_SEARCH_TIMEOUT_MS,
       totalBudgetMs: options.manualPlayerSearchBudgetMs ?? MANUAL_PLAYER_SEARCH_BUDGET_MS,
     });
     // WORK-2026110802: only after every check above passed does the server write the
     // provenance labels -- whatever the client sent for them is overwritten, never trusted.
     if (resolution.manualPlayer) {
-      stampManualPlayerProvenance(payload, manualPlayerName(resolution.manualPlayer.displayName));
+      stampManualPlayerProvenance(
+        payload,
+        manualPlayerName(resolution.manualPlayer.displayName),
+        rejectedCandidates,
+      );
     }
     return { kind: 'structured-team-fallback', distributionMode, serverAuthorizedHumanDelivery };
   }
@@ -356,7 +364,7 @@ async function validateStructuredTeamFallback(
   sportId: string,
   referenceData: ReferenceDataRepository,
   manualPlayerSearchBounds: ManualPlayerSearchBounds,
-) {
+): Promise<ManualPlayerCandidate[]> {
   if (!resolution.away || !resolution.home) {
     fail('team-sport canonical fallback requires distinct away and home participants');
   }
@@ -404,13 +412,21 @@ async function validateStructuredTeamFallback(
 
   // WORK-2026110802: the sides and the selected team above are verified exactly as for every
   // structured fallback; only the player differs, and its claimed gap is proved here.
+  let rejectedCandidates: ManualPlayerCandidate[] = [];
   if (resolution.manualPlayer) {
-    await verifyManualPlayerCoverageGap(
+    const candidates = await verifyManualPlayerCoverageGap(
       manualPlayerName(resolution.manualPlayer.displayName),
       sportId,
       referenceData,
       manualPlayerSearchBounds,
+      [resolution.away, resolution.home],
     );
+    assertCandidatesConfirmed(
+      manualPlayerName(resolution.manualPlayer.displayName),
+      candidates,
+      readConfirmedNotCandidates(resolution.manualPlayer),
+    );
+    rejectedCandidates = candidates;
   }
 
   // UTV2-1842 STRUCTURED_FALLBACK_MATCHUP_NAME_START
@@ -428,6 +444,7 @@ async function validateStructuredTeamFallback(
   // refusing anything the form can produce.
   validateStructuredMatchupName(payload, resolution);
   // UTV2-1842 STRUCTURED_FALLBACK_MATCHUP_NAME_END
+  return rejectedCandidates;
 }
 
 /**
@@ -1010,7 +1027,11 @@ const MANUAL_PLAYER_ALLOWED_KEYS: ReadonlySet<string> = new Set([
   'displayName',
   'canonicalParticipantId',
   'reason',
+  'confirmedNotCandidates',
 ]);
+
+/** Longest participant id accepted in `manualPlayer.confirmedNotCandidates`. */
+const MANUAL_PLAYER_CANDIDATE_ID_MAX_LENGTH = 128;
 
 interface ManualPlayerSearchBounds {
   perSearchTimeoutMs: number;
@@ -1032,6 +1053,11 @@ function assertManualPlayerAdmissible(
     // player that claims the label would mislabel a canonical pick and silently forfeit CLV.
     if (declaredProvenance !== undefined && declaredProvenance !== null) {
       fail('metadata.playerProvenance is only valid beside participantResolution.manualPlayer');
+    }
+    // The review is a server-written audit record of a proved manual player; a pick without
+    // one cannot carry it.
+    if (metadata?.['manualPlayerReview'] !== undefined && metadata?.['manualPlayerReview'] !== null) {
+      fail('metadata.manualPlayerReview is only valid beside participantResolution.manualPlayer');
     }
     return;
   }
@@ -1061,6 +1087,7 @@ function assertManualPlayerAdmissible(
   if (rawManualPlayer['reason'] !== 'canonical-coverage-gap') {
     fail('manualPlayer must state canonical-coverage-gap provenance');
   }
+  readConfirmedNotCandidates(rawManualPlayer);
   // Length first, on the raw value: nothing below folds or searches an unbounded string.
   const rawDisplayName = rawManualPlayer['displayName'];
   if (typeof rawDisplayName === 'string' && rawDisplayName.length > MANUAL_PLAYER_DISPLAY_NAME_MAX_LENGTH) {
@@ -1131,13 +1158,17 @@ function assertNoManualPlayerMarkers(payload: SubmissionPayload) {
   const metadata = payload.metadata;
   if (!metadata) return;
   const provenance = metadata['playerProvenance'];
+  const review = metadata['manualPlayerReview'];
   const resolution = metadata['participantResolution'];
   const manualPlayer = isRecord(resolution) ? resolution['manualPlayer'] : undefined;
   if (
     (provenance !== undefined && provenance !== null) ||
+    (review !== undefined && review !== null) ||
     (manualPlayer !== undefined && manualPlayer !== null)
   ) {
-    fail('playerProvenance and participantResolution.manualPlayer are accepted only on a Smart Form submission');
+    fail(
+      'playerProvenance, manualPlayerReview and participantResolution.manualPlayer are accepted only on a Smart Form submission',
+    );
   }
 }
 
@@ -1497,11 +1528,30 @@ function manualPlayerCoverageQueries(displayName: string): string[] {
  * provenance CLV exclusion (clv-service.ts) and the receipt read -- and never because a
  * client said so. Other manual fields the client declared (e.g. `sportsbook`) are kept.
  */
-function stampManualPlayerProvenance(payload: SubmissionPayload, displayName: string) {
+function stampManualPlayerProvenance(
+  payload: SubmissionPayload,
+  displayName: string,
+  rejectedCandidates: readonly ManualPlayerCandidate[],
+) {
   const metadata = payload.metadata ?? {};
   // Persist the validated name, not the raw request value, wherever the pick names its player.
   const resolution = isRecord(metadata['participantResolution']) ? metadata['participantResolution'] : {};
-  const manualPlayer = isRecord(resolution['manualPlayer']) ? resolution['manualPlayer'] : {};
+  const { confirmedNotCandidates: _clientConfirmation, ...manualPlayer } = isRecord(resolution['manualPlayer'])
+    ? resolution['manualPlayer']
+    : {};
+  // The audit trail: which catalog candidates the operator ruled out. Server-written from the
+  // candidate set it recomputed and matched; any client `manualPlayerReview` is overwritten.
+  const manualPlayerReview: ManualPlayerReview = {
+    operatorConfirmed: rejectedCandidates.length > 0,
+    rejectedCandidates: rejectedCandidates.map((candidate) => ({
+      participantId: candidate.participantId,
+      displayName: candidate.displayName,
+    })),
+  };
+  const confirmation =
+    rejectedCandidates.length > 0
+      ? { confirmedNotCandidates: rejectedCandidates.map((candidate) => candidate.participantId) }
+      : {};
   const nameFields: Record<string, string> = {};
   for (const field of PLAYER_NAME_FIELDS) {
     if (typeof metadata[field] === 'string') nameFields[field] = displayName;
@@ -1514,7 +1564,8 @@ function stampManualPlayerProvenance(payload: SubmissionPayload, displayName: st
   payload.metadata = {
     ...metadata,
     ...nameFields,
-    participantResolution: { ...resolution, manualPlayer: { ...manualPlayer, displayName } },
+    participantResolution: { ...resolution, manualPlayer: { ...manualPlayer, displayName, ...confirmation } },
+    manualPlayerReview,
     playerProvenance: manualPlayerProvenance,
     manualEntry: true,
     manualOverrideFields: [...new Set(declaredFields), 'player'],
@@ -1526,8 +1577,13 @@ async function verifyManualPlayerCoverageGap(
   sportId: string,
   referenceData: ReferenceDataRepository,
   bounds: ManualPlayerSearchBounds,
-) {
+  matchupSides: ReadonlyArray<{ participantId?: string | null; displayName?: string | null }>,
+): Promise<ManualPlayerCandidate[]> {
   const enteredTokens = aliasTokens(displayName);
+  // Rows the searches returned that are not refused outright but are similar enough that the
+  // operator must rule them out (see `rankManualPlayerCandidates`). Built from the searches
+  // already issued -- no extra query, same cap and budget.
+  const similarRows = new Map<string, { participantId: string; displayName: string; teamId: string | null; score: number }>();
   if (playerNameCore(enteredTokens).length === 0) fail('manualPlayer.displayName must name a player');
 
   const queries = manualPlayerCoverageQueries(displayName);
@@ -1569,6 +1625,15 @@ async function verifyManualPlayerCoverageGap(
           `manual player "${displayName}" claims a coverage gap, but may be canonical player ${row['participantId']} (${row['displayName']}); a name this close to a covered player is refused -- select the canonical player`,
         );
       }
+      const score = candidateSimilarity(enteredTokens, aliasTokens(row['displayName']));
+      if (score > 0 && !similarRows.has(row['participantId'])) {
+        similarRows.set(row['participantId'], {
+          participantId: row['participantId'],
+          displayName: row['displayName'],
+          teamId: typeof row['teamId'] === 'string' ? row['teamId'] : null,
+          score,
+        });
+      }
     }
     if (rows.length >= MANUAL_PLAYER_SEARCH_ROW_LIMIT && saturatedQuery === null) {
       saturatedQuery = query;
@@ -1584,6 +1649,129 @@ async function verifyManualPlayerCoverageGap(
       `manual player "${displayName}" cannot be verified as a coverage gap: at least ${MANUAL_PLAYER_SEARCH_ROW_LIMIT} catalog players match "${saturatedQuery}"; enter the full name or select the canonical player`,
     );
   }
+  return rankManualPlayerCandidates([...similarRows.values()], matchupSides);
+}
+
+/**
+ * How similar a catalog player's name is to the entered one, on folded core tokens; 0 means
+ * not similar enough to list. Each entered token scores its best pairing with a catalog token:
+ * the same token 4 (6 when it is the catalog surname), within one edit 3, a 3+ letter prefix
+ * pair 2, within two edits (both 4+ letters) 1. Only rows `catalogPlayerMatch` did not refuse
+ * reach here, so this never decides acceptance: it only decides what the operator is asked to
+ * rule out ("Tyler Herro" lists the catalog's other Tylers).
+ */
+function candidateSimilarity(enteredTokens: string[], catalogTokens: string[]): number {
+  const entered = playerNameCore(enteredTokens);
+  const catalog = playerNameCore(catalogTokens);
+  if (entered.length === 0 || catalog.length === 0) return 0;
+  const surname = catalog[catalog.length - 1];
+  let score = 0;
+  for (const token of entered) {
+    let best = 0;
+    for (const name of catalog) {
+      if (token === name) best = Math.max(best, name === surname ? 6 : 4);
+      else if (token.length >= 3 && name.length >= 3 && withinOneEdit(token, name)) best = Math.max(best, 3);
+      else if (isPrefixPair(token, name, 3)) best = Math.max(best, 2);
+      else if (Math.min(token.length, name.length) >= 4 && editDistanceAtMost(token, name, 2)) best = Math.max(best, 1);
+    }
+    score += best;
+  }
+  return score;
+}
+
+/** True when the Levenshtein distance between `left` and `right` is at most `limit`. */
+function editDistanceAtMost(left: string, right: string, limit: number): boolean {
+  if (Math.abs(left.length - right.length) > limit) return false;
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= left.length; row += 1) {
+    const current = [row];
+    for (let column = 1; column <= right.length; column += 1) {
+      current[column] = Math.min(
+        previous[column]! + 1,
+        current[column - 1]! + 1,
+        previous[column - 1]! + (left[row - 1] === right[column - 1] ? 0 : 1),
+      );
+    }
+    previous = current;
+  }
+  return previous[right.length]! <= limit;
+}
+
+/** Code-point order, so the candidate order never depends on the server's locale. */
+function compareCodePoints(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+/**
+ * The candidates the operator must rule out: at most `manualPlayerMaxCandidates`, by
+ * similarity (highest first), then display name, then participant id -- a total, deterministic
+ * order, so the same catalog always yields the same list and the confirmation can be bound.
+ */
+function rankManualPlayerCandidates(
+  rows: Array<{ participantId: string; displayName: string; teamId: string | null; score: number }>,
+  matchupSides: ReadonlyArray<{ participantId?: string | null; displayName?: string | null }>,
+): ManualPlayerCandidate[] {
+  return [...rows]
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        compareCodePoints(left.displayName, right.displayName) ||
+        compareCodePoints(left.participantId, right.participantId),
+    )
+    .slice(0, manualPlayerMaxCandidates)
+    .map((row) => {
+      const side = row.teamId ? matchupSides.find((candidate) => candidate.participantId === row.teamId) : undefined;
+      return {
+        participantId: row.participantId,
+        displayName: row.displayName,
+        teamId: row.teamId,
+        teamName: side?.displayName ?? null,
+      };
+    });
+}
+
+/**
+ * `manualPlayer.confirmedNotCandidates`, validated: absent (undefined/null) -> null; otherwise
+ * an array of at most `manualPlayerMaxCandidates` distinct, non-empty, bounded strings.
+ */
+function readConfirmedNotCandidates(manualPlayer: unknown): string[] | null {
+  const raw = isRecord(manualPlayer) ? manualPlayer['confirmedNotCandidates'] : undefined;
+  if (raw === undefined || raw === null) return null;
+  if (!Array.isArray(raw) || raw.length > manualPlayerMaxCandidates) {
+    fail(`manualPlayer.confirmedNotCandidates must be a list of at most ${manualPlayerMaxCandidates} participant ids`);
+  }
+  for (const id of raw) {
+    if (typeof id !== 'string' || id.length === 0 || id.length > MANUAL_PLAYER_CANDIDATE_ID_MAX_LENGTH) {
+      fail('manualPlayer.confirmedNotCandidates must hold participant ids');
+    }
+  }
+  if (new Set(raw).size !== raw.length) fail('manualPlayer.confirmedNotCandidates must not repeat an id');
+  return raw as string[];
+}
+
+/**
+ * The operator's confirmation is bound to the candidate set the server just recomputed: it is
+ * accepted only when it names exactly those participant ids (any order). No candidates and no
+ * confirmation is today's path. Anything else -- no confirmation while candidates exist, or a
+ * partial, extra, stale or forged list -- is a 409 carrying the current candidates, and nothing
+ * is written. An exact or near match never gets here: it was refused above, confirmed or not.
+ */
+function assertCandidatesConfirmed(
+  displayName: string,
+  candidates: readonly ManualPlayerCandidate[],
+  confirmed: readonly string[] | null,
+) {
+  const confirmedIds = confirmed ?? [];
+  const expectedIds = new Set(candidates.map((candidate) => candidate.participantId));
+  if (confirmedIds.length === expectedIds.size && confirmedIds.every((id) => expectedIds.has(id))) return;
+  throw new ApiError(
+    409,
+    manualPlayerConfirmationRequiredCode,
+    confirmed === null
+      ? `manual player "${displayName}" is similar to ${candidates.length} catalog player(s); confirm it is none of them, or select the canonical player`
+      : `manualPlayer.confirmedNotCandidates does not match the current catalog candidates for "${displayName}"; review the ${candidates.length} candidate(s) again`,
+    { candidates: candidates.map((candidate) => ({ ...candidate })) },
+  );
 }
 
 function searchUnavailable(displayName: string, reason: string): ApiError {

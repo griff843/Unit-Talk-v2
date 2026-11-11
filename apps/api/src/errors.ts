@@ -3,6 +3,8 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly code: string,
     message: string,
+    /** Optional structured data for the client; omitted from the response when undefined. */
+    public readonly details?: Readonly<Record<string, unknown>>,
   ) {
     super(message);
     this.name = 'ApiError';

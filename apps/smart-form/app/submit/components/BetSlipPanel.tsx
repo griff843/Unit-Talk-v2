@@ -251,7 +251,7 @@ export function BetSlipPanel({
               <LineItem label="Market" value={marketLabel} />
               {values.eventName && <LineItem label="Game" value={values.eventName} />}
               {selection && <LineItem label="Pick" value={selection} />}
-              {manualPlayerName && <LineItem label="Player" value={`${manualPlayerName} (manually entered)`} />}
+              {manualPlayerName && <LineItem label="Player" value={`${manualPlayerName} (manually entered, unverified)`} />}
               {values.sportsbook && <LineItem label="Book" value={values.sportsbook} />}
               {values.odds && <LineItem label="Odds" value={Number(values.odds) > 0 ? `+${Number(values.odds)}` : Number(values.odds)} />}
               {values.units && <LineItem label="Units" value={`${values.units}u`} />}
@@ -287,8 +287,8 @@ export function BetSlipPanel({
               className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs leading-relaxed text-muted-foreground"
               data-testid="slip-manual-player"
             >
-              Manual fallback: {manualPlayerName} is not in the reference player data. It is saved as manually
-              entered, without provider verification and with no CLV, and only as Track Only.
+              Unverified player: {manualPlayerName} is not in the reference player data. It is saved as
+              manually entered, without provider verification and with no CLV, and only as Track Only.
             </p>
           )}
 

@@ -111,6 +111,13 @@ async function fillLine(page: Page, shape: Shape) {
   await page.getByRole('button', { name: '7', exact: true }).click();
 }
 
+async function submitAndWait(page: Page, trigger: () => Promise<void>) {
+  const responsePromise = page.waitForResponse((response) =>
+    response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/submissions');
+  await trigger();
+  return responsePromise;
+}
+
 const shapes: Shape[] = [
   { label: 'Herro (NBA threes)', sport: 'NBA', awayQuery: 'Celtics', homeQuery: 'Knicks', teamQuery: 'Knicks', player: 'Tyler Herro', statType: 'Threes', line: '2.5' },
   { label: 'Burries (NBA rebounds)', sport: 'NBA', awayQuery: 'Celtics', homeQuery: 'Knicks', teamQuery: 'Celtics', player: 'Burries', statType: 'Rebounds', line: '4.5' },
@@ -140,16 +147,22 @@ for (const shape of shapes) {
 
     await fillLine(page, shape);
 
-    const responsePromise = page.waitForResponse((response) =>
-      response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/submissions');
-    await page.locator('[data-testid="smart-form-submit-button"]:visible').first().click();
-    const response = await responsePromise;
+    let response = await submitAndWait(page, () =>
+      page.locator('[data-testid="smart-form-submit-button"]:visible').first().click());
+    // If the local catalog holds a similar player, the API first asks the operator to rule
+    // the suggestions out (409); confirming "none of these" resubmits.
+    let rejectedCandidates: unknown[] = [];
+    if (response.status() === 409) {
+      rejectedCandidates = ((await response.json()) as { error: { details: { candidates: unknown[] } } }).error.details.candidates;
+      await expect(page.getByTestId('manual-player-candidates')).toBeVisible();
+      response = await submitAndWait(page, () => page.getByTestId('manual-player-none-of-these').click());
+    }
     expect(response.status(), `submission must reach the real local API: ${await response.text()}`).toBe(201);
     const submission = await response.json() as { data: { pickId: string; lifecycleState: string; outboxEnqueued: boolean } };
     expect(submission.data).toMatchObject({ lifecycleState: 'validated', outboxEnqueued: false });
 
     await expect(page.getByRole('heading', { name: 'Saved as Track Only' })).toBeVisible();
-    await expect(page.getByTestId('receipt-manual-player')).toContainText(`${shape.player} (manually entered)`);
+    await expect(page.getByTestId('receipt-manual-player')).toContainText(`${shape.player} (manually entered, unverified)`);
     await expect(page.getByTestId('receipt-manual-player')).toContainText('no provider verification, no CLV');
 
     const pick = await readPersistedPick(request, submission.data.pickId);
@@ -159,6 +172,13 @@ for (const shape of shapes) {
       playerProvenance: 'manual-coverage-gap',
       // PM F3: server-stamped labels agree with the provenance.
       manualEntry: true,
+      manualPlayerReview: {
+        operatorConfirmed: rejectedCandidates.length > 0,
+        rejectedCandidates: rejectedCandidates.map((candidate) => {
+          const { participantId, displayName } = candidate as { participantId: string; displayName: string };
+          return { participantId, displayName };
+        }),
+      },
       manualOverrideFields: expect.arrayContaining(['player']),
       eventId: null,
       playerId: null,
@@ -207,4 +227,106 @@ test('WORK-2026110802: a failed player search never offers manual entry and the 
   await page.locator('[data-testid="smart-form-submit-button"]:visible').first().click();
   await expect(page.getByText('Select a player from the results').first()).toBeVisible();
   expect(submissions, 'an errored search must not produce a submission').toBe(0);
+});
+
+// PM decision (operator-confirmed unverified player). The fixture is derived from the real local
+// catalog, not mocked: a catalog player's given name with an invented surname is absent from
+// the catalog (so manual entry is offered) but similar to that player (so the API lists it).
+async function similarNameFixture(request: APIRequestContext) {
+  for (const probe of ['an', 'er', 'ar', 'on']) {
+    for (const row of await searchRows(request, 'players', 'NBA', probe)) {
+      const given = row.displayName.split(/\s+/u)[0] ?? '';
+      if (!/^[A-Za-z]{3,}$/u.test(given)) continue;
+      const name = `${given} Qwyxzer`;
+      if ((await searchRows(request, 'players', 'NBA', name)).length === 0) return { row, name };
+    }
+  }
+  return null;
+}
+
+test('WORK-2026110802: a similar catalog player is offered, and "none of these" records an unverified player', async ({ page, request }) => {
+  await assertIsolatedApiReady(request);
+  const fixture = await similarNameFixture(request);
+  test.skip(!fixture, 'local NBA player catalog has no usable player');
+  const shape = { ...shapes[0]!, player: fixture!.name };
+  const [team] = await searchRows(request, 'teams', shape.sport, shape.teamQuery);
+  test.skip(!team, 'local NBA team catalog lacks the matchup teams');
+
+  await openStructuredMatchup(page, shape);
+  await page.getByLabel('Player', { exact: true }).fill(shape.player);
+  await page.getByTestId('manual-player-enter').click();
+  await fillLine(page, shape);
+
+  const first = await submitAndWait(page, () =>
+    page.locator('[data-testid="smart-form-submit-button"]:visible').first().click());
+  expect(first.status(), await first.text()).toBe(409);
+  const refusal = (await first.json()) as {
+    error: { code: string; details: { candidates: Array<{ participantId: string; displayName: string }> } };
+  };
+  expect(refusal.error.code).toBe('SMART_FORM_MANUAL_PLAYER_CONFIRMATION_REQUIRED');
+  const candidates = refusal.error.details.candidates;
+  expect(candidates.length).toBeGreaterThan(0);
+  expect(candidates.length).toBeLessThanOrEqual(5);
+  expect(candidates.map((candidate) => candidate.participantId)).toContain(fixture!.row.participantId);
+
+  // The question is shown with exactly the API's candidates; nothing was saved.
+  await expect(page.getByTestId('manual-player-candidates')).toContainText('Is this one of these players?');
+  await expect(page.getByTestId('manual-player-candidate')).toHaveCount(candidates.length);
+  await expect(page.getByRole('heading', { name: 'Saved as Track Only' })).toHaveCount(0);
+
+  const second = await submitAndWait(page, () => page.getByTestId('manual-player-none-of-these').click());
+  expect(second.status(), await second.text()).toBe(201);
+  const sentManualPlayer = (second.request().postDataJSON() as {
+    metadata: { participantResolution: { manualPlayer: Record<string, unknown> } };
+  }).metadata.participantResolution.manualPlayer;
+  expect(sentManualPlayer['confirmedNotCandidates']).toEqual(candidates.map((candidate) => candidate.participantId));
+
+  const submission = (await second.json()) as { data: { pickId: string } };
+  await expect(page.getByTestId('receipt-manual-player')).toContainText(`${shape.player} (manually entered, unverified)`);
+  await expect(page.getByTestId('receipt-manual-player-confirmed')).toContainText(
+    `none of the ${candidates.length} suggested catalog player`,
+  );
+  // The receipt never names a catalog player beside the unverified one.
+  for (const candidate of candidates) {
+    await expect(page.getByTestId('receipt-manual-player')).not.toContainText(candidate.displayName);
+  }
+
+  const metadata = (await readPersistedPick(request, submission.data.pickId))['metadata'] as Record<string, unknown>;
+  expect(metadata).toMatchObject({
+    distributionMode: 'track-only',
+    playerProvenance: 'manual-coverage-gap',
+    playerId: null,
+    manualPlayerReview: {
+      operatorConfirmed: true,
+      rejectedCandidates: candidates.map(({ participantId, displayName }) => ({ participantId, displayName })),
+    },
+  });
+  await assertTrackOnlyHasNoOutbox(request, submission.data.pickId);
+});
+
+test('WORK-2026110802: picking a suggested player switches the leg to that canonical player', async ({ page, request }) => {
+  await assertIsolatedApiReady(request);
+  const fixture = await similarNameFixture(request);
+  test.skip(!fixture, 'local NBA player catalog has no usable player');
+  const shape = { ...shapes[0]!, player: fixture!.name };
+  let submissions = 0;
+  page.on('request', (sent) => {
+    if (sent.method() === 'POST' && new URL(sent.url()).pathname === '/api/submissions') submissions += 1;
+  });
+
+  await openStructuredMatchup(page, shape);
+  await page.getByLabel('Player', { exact: true }).fill(shape.player);
+  await page.getByTestId('manual-player-enter').click();
+  await fillLine(page, shape);
+  const first = await submitAndWait(page, () =>
+    page.locator('[data-testid="smart-form-submit-button"]:visible').first().click());
+  expect(first.status()).toBe(409);
+
+  await page.locator(`[data-testid="manual-player-candidate"][data-participant-id="${fixture!.row.participantId}"]`).click();
+  // The manual entry is withdrawn and the field holds the canonical player's name.
+  await expect(page.getByTestId('manual-player-candidates')).toHaveCount(0);
+  await expect(page.getByTestId('manual-player-fallback')).toHaveCount(0);
+  await expect(page.getByLabel('Player', { exact: true })).toHaveValue(fixture!.row.displayName);
+  await expect(page.getByTestId('slip-manual-player')).toHaveCount(0);
+  expect(submissions, 'picking a candidate does not submit by itself').toBe(1);
 });

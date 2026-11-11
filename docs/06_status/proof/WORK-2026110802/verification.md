@@ -311,6 +311,31 @@ Unverified: runtime proof is still the CI staging receipt from PR head 900f46831
 the manual-player path. Real-catalog behaviour of the patterns, near-miss refusal rate and saturation
 rate were not measured from this host.
 
+## PM fallback: operator-confirmed unverified player (2026-11-11), uncommitted tree on a843bbad2
+
+Implements the PM decision: a manual player similar to catalog players gets a 409
+`SMART_FORM_MANUAL_PLAYER_CONFIRMATION_REQUIRED` with up to 5 candidates; the operator picks one or
+confirms none, and the server accepts only an exact match of its recomputed set, stamping
+`metadata.manualPlayerReview`. Error `details` flow through `ApiError` -> `errorResponse` (body
+unchanged when there are no details) -> `SubmitPickError` in the client.
+
+Results for this round are listed in the PR handback and will be re-measured on the exact head at the
+final proof refresh; this section records the mutation proofs, which are not re-run there.
+
+### PM-fallback mutation proofs (each applied alone, focused suite run, file restored)
+
+All 24 killed. Confirmation set: subset accepted (8 fail), superset accepted (2), any confirmation
+accepted (2), order-sensitive comparison (1), no 409 at all (suite fails to load). Client value overwrite:
+client `manualPlayerReview` kept (2), client `confirmedNotCandidates` persisted as sent (2),
+`operatorConfirmed` always true (1). Ranking: no cap (2), no name tie-break (1), no id tie-break (1), no
+score order (5), surname not weighted (1). Input: review allowed without a manual player (1), review allowed
+off Smart Form (1), duplicate ids allowed (1), key not allow-listed (9), teamName not resolved (1). Wire:
+handler drops details (1), `errorResponse` always adds a details key (1). Client: any error code yields
+candidates (1), malformed candidate skipped rather than refused (1), confirmation dropped from the payload
+(1), error code dropped (1). The name tie-break and surname-weight mutants first survived; the ordering
+fixture was changed so that id order and name order disagree, and so that an unweighted match sorts first,
+after which both were killed.
+
 ## Verification (original, on b64849542)
 
 Command: `pnpm verify` (lane worktree, on the tree later committed as b64849542 except the two
@@ -342,7 +367,12 @@ Execution SHA: b7692eacac44b95cabf6138e71f2c7a4dc502641 (review round 3; round 2
 The staging result below is from the earlier head 900f46831; CI's staging job re-runs on the new PR
 head and its receipt is authoritative. It was not re-harvested here.
 
-## CI staging result (PR head 900f46831d2c47d35daa266743f0eaded6f0afb3)
+## CI staging result (PR head 900f46831d2c47d35daa266743f0eaded6f0afb3): SUPERSEDED
+
+**Superseded.** This receipt is from 900f46831, before the round-3 and PM-fallback code. It is not
+exact-head evidence for any later head and must not be cited as such; the final proof refresh harvests
+the receipt for the exact PR head.
+
 
 CI run 42968390678, job "Writable DB proof (staging only)" 130351015911: success, against staging
 xskgrzbteyqdufktjrjx. `pnpm test:db`: 9 tests, 9 pass, 0 fail (from the run's `ci-db-proof-receipt/v2`).

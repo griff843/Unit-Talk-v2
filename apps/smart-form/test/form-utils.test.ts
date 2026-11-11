@@ -1036,3 +1036,59 @@ test('WORK-2026110802 P3: the client player-prop market keys match the contract 
   }
   assert.ok(compared > 500, `${compared} comparisons`);
 });
+
+test('WORK-2026110802 confirm: the client 409 code is the contract constant', async () => {
+  const contracts = await import('@unit-talk/contracts');
+  const { MANUAL_PLAYER_CONFIRMATION_REQUIRED_CODE } = await import('../lib/form-utils');
+  assert.equal(MANUAL_PLAYER_CONFIRMATION_REQUIRED_CODE, contracts.manualPlayerConfirmationRequiredCode);
+});
+
+test('WORK-2026110802 confirm: only a well-formed 409 yields candidates to show', async () => {
+  const { readManualPlayerCandidates } = await import('../lib/form-utils');
+  const code = 'SMART_FORM_MANUAL_PLAYER_CONFIRMATION_REQUIRED';
+  const candidate = { participantId: 'p-1', displayName: 'Tyler Adams', teamId: 'team-bos', teamName: 'Boston Celtics' };
+  assert.deepEqual(readManualPlayerCandidates({ code, details: { candidates: [candidate] } }), [candidate]);
+  assert.deepEqual(readManualPlayerCandidates({ code, details: { candidates: [] } }), []);
+  assert.deepEqual(
+    readManualPlayerCandidates({ code, details: { candidates: [{ participantId: 'p-2', displayName: 'X', teamId: 7 }] } }),
+    [{ participantId: 'p-2', displayName: 'X', teamId: null, teamName: null }],
+  );
+  for (const error of [
+    null,
+    new Error('confirm'),
+    { code: 'SMART_FORM_RELATIONSHIP_INVALID', details: { candidates: [candidate] } },
+    { code, details: null },
+    { code, details: { candidates: 'p-1' } },
+    { code, details: { candidates: [candidate, { displayName: 'no id' }] } },
+    { code, details: { candidates: [null] } },
+  ]) {
+    assert.equal(readManualPlayerCandidates(error), null, JSON.stringify(error));
+  }
+});
+
+test('WORK-2026110802 confirm: the confirmation rides on manualPlayer only when given', async () => {
+  const { withManualPlayer } = await import('../lib/form-utils');
+  const resolution = {
+    resolution: 'canonical',
+    sportId: 'NBA',
+    eventId: null,
+    eventName: 'A @ B',
+    away: null,
+    home: null,
+    team: null,
+    player: null,
+  } as unknown as CanonicalParticipantResolution;
+  assert.deepEqual(withManualPlayer(resolution, ' Tyler Herro ').manualPlayer, {
+    displayName: 'Tyler Herro',
+    canonicalParticipantId: null,
+    reason: 'canonical-coverage-gap',
+  });
+  assert.deepEqual(withManualPlayer(resolution, 'Tyler Herro', ['p-1', 'p-2']).manualPlayer, {
+    displayName: 'Tyler Herro',
+    canonicalParticipantId: null,
+    reason: 'canonical-coverage-gap',
+    confirmedNotCandidates: ['p-1', 'p-2'],
+  });
+  // An empty confirmation (the "suggestions changed" case) is still sent, as [].
+  assert.deepEqual(withManualPlayer(resolution, 'Tyler Herro', []).manualPlayer?.confirmedNotCandidates, []);
+});

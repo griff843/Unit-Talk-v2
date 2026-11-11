@@ -12,7 +12,11 @@ import type {
 // bundler cannot resolve, so a runtime import breaks `next build`. The annotation below binds
 // the client value to the contract constant at compile time, and form-utils.test.ts asserts
 // runtime equality against the real contract export.
-import type { manualPlayerProvenance } from '@unit-talk/contracts';
+import type {
+  ManualPlayerCandidate,
+  manualPlayerConfirmationRequiredCode,
+  manualPlayerProvenance,
+} from '@unit-talk/contracts';
 import {
   getMarketTypeFamily,
   getSupportedMarketTypesForSport,
@@ -763,12 +767,50 @@ export function canOfferManualPlayer(input: {
 }
 
 /** The `manualPlayer` claim the API verifies. Never carries a canonical id. */
-export function buildManualPlayerCoverageGap(playerName: string): ManualPlayerCoverageGap {
+export function buildManualPlayerCoverageGap(
+  playerName: string,
+  confirmedNotCandidates?: readonly string[] | null,
+): ManualPlayerCoverageGap {
   return {
     displayName: playerName.trim(),
     canonicalParticipantId: null,
     reason: 'canonical-coverage-gap',
+    ...(confirmedNotCandidates ? { confirmedNotCandidates: [...confirmedNotCandidates] } : {}),
   };
+}
+
+/**
+ * The API's 409 code when a manual player is similar to catalog players. A copy of the contract
+ * constant `manualPlayerConfirmationRequiredCode` (the client cannot import contract runtime
+ * values); a test keeps them equal.
+ */
+export const MANUAL_PLAYER_CONFIRMATION_REQUIRED_CODE: typeof manualPlayerConfirmationRequiredCode =
+  'SMART_FORM_MANUAL_PLAYER_CONFIRMATION_REQUIRED';
+
+/**
+ * The catalog candidates of a 409 confirmation-required refusal, or null when `error` is not
+ * one. Malformed candidate entries make the whole answer null: the operator is never shown,
+ * and never confirms against, a list the server did not send.
+ */
+export function readManualPlayerCandidates(error: unknown): ManualPlayerCandidate[] | null {
+  if (typeof error !== 'object' || error === null) return null;
+  const { code, details } = error as { code?: unknown; details?: unknown };
+  if (code !== MANUAL_PLAYER_CONFIRMATION_REQUIRED_CODE) return null;
+  const candidates = (details as { candidates?: unknown } | null | undefined)?.candidates;
+  if (!Array.isArray(candidates)) return null;
+  const parsed: ManualPlayerCandidate[] = [];
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'object' || candidate === null) return null;
+    const { participantId, displayName, teamId, teamName } = candidate as Record<string, unknown>;
+    if (typeof participantId !== 'string' || typeof displayName !== 'string') return null;
+    parsed.push({
+      participantId,
+      displayName,
+      teamId: typeof teamId === 'string' ? teamId : null,
+      teamName: typeof teamName === 'string' ? teamName : null,
+    });
+  }
+  return parsed;
 }
 
 /**
@@ -779,12 +821,13 @@ export function buildManualPlayerCoverageGap(playerName: string): ManualPlayerCo
 export function withManualPlayer(
   resolution: CanonicalParticipantResolution,
   playerName: string,
+  confirmedNotCandidates?: readonly string[] | null,
 ): CanonicalParticipantResolution {
   return {
     ...resolution,
     eventId: null,
     player: null,
-    manualPlayer: buildManualPlayerCoverageGap(playerName),
+    manualPlayer: buildManualPlayerCoverageGap(playerName, confirmedNotCandidates),
   };
 }
 // WORK-2026110802 MANUAL_PLAYER_CLIENT_END
