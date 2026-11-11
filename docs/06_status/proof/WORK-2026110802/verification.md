@@ -11,8 +11,11 @@ result: pass (static and browser evidence below; staging DB proof runs in CI onl
 ## Summary
 
 Adds the participant-resolution rung "canonical teams + one manually entered player" (structured
-team fallback, `eventId: null`, team sports) as a server-verified, Track Only only path. Code head
-under test: b64849542b6964eb7f23fb97ed6c64b06effa317.
+team fallback, `eventId: null`, team sports) as a server-verified, Track Only only path. Original
+code head under test: b64849542b6964eb7f23fb97ed6c64b06effa317. PM CHANGES REQUIRED (2026-11-11)
+fixes: commit 234e4983e, synced with main as 4361dd6efaedf188b2dea309ca39e4b48dc72987 (the head every
+result in "PM changes" below was measured on). The PM approved expanding the lane scope to
+`apps/api/src/clv-service.ts` and its focused tests for finding 1.
 
 ## ASSERTIONS:
 
@@ -20,7 +23,11 @@ under test: b64849542b6964eb7f23fb97ed6c64b06effa317.
 - [x] A manual player whose name resolves to a canonical player is refused, naming the match (api test 86).
 - [x] A player search error or timeout is a retryable 503 `SMART_FORM_REFERENCE_SEARCH_UNAVAILABLE` and never a recorded gap (api tests 87, 88).
 - [x] `delivery-eligible` with `manualPlayer` is refused (`SMART_FORM_MANUAL_PLAYER_TRACK_ONLY_REQUIRED`) with or without a server delivery authorization (api test 89).
-- [x] `manualPlayer` with `player`, with an event id, in a non-team sport, with a non-null canonical id, with a flat `playerId`, with a provider offer, without `manual-coverage-gap` provenance, or on the all-manual resolution is refused (api tests 90-97).
+- [x] `manualPlayer` with `player`, with an event id, in a non-team sport, with a non-null canonical id, with a flat `playerId`, with a provider offer, or on the all-manual resolution is refused; a client `playerProvenance` claim without a manual player is refused (api tests 90-97).
+- [x] PM 1: a manual coverage-gap pick never receives CLV, even when its typed name equals a canonical participant with a priced offer, on the name-fallback and the pre-resolved-context paths; normal picks unchanged (clv tests 39-44).
+- [x] PM 2: punctuation/alias-token/confusable spellings of a covered player are refused; the full-name query runs first; a saturated decisive search fails closed (api tests 99-103).
+- [x] PM 3: the server stamps `playerProvenance` (contract constant), `manualEntry: true` and `player` in `manualOverrideFields`, overwriting the client; the client builds the same labels and its constant is the contract value (api tests 104-105; smart-form tests 47-49, 52-54; browser tests 1-3).
+- [x] PM 4: strict `manualPlayer` field allow-list, 80-char and 6-word name caps, control characters refused, at most 12 searches, a total search budget; budget exhaustion or a malformed response is a retryable 503 (api tests 106-110).
 - [x] The teams beside a manual player are verified exactly as for any structured fallback (api test 98).
 - [x] The client offers manual entry only after a definitive not-found; an errored or unrun search keeps the refusal (smart-form tests 43-46; browser test 4).
 - [x] The client payload for each shape carries canonical teams, `manualPlayer`, Track Only and `playerProvenance: manual-coverage-gap` (smart-form tests 47-51).
@@ -123,7 +130,91 @@ Real local API in in-memory persistence mode (the spec asserts `persistenceMode:
 
 Bounded difference from the operator's report: the local QA catalog is used, so the NBA shapes run Celtics @ Knicks, not Celtics @ Bucks. The player names are the operator's, and the spec first asserts each is absent from the local player search.
 
-## Verification
+## PM changes (2026-11-11), measured on 4361dd6ef
+
+Commands: `pnpm exec tsx --test apps/api/src/smart-form-validation.test.ts`,
+`pnpm exec tsx --test apps/api/src/clv-service.test.ts`,
+`pnpm exec tsx --test test/form-utils.test.ts test/submission-guard.test.ts` (in `apps/smart-form`).
+
+```
+ok 95 - WORK-2026110802: refuses a client playerProvenance claim without a manual player
+ok 99 - WORK-2026110802 F2: punctuation, alias-token and confusable spellings of a covered player are refused
+ok 100 - WORK-2026110802 F2: the full-name query runs first, so the match is found before any one-word query
+ok 101 - WORK-2026110802 F2: a true match past a common-token page is still found by the exact full-name query
+ok 102 - WORK-2026110802 F2: a saturated decisive search fails closed instead of recording a gap
+ok 103 - WORK-2026110802 F2: a saturated first-name search does not block a genuinely uncovered player
+ok 104 - WORK-2026110802 F3: the server stamps provenance and manual labels, overwriting the client values
+ok 105 - WORK-2026110802 F3: a refused manual player is never stamped
+ok 106 - WORK-2026110802 F4: manualPlayer is a strict allow-list of fields
+ok 107 - WORK-2026110802 F4: manualPlayer.displayName is length-, word- and character-bounded
+ok 108 - WORK-2026110802 F4: the number of coverage searches is bounded for a worst-case admitted name
+ok 109 - WORK-2026110802 F4: exhausting the total search budget is retryable and never records a gap
+ok 110 - WORK-2026110802 F4: a malformed search response is retryable and never records a gap
+# tests 110
+# pass 110
+# fail 0
+# skipped 0
+```
+
+```
+ok 39 - WORK-2026110802: control -- the same name-matched pick without manual provenance computes CLV
+ok 40 - WORK-2026110802: a manual coverage-gap player gets no CLV through the name fallback (server-stamped playerProvenance)
+ok 41 - WORK-2026110802: a manual coverage-gap player gets no CLV through the name fallback (participantResolution.manualPlayer only)
+ok 42 - WORK-2026110802: a manual coverage-gap player gets no CLV through the name fallback (both markers)
+ok 43 - WORK-2026110802: a manual coverage-gap player gets no CLV even with a caller pre-resolved context
+ok 44 - WORK-2026110802: an unrelated playerProvenance value does not suppress CLV
+# tests 44
+# pass 44
+# fail 0
+# skipped 0
+```
+
+```
+ok 52 - WORK-2026110802 F3: the client provenance constant is the contract constant
+ok 53 - WORK-2026110802 F3: a manual player keeps other manual fields and adds player once
+ok 54 - WORK-2026110802 F3: without a manual player no player label is added
+# tests 61
+# pass 61
+# fail 0
+# skipped 0
+```
+
+### PM-change mutation proofs (each applied alone, suite run, file restored and diff-checked)
+
+- CLV exclusion block removed from `computeCLVOutcome`: `not ok 40, 41, 42, 43` (clv suite, 4 fail).
+- Pre-fix query builder restored (whitespace words only) for the manual player: `not ok 99, 100, 101`.
+- Saturation fail-closed disabled: `not ok 102`.
+- Server stamp call removed: `not ok 104`.
+- Field allow-list disabled: `not ok 106`.
+- Length cap disabled: `not ok 107`.
+- Both budget mechanisms disabled (deadline check and per-search `min(timeout, remaining)`): `not ok 109`. Either one alone still fails closed (each mutation alone: 0 fail), so they are redundant by design.
+- Client: `player` label no longer added in `buildSubmissionPayload`: `not ok 47, 48, 49, 53`.
+
+### Browser run on 4361dd6ef
+
+Same command as below; the spec now also asserts the persisted `manualEntry: true` and `player` in
+`manualOverrideFields` (server-stamped).
+
+```
+  ✓  1 e2e/manual-player-fallback.spec.ts:121:7 › WORK-2026110802: Herro (NBA threes) saves as a Track Only manual player beside canonical teams (7.7s)
+  ✓  2 e2e/manual-player-fallback.spec.ts:121:7 › WORK-2026110802: Burries (NBA rebounds) saves as a Track Only manual player beside canonical teams (7.3s)
+  ✓  3 e2e/manual-player-fallback.spec.ts:121:7 › WORK-2026110802: Dulcich (NFL receptions) saves as a Track Only manual player beside canonical teams (6.7s)
+  ✓  4 e2e/manual-player-fallback.spec.ts:184:5 › WORK-2026110802: a failed player search never offers manual entry and the typed name is refused (5.1s)
+  4 passed (52.8s)
+```
+
+### `pnpm verify` on 4361dd6ef
+
+`verify:static`: green. Summed over its 122 TAP summaries: tests 8224, pass 8211, fail 0, skipped 13.
+`test:live-db`: refused locally, as designed (`[assert-staging] REFUSED: target identity could not be
+resolved from its URL (host=127.0.0.1)`), so `pnpm verify` exits 1 on this host for that reason only.
+`pnpm lint` exit 0 and `pnpm type-check` exit 0 (run on 234e4983e before the main sync).
+
+A runtime value import of `@unit-talk/contracts` into the Smart Form client was tried and broke
+`next build` (`Module not found: Can't resolve './smart-form.js'` from `packages/contracts/src/index.ts`),
+so the client constant is a literal typed as `typeof manualPlayerProvenance` plus a runtime equality test.
+
+## Verification (original, on b64849542)
 
 Command: `pnpm verify` (lane worktree, on the tree later committed as b64849542 except the two
 test-harness edits to the e2e spec and the docs edits listed in diff-summary.md)
@@ -149,7 +240,10 @@ only in CI's "Writable DB proof (staging only)" job on the exact PR head; that j
 `ops:proof-generate`. No production data was read or written by this lane. This lane adds no
 migration and no new write path; the persisted shape was asserted against the real local API above.
 
-Execution SHA: b64849542b6964eb7f23fb97ed6c64b06effa317
+Execution SHA: 4361dd6efaedf188b2dea309ca39e4b48dc72987 (PM changes; original b64849542b6964eb7f23fb97ed6c64b06effa317)
+
+The staging result below is from the earlier head 900f46831; CI's staging job re-runs on the new PR
+head and its receipt is authoritative. It was not re-harvested here.
 
 ## CI staging result (PR head 900f46831d2c47d35daa266743f0eaded6f0afb3)
 
@@ -166,4 +260,4 @@ exact-head CI re-runs the same staging job.
 
 Merge SHA: pending merge
 PR: pending
-Execution SHA: b64849542b6964eb7f23fb97ed6c64b06effa317
+Execution SHA: 4361dd6efaedf188b2dea309ca39e4b48dc72987
