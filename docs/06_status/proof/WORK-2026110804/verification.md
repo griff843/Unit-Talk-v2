@@ -81,6 +81,19 @@ Run on 42b345f69311bf86aca19f68934d6363f0b80f90, which merges origin/main 0033d3
 - `test:live-db`: refused locally, as designed: `[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx.` Because of that refusal, `pnpm verify` exited 1. This step runs only against staging through the staging-ci GitHub environment, and the exact-head CI staging DB proof (concurrency group `staging-ci-db`) covers it.
 - The Smart Form e2e step was skipped (`UNIT_TALK_SMART_FORM_E2E` not set). This lane does not touch Smart Form.
 
+### Review fixes (2026-11-11, Codex P1 and P2)
+
+Code commit: 7c381405c36bbd59322f750fb30fbdbf6a721417 (parent 62e3062230044427c37cfa27eac8ff409f2d8074). Commands run locally on that tree:
+
+- P1: in armed lean mode, `required-check-refresh.yml` treats a trusted reviewer's `RISK-CLASS: PROTECTED` issue comment as a refresh signal and reruns Merge Gate, Executor Result Validation, Risk Class (new `risk` target, `risk-class.yml`) and Independent Review. Trust uses `isTrustedReviewerEscalation` from `operating-model.cjs`, the same predicate `reviewerRequestsProtected` applies during classification. Untrusted commenters trigger nothing. Legacy and unset modes do not load the module and behave as before.
+- P2: `REVIEW_THREADS_QUERY` reads `pageInfo { hasNextPage }` on each thread's nested comments. When a thread has another page, or pageInfo is missing, `collectIndependentReviewInputs` throws, so classification, Independent Review and Merge Gate all fail closed.
+- `npx tsx --test scripts/ops/operating-model.test.ts`: 34/34 pass, exit 0
+- `npx tsx --test scripts/ops/operating-model-workflows.test.ts`: 38/38 pass, exit 0
+- `npx tsx --test scripts/ops/workflow-hardening.test.ts`: 99/99 pass, exit 0
+- `pnpm test:ops`: 3861 tests, 3851 pass, 0 fail, exit 0
+- `pnpm lint`: exit 0
+- `pnpm type-check`: exit 0
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
