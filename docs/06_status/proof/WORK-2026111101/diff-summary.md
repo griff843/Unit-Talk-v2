@@ -21,5 +21,5 @@ Scope: the lane's documentation, the audit allow-list line and the work order, e
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 0033d3a1e9ab9cdc8c221d7bf3743c242c7744f6
 PR: pending

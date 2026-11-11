@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026111101/.out/worktrees/claude__work-2026111101-provider-lock-a1",
   "branch": "claude/work-2026111101-provider-lock-a1",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "0033d3a1e9ab9cdc8c221d7bf3743c242c7744f6",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1843",
   "files_changed": [],
   "file_scope_lock": [
@@ -22,14 +22,22 @@
     "docs/06_status/proof/WORK-2026111101/evidence.json",
     "docs/06_status/proof/WORK-2026111101/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-11-11T05:50:44.931Z",
-  "heartbeat_at": "2026-11-11T06:01:04.429Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-11-11T12:45:26.728Z",
+  "closed_at": "2026-11-11T12:45:26.728Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026111101-provider-lock-a1.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-11-11T12:45:23.888Z",
+      "verdict": "pass",
+      "merge_sha": "0033d3a1e9ab9cdc8c221d7bf3743c242c7744f6",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

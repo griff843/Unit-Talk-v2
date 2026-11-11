@@ -1,6 +1,6 @@
 # PROOF: WORK-2026111101
 
-MERGE_SHA: pending merge
+MERGE_SHA: 0033d3a1e9ab9cdc8c221d7bf3743c242c7744f6
 
 Issue: WORK-2026111101
 Tier: T2
@@ -60,5 +60,5 @@ None applicable. No runtime, database, key, ingestion, workflow or deployment su
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
-PR: pending
+Merge SHA: `0033d3a1e9ab9cdc8c221d7bf3743c242c7744f6`
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1843
