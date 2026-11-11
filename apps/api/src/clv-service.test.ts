@@ -7,6 +7,7 @@ import {
   computeCLVOutcome,
   isCLVFallbackSource,
   CLOSING_SOURCE_HIERARCHY_VERSION,
+  resolveParticipantId,
 } from './clv-service.js';
 
 function makeGameTotalPick(overrides: Partial<PickRecord> = {}): PickRecord {
@@ -2599,4 +2600,19 @@ test('WORK-2026110802: an unrelated playerProvenance value does not suppress CLV
     repositories,
   );
   assert.equal(outcome.status, 'computed');
+});
+
+test('WORK-2026110802 P3: the participant name fallback itself never resolves a manual coverage-gap player', async () => {
+  // computeCLVOutcome's early exclusion shadows this guard, so it is pinned directly: any
+  // other caller of the resolver must not launder a manual player into a canonical id.
+  const repositories = await seedNameMatchedPlayerProp();
+  const control = await resolveParticipantId(nameMatchedPick({}), repositories.participants);
+  assert.ok(control, 'non-vacuity: the name fallback resolves the unmarked control pick');
+
+  for (const metadata of [
+    { playerProvenance: 'manual-coverage-gap' },
+    { participantResolution: manualPlayerResolution },
+  ]) {
+    assert.equal(await resolveParticipantId(nameMatchedPick(metadata), repositories.participants), null);
+  }
 });

@@ -1760,6 +1760,7 @@ type ManualPlayerShape = {
   team: { participantId: string; displayName: string };
   playerName: string;
   market: string;
+  statType: string;
   line: number;
 };
 
@@ -1778,6 +1779,7 @@ const herroShape: ManualPlayerShape = {
   team: celticsAtBucks.home,
   playerName: 'Tyler Herro',
   market: 'player.threes',
+  statType: 'Threes',
   line: 2.5,
 };
 const burriesShape: ManualPlayerShape = {
@@ -1786,6 +1788,7 @@ const burriesShape: ManualPlayerShape = {
   team: celticsAtBucks.away,
   playerName: 'Burries',
   market: 'player.rebounds',
+  statType: 'Rebounds',
   line: 4.5,
 };
 const dulcichShape: ManualPlayerShape = {
@@ -1794,6 +1797,7 @@ const dulcichShape: ManualPlayerShape = {
   team: lionsAtDolphins.away,
   playerName: 'Greg Dulcich',
   market: 'player.receptions',
+  statType: 'Receptions',
   line: 3.5,
 };
 
@@ -1815,7 +1819,8 @@ function manualPlayerPayload(
   return {
     source: 'smart-form',
     market: shape.market,
-    selection: `${shape.playerName} O ${shape.line}`,
+    // Exactly what the form builds (form-utils buildSelectionString): player, stat, O/U, line.
+    selection: `${shape.playerName} ${shape.statType} O ${shape.line}`,
     line: shape.line,
     eventName,
     odds: -110,
@@ -1824,6 +1829,9 @@ function manualPlayerPayload(
     metadata: {
       sport: shape.sport,
       distributionMode: 'track-only',
+      marketType: 'player-prop',
+      statType: shape.statType,
+      overUnder: 'over',
       player: shape.playerName,
       playerId: null,
       participantId: null,
@@ -1856,12 +1864,28 @@ function manualPlayerPayload(
 }
 
 /**
+ * The reference search's matching, `display_name ILIKE '%<query>%'`: `%` is any run, `_` any
+ * one character, case-insensitive, NO accent folding (packages/db searchPlayers).
+ */
+function ilikeContains(displayName: string, query: string): boolean {
+  const body = [...query]
+    .map((character) =>
+      character === '%' ? '.*' : character === '_' ? '.' : character.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'),
+    )
+    .join('');
+  return new RegExp(body, 'isu').test(displayName);
+}
+
+/**
  * Teams are canonical for both matchups. The NBA player catalog carries Jayson Tatum (the
- * production observation: Tatum is found) and nobody else these tests name; the NFL player
- * catalog is empty, as in production. Searches match substrings, like the real repository.
+ * production observation: Tatum is found) plus `extraPlayers`; the NFL player catalog is
+ * empty, as in production. Searches behave like the real repository: ILIKE, sorted, limited.
  */
 function manualPlayerRepository(
-  options: { searchPlayers?: ReferenceDataRepository['searchPlayers'] } = {},
+  options: {
+    searchPlayers?: ReferenceDataRepository['searchPlayers'];
+    extraPlayers?: Array<{ participantId: string; displayName: string }>;
+  } = {},
 ): { repository: ReferenceDataRepository; playerQueries: string[] } {
   const repository = referenceData();
   const teams = [celticsAtBucks.away, celticsAtBucks.home, lionsAtDolphins.away, lionsAtDolphins.home];
@@ -1869,14 +1893,19 @@ function manualPlayerRepository(
     teams
       .filter((team) => team.displayName.toLowerCase().includes(query.toLowerCase()))
       .map((team) => ({ participantId: team.participantId, displayName: team.displayName }) as never);
-  const players = [{ participantId: 'player-tatum', displayName: 'Jayson Tatum', sport: 'NBA', teamId: 'team-bos' }];
+  const players = [
+    { participantId: 'player-tatum', displayName: 'Jayson Tatum', sport: 'NBA', teamId: 'team-bos' },
+    ...(options.extraPlayers ?? []).map((player) => ({ ...player, sport: 'NBA', teamId: null })),
+  ];
   const playerQueries: string[] = [];
   repository.searchPlayers =
     options.searchPlayers ??
-    (async (sportId, query) => {
+    (async (sportId, query, limit = 20) => {
       playerQueries.push(query);
       return players
-        .filter((player) => player.sport === sportId && player.displayName.toLowerCase().includes(query.toLowerCase()))
+        .filter((player) => player.sport === sportId && ilikeContains(player.displayName, query))
+        .sort((left, right) => left.displayName.localeCompare(right.displayName))
+        .slice(0, limit)
         .map((player) => ({ ...player, participantType: 'player' }) as never);
     });
   return { repository, playerQueries };
@@ -1901,7 +1930,7 @@ for (const [label, shape] of [
 }
 
 test('WORK-2026110802: refuses a manual player whose name resolves to a canonical player, naming the match', async () => {
-  for (const playerName of ['Jayson Tatum', 'Tatum', 'jayson  TATUM.', 'Jаyson Tatum']) {
+  for (const playerName of ['Jayson Tatum', 'Tatum', 'jayson  TATUM.']) {
     const { repository } = manualPlayerRepository();
     await assert.rejects(
       () => validateSmartFormRelationships(manualPlayerPayload({ ...herroShape, team: celticsAtBucks.away, playerName }), repository),
@@ -2111,13 +2140,11 @@ test('WORK-2026110802 F2: punctuation, alias-token and confusable spellings of a
     'Jayson-Tatum',
     'Jayson,Tatum',
     'Jayson/Tatum',
-    'Jayson_Tatum',
     '  Jayson .-/ Tatum  ',
     'Jayson. Tatum,',
-    'J\u0430yson-T\u0430tum', // Cyrillic a in both words, joined by punctuation
-    '\uff2aayson/Tatum', // fullwidth J
-    'Jay\u200bson.Tatum', // zero-width space inside a word
     'Tatum.', // last name only, trailing punctuation
+    // Look-alike and invisible characters are no longer folded but refused outright (P3):
+    // see "a manual player name with invisible or look-alike characters is refused".
   ]) {
     const { repository, playerQueries } = manualPlayerRepository();
     await assert.rejects(
@@ -2142,17 +2169,19 @@ test('WORK-2026110802 F2: the full-name query runs first, so the match is found 
       ),
     (error: unknown) => assertCoveredRefusal(error),
   );
-  assert.deepEqual(playerQueries, ['jayson tatum']);
+  // "jayson" keeps one literal letter as a pattern, so it is searched plain; "tatum" is
+  // accent-tolerant.
+  assert.deepEqual(playerQueries, ['jayson%t_t_m']);
 });
 
 /**
  * A catalog that behaves like the real repository: `ILIKE '%q%' ORDER BY display_name LIMIT n`.
- * 120 "Smithers" players sort before the one true "Smith".
+ * More "Smithers" players than the row limit sort before the one true "Smith".
  */
 function truncatingRepository(): { repository: ReferenceDataRepository; limits: number[] } {
   const { repository } = manualPlayerRepository();
   const players = [
-    ...Array.from({ length: 120 }, (_, index) => ({
+    ...Array.from({ length: MANUAL_PLAYER_SEARCH_ROW_LIMIT + 20 }, (_, index) => ({
       participantId: `player-smithers-${index}`,
       displayName: `Aa${String(index).padStart(3, '0')} Smithers`,
     })),
@@ -2166,7 +2195,7 @@ function truncatingRepository(): { repository: ReferenceDataRepository; limits: 
   repository.searchPlayers = async (_sportId, query, limit = 20) => {
     limits.push(limit);
     return players
-      .filter((player) => player.displayName.toLowerCase().includes(query.toLowerCase()))
+      .filter((player) => ilikeContains(player.displayName, query))
       .sort((left, right) => left.displayName.localeCompare(right.displayName))
       .slice(0, limit)
       .map((player) => ({ ...player, sport: 'NBA', teamId: null }) as never);
@@ -2203,7 +2232,8 @@ test('WORK-2026110802 F2: a saturated decisive search fails closed instead of re
 });
 
 test('WORK-2026110802 F2: a saturated first-name search does not block a genuinely uncovered player', async () => {
-  // 40 Tylers exceed the form's 25-row page, but no true match can lack "herro".
+  // 40 Tylers exceed the form's 25-row page but not the gap proof's row limit, and none of
+  // them is plausibly Tyler Herro.
   const { repository } = truncatingRepository();
   const outcome = await validateSmartFormRelationships(manualPlayerPayload(herroShape), repository);
   assert.equal(outcome.kind, 'structured-team-fallback');
@@ -2267,8 +2297,8 @@ test('WORK-2026110802 F4: manualPlayer.displayName is length-, word- and charact
     [`${atLimit}B`, /at most 80 characters/],
     ['x'.repeat(10_000), /at most 80 characters/],
     ['Aa Bb Cc Dd Ee Ff Gg', /at most 6 words/],
-    ['Tyler\nHerro', /control characters/],
-    ['Tyler\u0000Herro', /control characters/],
+    ['Tyler\nHerro', /unsupported characters/],
+    ['Tyler\u0000Herro', /unsupported characters/],
     ['.-/,', /must name a player/],
   ] as const) {
     const { repository, playerQueries } = manualPlayerRepository();
@@ -2283,10 +2313,13 @@ test('WORK-2026110802 F4: manualPlayer.displayName is length-, word- and charact
 test('WORK-2026110802 F4: the number of coverage searches is bounded for a worst-case admitted name', async () => {
   const { repository, playerQueries } = manualPlayerRepository();
   await validateSmartFormRelationships(
-    manualPlayerPayload({ ...herroShape, playerName: 'Aaa.Bbb-Ccc Ddd/Eee,Fj' }),
+    // Six long tokens: every per-token and concatenation query is generated.
+    manualPlayerPayload({ ...herroShape, playerName: 'Bartholo Cristobal Fernando Gonzalez Matthias Lorenzon' }),
     repository,
   );
-  assert.ok(playerQueries.length > 0);
+  // At most 1 full-name + 6 x (plain + 3 accent-tolerant) + 6 x 4 concatenation probes = 49;
+  // this name yields fewer only where two forms coincide.
+  assert.ok(playerQueries.length >= 40, `${playerQueries.length}: ${JSON.stringify(playerQueries)}`);
   assert.ok(
     playerQueries.length <= MANUAL_PLAYER_MAX_SEARCHES,
     `${playerQueries.length} searches exceed the ${MANUAL_PLAYER_MAX_SEARCHES} cap: ${JSON.stringify(playerQueries)}`,
@@ -2327,4 +2360,332 @@ test('WORK-2026110802 F4: a malformed search response is retryable and never rec
       return true;
     },
   );
+});
+
+// ---------------------------------------------------------------------------------------------
+// WORK-2026110802 review round 2 (P1-A, P1-B, P1-C, P2-A, P3). Names seeded from the reviewer's
+// probe.mts / probe2.mts.
+// ---------------------------------------------------------------------------------------------
+
+async function assertRefusedBeforeSearch(
+  payload: SubmissionPayload,
+  pattern: RegExp,
+  options: { extraPlayers?: Array<{ participantId: string; displayName: string }> } = {},
+) {
+  const { repository, playerQueries } = manualPlayerRepository(options);
+  await assert.rejects(
+    () => validateSmartFormRelationships(payload, repository),
+    (error: unknown) => {
+      assert.ok(error instanceof ApiError, `expected ApiError, got ${String(error)}`);
+      assert.equal(error.status, 422);
+      assert.match(error.message, pattern);
+      return true;
+    },
+    `${JSON.stringify(payload.selection)} / ${JSON.stringify(payload.metadata?.['player'])} must be refused`,
+  );
+  assert.equal(playerQueries.length, 0, 'refused before any coverage search');
+}
+
+const accentedCatalog = [
+  { participantId: 'player-munoz', displayName: 'Andrés Muñoz' },
+  { participantId: 'player-jokic', displayName: 'Nikola Jokić' },
+  { participantId: 'player-stutzle', displayName: 'Tim Stützle' },
+  { participantId: 'player-schroder', displayName: 'Dennis Schröder' },
+  { participantId: 'player-slafkovsky', displayName: 'Juraj Slafkovský' },
+  { participantId: 'player-gimenez', displayName: 'Andrés Giménez' },
+  { participantId: 'player-ramirez', displayName: 'Agustín Ramírez' },
+  { participantId: 'player-doncic', displayName: 'Luka Dončić' },
+];
+
+test('WORK-2026110802 P1-A: the ASCII spelling of an accented catalog player is refused as covered', async () => {
+  for (const [playerName, participantId] of [
+    ['Andres Munoz', 'player-munoz'],
+    ['Munoz', 'player-munoz'],
+    ['Nikola Jokic', 'player-jokic'],
+    ['Jokic', 'player-jokic'],
+    ['NikolaJokic', 'player-jokic'],
+    ['Tim Stutzle', 'player-stutzle'],
+    ['Dennis Schroder', 'player-schroder'],
+    ['Juraj Slafkovsky', 'player-slafkovsky'],
+    ['Andres Gimenez', 'player-gimenez'],
+    ['Agustin Ramirez', 'player-ramirez'],
+    ['Luka Doncic', 'player-doncic'],
+  ] as const) {
+    const { repository, playerQueries } = manualPlayerRepository({ extraPlayers: accentedCatalog });
+    await assert.rejects(
+      () => validateSmartFormRelationships(manualPlayerPayload({ ...herroShape, playerName }), repository),
+      (error: unknown) => assertCoveredRefusal(error, participantId),
+      `"${playerName}" must be refused as ${participantId} (queries: ${JSON.stringify(playerQueries)})`,
+    );
+  }
+});
+
+test('WORK-2026110802 P1-A: coverage queries carry only folded letters, digits and the two ILIKE wildcards', async () => {
+  const { repository, playerQueries } = manualPlayerRepository({ extraPlayers: accentedCatalog });
+  const outcome = await validateSmartFormRelationships(
+    manualPlayerPayload({ ...herroShape, playerName: "Renée O'Neil-Smith Jr." }),
+    repository,
+  );
+  assert.equal(outcome.kind, 'structured-team-fallback');
+  assert.ok(playerQueries.length > 0);
+  for (const query of playerQueries) assert.match(query, /^[a-z0-9_%]+$/u);
+  // Accent tolerance is in the patterns: "renee" searches as "r_n__".
+  assert.ok(playerQueries.includes('r_n__'), JSON.stringify(playerQueries));
+  // A wildcard can never come from the entered name: it is a refused character.
+  for (const playerName of ['Jayson%Tatum', 'Jay_son Tatum', 'Jayson\\Tatum', '%', '_']) {
+    await assertRefusedBeforeSearch(manualPlayerPayload({ ...herroShape, playerName }), /unsupported characters/);
+  }
+});
+
+test('WORK-2026110802 P1-A: an accent-tolerant search that saturates without a covering row fails closed', async () => {
+  // "Munoz" is not in this catalog, but more rows than the row limit match "m_n_z", so a
+  // covering row could sit past the page. The gap is not proved.
+  const { repository } = manualPlayerRepository({
+    extraPlayers: Array.from({ length: MANUAL_PLAYER_SEARCH_ROW_LIMIT }, (_, index) => ({
+      participantId: `player-mendez-${index}`,
+      displayName: `Aa${String(index).padStart(3, '0')} Manoz`,
+    })),
+  });
+  await assert.rejects(
+    () => validateSmartFormRelationships(manualPlayerPayload({ ...herroShape, playerName: 'Andres Munoz' }), repository),
+    (error: unknown) => {
+      assert.ok(error instanceof ApiError);
+      assert.equal(error.code, 'SMART_FORM_MANUAL_PLAYER_UNVERIFIABLE');
+      return true;
+    },
+  );
+});
+
+test('WORK-2026110802 P1-A: a covering row deep in a common-surname page is found, not reported unverifiable', async () => {
+  // 150 "Smithers" sort before "Zed Smith": past the form's 25 and past 100 rows, but inside
+  // the gap proof's row limit, so the proof still sees the true match and names it.
+  const { repository } = manualPlayerRepository({
+    extraPlayers: [
+      ...Array.from({ length: 150 }, (_, index) => ({
+        participantId: `player-smithers-${index}`,
+        displayName: `Aa${String(index).padStart(3, '0')} Smithers`,
+      })),
+      { participantId: 'player-zed-smith', displayName: 'Zed Smith' },
+    ],
+  });
+  assert.ok(MANUAL_PLAYER_SEARCH_ROW_LIMIT > 151);
+  await assert.rejects(
+    () => validateSmartFormRelationships(manualPlayerPayload({ ...herroShape, playerName: 'Smith' }), repository),
+    (error: unknown) => assertCoveredRefusal(error, 'player-zed-smith'),
+  );
+});
+
+const nameVariantCatalog = [
+  { participantId: 'player-jjj', displayName: 'Jaren Jackson Jr.' },
+  { participantId: 'player-trent', displayName: 'Gary Trent' },
+  { participantId: 'player-mcconnell', displayName: 'T.J. McConnell' },
+  { participantId: 'player-oubre', displayName: 'Kelly Oubre Jr.' },
+  { participantId: 'player-sga', displayName: 'Shai Gilgeous-Alexander' },
+  { participantId: 'player-fox', displayName: "De'Aaron Fox" },
+];
+
+test('WORK-2026110802 P1-B: reordered, concatenated, decorated, initialed and suffixed spellings are refused as covered', async () => {
+  for (const [playerName, participantId] of [
+    ['Tatum, Jayson', 'player-tatum'],
+    ['Tatum Jayson', 'player-tatum'],
+    ['JaysonTatum', 'player-tatum'],
+    ['TatumJayson', 'player-tatum'],
+    ['Jayson Tatum BOS', 'player-tatum'],
+    ['Jayson Tatum 0', 'player-tatum'],
+    ['Jayson Tatum #0', 'player-tatum'],
+    ['Jayson Tatum (BOS)', 'player-tatum'],
+    ['Jayson "JT" Tatum', 'player-tatum'],
+    ['J. Tatum', 'player-tatum'],
+    ['J Tatum', 'player-tatum'],
+    ['Jayson Tatum Jr.', 'player-tatum'],
+    ['Jayson Tatum III', 'player-tatum'],
+    ['Jaren Jackson', 'player-jjj'],
+    ['Jaren Jackson Jr', 'player-jjj'],
+    ['Jaren Jackson II', 'player-jjj'],
+    ['Gary Trent Jr.', 'player-trent'],
+    ['Gary Trent IV', 'player-trent'],
+    ['TJ McConnell', 'player-mcconnell'],
+    ['T J McConnell', 'player-mcconnell'],
+    ['McConnell', 'player-mcconnell'],
+    ['Kelly Oubre', 'player-oubre'],
+    ['Gilgeous-Alexander', 'player-sga'],
+    ['Shai Alexander', 'player-sga'],
+    ['Shai Gilgeous-Alexander OKC', 'player-sga'],
+    ['Alexander, Shai Gilgeous (OKC)', 'player-sga'],
+    ['DeAaron Fox', 'player-fox'],
+    ['De Aaron Fox', 'player-fox'],
+    ['DeAaron', 'player-fox'],
+    ['DeAaron Fox SAC', 'player-fox'],
+    ['McConnell, JT', 'player-mcconnell'],
+    ['Jayson', 'player-tatum'],
+  ] as const) {
+    const { repository, playerQueries } = manualPlayerRepository({ extraPlayers: nameVariantCatalog });
+    await assert.rejects(
+      () =>
+        validateSmartFormRelationships(
+          manualPlayerPayload({ ...herroShape, team: celticsAtBucks.away, playerName }),
+          repository,
+        ),
+      (error: unknown) => assertCoveredRefusal(error, participantId),
+      `"${playerName}" must be refused as ${participantId} (queries: ${JSON.stringify(playerQueries)})`,
+    );
+  }
+});
+
+test('WORK-2026110802 P1-B: a different player who only shares a surname or given name is still a gap', async () => {
+  // Non-vacuity for the matcher: it is broad, not "refuse anything that shares a word".
+  for (const playerName of ['Jaylen Tatum', 'Marcus Jackson', 'Jayson Williams', 'Gary Payton', 'Tyler Herro']) {
+    const { repository, playerQueries } = manualPlayerRepository({ extraPlayers: nameVariantCatalog });
+    const outcome = await validateSmartFormRelationships(manualPlayerPayload({ ...herroShape, playerName }), repository);
+    assert.equal(outcome.kind, 'structured-team-fallback', `"${playerName}" is a genuine gap`);
+    assert.ok(playerQueries.length > 0);
+  }
+});
+
+test('WORK-2026110802 P1-C: a manual player is accepted only on a player-prop market', async () => {
+  for (const [market, marketType] of [
+    ['moneyline', 'moneyline'],
+    ['total', 'total'],
+    ['spread', undefined],
+    ['player.threes', 'game-line'],
+    ['player.threes', 'moneyline'],
+  ] as const) {
+    await assertRefusedBeforeSearch(
+      manualPlayerPayload({ ...herroShape, market }, { metadata: { marketType } }),
+      /accepted only on a player-prop market/,
+    );
+  }
+});
+
+test('WORK-2026110802 P1-C: the selection must be the manual player prop and name nobody else', async () => {
+  for (const selection of [
+    'Jayson Tatum Threes O 2.5',
+    'Tyler Herro Threes O 2.5 Jayson Tatum',
+    'Tyler Herro / Jayson Tatum Threes O 2.5',
+    'Tatum Threes O 2.5',
+    'Tyler Herro Threes U 2.5',
+    'Tyler Herro Threes O 3.5',
+    'Tyler Herro Points O 2.5',
+    'Celtics ML',
+  ]) {
+    await assertRefusedBeforeSearch(
+      { ...manualPlayerPayload(herroShape), selection },
+      /selection must be the manual player's prop/,
+    );
+  }
+});
+
+test('WORK-2026110802 P1-C: flat metadata.player and statType cannot name another player', async () => {
+  // A string mismatch is already refused by the flat-identity check; a non-string flat player
+  // slipped past it (readOptionalString ignores it) and is refused by the binding.
+  await assertRefusedBeforeSearch(
+    manualPlayerPayload(herroShape, { metadata: { player: 'Jayson Tatum' } }),
+    /player display does not match participantResolution|metadata.player must be the manual player/,
+  );
+  for (const player of [['Jayson Tatum'], { name: 'Jayson Tatum' }, 7]) {
+    await assertRefusedBeforeSearch(
+      manualPlayerPayload(herroShape, { metadata: { player } }),
+      /metadata.player must be the manual player/,
+    );
+  }
+  await assertRefusedBeforeSearch(
+    {
+      ...manualPlayerPayload(herroShape, { metadata: { statType: 'Jayson Tatum' } }),
+      selection: 'Tyler Herro Jayson Tatum O 2.5',
+    },
+    /is not a NBA stat type/,
+  );
+  for (const statType of [7, 'x'.repeat(41), ['Threes']]) {
+    await assertRefusedBeforeSearch(
+      manualPlayerPayload(herroShape, { metadata: { statType } }),
+      /must be a catalog stat type/,
+    );
+  }
+});
+
+test('WORK-2026110802 P1-C: the form-built selections still pass, in any case or spacing', async () => {
+  for (const [selection, metadata] of [
+    ['Tyler Herro Threes O 2.5', {}],
+    ['tyler  HERRO threes o 2.5', {}],
+    ['Tyler Herro Threes U 2.5', { overUnder: 'under' }],
+    ['Tyler Herro Points + Rebounds O 2.5', { statType: 'Points + Rebounds' }],
+    ['Tyler Herro O 2.5', { statType: undefined }],
+    ['Tyler Herro Threes O 2.5', { player: undefined, marketType: undefined }],
+  ] as const) {
+    const { repository } = manualPlayerRepository();
+    const outcome = await validateSmartFormRelationships(
+      { ...manualPlayerPayload(herroShape, { metadata }), selection },
+      repository,
+    );
+    assert.equal(outcome.kind, 'structured-team-fallback', selection);
+  }
+});
+
+test('WORK-2026110802 P2-A: manual-player markers are refused on any non-Smart-Form submission', async () => {
+  const marked: SubmissionPayload[] = [
+    { source: 'api', market: 'player.points', selection: 'Jayson Tatum O 27.5', metadata: { playerProvenance: manualPlayerProvenance } },
+    { source: 'discord-bot', market: 'player.points', selection: 'X', metadata: { playerProvenance: 'anything' } },
+    {
+      source: 'api',
+      market: 'player.points',
+      selection: 'Jayson Tatum O 27.5',
+      metadata: { participantResolution: { manualPlayer: { displayName: 'Jayson Tatum' } } },
+    },
+    // The legacy `smart-form` label without Smart Form fields takes the not-smart-form path too.
+    { source: 'smart-form', market: 'player.points', selection: 'Jayson Tatum O 27.5', metadata: { playerProvenance: manualPlayerProvenance } },
+  ];
+  for (const submission of marked) {
+    await assert.rejects(
+      () => validateSmartFormRelationships(submission, referenceData()),
+      (error: unknown) => {
+        assert.ok(error instanceof ApiError);
+        assert.equal(error.status, 422);
+        assert.match(error.message, /accepted only on a Smart Form submission/);
+        return true;
+      },
+      JSON.stringify(submission),
+    );
+  }
+  // Controls: the same traffic without the markers is untouched.
+  for (const submission of [
+    { source: 'api', market: 'player.points', selection: 'Jayson Tatum O 27.5', metadata: { player: 'Jayson Tatum' } },
+    { source: 'api', market: 'player.points', selection: 'Jayson Tatum O 27.5' },
+    { source: 'smart-form', market: 'player.points', selection: 'X', metadata: { playerProvenance: null } },
+    { source: 'api', market: 'player.points', selection: 'X', metadata: { participantResolution: { manualPlayer: null } } },
+  ] as SubmissionPayload[]) {
+    assert.deepEqual(await validateSmartFormRelationships(submission, referenceData()), { kind: 'not-smart-form' });
+  }
+});
+
+test('WORK-2026110802 P3: a manual player name with invisible or look-alike characters is refused', async () => {
+  for (const [playerName, pattern] of [
+    ['Jаyson Tatum', /unsupported characters/], // Cyrillic a
+    ['Τatum', /unsupported characters/], // Greek capital tau
+    ['Ｊayson Tatum', /unsupported characters/], // fullwidth J
+    ['ﬁnley', /unsupported characters/], // fi ligature
+    ['Jay​son Tatum', /unsupported characters/], // zero-width space
+    ['Jayson⁠Tatum', /unsupported characters/], // word joiner
+    ['Jayson‮Tatum', /unsupported characters/], // right-to-left override
+    ['Tatum\u{e0061}', /unsupported characters/], // tag character
+    ['Tatum҉', /unsupported characters/], // combining enclosing mark
+    ['Jayson　Tatum', /unsupported characters/], // ideographic space
+    ['Jayson Tatum', /unsupported characters/], // no-break space
+    ['Jayson\tTatum', /unsupported characters/],
+    ['Muñoz', /composed \(NFC\)/], // decomposed n + combining tilde
+  ] as const) {
+    await assertRefusedBeforeSearch(manualPlayerPayload({ ...herroShape, playerName }), pattern);
+  }
+});
+
+test('WORK-2026110802 P3: an accepted manual player persists exactly the validated name', async () => {
+  for (const playerName of ["Renée O’Neil-Smith Jr.", 'Zoë Ålund', "Ny'Quan Brown #7 (Rookie)", 'Iñaki Peña']) {
+    const { repository } = manualPlayerRepository({ extraPlayers: accentedCatalog });
+    const payload = manualPlayerPayload({ ...herroShape, playerName });
+    const outcome = await validateSmartFormRelationships(payload, repository);
+    assert.equal(outcome.kind, 'structured-team-fallback', playerName);
+    const resolution = payload.metadata?.['participantResolution'] as Record<string, unknown>;
+    const stored = (resolution['manualPlayer'] as Record<string, unknown>)['displayName'];
+    assert.equal(stored, playerName);
+    assert.equal(String(stored).normalize('NFC'), stored);
+  }
 });

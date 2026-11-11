@@ -918,8 +918,10 @@ function isClvComparableOffer(offer: ProviderOfferRecord): offer is ClvComparabl
  * Resolve participant_id for a pick.
  * Priority: pick.participant_id → fuzzy name match from metadata.player + metadata.sport.
  * Returns null if no unambiguous match is found (fail-open: CLV stays null).
+ * Exported for the WORK-2026110802 test that pins its manual-player guard directly: through
+ * computeCLVOutcome that guard is shadowed by the earlier exclusion.
  */
-async function resolveParticipantId(
+export async function resolveParticipantId(
   pick: PickRecord,
   participants: ParticipantRepository,
 ): Promise<string | null> {
