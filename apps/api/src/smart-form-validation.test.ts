@@ -2873,7 +2873,7 @@ test('WORK-2026110802 P2-1: ASCII and German-transliterated spellings of accente
   }
 });
 
-test('WORK-2026110802 P2-2: a two-letter token gets its own search, so "Wu A" finds Andrew Wu', async () => {
+test('WORK-2026110802 P2-2: the reversed full-name query finds Andrew Wu for "Wu A" (two-letter tokens are not searched alone)', async () => {
   const { repository, playerQueries } = manualPlayerRepository({ extraPlayers: nearMissCatalog });
   await assert.rejects(
     () => validateSmartFormRelationships(manualPlayerPayload({ ...herroShape, playerName: 'Wu A' }), repository),
