@@ -94,6 +94,17 @@ Code commit: 7c381405c36bbd59322f750fb30fbdbf6a721417 (parent 62e3062230044427c3
 - `pnpm lint`: exit 0
 - `pnpm type-check`: exit 0
 
+Follow-up commit 7275cc470aa0783f7fb0ffe3fbdc91362edad7de (notes 1 and 2):
+
+- Note 1: in lean mode, a completed Independent Review workflow_run now reruns Independent Review, Merge Gate, Executor Result Validation and Risk Class, in that order. Before this change it reran only the first two, so an escalation in a review body or review-thread comment left Executor Result Validation and Risk Class stale. Legacy and unset modes are unchanged; that signal is still a no-op there.
+- Note 2: escalation-comment targets now run in the order Merge Gate, Executor Result Validation, Independent Review, Risk Class. Risk Class is still required, so a missing run still fails the job closed, but only after every other rerun has been requested.
+- `npx tsx --test scripts/ops/operating-model.test.ts`: 34/34 pass, exit 0
+- `npx tsx --test scripts/ops/operating-model-workflows.test.ts`: 39/39 pass, exit 0
+- `npx tsx --test scripts/ops/workflow-hardening.test.ts`: 99/99 pass, exit 0
+- `pnpm test:ops`: 3862 tests, 3852 pass, 0 fail, 10 skipped, exit 0
+- `pnpm lint`: exit 0
+- `pnpm type-check`: exit 0
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
