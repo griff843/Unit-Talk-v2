@@ -524,9 +524,13 @@ test('required-check-refresh (P3): outside lean, Independent Review handling is 
   assert.deepEqual(legacy.reruns, []);
   const dispatch = await runRefresh({ eventName: 'repository_dispatch', payload: { action: 'required-check-refresh', client_payload: { pr_number: 77, target: 'independent' } }, env: LEGACY_ENV, runs: ALL_RUNS });
   assert.match(String(dispatch.error?.message), /Unknown manual refresh target/u, 'legacy refuses the independent target, as before');
-  const lean = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: run }, env: LEAN_ENV, runs: ALL_RUNS });
+  const lean = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: run }, env: LEAN_ENV, runs: {
+    ...ALL_RUNS,
+    'executor-result-validator.yml': [refreshRun(303, '.github/workflows/executor-result-validator.yml')],
+    'risk-class.yml': [refreshRun(404, '.github/workflows/risk-class.yml')],
+  } });
   assert.equal(lean.error, null);
-  assert.deepEqual(lean.reruns, [101, 202]);
+  assert.deepEqual(lean.reruns, [101, 202, 303, 404]);
 });
 
 test('required-check-refresh (P3): a missing or in-flight Independent Review run does not abort the Merge Gate rerun', async () => {
@@ -554,11 +558,42 @@ test('required-check-refresh (lean, P1): a trusted RISK-CLASS: PROTECTED issue c
   for (const user of [CODEX_BOT_USER, { login: 'chatgpt-codex-connector', type: 'User' }]) {
     const result = await runRefresh({ ...escalationCommentEvent(user, 'Escalating.\nRISK-CLASS: PROTECTED\n'), env: LEAN_ENV, runs: ESCALATION_RUNS });
     assert.equal(result.error, null, user.login);
-    assert.deepEqual(result.reruns, [202, 303, 404, 101], user.login);
+    assert.deepEqual(result.reruns, [202, 303, 101, 404], user.login);
   }
   // A configured reviewer list is honored exactly as classification honors it.
   const configured = await runRefresh({ ...escalationCommentEvent({ login: 'alice', type: 'User' }), env: { ...LEAN_ENV, TRUSTED_REVIEWER_LOGINS: 'alice' }, runs: ESCALATION_RUNS });
-  assert.deepEqual(configured.reruns, [202, 303, 404, 101]);
+  assert.deepEqual(configured.reruns, [202, 303, 101, 404]);
+  // Note 2: a missing Risk Class run fails closed, but only after Independent Review was rerun.
+  const noRisk = await runRefresh({ ...escalationCommentEvent(CODEX_BOT_USER), env: LEAN_ENV, runs: { ...ESCALATION_RUNS, 'risk-class.yml': [] } });
+  assert.deepEqual(noRisk.reruns, [202, 303, 101]);
+  assert.match(String(noRisk.error?.message), /No eligible Risk Class/u);
+});
+
+function independentReviewWorkflowRun() {
+  return { id: 9, name: 'Independent Review', path: '.github/workflows/independent-review.yml', event: 'pull_request_review', status: 'completed', head_sha: HEAD, repository: { full_name: REPO }, head_repository: { full_name: REPO }, pull_requests: [] };
+}
+
+test('required-check-refresh (lean, note 1): a completed Independent Review run also refreshes Executor Result Validation and Risk Class', async () => {
+  const result = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: independentReviewWorkflowRun() }, env: LEAN_ENV, runs: ESCALATION_RUNS });
+  assert.equal(result.error, null);
+  assert.deepEqual(result.reruns, [101, 202, 303, 404]);
+  // Missing Risk Class fails closed after the other three reruns.
+  const noRisk = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: independentReviewWorkflowRun() }, env: LEAN_ENV, runs: { ...ESCALATION_RUNS, 'risk-class.yml': [] } });
+  assert.deepEqual(noRisk.reruns, [101, 202, 303]);
+  assert.match(String(noRisk.error?.message), /No eligible Risk Class/u);
+  // Outside lean the Independent Review signal stays a legacy no-op.
+  for (const env of [LEGACY_ENV, UNSET_ENV]) {
+    const legacy = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: independentReviewWorkflowRun() }, env, runs: ESCALATION_RUNS });
+    assert.equal(legacy.error, null);
+    assert.deepEqual(legacy.reruns, []);
+  }
+  // Other trusted workflow_run signals keep their legacy targets in lean and legacy.
+  const ci = { ...independentReviewWorkflowRun(), name: 'CI', path: '.github/workflows/ci.yml', event: 'pull_request', conclusion: 'success', pull_requests: [{ number: 77, head: { sha: HEAD } }] };
+  for (const env of [LEAN_ENV, LEGACY_ENV]) {
+    const ciRun = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: ci }, env, runs: ESCALATION_RUNS });
+    assert.equal(ciRun.error, null);
+    assert.deepEqual(ciRun.reruns, [303]);
+  }
 });
 
 test('required-check-refresh (adversarial P1): untrusted or malformed escalation comments trigger nothing new', async () => {

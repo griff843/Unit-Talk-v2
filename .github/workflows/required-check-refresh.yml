@@ -125,9 +125,12 @@ jobs:
               // same configured reviewer list, so an untrusted commenter
               // triggers nothing. Merge Gate (the decision point) and Executor
               // Result Validation go first; both fail closed if absent.
+              // Independent Review (optional) precedes Risk Class, so a missing
+              // Risk Class run still fails the job closed but only after every
+              // other target has been rerun.
               if (leanActive &&
                   operatingModel.isTrustedReviewerEscalation(context.payload.comment, configuredReviewers)) {
-                targets.push('merge', 'executor', 'risk', 'independent');
+                targets.push('merge', 'executor', 'independent', 'risk');
               }
               if (targets.length === 0) {
                 core.info('Comment contains no recognized refresh signal.');
@@ -203,6 +206,15 @@ jobs:
                 throw new Error('workflow_run pull-request/head metadata mismatch; refusing refresh.');
               }
               targets = expected.targets;
+              // WORK-2026110804: a trusted review may carry RISK-CLASS:
+              // PROTECTED in its body or a thread comment. Merge Gate recomputes
+              // the class itself, but Executor Result Validation and Risk Class
+              // would otherwise keep a stale Standard result, so lean also
+              // refreshes them. Risk Class is last: if absent the job fails
+              // closed after all other reruns were requested.
+              if (run.name === 'Independent Review' && leanActive) {
+                targets = [...expected.targets, 'executor', 'risk'];
+              }
             } else {
               throw new Error(`Unsupported event ${context.eventName}; refusing refresh.`);
             }
