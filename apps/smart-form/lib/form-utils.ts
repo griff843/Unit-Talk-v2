@@ -1,5 +1,5 @@
 import type { CatalogData } from './catalog';
-import type { EventOfferBrowseResult } from './api-client';
+import type { EventOfferBrowseResult, EventOffersState } from './api-client';
 import type { BetFormValues } from './form-schema';
 import type { SubmitPickPayload } from './api-client';
 import type {
@@ -808,3 +808,43 @@ export function evaluateSubmissionGuards(
   return null;
 }
 // UTV2-1786 SUBMISSION_GUARD_END
+
+export interface OffersStateNotice {
+  tone: 'stale' | 'none';
+  label: string;
+  /** ISO timestamp of the newest observed offer, when one exists. */
+  lastObservedAt: string | null;
+}
+
+/**
+ * WORK-2026110705: turn the API's offers freshness state into something the user
+ * can see. Stale and empty are different facts and must not collapse into the
+ * generic "No live offers": stale carries its last-observed time. Returns null
+ * when the offers are fresh and complete, or when the API sent no state.
+ */
+export function describeOffersState(state: EventOffersState | null | undefined): OffersStateNotice | null {
+  if (!state) {
+    return null;
+  }
+  const lastObservedAt =
+    state.newestObservedAt && !Number.isNaN(Date.parse(state.newestObservedAt))
+      ? state.newestObservedAt
+      : null;
+  if (state.status === 'stale') {
+    const when = lastObservedAt
+      ? new Date(lastObservedAt).toISOString().replace('T', ' ').slice(0, 16) + ' UTC'
+      : 'unknown time';
+    return { tone: 'stale', label: `Stale offers — last observed ${when}`, lastObservedAt };
+  }
+  if (state.status === 'empty') {
+    return { tone: 'none', label: 'No offers recorded for this event', lastObservedAt: null };
+  }
+  if (state.truncated) {
+    return {
+      tone: 'stale',
+      label: 'Partial offers — result was truncated; some offers may be missing',
+      lastObservedAt,
+    };
+  }
+  return null;
+}

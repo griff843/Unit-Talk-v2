@@ -5,6 +5,7 @@ import {
   buildSelectionString,
   buildSubmissionPayload,
   calcPayout,
+  describeOffersState,
   easternDateIso,
   evaluateSubmissionGuards,
   getMarketTypesForSport,
@@ -751,4 +752,44 @@ test('no client guard refuses a structured-fallback player prop that has no even
     }),
     null,
   );
+});
+
+test('WORK-2026110705: stale offers state surfaces the last-observed timestamp, distinct from the generic empty message', () => {
+  const stale = describeOffersState({
+    status: 'stale',
+    newestObservedAt: '2026-06-30T12:41:02.424Z',
+    freshSince: '2026-11-08T14:00:00.000Z',
+    truncated: false,
+  });
+  assert.ok(stale);
+  assert.equal(stale.tone, 'stale');
+  assert.match(stale.label, /Stale offers/);
+  assert.match(stale.label, /2026-06-30 12:41 UTC/);
+  assert.equal(stale.lastObservedAt, '2026-06-30T12:41:02.424Z');
+  assert.doesNotMatch(stale.label, /No live offers/);
+
+  const empty = describeOffersState({ status: 'empty', newestObservedAt: null, freshSince: 'x', truncated: false });
+  assert.equal(empty?.tone, 'none');
+  assert.notEqual(empty?.label, stale.label);
+});
+
+test('WORK-2026110705: truncated fresh offers are flagged partial; complete fresh and missing state are silent', () => {
+  const partial = describeOffersState({
+    status: 'fresh',
+    newestObservedAt: '2026-11-08T13:59:00.000Z',
+    freshSince: '2026-11-08T12:00:00.000Z',
+    truncated: true,
+  });
+  assert.match(partial?.label ?? '', /Partial offers/);
+  assert.equal(
+    describeOffersState({ status: 'fresh', newestObservedAt: '2026-11-08T13:59:00.000Z', freshSince: 'x', truncated: false }),
+    null,
+  );
+  assert.equal(describeOffersState(undefined), null);
+});
+
+test('WORK-2026110705: BetForm routes an empty offers list through the offers state before falling back to "No live offers"', () => {
+  const source = readFileSync(new URL('../app/submit/components/BetForm.tsx', import.meta.url), 'utf8');
+  assert.match(source, /describeOffersState\(eventBrowse\?\.offersState\)/);
+  assert.match(source, /offersStateNotice\.label/);
 });

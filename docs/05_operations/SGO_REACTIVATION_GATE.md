@@ -153,10 +153,10 @@ behaviour. The schedule also only ever targets `today − hotRetentionDays − 1
 (`FIRST_ARCHIVE_CANDIDATE_PACKET.md` §2). If that view is auto-updatable, heavy ingestion would
 pour volume into the relation everyone is treating as frozen legacy.
 
-**Answered 2026-09-23: yes.** Production reports `is_updatable = YES`, `is_insertable_into = YES`,
-and the view is a plain `SELECT *` over the quarantine with no triggers. A reactivated ingestor
-writing `provider_offers` would insert into the quarantine. Reactivation must first repoint those
-four writes (or make the view non-insertable) — a precondition, not a follow-up. The query used:
+**Answered 2026-09-23 (view facts, still true):** production reports `is_updatable = YES` and
+`is_insertable_into = YES` for the view, a plain `SELECT *` over the quarantine with no triggers,
+so anything that wrote the logical name `provider_offers` would insert into the quarantine. The
+query used:
 
 ```sql
 SELECT is_updatable, is_insertable_into
@@ -164,5 +164,19 @@ FROM information_schema.views
 WHERE table_schema = 'public' AND table_name = 'provider_offers';
 ```
 
-No coverage estimate, storage projection or retention plan in this document is sound until those
-writes are repointed.
+**Corrected 2026-11-08 (WORK-2026110705, code-inspected on `main`, no reactivated run observed):
+no — the ingestor write path does not target the quarantine.** The earlier "yes" read the
+logical name in `apps/ingestor/src/write-surface.ts`, which is only a classification label for
+tests, as if it were the physical target. The database writers in
+`packages/db/src/runtime-repositories.ts` (`DatabaseProviderOfferRepository.upsertBatch`,
+`stageBatch`, `mergeStagedCycle`, `markClosingLines`) write `provider_offer_history`,
+`provider_offer_current`, `provider_offer_staging` and `provider_offer_history_compact`; none
+issues a write against `provider_offers` or `provider_offers_legacy_quarantine`. No repoint of the
+ingestor writes is therefore a precondition on this ground. What remains unproven until a
+reactivated cycle runs is the observation itself: the quarantine row count must stay unchanged
+while the canonical tables grow, and every other requirement in sections A to F still applies.
+
+The real defect found by this question was on the read side: Smart Form event offers, the
+execution-quality summaries and Command Center storage health read the view, so they presented
+frozen quarantine data as the provider-offer source. Those readers now use the canonical current
+and history tables (WORK-2026110705).

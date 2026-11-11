@@ -69,6 +69,7 @@ import type {
   ConfirmDeliveryAtomicInput,
   ConfirmDeliveryAtomicResult,
   EventBrowseResult,
+  EventOffersState,
   EventOfferBrowseResult,
   EventParticipantBrowseResult,
   EnqueueDistributionAtomicInput,
@@ -166,7 +167,7 @@ import type {
   PickReviewRecord,
   ExecutionIntentRow,
 } from './types.js';
-import type { Json } from './database.types.js';
+import type { Database, Json } from './database.types.js';
 import {
   createDatabaseClientFromConnection,
   type DatabaseConnectionConfig,
@@ -5902,25 +5903,44 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     since: string,
     limit = 10_000,
   ): Promise<ProviderOfferRecord[]> {
-    const { data, error } = await (fromUntyped(
-      this.client,
-      'provider_offer_history',
-    )
-      .select('*')
-      .gte('snapshot_at', since)
-      .order('snapshot_at', { ascending: false })
-      .limit(limit) as unknown as Promise<{
-      data: ProviderOfferRecord[] | null;
-      error: { message: string } | null;
-    }>);
+    // PostgREST clamps every response to `max_rows` (1000 in supabase/config.toml),
+    // silently, regardless of `.limit()`. Page with `.range()` so the documented
+    // `limit` is honoured and callers can rely on `rows.length >= limit` meaning
+    // "truncated at the caller's cap" rather than "clipped by the server".
+    // `id` is the tiebreaker so rows sharing a snapshot_at never skip or repeat
+    // across pages.
+    const PAGE = 1000;
+    const all: ProviderOfferRecord[] = [];
+    while (all.length < limit) {
+      const from = all.length;
+      const to = Math.min(from + PAGE, limit) - 1;
+      const { data, error } = await (fromUntyped(
+        this.client,
+        'provider_offer_history',
+      )
+        .select('*')
+        .gte('snapshot_at', since)
+        .order('snapshot_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, to) as unknown as Promise<{
+        data: ProviderOfferRecord[] | null;
+        error: { message: string } | null;
+      }>);
 
-    if (error) {
-      throw new Error(
-        `Failed to list recent provider offers: ${error.message}`,
-      );
+      if (error) {
+        throw new Error(
+          `Failed to list recent provider offers: ${error.message}`,
+        );
+      }
+
+      const page = data ?? [];
+      all.push(...page);
+      if (page.length < to - from + 1) {
+        break;
+      }
     }
 
-    return data ?? [];
+    return all;
   }
 
   async listClosingOffers(since: string): Promise<ProviderOfferRecord[]> {
@@ -7429,7 +7449,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     }
 
     const startTime = extractStartsAt(event.metadata);
-    const offers = await this.loadEventOffers(
+    const { offers, state: offersState } = await this.loadEventOffers(
       (event.external_id as string | null) ?? null,
       participants,
       event.sport_id as string,
@@ -7446,7 +7466,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
         )
         .find((value) => value !== null) ?? null;
 
-    return {
+    const browseResult: EventBrowseResult = {
       eventId: event.id as string,
       externalId: (event.external_id as string | null) ?? null,
       eventName: event.event_name as string,
@@ -7457,7 +7477,9 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       leagueId,
       participants,
       offers,
+      offersState,
     };
+    return browseResult;
   }
 
   async searchTeams(
@@ -7980,55 +8002,28 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     participants: EventParticipantBrowseResult[],
     sportId: string,
     recentSince: string = buildEventOfferRecentSince(null, 'scheduled'),
-  ): Promise<EventOfferBrowseResult[]> {
+  ): Promise<{ offers: EventOfferBrowseResult[]; state: EventOffersState }> {
     if (!providerEventId) {
-      return [];
+      return {
+        offers: [],
+        state: { status: 'empty', newestObservedAt: null, freshSince: recentSince, truncated: false },
+      };
     }
 
-    // Split into two queries to bypass Supabase PostgREST's 1000-row page cap.
-    // A single query ordered by snapshot_at fills the 1000 slots with player-prop
-    // rows, silently dropping all game-level markets (ML, spread, total, 1H, F5,
-    // innings, team total). Separating by provider_participant_id guarantees both
-    // categories are always represented regardless of row counts.
-    const [gameLevelResult, playerPropResult] = await Promise.all([
-      // Game-level: ML, spread, totals, halves, innings, team totals (~200 rows max)
-      this.client
-        .from('provider_offers')
-        .select('*')
-        .eq('provider_event_id', providerEventId)
-        .gte('snapshot_at', recentSince)
-        .is('provider_participant_id', null)
-        .order('snapshot_at', { ascending: false })
-        .limit(1000),
-      // Player props: batting, pitching, etc. (~1000 rows, one snapshot cycle)
-      this.client
-        .from('provider_offers')
-        .select('*')
-        .eq('provider_event_id', providerEventId)
-        .gte('snapshot_at', recentSince)
-        .not('provider_participant_id', 'is', null)
-        .order('snapshot_at', { ascending: false })
-        .limit(1000),
-    ]);
-
-    if (gameLevelResult.error) {
-      throw new Error(
-        `Failed to load game-level offers: ${gameLevelResult.error.message}`,
-      );
-    }
-    if (playerPropResult.error) {
-      throw new Error(
-        `Failed to load player-prop offers: ${playerPropResult.error.message}`,
-      );
-    }
-
-    const offers = [
-      ...(gameLevelResult.data ?? []),
-      ...(playerPropResult.data ?? []),
-    ];
+    // CURRENT-offer semantics: read the canonical current projection
+    // (provider_offer_current), never the frozen quarantine view. A missing or
+    // stale projection is reported through `state`, not presented as current
+    // offers and not silently replaced by quarantine data (WORK-2026110705).
+    const current = await fetchCurrentEventOffers(
+      this.client,
+      providerEventId,
+      recentSince,
+    );
+    const state = current.state;
+    const offers = current.rows;
 
     if (offers.length === 0) {
-      return [];
+      return { offers: [], state };
     }
 
     const providerMarketKeys = Array.from(
@@ -8098,7 +8093,10 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
 
             return splitProviderBookKey(row.provider_key as string).bookKey;
           })
-          .filter((value): value is string => value.length > 0),
+          .filter(
+            (value): value is string =>
+              typeof value === 'string' && value.length > 0,
+          ),
       ),
     );
     const { data: bookAliases, error: bookAliasesError } =
@@ -8240,7 +8238,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       });
     }
 
-    return Array.from(grouped.values()).sort((left, right) => {
+    const sortedOffers = Array.from(grouped.values()).sort((left, right) => {
       const sportsbookCompare = (left.sportsbookName ?? '').localeCompare(
         right.sportsbookName ?? '',
       );
@@ -8255,7 +8253,82 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       if (participantCompare !== 0) return participantCompare;
       return (left.line ?? 0) - (right.line ?? 0);
     });
+    return { offers: sortedOffers, state };
   }
+}
+
+export type CurrentOfferRow = Database['public']['Tables']['provider_offer_current']['Row'];
+
+/**
+ * Reads CURRENT offers for one provider event from `provider_offer_current`
+ * (the canonical current projection). Two queries (game-level, player-prop)
+ * preserve the PostgREST 1000-row page-cap workaround. Rows older than
+ * `recentSince` are never returned as current; when only older rows exist the
+ * state is `stale`. A read error throws (never a silent empty list).
+ */
+/** PostgREST `max_rows` ceiling (supabase/config.toml); a full page may be clipped. */
+const CURRENT_OFFER_PAGE_LIMIT = 1000;
+
+export async function fetchCurrentEventOffers(
+  client: UnitTalkSupabaseClient,
+  providerEventId: string,
+  recentSince: string,
+): Promise<{ rows: CurrentOfferRow[]; state: EventOffersState }> {
+  const [gameLevelResult, playerPropResult] = await Promise.all([
+    client
+      .from('provider_offer_current')
+      .select('*')
+      .eq('provider_event_id', providerEventId)
+      .is('provider_participant_id', null)
+      .order('snapshot_at', { ascending: false })
+      .limit(CURRENT_OFFER_PAGE_LIMIT),
+    client
+      .from('provider_offer_current')
+      .select('*')
+      .eq('provider_event_id', providerEventId)
+      .not('provider_participant_id', 'is', null)
+      .order('snapshot_at', { ascending: false })
+      .limit(CURRENT_OFFER_PAGE_LIMIT),
+  ]);
+
+  if (gameLevelResult.error) {
+    throw new Error(
+      `Failed to load game-level offers: ${gameLevelResult.error.message}`,
+    );
+  }
+  if (playerPropResult.error) {
+    throw new Error(
+      `Failed to load player-prop offers: ${playerPropResult.error.message}`,
+    );
+  }
+
+  const all = [...(gameLevelResult.data ?? []), ...(playerPropResult.data ?? [])];
+  const newestObservedAt =
+    all
+      .map((row) => (typeof row.snapshot_at === 'string' ? row.snapshot_at : null))
+      .filter((value): value is string => value !== null)
+      .sort()
+      .at(-1) ?? null;
+  const fresh = all.filter(
+    (row) =>
+      typeof row.snapshot_at === 'string' &&
+      Date.parse(row.snapshot_at) >= Date.parse(recentSince),
+  );
+  const status: EventOffersState['status'] =
+    all.length === 0 ? 'empty' : fresh.length === 0 ? 'stale' : 'fresh';
+  return {
+    rows: fresh,
+    state: {
+      status,
+      newestObservedAt,
+      freshSince: recentSince,
+      // Either query returning a full page means the PostgREST row cap may have
+      // clipped the set: the offers are a sample, not the full event.
+      truncated:
+        (gameLevelResult.data?.length ?? 0) >= CURRENT_OFFER_PAGE_LIMIT ||
+        (playerPropResult.data?.length ?? 0) >= CURRENT_OFFER_PAGE_LIMIT,
+    },
+  };
 }
 
 function extractStartsAt(metadata: unknown): string | null {
@@ -8849,7 +8922,7 @@ export class DatabaseExecutionQualityRepository implements ExecutionQualityRepos
 
   async summarizeByProvider(sport?: string): Promise<ExecutionQualityReport[]> {
     let query = this.client
-      .from('provider_offers')
+      .from('provider_offer_history_compact')
       .select(
         'provider_key, sport_key, provider_market_key, line, is_opening, is_closing',
       );
@@ -8872,7 +8945,7 @@ export class DatabaseExecutionQualityRepository implements ExecutionQualityRepos
     providerKey: string,
   ): Promise<ExecutionQualityReport[]> {
     const { data, error } = await this.client
-      .from('provider_offers')
+      .from('provider_offer_history_compact')
       .select(
         'provider_key, sport_key, provider_market_key, line, is_opening, is_closing',
       )

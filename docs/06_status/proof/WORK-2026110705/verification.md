@@ -1,0 +1,112 @@
+# PROOF: WORK-2026110705
+
+MERGE_SHA: pending merge
+
+> Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command
+> actually executed and its real result before review. `post-merge-lane-close.yml`
+> binds the merge SHA; never write one here by hand.
+
+Issue: WORK-2026110705
+Tier: T1
+result: not_run
+
+## ASSERTIONS:
+
+- [x] `listRecentOffers` pages with `.range()` plus an `id` tie-break, so it returns up to the caller cap despite PostgREST's 1,000-row server clamp (db test proof 2b).
+- [x] A fresh current-offer read that fills a page is flagged `truncated` and never presented as complete (db test proof 5).
+- [x] Stale canonical data yields an explicit stale state, no offers, and no quarantine fallback; repository read errors surface instead of an empty list (db tests proofs 3, 4).
+- [x] Smart Form `describeOffersState` labels stale, truncated and empty states distinctly, and BetForm routes an empty list through it before "No live offers" (smart-form tests 132-134).
+
+## EVIDENCE:
+
+Command: `pnpm --filter @unit-talk/db exec tsx --test src/provider-offer-readers.test.ts`
+
+```
+ok 1 - WORK-2026110705 proof 1: current-offer read returns the canonical current projection and never a quarantine row
+ok 2 - WORK-2026110705 proof 2: historical opening/closing reads keep history semantics (provider_offer_history_compact), not the quarantine view
+ok 3 - WORK-2026110705 proof 2b: listRecentOffers reads provider_offer_history and returns up to the caller cap despite the 1000-row server clamp
+ok 4 - WORK-2026110705 proof 5: a current-offer read that fills a PostgREST page is flagged truncated, not presented as complete
+ok 5 - WORK-2026110705 proof 3: stale canonical data returns an explicit stale state, no offers, and no quarantine fallback
+ok 6 - WORK-2026110705 proof 4: a repository read error is surfaced, never a silent empty list
+# tests 6
+# pass 6
+# fail 0
+```
+
+Command: `pnpm --filter @unit-talk/smart-form test`
+
+```
+ok 132 - WORK-2026110705: stale offers state surfaces the last-observed timestamp, distinct from the generic empty message
+ok 133 - WORK-2026110705: truncated fresh offers are flagged partial; complete fresh and missing state are silent
+ok 134 - WORK-2026110705: BetForm routes an empty list through the offers state before falling back to "No live offers"
+# tests 230
+# suites 23
+# pass 230
+# fail 0
+```
+
+Command: `pnpm --filter @unit-talk/db type-check` and `pnpm --filter @unit-talk/smart-form type-check`
+
+```
+exit 0 (both)
+```
+
+## Verification
+
+Run on code head 5040cddd160009ea4d8845a841765ac6ea77a42d (merge of main into the fix commit a927b25f5); the db tests, smart-form tests and both type-checks above all exited 0. Model routing evidence is the reconciled sidecar written by `ops:lane-manifest write-reconciled-sidecar` (unverified-external-session, approved on PR comment 6731792481). Staging Writable DB proof and `verify` run in CI on the final head.
+
+## Staging live-DB proof (PM Option A)
+
+`apps/api/src/t1-proof-work-2026110705-provider-offer-reader-live.test.ts`, registered in
+`pnpm test:t1-proof:live` (run by CI's "Writable DB proof (staging only)" job) and classified in
+`docs/05_operations/db-writer-classification.json`. It drives the real `listRecentOffers`,
+`fetchCurrentEventOffers` and `describeOffersState` against the staging schema
+(`xskgrzbteyqdufktjrjx`) with run-namespaced fixtures that are deleted in `finally`:
+1,250 `provider_offer_history` rows across 3 shared `snapshot_at` values (paging past the
+1,000-row cap, `id` tie-break order, `limit` 1000/1001/1100 honoured, and a non-vacuity control
+that the pre-fix single `.limit(10000)` query is clipped), plus `provider_offer_current` events
+proving truncated / fresh / stale / empty states and their labels. Locally it skips (no
+`CI_FIXTURE_RUN_ID`); its real result is the CI job log on the PR head.
+
+## pnpm verify (local, literal result)
+
+Command: `pnpm verify` (= `pnpm verify:static && pnpm test:live-db`), run 2026-11-10 on the
+working tree of this commit.
+
+```
+verify:static — env:check, lint, type-check, build and every unit suite passed
+  (122 TAP summaries, all "# fail 0"; no "# fail N>0")
+test:live-db → pnpm test:db → pnpm ci:assert-staging
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1).
+  Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci
+  GitHub environment with CI_SUPABASE_* credentials.
+ELIFECYCLE Command failed with exit code 1.
+EXIT=1
+```
+
+`pnpm verify` therefore exits 1 locally, by design: its live-DB tail refuses any non-staging
+target and this host holds no staging credential. The static half is green; the live-DB half
+(`pnpm test:db` + `pnpm test:t1-proof:live`, including the new proof above) runs only in CI's
+staging job, whose exact-head result is the authoritative record.
+
+## CI staging result (exact head b0c9e321ad1cb63c561d2a374e8dab40ffde49ef)
+
+CI run 42752805377, job "Writable DB proof (staging only)" 129620266350: success; `verify`: success.
+`pnpm test:db` 9/9 pass; `pnpm test:t1-proof:live` includes:
+
+```
+ok 1 - WORK0705 staging: provider-offer readers page past the row cap and report explicit freshness state
+# {"namespace":"work0705-utv2-1630-42752805377-1-b72fe807","history":{"fixtureRows":1250,"distinctSnapshotAt":3,"legacySingleQueryRows":1000,"readerRows":1250,"cappedReads":[1000,1001,1100]},"current":{"truncated":{"fixtureRows":1050,"returned":1000,"state":"fresh","flag":true},"fresh":{"returned":3,"state":"fresh"},"stale":{"returned":0,"state":"stale"},"empty":{"returned":0,"state":"empty"}}}
+# tests 1 / pass 1 / fail 0 / skipped 0
+```
+
+`evidence.json` `runtime_proof` was harvested from that run's `ci-db-proof-receipt/v2` and job log
+(see its `harvest_method`). The follow-on commit adding it is proof-only; its own exact-head CI
+re-runs the same staging job.
+
+## Merge SHA Binding
+
+Merge SHA: pending merge
+PR: pending
+Execution SHA: 5040cddd160009ea4d8845a841765ac6ea77a42d
