@@ -47,6 +47,7 @@ Run on `6b0ca0e4979605f1db95610fb1c1749caedaaf3b`:
 - [x] `pnpm type-check`: exit 0.
 - [x] `pnpm test`: exit 0. Summed `# pass 7909`, `# fail 0`, no `not ok` line.
 - [x] `pnpm ops:preflight WORK-2026111101 --tier T2 ...`: verdict PASS.
+- [ ] `pnpm verify` (on `aa485f74d`, which differs from `6b0ca0e49` only by proof and the lane-manifest bind): exit 1. Every `verify:static` stage passed (db-client-boundary, sync-check, system-alignment, automation-coverage, env, lint, type-check, build, test, migration checks). It stopped at `test:live-db`, where `ci:assert-staging` refuses the loopback target (`REFUSED: target identity could not be resolved from its URL (host=127.0.0.1)`). The PR's required `verify` check, which runs in the `staging-ci` environment, is the authority.
 - [ ] `tsx scripts/audit-provider-scope.ts`: exit 1, with no drift added by this lane (above).
 
 ## Known gap

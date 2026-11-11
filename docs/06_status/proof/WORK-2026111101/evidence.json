@@ -1,0 +1,29 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026111101",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "6b0ca0e4979605f1db95610fb1c1749caedaaf3b",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm test",
+    "conclusion": "success",
+    "verified_source_sha": "6b0ca0e4979605f1db95610fb1c1749caedaaf3b",
+    "full_suite": {
+      "command": "pnpm test",
+      "pass": 7909,
+      "fail": 0,
+      "exit_code": 0
+    },
+    "type_check": "pnpm type-check exit 0",
+    "r_level": "PASS",
+    "note": "Documentation plus one audit allow-list line. Local pnpm verify passed verify:static and stopped at test:live-db, where ci:assert-staging refuses the loopback target; the PR's required verify check is the authority. The provider-scope audit exits 1 on main and on this head with the same 61 pre-existing drift hits; this lane adds none."
+  }
+}
