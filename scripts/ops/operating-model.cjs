@@ -15,19 +15,25 @@
 //
 // Safety posture (all enforced by operating-model.test.ts):
 //   - Default is LEGACY. Lean applies only while OPERATING_MODEL=lean AND
-//     LEAN_MODE_ACTIVATED_AT is a valid timestamp (two keys). Mode is global and
-//     evaluated on every run: setting OPERATING_MODEL to anything else returns
-//     every unmerged PR to the legacy gate immediately (emergency stop).
+//     LEAN_MODE_ACTIVATED_AT is a strict ISO-8601 timestamp that is not in the
+//     future (two keys). Mode is global and evaluated on every check RUN:
+//     setting OPERATING_MODEL to anything else makes the NEXT run of each
+//     check legacy. It does NOT invalidate a Merge Gate run that already
+//     concluded green under lean - that success stays on the PR head until the
+//     check reruns. Rollback therefore requires rerunning Merge Gate on every
+//     open lean PR (one-command procedure in LEAN_MODE_ACTIVATION.md).
 //   - Classification is an ALLOW-LIST. A file is Standard only if it matches a
 //     named Standard rule and passes that rule's content checks. Everything
 //     else - unknown paths, generated files, snapshots, governance docs, agent
 //     instructions, nested app code - is Protected. Fail-closed by construction.
 //   - Escalation only goes up. A trusted reviewer's RISK-CLASS: PROTECTED line
 //     anywhere on the PR is sticky.
-//   - Independent Review passes only on a TRUSTED reviewer pass bound to the
-//     exact head that is newer than every P0/P1 finding ever raised on the PR.
-//     Resolving a thread, dismissing a review or editing a bot comment never
-//     clears a finding by itself.
+//   - Independent Review passes only on the trusted connector's anchored
+//     codex-review-state:v1 summary, from a Bot account, bound to the exact
+//     head, status completed, has_any_findings=false. A bare review object
+//     never passes. Any P0/P1 finding raised at the head blocks that head for
+//     good (a new commit plus a fresh clean summary is required); resolving a
+//     thread, deleting a comment or editing a bot comment never clears one.
 
 const TRUSTED_REVIEWER_LOGINS_DEFAULT = Object.freeze(['chatgpt-codex-connector[bot]']);
 const AUTHORIZED_REVIEWERS_DEFAULT = Object.freeze(['griff843']);
@@ -35,29 +41,38 @@ const OPERATING_MODULE_PATH = 'scripts/ops/operating-model.cjs';
 
 // ── Operating mode ─────────────────────────────────────────────────────────
 
-function parseTime(value) {
-  if (typeof value !== 'string' || value.trim() === '') return null;
+// Strict ISO-8601: a calendar date, optionally with a time and an explicit
+// zone. Anything Date.parse would accept loosely ("1", "Dec 1") is rejected.
+const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2}))?$/u;
+
+function parseActivation(value, now) {
+  if (typeof value !== 'string' || !ISO_TIMESTAMP.test(value.trim())) return null;
   const ms = Date.parse(value.trim());
-  return Number.isFinite(ms) ? ms : null;
+  if (!Number.isFinite(ms)) return null;
+  if (ms > now) return null; // a future activation is not armed
+  return ms;
 }
 
 /**
  * Decide whether PRs are evaluated under the lean model or the legacy model.
  *
- * Global, not per PR: rollback (OPERATING_MODEL != lean) immediately returns
- * every unmerged PR - including ones opened while lean was active - to the
- * legacy gate, which they cannot satisfy without legacy artifacts. That is the
- * intended emergency stop. Anything malformed resolves to legacy.
+ * Global, not per PR: after rollback (OPERATING_MODEL != lean) every LATER
+ * check run - including on PRs opened while lean was active - uses the legacy
+ * gate, which lean PRs cannot satisfy without legacy artifacts. Check runs that
+ * already concluded are not re-evaluated by this function; Merge Gate must be
+ * rerun on open lean PRs (see LEAN_MODE_ACTIVATION.md, Rollback). Anything
+ * malformed, or an activation time in the future, resolves to legacy.
  */
-function resolveOperatingMode({ flag, activatedAt } = {}) {
+function resolveOperatingMode({ flag, activatedAt, now } = {}) {
   const normalizedFlag = typeof flag === 'string' ? flag.trim().toLowerCase() : '';
   if (normalizedFlag !== 'lean') {
     return { mode: 'legacy', reason: 'OPERATING_MODEL is not "lean"; legacy controls apply to every PR.' };
   }
-  if (parseTime(activatedAt) === null) {
-    return { mode: 'legacy', reason: 'LEAN_MODE_ACTIVATED_AT is unset or invalid; lean mode is not armed (fail-closed).' };
+  const nowMs = Number.isFinite(now) ? now : Date.now();
+  if (parseActivation(activatedAt, nowMs) === null) {
+    return { mode: 'legacy', reason: 'LEAN_MODE_ACTIVATED_AT is unset, not a strict ISO-8601 date, or in the future; lean mode is not armed (fail-closed).' };
   }
-  return { mode: 'lean', reason: 'OPERATING_MODEL=lean and LEAN_MODE_ACTIVATED_AT is set.' };
+  return { mode: 'lean', reason: 'OPERATING_MODEL=lean and LEAN_MODE_ACTIVATED_AT is a past ISO-8601 timestamp.' };
 }
 
 // ── Risk classification (Standard allow-list; everything else Protected) ────
@@ -96,7 +111,10 @@ const DOCS_EXCLUDED = [
   /^docs\/mission\//u,
   /^docs\/05_operations\//u,
   /^docs\/06_status\/(?:lanes|proof|readiness)\//u,
-  /(?:CONTRACT|POLICY|SPEC|AUTHORITY|RUNBOOK|CODEOWNERS|STANDING|INVARIANT|CHARTER|READINESS)/u,
+  // Case-insensitive substring: backup-dr-policy, environment_contract,
+  // *_spec, charter, networking ... all stay Protected.
+  /(?:contract|policy|policies|spec|authority|runbook|codeowners|standing|invariant|charter|readiness|environment|networking|network|backup|disaster|recovery|security|secret|governance|guardrail)/iu,
+  /(?:^|[/._-])dr(?:[/._-]|$)/iu,
   /(?:^|\/)intent\.md$/iu,
   /(?:^|\/)(?:CLAUDE|AGENTS)\.md$/iu,
 ];
@@ -160,10 +178,52 @@ const WEAKENING_ADDITION = /(?:\b(?:it|test|describe|suite)\.(?:skip|only|todo)\
 // UI component capability markers. Scanned over the WHOLE head file so an
 // innocuous-looking edit to a component that already submits, fetches or
 // authenticates is Protected.
-const UI_FORBIDDEN = /(?:\bfetch\s*\(|['"]use server['"]|\bsupabase\b|\bcreateClient\b|next-auth|\bsign(?:In|Out)\s*\(|process\.env|import\.meta\.env|\.rpc\s*\(|\.from\s*\(|\.(?:insert|upsert|update|delete)\s*\(|dangerouslySetInnerHTML|\beval\s*\(|\bnew\s+Function\b|XMLHttpRequest|WebSocket|EventSource|sendBeacon|document\.cookie|localStorage|sessionStorage|\bformAction\b|\baction\s*=\s*\{|<form\b|\baxios\b|\buseMutation\b|\bmutate(?:Async)?\s*\(|window\.location\s*=|\bwindow\.open\s*\()/u;
+// Bare global identifiers (fetch, globalThis, navigator, ...) and computed
+// member access on browser globals are forbidden outright: `fetch.call(...)`,
+// `globalThis['fetch']`, `navigator['sendB'+'eacon']`, `document['cookie']`
+// cannot be told apart from harmless use by a regex, so any of them is
+// Protected.
+const UI_FORBIDDEN = /(?:\bfetch\b|\bglobalThis\b|\bnavigator\b|\b(?:window|self|top|parent|frames|opener|document|globalThis)\s*\[|\bdocument\s*\.\s*cookie\b|\bcreateElement\s*\(\s*(?:['"`]\s*form\b|[^'"`\s])|\bReflect\b|\bconstructor\b|\bFunction\s*\(|\bimport\s*\.\s*meta\b|\brequire\b|use server|\bsupabase\b|\bcreateClient\b|next-auth|\bsign(?:In|Out)\s*\(|process\.env|import\.meta\.env|\.rpc\s*\(|\.from\s*\(|\.(?:insert|upsert|update|delete)\s*\(|dangerouslySetInnerHTML|\beval\s*\(|\bnew\s+Function\b|XMLHttpRequest|WebSocket|EventSource|sendBeacon|document\.cookie|localStorage|sessionStorage|\bformAction\b|\baction\s*=\s*\{|<form\b|\baxios\b|\buseMutation\b|\bmutate(?:Async)?\s*\(|window\.location\s*=|\bwindow\.open\s*\()/u;
 const UI_ALLOWED_IMPORTS = /^(?:react|react-dom|next\/link|next\/image|next\/navigation|next\/dynamic|next-themes|clsx|classnames|lucide-react|class-variance-authority|tailwind-merge|framer-motion|recharts|@radix-ui\/[a-z0-9-]+|@\/components\/[A-Za-z0-9_./-]+|@\/lib\/(?:types|utils|cn|format|formatters|site-config))$/u;
-const IMPORT_SPECIFIERS = /(?:\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)|\bimport\s+['"]([^'"]+)['"]|\brequire\s*\(\s*['"]([^'"]+)['"]\s*\))/gu;
-const DYNAMIC_LOAD = /(?:\bimport\s*\(\s*[^'"\s)]|\brequire\s*\(\s*[^'"\s)])/u;
+// Whitespace and comments may legally sit between `from`/`import(` and the
+// specifier; tolerate them so a comment cannot hide the specifier.
+const GAP = String.raw`(?:\s|/\*[\s\S]*?\*/|//[^\n]*(?:\n|$))*`;
+const IMPORT_SPECIFIERS = new RegExp(String.raw`(?:\bfrom${GAP}(['"])([^'"\n]*)\1|\bimport${GAP}\(${GAP}(['"])([^'"\n]*)\3|\bimport${GAP}(['"])([^'"\n]*)\5|\brequire${GAP}\(${GAP}(['"])([^'"\n]*)\7)`, 'gu');
+const DYNAMIC_LOAD = new RegExp(String.raw`(?:\bimport${GAP}\(${GAP}[^'"\s)/]|\brequire${GAP}\(${GAP}[^'"\s)/]|\bfrom${GAP}\x60)`, 'u');
+// CSS that can load remote resources (@import, url() with a scheme or a
+// protocol-relative / escaped target, legacy expression()).
+const CSS_FORBIDDEN = /(?:@import\b|\burl\s*\(\s*['"]?\s*(?:[a-z][a-z0-9+.-]*:|\/\/|\\)|\bexpression\s*\(|\bbehavior\s*:|-moz-binding)/iu;
+// Newly added unit tests run in CI with secrets. Any process, network, FS,
+// child-process, dynamic-code or DB-client reference is Protected.
+const TEST_FORBIDDEN = /(?:\bprocess\b|\bglobalThis\b|\bfetch\b|\bXMLHttpRequest\b|\bWebSocket\b|\bEventSource\b|\beval\b|\bFunction\s*\(|\bconstructor\b|\bReflect\b|\bimport\s*\.\s*meta\b|\bcreateDatabaseClient\b|\bcreate[A-Za-z]*Client\b|\b[Ss]upabase|\bpostgres\b|\bnew\s+(?:Pool|Client)\b|@unit-talk\/db\b|['"]pg['"])/u;
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- CommonJS policy module
+const NODE_BUILTINS = new Set(require('node:module').builtinModules.map(name => name.replace(/^node:/u, '')));
+const TEST_ALLOWED_BUILTINS = new Set(['test', 'assert', 'assert/strict']);
+
+function importSpecifiers(content) {
+  const specifiers = [];
+  for (const match of String(content).matchAll(IMPORT_SPECIFIERS)) {
+    specifiers.push(match[2] ?? match[4] ?? match[6] ?? match[8]);
+  }
+  return specifiers.filter(spec => spec !== undefined);
+}
+
+/** Problems with a newly added unit test's content (fail-closed). */
+function scanTestContent(content) {
+  const problems = [];
+  const text = String(content);
+  const marker = text.match(TEST_FORBIDDEN);
+  if (marker) problems.push(`process/network/FS/DB reference \`${marker[0]}\``);
+  if (DYNAMIC_LOAD.test(text)) problems.push('non-literal import()/require()');
+  for (const specifier of importSpecifiers(text)) {
+    const bare = specifier.replace(/^node:/u, '');
+    if (specifier.startsWith('node:') || NODE_BUILTINS.has(bare) || NODE_BUILTINS.has(bare.split('/')[0])) {
+      if (!TEST_ALLOWED_BUILTINS.has(bare)) problems.push(`imports Node built-in \`${specifier}\``);
+    }
+    if (specifier.includes('\\') || specifier.split('/').includes('..')) problems.push(`import \`${specifier}\` escapes its directory`);
+  }
+  return problems;
+}
 
 function posixDirname(p) {
   const index = p.lastIndexOf('/');
@@ -186,14 +246,26 @@ function resolveRelative(fromFile, specifier) {
 function scanUiContent(fileName, content) {
   const problems = [];
   const root = UI_COMPONENT_DIRS.find(dir => fileName.startsWith(dir));
+  if (/\.css$/u.test(fileName)) {
+    const css = content.match(CSS_FORBIDDEN);
+    if (css) problems.push(`CSS loads an external resource \`${css[0]}\``);
+  }
   if (UI_FORBIDDEN.test(content)) {
     const match = content.match(UI_FORBIDDEN);
     problems.push(`capability marker \`${match && match[0]}\``);
   }
   if (DYNAMIC_LOAD.test(content)) problems.push('non-literal import()/require()');
-  for (const match of content.matchAll(IMPORT_SPECIFIERS)) {
-    const specifier = match[1] || match[2] || match[3] || match[4];
-    if (!specifier) continue;
+  for (const specifier of importSpecifiers(content)) {
+    if (!specifier) {
+      problems.push('empty import specifier');
+      continue;
+    }
+    // `..` anywhere (alias or relative) and escapes are rejected outright:
+    // `@/components/../app/actions/x` must not ride the alias allow-list.
+    if (specifier.includes('\\') || specifier.split('/').includes('..')) {
+      problems.push(`import \`${specifier}\` contains a parent-directory segment or escape`);
+      continue;
+    }
     if (specifier.startsWith('.')) {
       const resolved = resolveRelative(fileName, specifier);
       if (!resolved || !root || !(`${resolved}/`.startsWith(root) || resolved.startsWith(root))) {
@@ -280,8 +352,15 @@ function classifyRisk({ files } = {}) {
     const before = reasons.length;
 
     if (rule === 'test-addition') {
-      if (status === 'renamed' || status === 'copied') {
-        protect(name, 'test-renamed', 'Renamed/copied test files are not add-only.');
+      // Only a NEWLY ADDED test file can be Standard. Inserting `/*`...`*/`,
+      // `return;` or a shadowing `const test =` into an existing test removes
+      // no line yet disables assertions, so any modified test is Protected.
+      if (status !== 'added') {
+        protect(name, 'test-not-new', `Test file status is "${status}"; only newly added test files are Standard (modifying an existing test can disable assertions without removing a line).`);
+      }
+      const testProblems = scanTestContent(addedText);
+      if (testProblems.length) {
+        protect(name, 'test-capability', testProblems.join('; '));
       }
       if (removed.length > 0) {
         protect(name, 'test-lines-removed', `${removed.length} line(s) removed from a test file; Standard tests are add-only (assertions cannot be removed or rewritten).`);
@@ -331,9 +410,17 @@ function needsHeadContent(file) {
 
 // ── Independent review ─────────────────────────────────────────────────────
 
-const P0_P1_FINDING = /(?:!\[P[01][^\]]*\]|\bP[01]\b\s*(?:Badge|:|-|\])|\[P[01]\]|\bP[01]\s+(?:finding|issue|bug|blocker)\b)/iu;
+// Severity markers the connector (or a human-styled bot body) may use: badge
+// images, **P1**, (P1), [P1], P1:, "P1 finding", "Priority 1". Any standalone
+// P0/P1 token counts; a false positive costs one more review, a false
+// negative lets a P1 merge.
+const P0_P1_FINDING = /(?:(?<![A-Za-z0-9_])P[01](?![A-Za-z0-9_])|\bpriority[\s:_-]*[01]\b|\bsev(?:erity)?[\s:_-]*[01]\b)/iu;
 const RISK_CLASS_PROTECTED_LINE = /^\s*RISK-CLASS:\s*PROTECTED\s*$/imu;
 const CODEX_STATE_MARKER = 'codex-review-state:v1';
+// The connector's summary comment has a fixed shape: its body STARTS with the
+// summary header comment, immediately followed by the state comment. A marker
+// anywhere else (quoted, echoed, appended) is not a summary.
+const CODEX_SUMMARY_HEAD = /^<!-- codex-pull-request-review-summary -->\r?\n<!-- codex-review-state:v1 (\{[^\n]*?\}) -->(?:\r?\n|$)/u;
 
 function normLogin(login) {
   return String(login || '').trim().toLowerCase().replace(/\[bot\]$/u, '');
@@ -361,18 +448,27 @@ function editedByOther(node, trusted) {
   return Boolean(editor) && !trusted.has(normLogin(editor));
 }
 
+/**
+ * Parse the connector summary state. Returns null unless the body has the
+ * exact anchored shape and exactly one state marker.
+ */
 function parseCodexState(body) {
   const text = String(body || '');
-  const index = text.indexOf(CODEX_STATE_MARKER);
-  if (index < 0) return null;
-  const start = text.indexOf('{', index);
-  const end = text.indexOf('-->', index);
-  if (start < 0 || end < 0 || end < start) return null;
+  if (text.split(CODEX_STATE_MARKER).length !== 2) return null;
+  const match = text.match(CODEX_SUMMARY_HEAD);
+  if (!match) return null;
   try {
-    return JSON.parse(text.slice(start, end).trim());
+    const parsed = JSON.parse(match[1]);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
   } catch {
     return null;
   }
+}
+
+function commitOid(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  return value.oid || null;
 }
 
 /**
@@ -381,18 +477,23 @@ function parseCodexState(body) {
  * reviews:  [{ id|databaseId, user:{login,type} | author:{login,__typename}, commit_id|commit:{oid},
  *              state, body, submitted_at|submittedAt, editor? }]
  * threads:  [{ isResolved, comments:[{ author:{login,__typename}, body, createdAt, editor?,
- *              pullRequestReview?:{ databaseId, submittedAt } }] }]
- * comments: issue comments [{ user|author, body, updated_at|updatedAt, editor? }] - only the
- *           connector's codex-review-state:v1 summary is read.
+ *              originalCommit?:{oid}, pullRequestReview?:{ databaseId, commit?:{oid} } }] }]
+ * comments: issue comments [{ user|author, body, updatedAt|updated_at, editor? }] - only the
+ *           connector's anchored codex-review-state:v1 summary is read.
  *
- * PASS requires a head-bound clean pass P from a trusted bot (a review at the
- * head with no P0/P1 of its own, or the connector summary reporting a completed
- * review of the head with has_any_findings=false) such that:
- *   - no P0/P1 thread is unresolved;
- *   - every P0/P1 finding ever raised (thread or review body, any head, any
- *     state including dismissed, resolved or not) predates P and is not part of P;
- *   - no trusted artifact was edited by a non-trusted account.
- * Everything else fails closed.
+ * PASS requires ALL of:
+ *   - a trusted Bot connector summary (anchored marker, untampered) bound to
+ *     the exact head with status=completed, has_any_findings=false and
+ *     has_unresolved_findings=false. A bare review object never passes, and a
+ *     missing summary is a FAIL;
+ *   - no connector summary for the head reporting any finding;
+ *   - no P0/P1 finding (any trusted comment in any thread, or a trusted review
+ *     body / CHANGES_REQUESTED) raised at the current head, resolved or not -
+ *     a finding at head H can only be cleared by a NEW head commit with a
+ *     fresh clean summary. A finding whose commit cannot be determined is
+ *     treated as raised at the head;
+ *   - no unresolved P0/P1 thread at any head;
+ *   - no trusted artifact edited by a non-trusted account.
  */
 function evaluateIndependentReview({ reviews, threads, comments, headSha, prAuthorLogin, lastPusherLogin, trustedReviewers } = {}) {
   const trusted = trustedSet(trustedReviewers);
@@ -401,83 +502,83 @@ function evaluateIndependentReview({ reviews, threads, comments, headSha, prAuth
   if (!headSha) {
     return { pass: false, reasons: ['Head SHA is unavailable; cannot bind a review to it.'], reviewers: [] };
   }
-  const isTrustedActor = node => actorIsBot(node) && trusted.has(normLogin(actorLogin(node))) && !implementers.has(normLogin(actorLogin(node)));
+  const isTrustedLogin = node => trusted.has(normLogin(actorLogin(node)));
+  const isTrustedActor = node => actorIsBot(node) && isTrustedLogin(node) && !implementers.has(normLogin(actorLogin(node)));
 
-  const reviewRows = (Array.isArray(reviews) ? reviews : []).filter(Boolean).map(review => ({
-    raw: review,
-    id: review.databaseId !== undefined ? review.databaseId : review.id,
-    commit: review.commit_id || (review.commit && review.commit.oid) || null,
-    state: String(review.state || ''),
-    body: String(review.body || ''),
-    time: parseTime(review.submitted_at || review.submittedAt),
-    trustedActor: isTrustedActor(review),
-    tampered: editedByOther(review, trusted),
-  }));
-  const reviewTime = new Map(reviewRows.filter(row => row.id !== undefined && row.id !== null).map(row => [String(row.id), row.time]));
-
-  const findings = [];
+  const reviewCommit = new Map();
+  let tampered = 0;
+  let findingsAtHead = 0;
   let unresolved = 0;
-  for (const row of reviewRows) {
-    if (!row.trustedActor) continue;
-    if (row.tampered) {
-      findings.push({ source: 'review-body-edited', reviewId: row.id, time: Infinity });
-    } else if (P0_P1_FINDING.test(row.body) || row.state === 'CHANGES_REQUESTED') {
-      findings.push({ source: 'review-body', reviewId: row.id, time: row.time === null ? Infinity : row.time });
-    }
-  }
-  for (const thread of Array.isArray(threads) ? threads : []) {
-    const first = thread && Array.isArray(thread.comments) ? thread.comments[0] : null;
-    if (!first || !trusted.has(normLogin(actorLogin(first)))) continue;
-    const tampered = editedByOther(first, trusted);
-    if (!tampered && !P0_P1_FINDING.test(String(first.body || ''))) continue;
-    const reviewId = first.pullRequestReview ? first.pullRequestReview.databaseId : undefined;
-    const time = reviewId !== undefined && reviewTime.has(String(reviewId))
-      ? reviewTime.get(String(reviewId))
-      : parseTime(first.pullRequestReview && first.pullRequestReview.submittedAt) ?? parseTime(first.createdAt);
-    findings.push({ source: tampered ? 'thread-edited' : 'thread', reviewId, time: tampered || time === null ? Infinity : time });
-    if (!thread.isResolved) unresolved += 1;
-  }
 
-  const findingReviewIds = new Set(findings.map(finding => String(finding.reviewId)).filter(id => id !== 'undefined'));
-  const passes = [];
-  for (const row of reviewRows) {
-    if (!row.trustedActor || row.tampered || row.commit !== headSha || row.time === null) continue;
-    if (row.state !== 'COMMENTED' && row.state !== 'APPROVED') continue;
-    if (P0_P1_FINDING.test(row.body) || findingReviewIds.has(String(row.id))) continue;
-    passes.push({ kind: 'review', reviewId: row.id, time: row.time, login: normLogin(actorLogin(row.raw)) });
-  }
-  for (const comment of Array.isArray(comments) ? comments : []) {
-    if (!comment || !isTrustedActor(comment)) continue;
-    const state = parseCodexState(comment.body);
-    if (!state) continue;
-    const code = state.code_review || {};
-    if (editedByOther(comment, trusted)) {
-      findings.push({ source: 'summary-edited', time: Infinity });
+  for (const review of (Array.isArray(reviews) ? reviews : []).filter(Boolean)) {
+    const id = review.databaseId !== undefined ? review.databaseId : review.id;
+    const commit = review.commit_id || commitOid(review.commit);
+    if (id !== undefined && id !== null) reviewCommit.set(String(id), commit);
+    // Findings are counted for any account using a trusted login (fail-closed).
+    if (!isTrustedLogin(review)) continue;
+    if (editedByOther(review, trusted)) {
+      tampered += 1;
       continue;
     }
+    const isFinding = P0_P1_FINDING.test(String(review.body || '')) || String(review.state || '') === 'CHANGES_REQUESTED';
+    if (isFinding && (!commit || commit === headSha)) findingsAtHead += 1;
+  }
+
+  for (const thread of Array.isArray(threads) ? threads : []) {
+    const threadComments = thread && Array.isArray(thread.comments) ? thread.comments : [];
+    let threadHasFinding = false;
+    for (const comment of threadComments) {
+      if (!comment || !isTrustedLogin(comment)) continue;
+      if (editedByOther(comment, trusted)) {
+        tampered += 1;
+        threadHasFinding = true;
+        continue;
+      }
+      if (!P0_P1_FINDING.test(String(comment.body || ''))) continue;
+      threadHasFinding = true;
+      const review = comment.pullRequestReview || {};
+      const commit = commitOid(comment.originalCommit)
+        || commitOid(review.commit)
+        || (review.databaseId !== undefined ? reviewCommit.get(String(review.databaseId)) : null)
+        || null;
+      if (!commit || commit === headSha) findingsAtHead += 1;
+    }
+    if (threadHasFinding && !thread.isResolved) unresolved += 1;
+  }
+
+  let cleanSummaries = 0;
+  const reviewers = new Set();
+  for (const comment of Array.isArray(comments) ? comments : []) {
+    if (!comment || !isTrustedLogin(comment)) continue;
+    const state = parseCodexState(comment.body);
+    if (!state) continue;
+    if (!isTrustedActor(comment)) continue; // a user or implementer with the login: ignored, never a pass
+    if (editedByOther(comment, trusted)) {
+      tampered += 1;
+      continue;
+    }
+    const code = state.code_review && typeof state.code_review === 'object' ? state.code_review : {};
     if (code.commit_sha !== headSha) continue;
-    if (code.has_unresolved_findings === true) {
-      reasons.push('The connector summary reports unresolved findings at the current head.');
+    if (code.has_any_findings !== false || code.has_unresolved_findings === true) {
+      if (code.has_any_findings === true || code.has_unresolved_findings === true) findingsAtHead += 1;
+      continue;
     }
-    const time = parseTime(comment.updatedAt || comment.updated_at);
-    if (code.status === 'completed' && code.has_any_findings === false && time !== null) {
-      passes.push({ kind: 'summary', reviewId: undefined, time, login: normLogin(actorLogin(comment)) });
+    if (code.status === 'completed' && code.has_unresolved_findings === false) {
+      cleanSummaries += 1;
+      reviewers.add(normLogin(actorLogin(comment)));
     }
   }
 
+  if (tampered > 0) reasons.push(`${tampered} trusted review artifact(s) were edited by a non-trusted account; they can never count as clean.`);
   if (unresolved > 0) reasons.push(`${unresolved} unresolved P0/P1 finding thread(s) from a trusted reviewer remain.`);
-
-  const latest = passes.reduce((best, candidate) => (!best || candidate.time > best.time ? candidate : best), null);
-  if (!latest) {
-    reasons.push(`No clean pass by a trusted reviewer identity (${[...trusted].join(', ')}) is bound to the current head ${headSha.slice(0, 12)}. Request one with an "@codex review" comment; the connector's review or summary reruns this check.`);
-  } else {
-    const stale = findings.filter(finding => !(finding.time < latest.time) || (finding.reviewId !== undefined && String(finding.reviewId) === String(latest.reviewId)));
-    if (stale.length > 0) {
-      reasons.push(`${stale.length} P0/P1 finding(s) (or edited trusted artifacts) are not followed by a later clean trusted review of the current head; resolving a thread does not clear it.`);
-    }
+  if (findingsAtHead > 0) {
+    reasons.push(`${findingsAtHead} P0/P1 finding(s) were raised at the current head ${headSha.slice(0, 12)} (or at an unknown commit); resolving them does not clear them. Push a new commit and obtain a fresh clean connector summary for it.`);
+  }
+  if (cleanSummaries === 0) {
+    reasons.push(`No completed, finding-free connector summary (codex-review-state:v1) from a trusted reviewer identity (${[...trusted].join(', ')}) is bound to the current head ${headSha.slice(0, 12)}. A review object alone never passes. Request one with an "@codex review" comment.`);
   }
 
-  return { pass: reasons.length === 0, reasons, reviewers: [...new Set(passes.map(pass => pass.login))] };
+  return { pass: reasons.length === 0, reasons, reviewers: [...reviewers] };
 }
 
 /**
@@ -554,7 +655,7 @@ const REVIEW_THREADS_QUERY = `
           nodes {
             isResolved
             comments(first: 100) {
-              nodes { body createdAt author { __typename login } editor { login } pullRequestReview { databaseId submittedAt } }
+              nodes { body createdAt author { __typename login } editor { login } originalCommit { oid } pullRequestReview { databaseId submittedAt commit { oid } } }
             }
           }
         }
@@ -701,6 +802,8 @@ async function validateHeadBoundApproval({ github, owner, repo, prNumber, headSh
 
 module.exports = {
   OPERATING_MODULE_PATH,
+  parseCodexState,
+  scanTestContent,
   TRUSTED_REVIEWER_LOGINS_DEFAULT,
   AUTHORIZED_REVIEWERS_DEFAULT,
   UI_COMPONENT_DIRS,

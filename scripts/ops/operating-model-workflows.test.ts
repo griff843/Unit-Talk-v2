@@ -31,7 +31,8 @@ function findStep(workflow: Doc, jobId: string, stepName: string): Doc {
 
 const HEAD = 'c'.repeat(40);
 const BASE = 'd'.repeat(40);
-const ACTIVATED = '2026-12-01T00:00:00Z';
+// Must be in the past: a future LEAN_MODE_ACTIVATED_AT disarms lean.
+const ACTIVATED = '2026-01-01T00:00:00Z';
 const CODEX_GQL = 'chatgpt-codex-connector';
 const DOC = 'docs/03_product/notes.md';
 
@@ -241,11 +242,12 @@ test('lean inputs are repo variables; no rollback window variable remains', () =
   }
 });
 
-test('required-check-refresh retries Independent Review and Merge Gate on a review AND on the connector summary comment', () => {
+test('required-check-refresh: Independent Review target and signals exist only behind the lean check', () => {
   const text = readWorkflowText('required-check-refresh.yml');
   assert.ok(text.includes("workflowId: 'independent-review.yml'"));
   assert.ok(text.includes("targets: ['independent', 'merge']"));
-  assert.ok(text.includes("body.includes('codex-review-state:v1')) targets.push('independent', 'merge')"));
+  assert.ok(!text.includes("body.includes('codex-review-state:v1')"), 'raw substring signal is gone');
+  assert.ok(text.includes('operatingModel.parseCodexState(body)'));
 });
 
 // ── Missing module on base => legacy, everywhere ────────────────────────────
@@ -319,11 +321,11 @@ test('gate matrix: under lean, an approved T1 lane PR touching Protected paths s
   const noReview = await gate(fixture);
   assert.equal(noReview.failures.length, 1);
   assert.match(noReview.failures[0]!, /Independent Review/);
-  assert.deepEqual((await gate({ ...fixture, reviews: [trustedReview()] })).failures, []);
+  assert.deepEqual((await gate({ ...fixture, summaries: [cleanSummary()] })).failures, []);
 });
 
 test('gate matrix: lean Standard needs no manifest, tier label, scope-override or pm-verdict', async () => {
-  assert.deepEqual((await gate({ branch: 'claude/standard-change', env: LEAN_ENV, reviews: [trustedReview()] })).failures, []);
+  assert.deepEqual((await gate({ branch: 'claude/standard-change', env: LEAN_ENV, summaries: [cleanSummary()] })).failures, []);
   assert.deepEqual((await gate({ branch: 'claude/standard-change', env: LEAN_ENV, summaries: [cleanSummary()] })).failures, [], 'clean PR passes on connector summary');
 });
 
@@ -333,31 +335,36 @@ test('gate matrix: lean Standard is blocked without a trusted head-bound pass, b
   assert.match(none.failures[0]!, /Independent Review/);
   assert.equal((await gate({ branch: 'claude/standard-change', env: LEAN_ENV, reviews: [trustedReview('e'.repeat(40))] })).failures.length, 1);
   assert.equal((await gate({ branch: 'claude/standard-change', env: LEAN_ENV, summaries: [cleanSummary('e'.repeat(40))] })).failures.length, 1);
-  assert.equal((await gate({ branch: 'claude/standard-change', env: LEAN_ENV, reviews: [trustedReview()], liveHead: 'f'.repeat(40) })).failures.length, 1);
+  assert.equal((await gate({ branch: 'claude/standard-change', env: LEAN_ENV, summaries: [cleanSummary()], liveHead: 'f'.repeat(40) })).failures.length, 1);
 });
 
-test('gate matrix (adversarial): an author-resolved P1 thread does not clear without a later clean pass', async () => {
+test('gate matrix (adversarial): a P1 at the head is never cleared at that head; a new head with a fresh clean summary clears it', async () => {
   const findingReview = trustedReview(HEAD, { databaseId: 10, body: 'Here are some automated review suggestions.' });
   const resolvedOnly = await gate({ branch: 'claude/standard-change', env: LEAN_ENV, reviews: [findingReview], threads: [p1Thread(true)] });
   assert.equal(resolvedOnly.failures.length, 1);
   assert.match(resolvedOnly.failures[0]!, /Independent Review/);
-  const laterPass = await gate({ branch: 'claude/standard-change', env: LEAN_ENV, reviews: [findingReview], threads: [p1Thread(true)], summaries: [cleanSummary()] });
-  assert.deepEqual(laterPass.failures, []);
+  const sameHeadSummary = await gate({ branch: 'claude/standard-change', env: LEAN_ENV, reviews: [findingReview], threads: [p1Thread(true)], summaries: [cleanSummary()] });
+  assert.equal(sameHeadSummary.failures.length, 1, 'later clean summary at the SAME head does not clear a finding at that head');
+  const oldHeadReview = trustedReview(BASE, { databaseId: 10, body: 'Here are some automated review suggestions.' });
+  const newHead = await gate({ branch: 'claude/standard-change', env: LEAN_ENV, reviews: [oldHeadReview], threads: [p1Thread(true)], summaries: [cleanSummary()] });
+  assert.deepEqual(newHead.failures, []);
+  const deleted = await gate({ branch: 'claude/standard-change', env: LEAN_ENV, reviews: [findingReview] });
+  assert.equal(deleted.failures.length, 1, 'deleting the P1 thread and summary leaves only a review object: FAIL');
 });
 
 test('gate matrix: lean Standard is blocked by governance:pause', async () => {
-  const result = await gate({ branch: 'claude/standard-change', env: LEAN_ENV, reviews: [trustedReview()], labels: ['governance:pause'] });
+  const result = await gate({ branch: 'claude/standard-change', env: LEAN_ENV, summaries: [cleanSummary()], labels: ['governance:pause'] });
   assert.equal(result.failures.length, 1);
   assert.match(result.failures[0]!, /governance:pause/);
 });
 
 test('gate matrix: lean Protected requires t1-approved and a head-bound pm-verdict in addition to review', async () => {
   const base = { branch: 'claude/protected-change', env: LEAN_ENV, files: [PROTECTED_FILE] };
-  const reviewOnly = await gate({ ...base, reviews: [trustedReview()] });
+  const reviewOnly = await gate({ ...base, summaries: [cleanSummary()] });
   assert.equal(reviewOnly.failures.length, 1);
   assert.match(reviewOnly.failures[0]!, /t1-approved/);
-  assert.equal((await gate({ ...base, reviews: [trustedReview()], labels: ['t1-approved'], comments: [verdictComment('e'.repeat(40))] })).failures.length, 1);
-  assert.deepEqual((await gate({ ...base, reviews: [trustedReview()], labels: ['t1-approved'], comments: [verdictComment()] })).failures, []);
+  assert.equal((await gate({ ...base, summaries: [cleanSummary()], labels: ['t1-approved'], comments: [verdictComment('e'.repeat(40))] })).failures.length, 1);
+  assert.deepEqual((await gate({ ...base, summaries: [cleanSummary()], labels: ['t1-approved'], comments: [verdictComment()] })).failures, []);
 });
 
 test('gate matrix: lean Protected without Independent Review is blocked even with full human approval', async () => {
@@ -368,7 +375,7 @@ test('gate matrix: lean Protected without Independent Review is blocked even wit
 });
 
 test('rollback (adversarial): OPERATING_MODEL=legacy immediately returns an in-flight lean PR to the legacy gate (stopped)', async () => {
-  const inFlight: Fixture = { branch: 'claude/standard-change', env: LEAN_ENV, reviews: [trustedReview()] };
+  const inFlight: Fixture = { branch: 'claude/standard-change', env: LEAN_ENV, summaries: [cleanSummary()] };
   assert.deepEqual((await gate(inFlight)).failures, [], 'mergeable while lean');
   for (const env of [LEGACY_ENV, UNSET_ENV, { OPERATING_MODEL: 'legacy', LEAN_MODE_ACTIVATED_AT: ACTIVATED, LEAN_MODE_DEACTIVATED_AT: '2099-01-01T00:00:00Z' }]) {
     const stopped = await gate({ ...inFlight, env });
@@ -383,7 +390,7 @@ test('rollback (adversarial): OPERATING_MODEL=legacy immediately returns an in-f
 
 test('reviewer escalation (RISK-CLASS: PROTECTED) is honored by Merge Gate, Executor Result Validation, Risk Class and post-merge QA', async () => {
   const escalation = trustedReview('e'.repeat(40), { databaseId: 3, body: 'Touches payout semantics.\nRISK-CLASS: PROTECTED', submittedAt: '2026-12-03T00:00:00Z' });
-  const fixture: Fixture = { branch: 'claude/standard-change', env: LEAN_ENV, reviews: [escalation, trustedReview()] };
+  const fixture: Fixture = { branch: 'claude/standard-change', env: LEAN_ENV, reviews: [escalation], summaries: [cleanSummary()] };
   const mg = await gate(fixture);
   assert.equal(mg.failures.length, 1);
   assert.match(mg.failures[0]!, /t1-approved/);
@@ -430,14 +437,108 @@ test('Risk Class: not-applicable for legacy; reports class for lean PRs; UI comp
   assert.ok((await runStep(riskScript, { branch: 'claude/x', env: LEAN_ENV, files: [uiFile], contents: { [component]: "import { settle } from '@/app/actions/settle';\n" } })).notices.some(n => /Risk Class: Protected/u.test(n)));
 });
 
-test('Independent Review: not applicable for legacy; fails closed for lean without a pass; passes on a review or clean summary', async () => {
+test('Independent Review: not applicable for legacy; fails closed for lean without a pass; passes only on a clean summary', async () => {
   assert.deepEqual((await runStep(reviewScript, { branch: 'claude/x', env: LEGACY_ENV })).failures, []);
   assert.deepEqual((await runStep(reviewScript, { branch: 'claude/x', env: UNSET_ENV })).failures, []);
   assert.equal((await runStep(reviewScript, { branch: 'claude/x', env: LEAN_ENV })).failures.length, 1);
-  assert.deepEqual((await runStep(reviewScript, { branch: 'claude/x', env: LEAN_ENV, reviews: [trustedReview()] })).failures, []);
+  assert.equal((await runStep(reviewScript, { branch: 'claude/x', env: LEAN_ENV, reviews: [trustedReview()] })).failures.length, 1, 'a bare review object never passes');
   assert.deepEqual((await runStep(reviewScript, { branch: 'claude/x', env: LEAN_ENV, summaries: [cleanSummary()] })).failures, []);
   assert.equal((await runStep(reviewScript, { branch: 'claude/x', env: LEAN_ENV, reviews: [trustedReview('f'.repeat(40))] })).failures.length, 1);
-  assert.equal((await runStep(reviewScript, { branch: 'claude/x', env: LEAN_ENV, reviews: [trustedReview()], threads: [p1Thread(false, 99)] })).failures.length, 1);
+  assert.equal((await runStep(reviewScript, { branch: 'claude/x', env: LEAN_ENV, summaries: [cleanSummary()], threads: [p1Thread(false, 99)] })).failures.length, 1);
+});
+
+// ── required-check-refresh: executed against stubbed Actions APIs ──────────
+
+const refreshScript = findStep(readWorkflow('required-check-refresh.yml'), 'refresh', 'Resolve trusted signal and retry exact-head native run').with.script as string;
+const REPO = 'o/r';
+
+function refreshRun(id: number, workflowPath: string, status = 'completed') {
+  return { id, event: 'pull_request', path: workflowPath, head_sha: HEAD, status, pull_requests: [{ number: 77, head: { sha: HEAD } }] };
+}
+
+async function runRefresh({ eventName, payload, env, runs }: { eventName: string; payload: Record<string, unknown>; env: Record<string, string>; runs: Record<string, Array<Record<string, unknown>>> }, requireFn: RequireFn = rootRequire) {
+  const reruns: number[] = [];
+  const warnings: string[] = [];
+  const pr = { number: 77, state: 'open', head: { sha: HEAD, repo: { full_name: REPO } }, base: { ref: 'main', repo: { full_name: REPO } } };
+  const github = {
+    rest: {
+      pulls: { get: async () => ({ data: pr }) },
+      actions: {
+        listWorkflowRuns: async ({ workflow_id }: { workflow_id: string }) => ({ data: runs[workflow_id] ?? [] }),
+        reRunWorkflow: async ({ run_id }: { run_id: number }) => { reruns.push(run_id); return { data: {} }; },
+        getWorkflowRun: async () => ({ data: (payload.workflow_run as Record<string, unknown>) }),
+      },
+      repos: { listPullRequestsAssociatedWithCommit: async () => ({ data: [pr] }) },
+    },
+    paginate: async (fn: (p: unknown) => Promise<{ data: unknown }>, params: unknown) => (await fn(params)).data,
+  };
+  const core = { info: () => undefined, notice: () => undefined, warning: (m: string) => { warnings.push(m); }, setFailed: () => undefined };
+  const context = { repo: { owner: 'o', repo: 'r' }, eventName, payload: { repository: { default_branch: 'main' }, ...payload } };
+  const fn = new AsyncFunction('github', 'context', 'core', 'require', 'process', refreshScript);
+  let error: Error | null = null;
+  try {
+    await fn(github, context, core, requireFn, { env });
+  } catch (caught) {
+    error = caught as Error;
+  }
+  return { reruns, warnings, error };
+}
+
+const ALL_RUNS = {
+  'independent-review.yml': [refreshRun(101, '.github/workflows/independent-review.yml')],
+  'merge-gate.yml': [refreshRun(202, '.github/workflows/merge-gate.yml')],
+};
+function summaryCommentEvent(user: Record<string, unknown>, body = cleanSummary().body) {
+  return { eventName: 'issue_comment', payload: { issue: { number: 77, pull_request: {} }, comment: { body, user } } };
+}
+const CODEX_BOT_USER = { login: 'chatgpt-codex-connector[bot]', type: 'Bot' };
+
+test('required-check-refresh (lean): the anchored summary from the trusted Bot reruns Independent Review and Merge Gate', async () => {
+  const result = await runRefresh({ ...summaryCommentEvent(CODEX_BOT_USER), env: LEAN_ENV, runs: ALL_RUNS });
+  assert.equal(result.error, null);
+  assert.deepEqual(result.reruns, [101, 202]);
+});
+
+test('required-check-refresh (adversarial P3): the summary signal is ignored from a user, another bot, an unanchored marker, or outside lean', async () => {
+  for (const [label, event, env] of [
+    ['user with bot login', summaryCommentEvent({ login: 'chatgpt-codex-connector', type: 'User' }), LEAN_ENV],
+    ['other bot', summaryCommentEvent({ login: 'some-app[bot]', type: 'Bot' }), LEAN_ENV],
+    ['unanchored marker', summaryCommentEvent(CODEX_BOT_USER, `echo ${cleanSummary().body}`), LEAN_ENV],
+    ['legacy', summaryCommentEvent(CODEX_BOT_USER), LEGACY_ENV],
+    ['unset', summaryCommentEvent(CODEX_BOT_USER), UNSET_ENV],
+    ['future activation', summaryCommentEvent(CODEX_BOT_USER), { OPERATING_MODEL: 'lean', LEAN_MODE_ACTIVATED_AT: '2999-01-01T00:00:00Z' }],
+  ] as const) {
+    const result = await runRefresh({ ...event, env, runs: ALL_RUNS });
+    assert.equal(result.error, null, label);
+    assert.deepEqual(result.reruns, [], label);
+  }
+  // Legacy never loads the module for a summary comment.
+  const legacy = await runRefresh({ ...summaryCommentEvent(CODEX_BOT_USER), env: UNSET_ENV, runs: ALL_RUNS }, forbidModuleRequire);
+  assert.equal(legacy.error, null);
+});
+
+test('required-check-refresh (P3): outside lean, Independent Review handling is a legacy no-op', async () => {
+  const run = { id: 9, name: 'Independent Review', path: '.github/workflows/independent-review.yml', event: 'pull_request_review', status: 'completed', head_sha: HEAD, repository: { full_name: REPO }, head_repository: { full_name: REPO }, pull_requests: [] };
+  const legacy = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: run }, env: LEGACY_ENV, runs: ALL_RUNS });
+  assert.equal(legacy.error, null);
+  assert.deepEqual(legacy.reruns, []);
+  const dispatch = await runRefresh({ eventName: 'repository_dispatch', payload: { action: 'required-check-refresh', client_payload: { pr_number: 77, target: 'independent' } }, env: LEGACY_ENV, runs: ALL_RUNS });
+  assert.match(String(dispatch.error?.message), /Unknown manual refresh target/u, 'legacy refuses the independent target, as before');
+  const lean = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: run }, env: LEAN_ENV, runs: ALL_RUNS });
+  assert.equal(lean.error, null);
+  assert.deepEqual(lean.reruns, [101, 202]);
+});
+
+test('required-check-refresh (P3): a missing or in-flight Independent Review run does not abort the Merge Gate rerun', async () => {
+  const missing = await runRefresh({ ...summaryCommentEvent(CODEX_BOT_USER), env: LEAN_ENV, runs: { 'merge-gate.yml': ALL_RUNS['merge-gate.yml'] } });
+  assert.equal(missing.error, null);
+  assert.deepEqual(missing.reruns, [202]);
+  assert.ok(missing.warnings.some(w => /Independent Review/u.test(w)));
+  const running = await runRefresh({ ...summaryCommentEvent(CODEX_BOT_USER), env: LEAN_ENV, runs: { ...ALL_RUNS, 'independent-review.yml': [refreshRun(103, '.github/workflows/independent-review.yml', 'in_progress')] } });
+  assert.deepEqual(running.reruns, [202]);
+  // A missing Merge Gate run still fails closed.
+  const noGate = await runRefresh({ ...summaryCommentEvent(CODEX_BOT_USER), env: LEAN_ENV, runs: { 'independent-review.yml': ALL_RUNS['independent-review.yml'] } });
+  assert.match(String(noGate.error?.message), /No eligible Merge Gate/u);
 });
 
 // ── post-merge-qa-gate tier derivation ─────────────────────────────────────
@@ -448,6 +549,31 @@ test('post-merge-qa-gate: label tier wins; lean Protected derives T1; lean Stand
   assert.equal((await runStep(effScript, { branch: 'x', env: LEAN_ENV, files: [worker] }, { LABEL_TIER: '', PR_NUMBER: '77' })).outputs.tier, 'T1');
   assert.equal((await runStep(effScript, { branch: 'x', env: LEAN_ENV }, { LABEL_TIER: '', PR_NUMBER: '77' })).outputs.tier, '');
   assert.equal((await runStep(effScript, { branch: 'x', env: UNSET_ENV, files: [worker] }, { LABEL_TIER: '', PR_NUMBER: '77' })).outputs.tier, '');
+});
+
+test('post-merge-qa-gate (P3): in lean the tier is derived from the diff (Protected -> T1 over any label); legacy forwards the label unchanged', async () => {
+  const worker = { filename: 'apps/worker/src/a.ts', status: 'modified', additions: 1, deletions: 0, patch: '@@ -1 +1 @@\n+a\n' };
+  assert.equal((await runStep(effScript, { branch: 'x', env: LEAN_ENV, files: [worker] }, { LABEL_TIER: 'T3', PR_NUMBER: '77' })).outputs.tier, 'T1', 'T3 label on a Protected diff');
+  assert.equal((await runStep(effScript, { branch: 'x', env: LEAN_ENV }, { LABEL_TIER: 'T1', PR_NUMBER: '77' })).outputs.tier, 'T1', 'label never lowered');
+  for (const env of [LEGACY_ENV, UNSET_ENV]) {
+    assert.equal((await runStep(effScript, { branch: 'x', env, files: [worker] }, { LABEL_TIER: 'T3', PR_NUMBER: '77' }, forbidModuleRequire)).outputs.tier, 'T3');
+  }
+});
+
+test('post-merge-qa-gate (P3): an unlabelled legacy PR skips checkout and tier resolution exactly as on base c3168c525', () => {
+  const workflow = readWorkflow('post-merge-qa-gate.yml');
+  const checkout = findStep(workflow, 'qa-gate', 'Checkout');
+  const eff = findStep(workflow, 'qa-gate', 'Resolve effective tier');
+  // Both conditions reduce to the base condition (tier != '') whenever the lean flag is absent.
+  for (const condition of [checkout.if as string, eff.if as string]) {
+    assert.match(condition, /steps\.pr\.outputs\.tier != ''/u);
+    assert.match(condition, /contains\(vars\.OPERATING_MODEL, 'lean'\)/u);
+    assert.doesNotMatch(condition.replace(/contains\(vars\.OPERATING_MODEL, 'lean'\)/u, 'false'), /vars\./u);
+  }
+  // Downstream steps key on steps.eff.outputs.tier only; with eff skipped that output is '' => skipped, as before.
+  for (const step of workflow.jobs['qa-gate'].steps as Doc[]) {
+    if (typeof step.if === 'string' && step.if.includes('steps.eff.outputs.tier')) assert.match(step.if, /^steps\.eff\.outputs\.tier != ''$/u, step.name);
+  }
 });
 
 test('post-merge-qa-gate: every downstream step keys on the effective tier, none on the raw label output', () => {

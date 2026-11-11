@@ -21,14 +21,14 @@ Defense in depth: every workflow requires the module **lazily** (only when `OPER
 | Gate (`Merge Gate`) | branch-protected checks green + `Independent Review` | additionally `t1-approved` label + head-bound CODEOWNER `pm-verdict/v1` |
 | Manifest / preflight token / lease / tier label / scope-override / model-routing sidecar | not required | not required for the gate |
 | `Executor Result Validation` | reports success (not required) | still fully validated |
-| Post-merge QA | non-lane (no tier) | derived as T1 |
+| Post-merge QA | label tier, else non-lane | derived from the diff: T1 regardless of label |
 | Staging DB proof, `verify`, `P0 Protocol`, kill switches, deploy gates | unchanged | unchanged |
 
 ### Standard allow-list (everything not listed is Protected)
 
-- **Docs:** `docs/**/*.md`, except `docs/00_constitution/`, `docs/mission/`, `docs/05_operations/`, `docs/06_status/{lanes,proof,readiness}/`, and any file whose name contains `CONTRACT`, `POLICY`, `SPEC`, `AUTHORITY`, `RUNBOOK`, `CODEOWNERS`, `STANDING`, `INVARIANT`, `CHARTER`, `READINESS`, or is `intent.md`, `CLAUDE.md`, `AGENTS.md`.
-- **Add-only unit tests:** files named `*.test.ts(x)` or `*.spec.ts(x)` under `apps/<app>/` or `packages/<pkg>/` (not fixtures, snapshots, or anything under `scripts/`). Any removed line, rename, skip/only/todo (including `{ skip: … }`), `process.exit`, env/secret reference, network or child-process use makes the file Protected.
-- **UI-only components:** `.tsx`/`.css` in `apps/command-center/src/components/`, `apps/smart-form/components/`, `apps/web/src/components/`. The **full head file** is fetched and must import only React/Next presentation modules, `@/components/*`, a few `@/lib/{types,utils,cn,format,…}` helpers and relative files inside the component tree, and contain no fetch, server action, form, Supabase, auth, env, storage, `dangerouslySetInnerHTML`, `eval` or dynamic import. Deleting a component is Protected.
+- **Docs:** `docs/**/*.md`, except `docs/00_constitution/`, `docs/mission/`, `docs/05_operations/`, `docs/06_status/{lanes,proof,readiness}/`, and any path containing (case-insensitive) `contract`, `policy`/`policies`, `spec`, `authority`, `runbook`, `codeowners`, `standing`, `invariant`, `charter`, `readiness`, `environment`, `network`(`ing`), `backup`, `disaster`, `recovery`, `security`, `secret`, `governance`, `guardrail`, or a `dr` token (e.g. `backup-dr-policy.md`, `environment_contract.md`, `pick_spec.md`), or is `intent.md`, `CLAUDE.md`, `AGENTS.md`.
+- **Newly added unit tests only:** NEW files (`status: added`) named `*.test.ts(x)` or `*.spec.ts(x)` under `apps/<app>/` or `packages/<pkg>/` (not fixtures, snapshots, or anything under `scripts/`). Any **modified**, renamed or copied test file is Protected (an added `/* … */`, `return;` or shadowing `const test =` disables assertions without removing a line). A new test is also Protected if it uses skip/only/todo (including `{ skip: … }`), `process` in any form (`process["env"]`, `process.exit`), `globalThis`, `fetch`, `eval`/`Function(`, a non-literal `import()`/`require()`, any Node built-in other than `node:test` / `node:assert` (`http(s)`, `net`, `fs`, `child_process`, …), `createDatabaseClient` or any other DB client (`create*Client`, Supabase, `pg`, `@unit-talk/db`), or an env/secret reference.
+- **UI-only components:** `.tsx`/`.css` in `apps/command-center/src/components/`, `apps/smart-form/components/`, `apps/web/src/components/`. The **full head file** is fetched and must import only React/Next presentation modules, `@/components/*`, a few `@/lib/{types,utils,cn,format,…}` helpers and `./`-relative files inside the component tree. Specifiers are parsed through comments/whitespace; any specifier containing a `..` segment or a backslash escape is Protected (including relative `../x`). The file must contain no `fetch` (any use, e.g. `fetch.call`), `globalThis`, `navigator`, computed access on `window`/`self`/`document`/`top`/`parent`/`frames`, `document.cookie`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `createElement('form'…)` or non-literal `createElement`, `use server` (any quoting), form, Supabase, auth, env, storage, `dangerouslySetInnerHTML`, `eval`/`Function(`/`constructor`/`Reflect`, `require`, or dynamic import. `.css` files are also Protected on `@import`, `url(` with a scheme or `//`, `expression(`. `.scss` is not on the allow-list. Deleting a component is Protected.
 - **Sensitive-word veto:** any path containing words such as `auth`, `secret`, `token`, `kill`, `switch`, `delivery`, `distribut`, `settle`, `grad(e|ing)`, `payout`, `whop`, `stripe`, `billing`, `subscri`, `payment`, `role`, `tier`, `member`, `permission`, `admin`, `restore`, `purge`, `retention`, `promotion`, `routing`, `guard`, `governance`, `merge`, `lane`, `verdict`, `override`, `action`, `confirm`, `migration`, `deploy`, `webhook`, `submit`, `cron`, `worker`, or an `env` token is Protected whatever rule it matched (full list in the module).
 - Shared content checks on Standard code candidates: a write call (`insert/upsert/update/delete/rpc`) within 400 characters of a protected table name in the joined added text (multi-line aware), references to `delivery_kill_switch`/`distribution_outbox`/`distribution_receipts`/`settlement_records`, and member-PII fields all escalate.
 - There are **no generated-file exemptions**: `database.types.ts`, lockfiles, `__snapshots__/` and `*.snap` are simply not on the allow-list. There is no size-based rule.
@@ -37,12 +37,13 @@ Defense in depth: every workflow requires the module **lazily** (only when `OPER
 
 ### Independent Review
 
-Trusted identity: default `chatgpt-codex-connector[bot]` (overridable with `TRUSTED_REVIEWER_LOGINS`); must be a GitHub `Bot` account and never the PR author or last pusher. The check passes only when a **clean pass bound to the exact head** exists and it is **later than every P0/P1 finding ever raised on the PR**:
+Trusted identity: default `chatgpt-codex-connector[bot]` (overridable with `TRUSTED_REVIEWER_LOGINS`); must be a GitHub `Bot` account and never the PR author or last pusher. The check passes **only** on the connector's summary comment:
 
-- A clean pass is either a trusted review at the head with no P0/P1 of its own (body or threads), or — for clean PRs, on which the connector posts no review — the connector's `codex-review-state:v1` summary comment reporting `status: completed`, `has_any_findings: false` for `commit_sha == head`.
-- Findings are P0/P1 threads and P0/P1 / `CHANGES_REQUESTED` review bodies, at any head and in any state including dismissed. **Resolving a thread or dismissing a review never clears a finding**; only a later clean pass at the current head does. An unresolved P0/P1 thread blocks regardless.
-- A trusted artifact edited by any other account (the repository admin can edit bot comments) is treated as an unclearable finding.
-- Retry: a bot review fires `pull_request_review`; the connector summary is an issue comment. `required-check-refresh.yml` reruns `Independent Review` and `Merge Gate` at the exact live head on either. To request a review at a new head, comment `@codex review`.
+- The pass artifact is the connector's issue comment whose body **starts with** `<!-- codex-pull-request-review-summary -->` followed on the next line by `<!-- codex-review-state:v1 {…} -->` (exactly one state marker in the body), from the trusted Bot login, reporting `commit_sha == head`, `status: completed`, `has_any_findings: false`, `has_unresolved_findings: false`. A marker anywhere else (quoted, echoed, appended) is ignored. **A bare review object never passes**, whatever its body or state; no summary = FAIL.
+- Findings are P0/P1 in any trusted comment of any thread (not only the first), P0/P1 or `CHANGES_REQUESTED` review bodies (any state, including dismissed), and a head-bound summary reporting findings. Notations recognised include badges, `**P1**`, `(P1)`, `[P1]`, `P1:`, `Priority 1`.
+- **A finding raised at head H blocks H for good.** A later clean summary at the same head does not clear it, and neither does resolving the thread, deleting the comment or dismissing the review. Push a new commit and obtain a fresh clean summary for it. A finding whose commit cannot be determined is treated as raised at the head. An unresolved P0/P1 thread at any head blocks.
+- A trusted artifact edited by any other account (the repository admin can edit bot comments) fails the check.
+- Retry: the connector summary is an issue comment; `required-check-refresh.yml` reruns `Independent Review` and `Merge Gate` at the exact live head only when lean mode is armed and the comment is the anchored summary from the trusted Bot login. A bot review (`pull_request_review`) also triggers a rerun in lean mode. A missing Independent Review run does not stop the Merge Gate rerun. To request a review at a new head, comment `@codex review`.
 - No pass, a stale head, an untrusted identity, a connector outage or more than 2,000 review artifacts all fail the check. Never neutral.
 
 ## Repository variables (all Griff-set)
@@ -50,7 +51,7 @@ Trusted identity: default `chatgpt-codex-connector[bot]` (overridable with `TRUS
 | Variable | Meaning |
 |---|---|
 | `OPERATING_MODEL` | `lean` or anything else. Anything other than `lean` = legacy for **every** unmerged PR. |
-| `LEAN_MODE_ACTIVATED_AT` | ISO-8601 UTC. Second key: lean applies only when this is a valid timestamp. Recorded for audit. |
+| `LEAN_MODE_ACTIVATED_AT` | Strict ISO-8601 (`YYYY-MM-DD` or `YYYY-MM-DDTHH:MM[:SS[.fff]](Z|±HH:MM)`). Second key: lean applies only when this parses **and is not in the future**; anything else disarms lean. Recorded for audit. |
 | `TRUSTED_REVIEWER_LOGINS` | Optional comma list. Default `chatgpt-codex-connector[bot]`. |
 
 Mode is global, not per PR. At activation, open legacy PRs are evaluated by the lean gate (Protected still needs `t1-approved` + head-bound `pm-verdict/v1`, plus Independent Review); activate when few lane PRs are open.
@@ -64,15 +65,28 @@ Mode is global, not per PR. At activation, open legacy PRs are evaluated by the 
 5. **Rehearsal.** Set `OPERATING_MODEL=lean`, `LEAN_MODE_ACTIVATED_AT=<now>`. Open one docs-only Standard PR and one Protected PR; confirm `Risk Class`, `Independent Review` and `Merge Gate` behave per the tables above.
 6. **Trial** of 5–10 Standard PRs plus every Protected PR, against the proposal's §8 criteria. Step B (removing `Executor Result Validation` from required contexts) is a separate Griff decision after the trial.
 
-## Rollback (config only; no code revert)
+## Rollback (config change + mandatory Merge Gate rerun)
 
-1. Set `OPERATING_MODEL=legacy` (or delete it). From the next check run, **every unmerged PR** — including ones opened under lean — is evaluated by the legacy gate. A lean PR without legacy artifacts (manifest, tier label, executor result / verdict) is blocked, i.e. stopped. To force re-evaluation immediately, push or re-run `Merge Gate` on open PRs (or close them).
-2. Leave `Risk Class` and `Independent Review` in the required contexts; they report "not applicable".
-3. Nothing is deleted. Protected-main checks are never disabled.
+Changing the variable alone does **not** stop a PR whose `Merge Gate` already concluded green under lean: that check result stays on the PR head and branch protection keeps accepting it until the check runs again. Rollback is therefore two steps, both required:
+
+1. Set `OPERATING_MODEL=legacy` (or delete it). Every check run from now on — including on PRs opened under lean — uses the legacy gate, which a lean PR without legacy artifacts (manifest, tier label, executor result / verdict) cannot satisfy.
+2. **Immediately rerun `Merge Gate` on every open PR** so no lean-era green result survives. One command (needs `gh` with `actions:write`):
+
+   ```bash
+   gh pr list --state open --base main --json headRefOid --jq '.[].headRefOid' | while read -r sha; do
+     gh run list --workflow merge-gate.yml --event pull_request --commit "$sha" --limit 1 --json databaseId --jq '.[].databaseId' |
+       xargs -r -n1 gh run rerun
+   done
+   ```
+
+   Then confirm with `gh pr checks <n>` that no open PR shows a green `Merge Gate` it should not have. Until this step completes, assume an open lean PR can still be merged. Closing a PR, or pushing to it, also forces re-evaluation.
+3. Leave `Risk Class` and `Independent Review` in the required contexts; they report "not applicable".
+4. Nothing is deleted. Protected-main checks are never disabled.
 
 ## Known limits (stated, not hidden)
 
-- **Connector semantics are partly unverified.** Whether `has_any_findings` in the summary resets per reviewed commit is not proven; if it is cumulative, a PR that once had findings can only pass via a later review object at the head (fail-closed, may need a human re-review request). Codex reviews on demand (`@codex review`), not on every push.
+- **Connector semantics are partly unverified.** Whether `has_any_findings` in the summary resets per reviewed commit is not proven. Since a review object can no longer pass, if it is cumulative a PR that once had findings cannot pass Independent Review at all (fail-closed): the remedy is a fresh PR. Codex reviews on demand (`@codex review`), not on every push.
+- **Head binding of findings** uses the thread comment's `originalCommit` (then its review's commit). If GitHub returns neither, the finding is treated as raised at the current head.
 - **Merge Gate decision freshness.** Merge Gate evaluates at its own run; a finding arriving after the gate passed reruns it only through `required-check-refresh.yml`.
 - **UI scan is lexical.** It inspects imports and capability markers, not semantics; a component can still render misleading UI. Server actions and lib code it could call are themselves Protected.
 - **Local merge tool is not lean-aware.** `ops:merge-wrapper pr-merge` / `pre-merge-authorization.ts` still require legacy artifacts; lean Standard PRs merge with `gh pr merge --squash` against branch protection. Making the tool lean-aware is a separate Protected change.

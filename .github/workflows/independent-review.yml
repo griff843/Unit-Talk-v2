@@ -2,13 +2,16 @@
 #
 # WORK-2026110804 (Standard/Protected operating model, Step A: add-only).
 #
-# Passes only when a TRUSTED reviewer identity (default
-# chatgpt-codex-connector[bot]) has produced a clean pass bound to the exact
-# PR head that is LATER than every P0/P1 finding ever raised on the PR: either
-# a review at the head with no P0/P1 of its own, or the connector's
-# codex-review-state:v1 summary reporting a completed review of the head with
-# no findings (clean PRs get no review object). Resolving a thread, dismissing
-# a review or editing a bot comment never clears a finding. Reads only
+# Passes only on the TRUSTED connector's (default
+# chatgpt-codex-connector[bot], a GitHub Bot account) anchored
+# codex-review-state:v1 summary comment bound to the exact PR head with
+# status=completed and has_any_findings=false. A bare review object never
+# passes; a missing summary fails. Any P0/P1 finding raised at the head
+# (thread comment, review body, CHANGES_REQUESTED, or a summary reporting
+# findings) blocks that head permanently - a new commit with a fresh clean
+# summary is required. Unresolved P0/P1 threads at any head block. Resolving
+# a thread, deleting a comment, dismissing a review or editing a bot comment
+# never clears a finding. Reads only
 # GitHub-trusted artifacts via scripts/ops/operating-model.cjs; PR-body text
 # is never consulted. Fails closed, including on connector outage.
 #

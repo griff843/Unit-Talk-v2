@@ -36,9 +36,34 @@ jobs:
 
       - name: Resolve trusted signal and retry exact-head native run
         uses: actions/github-script@v7
+        env:
+          OPERATING_MODEL: ${{ vars.OPERATING_MODEL }}
+          LEAN_MODE_ACTIVATED_AT: ${{ vars.LEAN_MODE_ACTIVATED_AT }}
+          TRUSTED_REVIEWER_LOGINS: ${{ vars.TRUSTED_REVIEWER_LOGINS }}
         with:
           script: |
             const { selectEligibleRefreshRun } = require('./scripts/ops/executor-result-check-selection.cjs');
+            // WORK-2026110804: Independent Review handling exists only while lean
+            // mode is armed. Otherwise this broker behaves exactly as the legacy
+            // definition (no 'independent' target, no summary-comment signal).
+            let operatingModel = null;
+            if (String(process.env.OPERATING_MODEL || '').trim().toLowerCase() === 'lean') {
+              try {
+                operatingModel = require('./scripts/ops/operating-model.cjs');
+              } catch (error) {
+                if (!(error && error.code === 'MODULE_NOT_FOUND' && String(error.message || '').includes('operating-model.cjs'))) throw error;
+                core.notice('Lean operating model requested, but scripts/ops/operating-model.cjs is absent; legacy refresh applies.');
+              }
+            }
+            const leanActive = Boolean(operatingModel) && operatingModel.resolveOperatingMode({
+              flag: process.env.OPERATING_MODEL,
+              activatedAt: process.env.LEAN_MODE_ACTIVATED_AT,
+            }).mode === 'lean';
+            const normLogin = login => String(login || '').trim().toLowerCase().replace(/\[bot\]$/u, '');
+            const configuredReviewers = String(process.env.TRUSTED_REVIEWER_LOGINS || '').split(',').map(l => l.trim()).filter(Boolean);
+            const trustedReviewerLogins = new Set((configuredReviewers.length
+              ? configuredReviewers
+              : (operatingModel ? operatingModel.TRUSTED_REVIEWER_LOGINS_DEFAULT : [])).map(normLogin));
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const repository = `${owner}/${repo}`;
@@ -78,9 +103,15 @@ jobs:
               if (body.includes('PM_VERDICT:')) targets.push('merge');
               // WORK-2026110804: the review connector's summary comment (created
               // or edited when a review completes) is the only signal a CLEAN PR
-              // gets. Rerunning is safe for any author: the rerun itself decides
-              // trust from GitHub identity and exact head.
-              if (body.includes('codex-review-state:v1')) targets.push('independent', 'merge');
+              // gets. Honored only in lean mode, only from a trusted Bot login,
+              // and only when the anchored summary marker parses.
+              const commenter = context.payload.comment?.user;
+              if (leanActive &&
+                  commenter?.type === 'Bot' &&
+                  trustedReviewerLogins.has(normLogin(commenter?.login)) &&
+                  operatingModel.parseCodexState(body) !== null) {
+                targets.push('independent', 'merge');
+              }
               if (targets.length === 0) {
                 core.info('Comment contains no recognized refresh signal.');
                 return;
@@ -91,7 +122,8 @@ jobs:
               }
               prNumber = Number(context.payload.client_payload?.pr_number);
               const requested = String(context.payload.client_payload?.target || 'both');
-              if (!['executor', 'merge', 'independent', 'both'].includes(requested)) {
+              const allowedTargets = leanActive ? ['executor', 'merge', 'independent', 'both'] : ['executor', 'merge', 'both'];
+              if (!allowedTargets.includes(requested)) {
                 throw new Error(`Unknown manual refresh target ${requested}; refusing refresh.`);
               }
               targets = requested === 'both' ? ['executor', 'merge'] : [requested];
@@ -100,6 +132,10 @@ jobs:
               const { data: run } = await github.rest.actions.getWorkflowRun({
                 owner, repo, run_id: Number(advertised?.id),
               });
+              if (run.name === 'Independent Review' && !leanActive) {
+                core.info('Independent Review signal ignored: lean mode is not armed (legacy no-op).');
+                return;
+              }
               if (run.repository?.full_name !== repository || run.head_repository?.full_name !== repository) {
                 throw new Error('workflow_run repository identity mismatch; refusing refresh.');
               }
@@ -184,11 +220,18 @@ jobs:
                 prNumber,
                 headSha,
               });
+              // A missing or in-flight Independent Review run must not abort
+              // the Merge Gate rerun that follows it.
+              const optional = targetName === 'independent';
               if (!target) {
-                throw new Error(`No eligible ${config.label} pull_request run exists for PR #${prNumber} at ${headSha}.`);
+                const message = `No eligible ${config.label} pull_request run exists for PR #${prNumber} at ${headSha}.`;
+                if (optional) { core.warning(`${message} Skipping; continuing with remaining targets.`); continue; }
+                throw new Error(message);
               }
               if (target.status !== 'completed') {
-                throw new Error(`Newest eligible ${config.label} run ${target.id} is ${target.status}; refusing older fallback.`);
+                const message = `Newest eligible ${config.label} run ${target.id} is ${target.status}; refusing older fallback.`;
+                if (optional) { core.warning(`${message} Skipping; continuing with remaining targets.`); continue; }
+                throw new Error(message);
               }
 
               // This API read is intentionally adjacent to the only mutation.

@@ -138,9 +138,11 @@ jobs:
             try {
               // ── 2b. Operating mode (WORK-2026110804) ───────────────
               // Lean applies only while OPERATING_MODEL=lean and
-              // LEAN_MODE_ACTIVATED_AT is set (global; rollback = set the flag
-              // to anything else and every unmerged PR returns to the legacy
-              // path below). The policy module is required LAZILY and only
+              // LEAN_MODE_ACTIVATED_AT is a past ISO-8601 timestamp (global;
+              // rollback = set the flag to anything else and every LATER run
+              // takes the legacy path below - an already-green run is not
+              // re-evaluated, so rollback also requires rerunning this check on
+              // open PRs, see LEAN_MODE_ACTIVATION.md). The policy module is required LAZILY and only
               // when lean is requested: with the flag unset the legacy path
               // runs byte-for-byte as before, and a base commit that predates
               // scripts/ops/operating-model.cjs also means legacy, never a
