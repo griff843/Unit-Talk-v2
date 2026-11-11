@@ -119,6 +119,19 @@ Follow-up commit 61aefdf82f04de51a31b285c2c36eb960da0a134 (review-input event au
 
 Truth correction (2026-11-11, docs only, no code change): AC3, `LEAN_MODE_ACTIVATION.md` and `OPERATING_MODEL_SONNET5.md` now describe what the code does. Escalation and findings last while the trusted artifact exists, and deleting it clears them at the next recompute. Dismissal clears a `CHANGES_REQUESTED`-only finding but not a P0/P1 in the review body. Deletion-proof findings and escalation are listed as a known limit pending a separate PM-governed follow-up.
 
+Follow-up commit e5789466523e68065526d7a6d9ee7780b32c6101 (Codex P1 and P2 on head 3de06a6e0, after syncing main at 4fa3132b2):
+
+- P1: `operating-model.cjs` mirrors the `merge-risk.ts` Tier C exact paths, prefixes and patterns, and `standardRuleFor` vetoes them before any Standard rule. A newly added test, doc or nested file under any Tier C prefix (for example `packages/domain/src/market/market-key.test.ts` or `packages/contracts/src/canonical-pick.test.ts`) is now Protected. A parity test asserts the lists match `merge-risk.ts` exactly. Adversarial cases cover `*.test.ts`, `*.spec.ts`, `*.test.tsx`, nested, doc and fixture paths under every prefix. Audit: the docs and UI-component rules could not admit a Tier C path (`docs/00_constitution/` and `*_POLICY`/`*_SPEC` were already excluded, and no UI directory is under a Tier C prefix). The hole was only in the test-addition rule, for `packages/domain/src/`, `packages/contracts/src/` and `packages/config/`. `apps/worker/` was already caught by the `worker` path word.
+- P2: in lean only, `required-check-refresh.yml` accepts the native `pull_request` Independent Review `workflow_run` completion. When that run did not succeed and a trusted-Bot anchored summary was written at or after the run started, it reruns Independent Review and Merge Gate once. The rerun starts after that summary, so its own completion is a no-op and the retry cannot loop. A missing `run_started_at` fails closed. Legacy and unset modes return before this code and never load the module. Permissions are unchanged; `issues.listComments` runs under the existing `pull-requests: read`.
+- Mutation, P1: removing the veto line in `standardRuleFor` fails `operating-model.test.ts` (37 pass, 1 fail: "Tier C veto ... unexpected Standard rule for packages/contracts/src/example.test.ts"). Restored: 38/38.
+- Mutation, P2: restoring the head 3de06a6e0 `required-check-refresh.yml` fails both new lean P2 tests with "Untrusted workflow_run identity Independent Review/.../pull_request". Removing only the timestamp bound fails the bounded/adversarial test (45 pass, 1 fail). Restored: 46/46.
+- `npx tsx --test scripts/ops/operating-model.test.ts`: 38/38 pass, exit 0
+- `npx tsx --test scripts/ops/operating-model-workflows.test.ts`: 46/46 pass, exit 0
+- `npx tsx --test scripts/ops/workflow-hardening.test.ts`: 99/99 pass, exit 0
+- `pnpm test:ops`: 3873 tests, 3863 pass, 0 fail, 10 skipped, exit 0
+- `pnpm lint`: exit 0
+- `pnpm type-check`: exit 0
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
