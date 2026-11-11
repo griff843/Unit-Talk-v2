@@ -87,6 +87,11 @@ jobs:
                 workflowPath: '.github/workflows/independent-review.yml',
                 label: 'Independent Review',
               },
+              risk: {
+                workflowId: 'risk-class.yml',
+                workflowPath: '.github/workflows/risk-class.yml',
+                label: 'Risk Class',
+              },
             };
 
             let prNumber;
@@ -111,6 +116,18 @@ jobs:
                   trustedReviewerLogins.has(normLogin(commenter?.login)) &&
                   operatingModel.parseCodexState(body) !== null) {
                 targets.push('independent', 'merge');
+              }
+              // WORK-2026110804: a trusted reviewer's standalone RISK-CLASS:
+              // PROTECTED issue comment escalates the class for good, so every
+              // class-dependent check must be recomputed at the live head or a
+              // stale green Standard decision survives. The predicate is the
+              // one classification uses (isTrustedReviewerEscalation), with the
+              // same configured reviewer list, so an untrusted commenter
+              // triggers nothing. Merge Gate (the decision point) and Executor
+              // Result Validation go first; both fail closed if absent.
+              if (leanActive &&
+                  operatingModel.isTrustedReviewerEscalation(context.payload.comment, configuredReviewers)) {
+                targets.push('merge', 'executor', 'risk', 'independent');
               }
               if (targets.length === 0) {
                 core.info('Comment contains no recognized refresh signal.');

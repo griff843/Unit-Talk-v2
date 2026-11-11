@@ -593,7 +593,21 @@ function reviewerRequestsProtected({ reviews, threads, comments, trustedReviewer
     ...(Array.isArray(comments) ? comments : []),
     ...(Array.isArray(threads) ? threads : []).flatMap(thread => (thread && Array.isArray(thread.comments) ? thread.comments : [])),
   ];
-  return nodes.some(node => node && trusted.has(normLogin(actorLogin(node))) && RISK_CLASS_PROTECTED_LINE.test(String(node.body || '')));
+  return nodes.some(node => isTrustedEscalation(node, trusted));
+}
+
+function isTrustedEscalation(node, trusted) {
+  return Boolean(node) && trusted.has(normLogin(actorLogin(node))) && RISK_CLASS_PROTECTED_LINE.test(String(node.body || ''));
+}
+
+/**
+ * True when one artifact (a REST issue comment `{ user, body }` or a GraphQL
+ * node `{ author, body }`) is a trusted reviewer escalation. This is the exact
+ * predicate reviewerRequestsProtected applies, so the refresh broker can never
+ * honor an escalation that classification would ignore, or vice versa.
+ */
+function isTrustedReviewerEscalation(node, trustedReviewers) {
+  return isTrustedEscalation(node, trustedSet(trustedReviewers));
 }
 
 // ── Lean merge-gate decision ───────────────────────────────────────────────
@@ -655,6 +669,7 @@ const REVIEW_THREADS_QUERY = `
           nodes {
             isResolved
             comments(first: 100) {
+              pageInfo { hasNextPage }
               nodes { body createdAt author { __typename login } editor { login } originalCommit { oid } pullRequestReview { databaseId submittedAt commit { oid } } }
             }
           }
@@ -691,13 +706,30 @@ async function graphqlConnection(github, query, variables) {
   throw new Error(`More than ${MAX_PAGES * 100} review artifacts; cannot prove none is an open P0/P1. Failing closed.`);
 }
 
+/**
+ * A review thread's nested comments connection is not paginated. If GitHub
+ * reports another page (or omits pageInfo / nodes), a P0/P1 finding or a
+ * RISK-CLASS: PROTECTED escalation could sit past comment 100 unseen, so the
+ * whole evaluation fails closed instead of reading a truncated thread.
+ */
+function normalizeThread(node) {
+  const connection = node && node.comments;
+  if (!connection || !Array.isArray(connection.nodes) || !connection.pageInfo || typeof connection.pageInfo.hasNextPage !== 'boolean') {
+    throw new Error('Review thread comments connection is missing nodes or pageInfo; cannot prove the thread has no open P0/P1 or escalation. Failing closed.');
+  }
+  if (connection.pageInfo.hasNextPage) {
+    throw new Error('A review thread has more than 100 comments; nested comments are not paginated, so an open P0/P1 or escalation could be hidden. Failing closed.');
+  }
+  return { isResolved: node.isResolved, comments: connection.nodes };
+}
+
 /** Collect the GitHub-trusted artifacts Independent Review and escalation read. */
 async function collectIndependentReviewInputs({ github, owner, repo, prNumber }) {
   const variables = { owner, repo, number: prNumber };
   const reviews = await graphqlConnection(github, REVIEWS_QUERY, variables);
   const rawThreads = await graphqlConnection(github, REVIEW_THREADS_QUERY, variables);
   const comments = await graphqlConnection(github, ISSUE_COMMENTS_QUERY, variables);
-  const threads = rawThreads.map(node => ({ isResolved: node.isResolved, comments: (node.comments && node.comments.nodes) || [] }));
+  const threads = rawThreads.map(normalizeThread);
 
   const commits = await github.paginate(github.rest.pulls.listCommits, {
     owner, repo, pull_number: prNumber, per_page: 100,
@@ -816,6 +848,7 @@ module.exports = {
   classifyRisk,
   evaluateIndependentReview,
   reviewerRequestsProtected,
+  isTrustedReviewerEscalation,
   evaluateLeanGate,
   collectIndependentReviewInputs,
   loadPullRequestPolicy,

@@ -118,7 +118,7 @@ function makeHarness(fixture: Fixture) {
     paginate: async (fn: (p: unknown) => Promise<{ data: unknown }>, params: unknown) => (await fn(params)).data,
     graphql: async (query: string) => {
       const nodes = query.includes('reviewThreads')
-        ? (fixture.threads ?? []).map(thread => ({ isResolved: thread.isResolved, comments: { nodes: thread.comments } }))
+        ? (fixture.threads ?? []).map(thread => ({ isResolved: thread.isResolved, comments: { pageInfo: { hasNextPage: Boolean(thread.moreComments) }, nodes: thread.comments } }))
         : query.includes('reviews(') ? (fixture.reviews ?? []) : (fixture.summaries ?? []);
       return { repository: { pullRequest: { connection: { pageInfo: { hasNextPage: false }, nodes } } } };
     },
@@ -539,6 +539,66 @@ test('required-check-refresh (P3): a missing or in-flight Independent Review run
   // A missing Merge Gate run still fails closed.
   const noGate = await runRefresh({ ...summaryCommentEvent(CODEX_BOT_USER), env: LEAN_ENV, runs: { 'independent-review.yml': ALL_RUNS['independent-review.yml'] } });
   assert.match(String(noGate.error?.message), /No eligible Merge Gate/u);
+});
+
+const ESCALATION_RUNS = {
+  ...ALL_RUNS,
+  'executor-result-validator.yml': [refreshRun(303, '.github/workflows/executor-result-validator.yml')],
+  'risk-class.yml': [refreshRun(404, '.github/workflows/risk-class.yml')],
+};
+function escalationCommentEvent(user: Record<string, unknown>, body = 'RISK-CLASS: PROTECTED') {
+  return { eventName: 'issue_comment', payload: { issue: { number: 77, pull_request: {} }, comment: { body, user } } };
+}
+
+test('required-check-refresh (lean, P1): a trusted RISK-CLASS: PROTECTED issue comment reruns Merge Gate, Executor Result Validation, Risk Class and Independent Review', async () => {
+  for (const user of [CODEX_BOT_USER, { login: 'chatgpt-codex-connector', type: 'User' }]) {
+    const result = await runRefresh({ ...escalationCommentEvent(user, 'Escalating.\nRISK-CLASS: PROTECTED\n'), env: LEAN_ENV, runs: ESCALATION_RUNS });
+    assert.equal(result.error, null, user.login);
+    assert.deepEqual(result.reruns, [202, 303, 404, 101], user.login);
+  }
+  // A configured reviewer list is honored exactly as classification honors it.
+  const configured = await runRefresh({ ...escalationCommentEvent({ login: 'alice', type: 'User' }), env: { ...LEAN_ENV, TRUSTED_REVIEWER_LOGINS: 'alice' }, runs: ESCALATION_RUNS });
+  assert.deepEqual(configured.reruns, [202, 303, 404, 101]);
+});
+
+test('required-check-refresh (adversarial P1): untrusted or malformed escalation comments trigger nothing new', async () => {
+  for (const [label, event, env] of [
+    ['untrusted user', escalationCommentEvent({ login: 'griff843', type: 'User' }), LEAN_ENV],
+    ['untrusted bot', escalationCommentEvent({ login: 'some-app[bot]', type: 'Bot' }), LEAN_ENV],
+    ['default reviewer not in configured list', escalationCommentEvent(CODEX_BOT_USER), { ...LEAN_ENV, TRUSTED_REVIEWER_LOGINS: 'alice' }],
+    ['not an exact line', escalationCommentEvent(CODEX_BOT_USER, 'maybe RISK-CLASS: PROTECTED?'), LEAN_ENV],
+    ['STANDARD', escalationCommentEvent(CODEX_BOT_USER, 'RISK-CLASS: STANDARD'), LEAN_ENV],
+    ['future activation', escalationCommentEvent(CODEX_BOT_USER), { OPERATING_MODEL: 'lean', LEAN_MODE_ACTIVATED_AT: '2999-01-01T00:00:00Z' }],
+  ] as const) {
+    const result = await runRefresh({ ...event, env, runs: ESCALATION_RUNS });
+    assert.equal(result.error, null, label);
+    assert.deepEqual(result.reruns, [], label);
+  }
+});
+
+test('required-check-refresh (P1): outside lean an escalation comment is ignored exactly as before, without loading the module', async () => {
+  for (const env of [LEGACY_ENV, UNSET_ENV]) {
+    const result = await runRefresh({ ...escalationCommentEvent(CODEX_BOT_USER), env, runs: ESCALATION_RUNS }, env === UNSET_ENV ? forbidModuleRequire : rootRequire);
+    assert.equal(result.error, null);
+    assert.deepEqual(result.reruns, []);
+  }
+  // Legacy signals are untouched: EXECUTOR_RESULT / PM_VERDICT still map to their single targets.
+  const legacyExecutor = await runRefresh({ ...escalationCommentEvent(CODEX_BOT_USER, 'EXECUTOR_RESULT: READY\nRISK-CLASS: PROTECTED'), env: UNSET_ENV, runs: ESCALATION_RUNS }, forbidModuleRequire);
+  assert.deepEqual(legacyExecutor.reruns, [303]);
+  const legacyVerdict = await runRefresh({ ...escalationCommentEvent({ login: 'griff843', type: 'User' }, 'PM_VERDICT: APPROVED'), env: LEGACY_ENV, runs: ESCALATION_RUNS });
+  assert.deepEqual(legacyVerdict.reruns, [202]);
+});
+
+test('Independent Review / Merge Gate (P2): a review thread with more than 100 comments fails closed in lean', async () => {
+  const comment = { author: { login: CODEX_GQL, __typename: 'Bot' }, body: 'nit', createdAt: '2026-12-03T00:59:00Z', pullRequestReview: { databaseId: 10 } };
+  const fixture: Fixture = { branch: 'feature/x', env: LEAN_ENV, reviews: [trustedReview()], summaries: [cleanSummary()], threads: [{ isResolved: true, comments: [comment], moreComments: true }] };
+  const review = await runStep(reviewScript, fixture);
+  assert.ok(review.failures.some(f => /more than 100 comments/u.test(f)), JSON.stringify(review.failures));
+  const merge = await gate(fixture);
+  assert.ok(merge.failures.some(f => /more than 100 comments/u.test(f)), JSON.stringify(merge.failures));
+  // Same fixture with a complete thread is not blocked by pagination.
+  const complete = await runStep(reviewScript, { ...fixture, threads: [{ isResolved: true, comments: [comment] }] });
+  assert.ok(!complete.failures.some(f => /more than 100 comments/u.test(f)));
 });
 
 // ── post-merge-qa-gate tier derivation ─────────────────────────────────────

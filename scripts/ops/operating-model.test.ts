@@ -6,6 +6,7 @@ import {
   evaluateLeanGate,
   loadPullRequestPolicy,
   resolveOperatingMode,
+  isTrustedReviewerEscalation,
   reviewerRequestsProtected,
   scanUiContent,
   standardRuleFor,
@@ -525,7 +526,7 @@ function fakeGithub({ files, reviews = [], threads = [], comments = [], contents
     },
     paginate: async (fn: (p: unknown) => Promise<{ data: unknown }>, params: unknown) => (await fn(params)).data,
     graphql: async (query: string) => {
-      const nodes = query.includes('reviewThreads') ? threads.map(t => ({ isResolved: t.isResolved, comments: { nodes: t.comments } }))
+      const nodes = query.includes('reviewThreads') ? threads.map(t => ({ isResolved: t.isResolved, comments: { pageInfo: { hasNextPage: Boolean(t.moreComments) }, nodes: t.comments } }))
         : query.includes('reviews(') ? reviews : comments;
       return { repository: { pullRequest: { connection: { pageInfo: { hasNextPage: false }, nodes } } } };
     },
@@ -564,4 +565,38 @@ test('loader: a GraphQL page overflow fails closed instead of truncating finding
   const github = fakeGithub({ files: [file('docs/03_product/notes.md')] });
   github.graphql = async () => ({ repository: { pullRequest: { connection: { pageInfo: { hasNextPage: true, endCursor: 'x' }, nodes: [] } } } });
   await assert.rejects(loadPullRequestPolicy({ github, owner: 'o', repo: 'r', pr: PR, env: LEAN }), /Failing closed/);
+});
+
+test('loader (P2): a review thread with another page of nested comments fails closed; a complete thread is unchanged', async () => {
+  const doc = file('docs/03_product/notes.md');
+  const comment = { author: { login: CODEX_GQL, __typename: 'Bot' }, body: 'looks fine', createdAt: T1 };
+  const complete = await loadPullRequestPolicy({ github: fakeGithub({ files: [doc], threads: [{ isResolved: true, comments: [comment] }] }), owner: 'o', repo: 'r', pr: PR, env: LEAN });
+  assert.equal(complete.classification!.class, 'Standard');
+  assert.equal(complete.reviewInputs!.threads.length, 1);
+  assert.deepEqual(complete.reviewInputs!.threads[0].comments, [comment]);
+  await assert.rejects(
+    loadPullRequestPolicy({ github: fakeGithub({ files: [doc], threads: [{ isResolved: true, comments: [comment], moreComments: true }] }), owner: 'o', repo: 'r', pr: PR, env: LEAN }),
+    /more than 100 comments.*Failing closed/u,
+  );
+  // A response without nested pageInfo cannot prove completeness either.
+  const github = fakeGithub({ files: [doc] });
+  github.graphql = async (query: string) => ({ repository: { pullRequest: { connection: { pageInfo: { hasNextPage: false }, nodes: query.includes('reviewThreads') ? [{ isResolved: false, comments: { nodes: [comment] } }] : [] } } } });
+  await assert.rejects(loadPullRequestPolicy({ github, owner: 'o', repo: 'r', pr: PR, env: LEAN }), /pageInfo.*Failing closed/u);
+});
+
+test('escalation helper: isTrustedReviewerEscalation is the classification predicate, for REST and GraphQL shapes', () => {
+  const rest = (login: string, body = 'RISK-CLASS: PROTECTED', type = 'Bot') => ({ user: { login, type }, body });
+  assert.equal(isTrustedReviewerEscalation(rest(CODEX), []), true);
+  assert.equal(isTrustedReviewerEscalation({ author: { login: CODEX_GQL }, body: 'x\n RISK-CLASS: PROTECTED \n' }, []), true);
+  assert.equal(isTrustedReviewerEscalation(rest('griff843'), []), false);
+  assert.equal(isTrustedReviewerEscalation(rest(CODEX, 'RISK-CLASS: PROTECTED please'), []), false);
+  assert.equal(isTrustedReviewerEscalation(rest(CODEX, 'RISK-CLASS: STANDARD'), []), false);
+  assert.equal(isTrustedReviewerEscalation(rest('alice'), ['alice']), true, 'configured list replaces the default');
+  assert.equal(isTrustedReviewerEscalation(rest(CODEX), ['alice']), false);
+  assert.equal(isTrustedReviewerEscalation(null, []), false);
+  for (const node of [rest(CODEX), rest('griff843'), rest('alice')]) {
+    for (const list of [[], ['alice']]) {
+      assert.equal(isTrustedReviewerEscalation(node, list), reviewerRequestsProtected({ comments: [node], trustedReviewers: list }));
+    }
+  }
 });
