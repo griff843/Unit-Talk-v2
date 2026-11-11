@@ -71,6 +71,16 @@ Head under test: 212c813ea44574fdce9e49910b765caa679e05cf (lane worktree, branch
 - `pnpm ops:preflight WORK-2026110804 --tier T1 ...`: VERDICT PASS (42 checks). PB1 `pnpm type-check` and PB2 `pnpm test` passed on `main` + the work order. PT1 reported BLOCKED_BY_CONTAINMENT, and the token records `t1_live_db_precondition: deferred_to_ci` under the ratified PT1 route B (`docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md`).
 - Not run locally: `pnpm test:db` and runtime proof. This lane has no runtime or DB path. The live-DB precondition is deferred to exact-head CI under route B.
 
+### `pnpm verify` (2026-11-11, after syncing main)
+
+Run on 42b345f69311bf86aca19f68934d6363f0b80f90, which merges origin/main 0033d3a1e9ab9cdc8c221d7bf3743c242c7744f6 into the lane head d75e1d8cbcea48c79d13d3246b6dee6148275341 via `ops:merge-wrapper git-merge-main` (no rebase, no history rewrite).
+
+- env check, lint, type-check and build: passed.
+- Unit tests: 8232 tests, 8219 pass, 0 fail (the remaining 13 are skipped or todo).
+- `verify:commands`: the command manifest checked 14 definitions; 139 migration versions, no duplicates; migration lint, 138 files, no findings.
+- `test:live-db`: refused locally, as designed: `[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx.` Because of that refusal, `pnpm verify` exited 1. This step runs only against staging through the staging-ci GitHub environment, and the exact-head CI staging DB proof (concurrency group `staging-ci-db`) covers it.
+- The Smart Form e2e step was skipped (`UNIT_TALK_SMART_FORM_E2E` not set). This lane does not touch Smart Form.
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
