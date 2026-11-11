@@ -148,9 +148,54 @@ const STANDARD_RULES = Object.freeze([
   },
 ]);
 
+// Tier C paths (AGENTS.md "Tier C - stop and report before editing";
+// mirrored exactly from scripts/ops/merge-risk.ts, parity asserted by
+// operating-model.test.ts). Every file at or under one of these is a PM-approval
+// path with no test, docs or fixture exemption, so it is VETOED before any
+// Standard rule is consulted: nothing under a Tier C prefix can be Standard.
+const TIER_C_EXACT_PATHS = Object.freeze([
+  'packages/db/src/lifecycle.ts',
+  'packages/db/src/repositories.ts',
+  'packages/db/src/runtime-repositories.ts',
+  'packages/db/src/database.types.ts',
+  'apps/api/src/distribution-service.ts',
+  'apps/api/src/submission-service.ts',
+  'apps/api/src/settlement-service.ts',
+  'apps/api/src/auth.ts',
+  'scripts/ops/orchestration-reconciler.ts',
+  'scripts/ci/file-scope-guard.ts',
+  'scripts/ci/file-scope-guard.test.ts',
+]);
+const TIER_C_PATH_PREFIXES = Object.freeze([
+  'supabase/migrations/',
+  'packages/contracts/src/',
+  'packages/domain/src/',
+  'apps/worker/',
+  '.github/workflows/',
+  'docs/00_constitution/',
+  'packages/config/',
+]);
+const TIER_C_PATH_PATTERNS = Object.freeze([
+  /^apps\/api\/src\/[^/]+-service\.ts$/u,
+  /^scripts\/ops\/(?:lane|merge|tier)-[^/]+(?<!\.test)\.ts$/u,
+  /^docs\/05_operations\/[^/]+_(?:POLICY|SPEC)\.md$/u,
+  /^\.env(?:\..*)?$/u,
+  /^local\.env$/u,
+]);
+
+/** True when `filePath` is a Tier C path (exact, under a prefix, or a pattern). */
+function isTierCPath(filePath) {
+  const name = normalizePath(filePath);
+  return TIER_C_EXACT_PATHS.includes(name)
+    || TIER_C_PATH_PREFIXES.some(prefix => name.startsWith(prefix))
+    || TIER_C_PATH_PATTERNS.some(pattern => pattern.test(name));
+}
+
 function standardRuleFor(filePath) {
   const name = normalizePath(filePath);
   if (!name || name.includes('..')) return null;
+  // Tier C veto FIRST: no allow-list rule (tests, docs, UI) may admit it.
+  if (isTierCPath(name)) return null;
   const rule = STANDARD_RULES.find(candidate => candidate.match(name));
   if (!rule) return null;
   if (sensitivePathWord(name)) return null;
@@ -320,7 +365,9 @@ function classifyRisk({ files } = {}) {
     const rule = standardRuleFor(name);
     if (!rule) {
       const word = sensitivePathWord(name);
-      protect(name, 'not-standard-path', word
+      protect(name, 'not-standard-path', isTierCPath(name)
+        ? 'Path is Tier C (AGENTS.md / merge-risk.ts); PM approval is required for every file under it, tests included.'
+        : word
         ? `Path contains the sensitive word "${word}".`
         : 'Path is not on the Standard allow-list (docs outside governance, add-only app/package unit tests, UI-only components).');
       continue;
@@ -852,6 +899,10 @@ module.exports = {
   STANDARD_RULES,
   resolveOperatingMode,
   standardRuleFor,
+  isTierCPath,
+  TIER_C_EXACT_PATHS,
+  TIER_C_PATH_PREFIXES,
+  TIER_C_PATH_PATTERNS,
   sensitivePathWord,
   scanUiContent,
   needsHeadContent,

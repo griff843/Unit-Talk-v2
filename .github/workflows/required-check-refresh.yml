@@ -193,7 +193,10 @@ jobs:
                 // Inline review-thread comments (created, edited, deleted) emit
                 // pull_request_review_comment, observed by the same read-only
                 // Independent Review workflow and handled identically here.
-                'Independent Review': { path: '.github/workflows/independent-review.yml', event: ['pull_request_review', 'pull_request_review_comment'], conclusion: null, targets: ['independent', 'merge'] },
+                // The native pull_request run itself is also accepted (lean
+                // only; legacy returned above), solely for the missed-summary
+                // recovery below.
+                'Independent Review': { path: '.github/workflows/independent-review.yml', event: ['pull_request_review', 'pull_request_review_comment', 'pull_request'], conclusion: null, targets: ['independent', 'merge'] },
               };
               const expected = trustedSignals[run.name];
               const expectedEvents = expected ? [].concat(expected.event) : [];
@@ -228,13 +231,45 @@ jobs:
                 throw new Error('workflow_run pull-request/head metadata mismatch; refusing refresh.');
               }
               targets = expected.targets;
-              // WORK-2026110804: a trusted review may carry RISK-CLASS:
-              // PROTECTED in its body or a thread comment. Merge Gate recomputes
-              // the class itself, but Executor Result Validation and Risk Class
-              // would otherwise keep a stale Standard result, so lean also
-              // refreshes them. Risk Class is last: if absent the job fails
-              // closed after all other reruns were requested.
-              if (run.name === 'Independent Review' && leanActive) {
+              if (run.name === 'Independent Review' && run.event === 'pull_request') {
+                // WORK-2026110804 (Codex P2 on #1842): a clean connector summary
+                // can land while the native run is in flight, after it read the
+                // comments. The issue_comment refresh then skips the in-flight
+                // run, the stale run fails, and nothing else retries it. On that
+                // run's completion, rerun it (and Merge Gate) once iff a trusted
+                // Bot summary was written at or after the run started. The
+                // rerun starts later than that write, so its own completion
+                // finds no newer summary: bounded, never a loop. The rerun
+                // re-evaluates everything itself, so this can only retry, never
+                // pass anything.
+                if (run.conclusion === 'success') {
+                  core.info(`Independent Review run ${run.id} succeeded; nothing to recover.`);
+                  return;
+                }
+                const startedMs = Date.parse(String(run.run_started_at || ''));
+                if (!Number.isFinite(startedMs)) {
+                  throw new Error(`Independent Review run ${run.id} has no valid run_started_at; refusing refresh.`);
+                }
+                const issueComments = await github.paginate(github.rest.issues.listComments, {
+                  owner, repo, issue_number: prNumber, per_page: 100,
+                });
+                const missedSummary = issueComments.some(comment =>
+                  comment?.user?.type === 'Bot' &&
+                  trustedReviewerLogins.has(normLogin(comment.user.login)) &&
+                  operatingModel.parseCodexState(String(comment.body || '')) !== null &&
+                  Date.parse(String(comment.updated_at || comment.created_at || '')) >= startedMs);
+                if (!missedSummary) {
+                  core.info(`Independent Review run ${run.id} saw every trusted summary; nothing to recover.`);
+                  return;
+                }
+                targets = ['independent', 'merge'];
+              } else if (run.name === 'Independent Review' && leanActive) {
+                // WORK-2026110804: a trusted review may carry RISK-CLASS:
+                // PROTECTED in its body or a thread comment. Merge Gate
+                // recomputes the class itself, but Executor Result Validation
+                // and Risk Class would otherwise keep a stale Standard result,
+                // so lean also refreshes them. Risk Class is last: if absent
+                // the job fails closed after all other reruns were requested.
                 targets = [...expected.targets, 'executor', 'risk'];
               }
             } else {

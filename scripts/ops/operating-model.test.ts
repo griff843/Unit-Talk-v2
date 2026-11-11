@@ -11,8 +11,12 @@ import {
   reviewerRequestsProtected,
   scanUiContent,
   standardRuleFor,
+  isTierCPath,
+  TIER_C_EXACT_PATHS as POLICY_TIER_C_EXACT_PATHS,
+  TIER_C_PATH_PREFIXES as POLICY_TIER_C_PATH_PREFIXES,
+  TIER_C_PATH_PATTERNS as POLICY_TIER_C_PATH_PATTERNS,
 } from './operating-model.cjs';
-import { TIER_C_EXACT_PATHS, TIER_C_PATH_PREFIXES } from './merge-risk.js';
+import { TIER_C_EXACT_PATHS, TIER_C_PATH_PATTERNS, TIER_C_PATH_PREFIXES, isTierCPath as mergeRiskIsTierCPath } from './merge-risk.js';
 
 // Must be in the past: a future activation is not armed.
 const ACTIVATED = '2026-01-01T00:00:00Z';
@@ -177,13 +181,66 @@ test('classify: every merge-risk.ts Tier C exact path and prefix is Protected (p
   }
 });
 
+test('Tier C lists in operating-model.cjs mirror merge-risk.ts exactly', () => {
+  assert.deepEqual([...POLICY_TIER_C_EXACT_PATHS].sort(), [...TIER_C_EXACT_PATHS].sort());
+  assert.deepEqual([...POLICY_TIER_C_PATH_PREFIXES].sort(), [...TIER_C_PATH_PREFIXES].sort());
+  assert.deepEqual(POLICY_TIER_C_PATH_PATTERNS.map(String).sort(), TIER_C_PATH_PATTERNS.map(String).sort());
+});
+
+// Codex P1 on #1842: an add-only unit test, a nested file, a doc or a fixture
+// under a Tier C prefix must never reach a Standard rule (AGENTS.md: PM approval
+// for every file under those trees, no test exemption).
+test('classify (adversarial, Tier C veto): new tests, nested files, docs and fixtures under every Tier C prefix are Protected', () => {
+  const leaves = [
+    'example.test.ts',
+    'example.spec.ts',
+    'example.test.tsx',
+    'market/market-key.test.ts',
+    'a/b/c/deep.test.ts',
+    'src/nested.test.ts',
+    'nested/notes.md',
+    'notes.md',
+    '__fixtures__/x.json',
+    'components/Widget.tsx',
+  ];
+  for (const prefix of TIER_C_PATH_PREFIXES) {
+    for (const leaf of leaves) {
+      const name = `${prefix}${leaf}`;
+      assert.equal(isTierCPath(name), true, `isTierCPath ${name}`);
+      assert.equal(mergeRiskIsTierCPath(name), true, `merge-risk agrees ${name}`);
+      assert.equal(standardRuleFor(name), null, `unexpected Standard rule for ${name}`);
+      const entry = /\.(?:test|spec)\.tsx?$/u.test(name) ? addedTest(name) : file(name);
+      const result = classifyRisk({ files: [entry] });
+      assert.equal(result.class, 'Protected', `expected Protected: ${name}`);
+      assert.match(result.reasons[0]!.detail as string, /Tier C/u, name);
+    }
+  }
+  // The two examples named in the review, as clean add-only tests.
+  for (const name of ['packages/domain/src/market/market-key.test.ts', 'packages/contracts/src/canonical-pick.test.ts', 'packages/config/src/env.parse.test.ts']) {
+    assert.equal(classifyRisk({ files: [addedTest(name)] }).class, 'Protected', name);
+  }
+  // A Tier C test file mixed into an otherwise Standard PR makes the PR Protected.
+  assert.equal(classifyRisk({ files: [file('docs/03_product/notes.md'), addedTest('packages/domain/src/market/market-key.test.ts')] }).class, 'Protected');
+  // Tier C exact paths and patterns are vetoed too, whatever rule they resemble.
+  for (const name of [...TIER_C_EXACT_PATHS, 'apps/api/src/odds-service.ts', 'docs/05_operations/X_POLICY.md', 'docs/05_operations/Y_SPEC.md', 'scripts/ops/lane-x.ts']) {
+    assert.equal(standardRuleFor(name), null, name);
+  }
+});
+
+test('classify: the Tier C veto does not remove ordinary Standard paths outside Tier C', () => {
+  for (const name of ['packages/domain-utils/src/a.test.ts', 'packages/db/src/odds-math.test.ts', 'apps/api/src/odds-math.test.ts']) {
+    assert.equal(isTierCPath(name), false, name);
+    assert.equal(classifyRisk({ files: [addedTest(name)] }).class, 'Standard', name);
+  }
+});
+
 test('classify: the allow-list admits plain docs, add-only unit tests and clean UI components', () => {
   const result = classifyRisk({
     files: [
       file('docs/03_product/board-layout-notes.md'),
       file('docs/archive/old.md', { status: 'removed', additions: 0, deletions: 4 }),
       addedTest('apps/api/src/odds-math.test.ts'),
-      addedTest('packages/domain/src/market/market-key.test.ts'),
+      addedTest('packages/verification/src/market/market-key.test.ts'),
       ui('apps/command-center/src/components/MiniSparkline.tsx'),
       ui('apps/command-center/src/components/ui/Badge.tsx', "import { cn } from '@/lib/utils';\nimport { Icon } from './Icon';\nexport const B = () => <span className={cn('x')}><Icon /></span>;\n"),
     ],
