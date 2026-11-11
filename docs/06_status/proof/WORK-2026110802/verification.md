@@ -18,7 +18,9 @@ result in "PM changes" below was measured on). The PM approved expanding the lan
 `apps/api/src/clv-service.ts` and its focused tests for finding 1. Independent review round 2
 (CHANGES REQUIRED at 3fbe5b3ca) fixes: commit 8a90b9730, synced with main as
 f40e33cc5ce89c81704ba1f23a305b51f5edefcb (the sync added only `docs/06_status/readiness/readiness-score.json`);
-results in "Review round 2" below.
+results in "Review round 2" below. Independent review round 3 (CHANGES REQUIRED at bc8037946) fixes:
+commits df3d33296 (code) and b7692eaca (one test renamed); main was already merged, no sync needed;
+results in "Review round 3" below.
 
 ## ASSERTIONS:
 
@@ -36,6 +38,12 @@ results in "Review round 2" below.
 - [x] R2 P1-C: a manual player requires a player-prop market, a catalog statType, the form-built selection naming only that player, and a matching flat `metadata.player` (api tests 117-120).
 - [x] R2 P2-A: `playerProvenance` / `participantResolution.manualPlayer` are refused (422) on any non-Smart-Form submission (api test 121).
 - [x] R2 P3: displayName must be NFC and within a Latin/digit/punctuation allow-list (invisible, homoglyph, compatibility characters refused); the accepted name is persisted as validated (api tests 122-123); the CLV resolver's own manual-player guard is pinned (clv test 45).
+- [x] R3 P1-1: near misses of a covered player are refused with "may be canonical player": surname within one edit or a 4+ letter prefix or reduced to an initial beside the exact given name (Tatem, Tatumm, Tatums, Tatu, Antetokoumpo, "Jayson T.", "Giannis A"); given name a 3+ letter prefix pair, within one edit, or within one edit of a 3+ letter prefix beside the exact surname (Steph, Stef, Cam, Matt, Nic, Nick, Herb, Jay, Jason); two-letter full initials ("HS Kim"); controls (Jaylen Tatum, Jalen vs Jaylin, A.J. Johnson vs Andre Johnson) remain gaps (api tests 125-128).
+- [x] R3 P2-1: g l r d t k (accented forms) are wildcarded; German oe/ue/ae patterns and matching (Poeltl, Mueller, Oezil, Oedegaard, Schroeder) refuse the umlauted catalog players; Dogus/Ondrej are found only through the new wildcards (api test 130).
+- [x] R3 P2-2: the reversed full-name query finds "Andrew Wu" for "Wu A" (api test 131).
+- [x] R3 P2-3: `player`, `playerName`, `participantName` must be the manual player if present; `playerId`, `participantId`, `providerParticipantId` must be absent or null (api test 132).
+- [x] R3 P2-4: only an exact name says "resolves to"; near misses and initials say "may be"; several initials refuse only when they equal ALL the catalog player's given initials (api tests 127-129).
+- [x] R3 P3: the trimmed, space-collapsed name is persisted to `manualPlayer.displayName` and each string flat name field (api test 133); the market must equal the contract player-prop key for the sport and stat, kept identical to the client table by a parity test (api test 134; smart-form test 55); a malformed search row is a retryable 503 with no stamp (api test 135); the saturation test now exceeds the 500-row limit and expects 422 `SMART_FORM_MANUAL_PLAYER_UNVERIFIABLE` (api test 104; test 103 is the honest under-limit control).
 - [x] The teams beside a manual player are verified exactly as for any structured fallback (api test 98).
 - [x] The client offers manual entry only after a definitive not-found; an errored or unrun search keeps the refusal (smart-form tests 43-46; browser test 4).
 - [x] The client payload for each shape carries canonical teams, `manualPlayer`, Track Only and `playerProvenance: manual-coverage-gap` (smart-form tests 47-51).
@@ -266,6 +274,43 @@ catalog were not measured from this host (tests emulate ILIKE). Known limits: a 
 vowel and a consonant with under two literals left ("Nunez" for "Núñez"), and multi-letter
 transliterations ("ss"/"ß"), are not matched.
 
+## Review round 3 (2026-11-11), code commits df3d33296 + b7692eaca
+
+Measured on the df3d33296 tree (working copy, then committed unchanged):
+
+- `pnpm exec tsx --test apps/api/src/smart-form-validation.test.ts apps/api/src/clv-service.test.ts`: `# tests 180`, `# pass 180`, `# fail 0` (validator 135, clv 45).
+- `cd apps/smart-form && pnpm test`: `# tests 243`, `# pass 243`, `# fail 0`.
+- `pnpm type-check` exit 0; `pnpm lint` exit 0.
+- `CI=1 SMART_FORM_E2E_API_PORT=4610 SMART_FORM_E2E_PORT=4710 SMART_FORM_DIST_DIR=.next-e2e-0802 pnpm exec playwright test e2e/manual-player-fallback.spec.ts --reporter=list` in `apps/smart-form`: `4 passed (47.5s)`.
+
+On b7692eaca (a test title change only): the focused command again `# tests 180`, `# pass 180`, `# fail 0`;
+`pnpm exec eslint apps/api/src/smart-form-validation.test.ts` exit 0. `pnpm verify` was not re-run this round.
+
+### Round-3 mutation proofs (each applied alone, focused suite run, file restored)
+
+All 24 killed: no given-name prefix rule; no given-name one-edit rule; no given-name prefix-edit rule; no
+two-letter full-initials rule; no single-initial rule (3 fail); multi-initials matched on the first only
+(P2-4); no surname one-edit rule (2); no surname prefix rule; no surname initial rule (2); no matcher
+transliteration; consonant wildcards back to c n s z (2, after adding Dogus/Ondrej); no transliteration
+patterns; no reversed full-name query; only `player` bound (2); `providerParticipantId` allowed; id fields
+refused only when truthy strings; raw name persisted; no space collapse; flat name fields not rewritten;
+market prefix-only; market any key of the sport; malformed row skipped; near miss worded "resolves to" (4);
+saturation ignored (3). Parity test: changing a key in the contract copy (1 fail), in the client table
+(2), or adding a client-only stat (1) is caught.
+
+Reviewer probes: `bypass.mts` now accepts only the nickname/initialism cases left to the PM ("JT", SGA, MPJ,
+KAT, "Greek Freak", "King James", "Bron James", "Mike Porter Jr", "Wardell Curry") and the documented
+accent limits ("Sengun", "Ibanez", "Nunez", "Jiri": accented in a vowel and a consonant, under two
+literals left). `misc.mts`: trimmed name persisted, bad markets and flat fields refused, malformed row 503.
+`usability.mts` (synthetic 12000-player catalog with emulated ILIKE; emulation only): of 131 absent names,
+72 accepted, 25 refused as covered, 29 unverifiable (saturated, e.g. "_am" for "Cam Spencer", "ja_e_" for
+"Jalen Pickett"), 5 refused as near misses of a different synthetic player (Josh/John Brown, Jose/Joe
+Altuve, Yandy/Randy Diaz, Mike/Mikhail Jones, "T.J. Watt"/"J.T. Witt").
+
+Unverified: runtime proof is still the CI staging receipt from PR head 900f46831; it does not exercise
+the manual-player path. Real-catalog behaviour of the patterns, near-miss refusal rate and saturation
+rate were not measured from this host.
+
 ## Verification (original, on b64849542)
 
 Command: `pnpm verify` (lane worktree, on the tree later committed as b64849542 except the two
@@ -292,7 +337,7 @@ only in CI's "Writable DB proof (staging only)" job on the exact PR head; that j
 `ops:proof-generate`. No production data was read or written by this lane. This lane adds no
 migration and no new write path; the persisted shape was asserted against the real local API above.
 
-Execution SHA: f40e33cc5ce89c81704ba1f23a305b51f5edefcb (review round 2; PM changes 4361dd6ef; original b64849542b6964eb7f23fb97ed6c64b06effa317)
+Execution SHA: b7692eacac44b95cabf6138e71f2c7a4dc502641 (review round 3; round 2 f40e33cc5; PM changes 4361dd6ef; original b64849542b6964eb7f23fb97ed6c64b06effa317)
 
 The staging result below is from the earlier head 900f46831; CI's staging job re-runs on the new PR
 head and its receipt is authoritative. It was not re-harvested here.
@@ -312,4 +357,4 @@ exact-head CI re-runs the same staging job.
 
 Merge SHA: pending merge
 PR: pending
-Execution SHA: f40e33cc5ce89c81704ba1f23a305b51f5edefcb
+Execution SHA: b7692eacac44b95cabf6138e71f2c7a4dc502641

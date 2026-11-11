@@ -7,7 +7,7 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "f40e33cc5ce89c81704ba1f23a305b51f5edefcb",
+    "verified_source_sha": "b7692eacac44b95cabf6138e71f2c7a4dc502641",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },

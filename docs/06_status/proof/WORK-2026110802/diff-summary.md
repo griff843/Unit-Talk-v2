@@ -36,6 +36,15 @@ Review round 2 (2026-11-11, commit 8a90b9730):
 | `apps/api/src/clv-service.ts` | `resolveParticipantId` exported for its guard test |
 | `apps/api/src/clv-service.test.ts` | test 45 pins the resolver's manual-player guard |
 
+Review round 3 (2026-11-11, commits df3d33296, b7692eaca):
+
+| File | Change |
+|---|---|
+| `packages/contracts/src/smart-form.ts` | copy of the client player-prop market-key tables; `resolveSmartFormPlayerPropMarketKey`, `smartFormPlayerPropMarketKeysForSport`, `smartFormPlayerPropStatTypes`, `smartFormPlayerPropSports` |
+| `apps/api/src/smart-form-validation.ts` | P1-1/P2-4 `catalogPlayerMatch` (`resolves` / `plausible`, near-miss rules, transliteration undone) replaces `isPlausiblySamePlayer`; P2-1 consonant wildcards g l r d t k and oe/ue/ae patterns; P2-2 reversed full-name query (cap 64); P2-3 `PLAYER_NAME_FIELDS` / `PLAYER_ID_FIELDS` binding; P3 `manualPlayerName` persisted to every name field, exact market key, malformed row 503 |
+| `apps/api/src/smart-form-validation.test.ts` | 12 new tests (104, 125-135), saturation test split into under-limit control (103) and true saturation (104), refusal regexes accept "may be" |
+| `apps/smart-form/test/form-utils.test.ts` | test 55: client and contract market keys identical |
+
 Docs and records: `docs/03_product/smart-form/acceptance-matrix.md` (new resolution row),
 `.ops/work/WORK-2026110802.md` (work order, with the PM singleton authorization recorded under Admission),
 this proof directory.
