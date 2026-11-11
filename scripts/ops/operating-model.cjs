@@ -610,6 +610,16 @@ function isTrustedReviewerEscalation(node, trustedReviewers) {
   return isTrustedEscalation(node, trustedSet(trustedReviewers));
 }
 
+/**
+ * True when an artifact's author uses a trusted reviewer login (any account
+ * type). evaluateIndependentReview and reviewerRequestsProtected read ONLY
+ * artifacts with this property (findings, summaries, escalations, tamper
+ * detection), so a change to any other artifact cannot change either result.
+ */
+function isTrustedReviewerArtifact(node, trustedReviewers) {
+  return Boolean(node) && trustedSet(trustedReviewers).has(normLogin(actorLogin(node)));
+}
+
 // ── Lean merge-gate decision ───────────────────────────────────────────────
 
 /**
@@ -849,6 +859,7 @@ module.exports = {
   evaluateIndependentReview,
   reviewerRequestsProtected,
   isTrustedReviewerEscalation,
+  isTrustedReviewerArtifact,
   evaluateLeanGate,
   collectIndependentReviewInputs,
   loadPullRequestPolicy,

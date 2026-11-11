@@ -10,7 +10,7 @@ name: Required Check Refresh
 
 on:
   issue_comment:
-    types: [created, edited]
+    types: [created, edited, deleted]
   repository_dispatch:
     types: [required-check-refresh]
   workflow_run:
@@ -103,6 +103,13 @@ jobs:
                 throw new Error('issue_comment does not identify a pull request; refusing refresh.');
               }
               prNumber = Number(context.payload.issue.number);
+              // WORK-2026110804: 'deleted' is subscribed only for lean mode.
+              // Outside lean it is a no-op, so legacy sees exactly the
+              // created/edited signals it always did.
+              if (context.payload.action === 'deleted' && !leanActive) {
+                core.info('Deleted comment ignored: lean mode is not armed (legacy no-op).');
+                return;
+              }
               const body = String(context.payload.comment?.body || '');
               if (body.includes('EXECUTOR_RESULT:')) targets.push('executor');
               if (body.includes('PM_VERDICT:')) targets.push('merge');
@@ -130,6 +137,17 @@ jobs:
               // other target has been rerun.
               if (leanActive &&
                   operatingModel.isTrustedReviewerEscalation(context.payload.comment, configuredReviewers)) {
+                targets.push('merge', 'executor', 'independent', 'risk');
+              }
+              // WORK-2026110804: editing or deleting an issue comment authored
+              // by a trusted reviewer login can remove an escalation, delete or
+              // alter a connector summary, or mark it tampered (edited by
+              // another account). Evaluation reads only trusted-login
+              // artifacts, so only those recompute; untrusted ones cannot
+              // change any class-dependent result and trigger nothing.
+              if (leanActive &&
+                  (context.payload.action === 'edited' || context.payload.action === 'deleted') &&
+                  operatingModel.isTrustedReviewerArtifact(context.payload.comment, configuredReviewers)) {
                 targets.push('merge', 'executor', 'independent', 'risk');
               }
               if (targets.length === 0) {
@@ -172,17 +190,21 @@ jobs:
                 // WORK-2026110804: a trusted-reviewer review observed by the
                 // pull_request_review run reruns the native Independent Review
                 // and Merge Gate runs at the exact live head.
-                'Independent Review': { path: '.github/workflows/independent-review.yml', event: 'pull_request_review', conclusion: null, targets: ['independent', 'merge'] },
+                // Inline review-thread comments (created, edited, deleted) emit
+                // pull_request_review_comment, observed by the same read-only
+                // Independent Review workflow and handled identically here.
+                'Independent Review': { path: '.github/workflows/independent-review.yml', event: ['pull_request_review', 'pull_request_review_comment'], conclusion: null, targets: ['independent', 'merge'] },
               };
               const expected = trustedSignals[run.name];
-              if (!expected || run.path !== expected.path || run.event !== expected.event) {
+              const expectedEvents = expected ? [].concat(expected.event) : [];
+              if (!expected || run.path !== expected.path || !expectedEvents.includes(run.event)) {
                 throw new Error(`Untrusted workflow_run identity ${run.name}/${run.path}/${run.event}; refusing refresh.`);
               }
               if (expected.conclusion && run.conclusion !== expected.conclusion) {
                 throw new Error(`Trusted workflow_run ${run.id} concluded ${run.conclusion}; refusing refresh.`);
               }
               let linkedPulls = Array.isArray(run.pull_requests) ? run.pull_requests : [];
-              if (linkedPulls.length === 0 && run.event === 'pull_request_review') {
+              if (linkedPulls.length === 0 && (run.event === 'pull_request_review' || run.event === 'pull_request_review_comment')) {
                 // GitHub's real workflow-run API leaves pull_requests empty for
                 // pull_request_review runs. Resolve server-side association by
                 // the exact run SHA; never trust a branch name or artifact.

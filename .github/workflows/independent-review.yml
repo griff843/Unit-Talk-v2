@@ -19,10 +19,15 @@
 # the base commit predates the policy module (lazy, guarded require): reports
 # "not applicable" and passes; Merge Gate then runs its legacy path.
 #
-# Retry: a bot review is a pull_request_review event (ineligible job below);
-# the connector summary is an issue comment. Both are observed by
-# required-check-refresh.yml (trusted, default-branch definition), which
-# reruns the native pull_request run at the exact live head.
+# Retry: a review (submitted, edited, dismissed) is a pull_request_review
+# event and an inline review-thread comment (created, edited, deleted) is a
+# pull_request_review_comment event; both run the ineligible, read-only job
+# below. required-check-refresh.yml (trusted, default-branch definition)
+# observes that run via workflow_run and, in lean mode, reruns Independent
+# Review, Merge Gate, Executor Result Validation and Risk Class at the exact
+# live head. Issue comments (connector summary, escalation) are observed by
+# required-check-refresh.yml directly. Thread resolve/unresolve has no
+# Actions event: see Known limits in docs/05_operations/LEAN_MODE_ACTIVATION.md.
 #
 # Pinned to the PR's immutable base SHA so a PR cannot rewrite its own review
 # rules.
@@ -34,6 +39,8 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
   pull_request_review:
     types: [submitted, edited, dismissed]
+  pull_request_review_comment:
+    types: [created, edited, deleted]
 
 permissions:
   contents: read
@@ -98,4 +105,4 @@ jobs:
 
       - name: Review event observed (retry signal only)
         if: github.event_name != 'pull_request'
-        run: echo "pull_request_review observed; required-check-refresh.yml reruns the native Independent Review run at the live head."
+        run: echo "${{ github.event_name }} observed; required-check-refresh.yml reruns the native Independent Review run at the live head."

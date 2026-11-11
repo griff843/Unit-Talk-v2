@@ -636,6 +636,81 @@ test('Independent Review / Merge Gate (P2): a review thread with more than 100 c
   assert.ok(!complete.failures.some(f => /more than 100 comments/u.test(f)));
 });
 
+// ── Event-family audit: every input evaluation reads recomputes in lean ─────
+
+function commentEvent(action: string, user: Record<string, unknown>, body: string) {
+  return { eventName: 'issue_comment', payload: { action, issue: { number: 77, pull_request: {} }, comment: { body, user } } };
+}
+
+test('event audit: Independent Review subscribes to every review and inline-comment action, read-only', () => {
+  const workflow = readWorkflow('independent-review.yml');
+  assert.deepEqual(workflow.on.pull_request_review.types, ['submitted', 'edited', 'dismissed']);
+  assert.deepEqual(workflow.on.pull_request_review_comment.types, ['created', 'edited', 'deleted']);
+  assert.equal(workflow.on.pull_request_target, undefined);
+  for (const job of Object.values(workflow.jobs as Record<string, Doc>)) {
+    for (const value of Object.values((job.permissions ?? {}) as Record<string, string>)) assert.equal(value, 'read');
+  }
+  assert.deepEqual(workflow.permissions, { contents: 'read' });
+  const refresh = readWorkflow('required-check-refresh.yml');
+  assert.deepEqual(refresh.on.issue_comment.types, ['created', 'edited', 'deleted']);
+  assert.equal(refresh.on.pull_request_review_comment, undefined, 'the privileged broker is never fork-event triggered');
+});
+
+test('event audit (lean): an inline review-thread comment run recomputes all four class-dependent checks', async () => {
+  const run = { ...independentReviewWorkflowRun(), event: 'pull_request_review_comment' };
+  const result = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: run }, env: LEAN_ENV, runs: ESCALATION_RUNS });
+  assert.equal(result.error, null);
+  assert.deepEqual(result.reruns, [101, 202, 303, 404]);
+  for (const env of [LEGACY_ENV, UNSET_ENV]) {
+    const legacy = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: run }, env, runs: ESCALATION_RUNS });
+    assert.equal(legacy.error, null);
+    assert.deepEqual(legacy.reruns, []);
+  }
+  // Only the Independent Review workflow may carry this event.
+  const spoof = { ...run, name: 'Merge Gate', path: '.github/workflows/merge-gate.yml' };
+  const refused = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: spoof }, env: LEAN_ENV, runs: ESCALATION_RUNS });
+  assert.match(String(refused.error?.message), /Untrusted workflow_run identity/u);
+  assert.deepEqual(refused.reruns, []);
+});
+
+test('event audit (lean): editing or deleting a trusted-login issue comment recomputes all four checks', async () => {
+  for (const action of ['edited', 'deleted']) {
+    for (const [label, user, body] of [
+      ['summary', CODEX_BOT_USER, cleanSummary().body],
+      ['escalation removed', CODEX_BOT_USER, 'no longer protected'],
+      ['user with trusted login', { login: 'chatgpt-codex-connector', type: 'User' }, 'anything'],
+    ] as const) {
+      const result = await runRefresh({ ...commentEvent(action, user, body), env: LEAN_ENV, runs: ESCALATION_RUNS });
+      assert.equal(result.error, null, `${action} ${label}`);
+      assert.deepEqual([...result.reruns].sort(), [101, 202, 303, 404], `${action} ${label}`);
+    }
+  }
+  // A trusted-login comment that is created as plain text affects nothing.
+  const created = await runRefresh({ ...commentEvent('created', CODEX_BOT_USER, 'thanks'), env: LEAN_ENV, runs: ESCALATION_RUNS });
+  assert.deepEqual(created.reruns, []);
+});
+
+test('event audit (adversarial): untrusted comment edits/deletions trigger nothing; legacy ignores deletions entirely', async () => {
+  for (const action of ['created', 'edited', 'deleted']) {
+    const untrusted = await runRefresh({ ...commentEvent(action, { login: 'mallory', type: 'User' }, 'RISK-CLASS: PROTECTED\n![P1 Badge](x)'), env: LEAN_ENV, runs: ESCALATION_RUNS });
+    assert.equal(untrusted.error, null, action);
+    assert.deepEqual(untrusted.reruns, [], action);
+  }
+  // Legacy: deleted is a no-op even for legacy body signals; created/edited unchanged.
+  for (const env of [LEGACY_ENV, UNSET_ENV]) {
+    const requireFn = env === UNSET_ENV ? forbidModuleRequire : rootRequire;
+    const deleted = await runRefresh({ ...commentEvent('deleted', { login: 'griff843', type: 'User' }, 'EXECUTOR_RESULT: READY\nPM_VERDICT: APPROVED'), env, runs: ESCALATION_RUNS }, requireFn);
+    assert.equal(deleted.error, null);
+    assert.deepEqual(deleted.reruns, []);
+    const trustedDeleted = await runRefresh({ ...commentEvent('deleted', CODEX_BOT_USER, cleanSummary().body), env, runs: ESCALATION_RUNS }, requireFn);
+    assert.deepEqual(trustedDeleted.reruns, []);
+    const edited = await runRefresh({ ...commentEvent('edited', { login: 'griff843', type: 'User' }, 'EXECUTOR_RESULT: READY'), env, runs: ESCALATION_RUNS }, requireFn);
+    assert.deepEqual(edited.reruns, [303]);
+    const trustedEdited = await runRefresh({ ...commentEvent('edited', CODEX_BOT_USER, 'anything'), env, runs: ESCALATION_RUNS }, requireFn);
+    assert.deepEqual(trustedEdited.reruns, []);
+  }
+});
+
 // ── post-merge-qa-gate tier derivation ─────────────────────────────────────
 
 test('post-merge-qa-gate: label tier wins; lean Protected derives T1; lean Standard and legacy stay non-lane', async () => {

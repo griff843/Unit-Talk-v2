@@ -6,6 +6,7 @@ import {
   evaluateLeanGate,
   loadPullRequestPolicy,
   resolveOperatingMode,
+  isTrustedReviewerArtifact,
   isTrustedReviewerEscalation,
   reviewerRequestsProtected,
   scanUiContent,
@@ -599,4 +600,17 @@ test('escalation helper: isTrustedReviewerEscalation is the classification predi
       assert.equal(isTrustedReviewerEscalation(node, list), reviewerRequestsProtected({ comments: [node], trustedReviewers: list }));
     }
   }
+});
+
+test('trusted artifact helper: matches the login set evaluation and escalation read, any account type', () => {
+  assert.equal(isTrustedReviewerArtifact({ user: { login: CODEX, type: 'Bot' }, body: '' }, []), true);
+  assert.equal(isTrustedReviewerArtifact({ user: { login: 'chatgpt-codex-connector', type: 'User' } }, []), true);
+  assert.equal(isTrustedReviewerArtifact({ author: { login: CODEX_GQL } }, []), true);
+  assert.equal(isTrustedReviewerArtifact({ user: { login: 'mallory', type: 'User' } }, []), false);
+  assert.equal(isTrustedReviewerArtifact({ user: { login: 'alice' } }, ['alice']), true);
+  assert.equal(isTrustedReviewerArtifact({ user: { login: CODEX } }, ['alice']), false);
+  assert.equal(isTrustedReviewerArtifact(null, []), false);
+  // Anything the helper rejects can never escalate.
+  const untrusted = { user: { login: 'mallory' }, body: 'RISK-CLASS: PROTECTED' };
+  assert.equal(reviewerRequestsProtected({ comments: [untrusted] }), isTrustedReviewerArtifact(untrusted, []));
 });
