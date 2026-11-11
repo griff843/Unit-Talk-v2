@@ -270,21 +270,29 @@ jobs:
                   return writtenMs >= startedMs;
                 });
               };
+              // WORK-2026110804 (Codex P1 on #1842, round 6): a trusted P0/P1
+              // finding (review body, CHANGES_REQUESTED review or inline review
+              // comment) written while both native runs were in flight is
+              // skipped by the review-comment refresh too, and changes both
+              // results. Both completions therefore also recover a finding,
+              // using the exact finding test Independent Review evaluates.
+              const isFinding = node => operatingModel.isTrustedReviewerFinding(node, configuredReviewers);
               if (run.name === 'Independent Review' && run.event === 'pull_request') {
                 const isSummary = node =>
                   node?.user?.type === 'Bot' &&
                   trustedReviewerLogins.has(normLogin(node.user.login)) &&
                   operatingModel.parseCodexState(String(node.body || '')) !== null;
-                if (!(await signalWrittenSinceRunStart('Independent Review', isSummary, { includeReviews: false }))) {
-                  core.info(`Independent Review run ${run.id} saw every trusted summary; nothing to recover.`);
+                const isReviewSignal = node => isSummary(node) || isFinding(node);
+                if (!(await signalWrittenSinceRunStart('Independent Review', isReviewSignal, { includeReviews: true }))) {
+                  core.info(`Independent Review run ${run.id} saw every trusted summary and finding; nothing to recover.`);
                   return;
                 }
                 targets = ['independent', 'merge'];
               } else if (run.name === 'Merge Gate' && run.event === 'pull_request') {
                 // Reached only in lean (legacy refuses this event above).
-                const isEscalation = node => operatingModel.isTrustedReviewerEscalation(node, configuredReviewers);
-                if (!(await signalWrittenSinceRunStart('Merge Gate', isEscalation, { includeReviews: true }))) {
-                  core.info(`Merge Gate run ${run.id} saw every trusted escalation; nothing to recover.`);
+                const isGateSignal = node => operatingModel.isTrustedReviewerEscalation(node, configuredReviewers) || isFinding(node);
+                if (!(await signalWrittenSinceRunStart('Merge Gate', isGateSignal, { includeReviews: true }))) {
+                  core.info(`Merge Gate run ${run.id} saw every trusted escalation and finding; nothing to recover.`);
                   return;
                 }
                 targets = ['merge', 'executor', 'independent', 'risk'];

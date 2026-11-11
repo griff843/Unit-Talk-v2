@@ -653,6 +653,20 @@ function isTrustedReviewerArtifact(node, trustedReviewers) {
   return Boolean(node) && trustedSet(trustedReviewers).has(normLogin(actorLogin(node)));
 }
 
+/**
+ * True when one artifact (REST issue comment, review or inline review comment,
+ * or a GraphQL node) is a P0/P1 finding from a trusted reviewer login: the
+ * exact finding test evaluateIndependentReview applies (P0/P1 marker in the
+ * body, or a CHANGES_REQUESTED review), counted for any account type using a
+ * trusted login. The refresh broker uses it to recover a finding written while
+ * a native run was in flight, so it can never ignore a finding the evaluation
+ * would count.
+ */
+function isTrustedReviewerFinding(node, trustedReviewers) {
+  if (!isTrustedReviewerArtifact(node, trustedReviewers)) return false;
+  return P0_P1_FINDING.test(String(node.body || '')) || String(node.state || '') === 'CHANGES_REQUESTED';
+}
+
 // ── Lean merge-gate decision ───────────────────────────────────────────────
 
 /**
@@ -897,6 +911,7 @@ module.exports = {
   reviewerRequestsProtected,
   isTrustedReviewerEscalation,
   isTrustedReviewerArtifact,
+  isTrustedReviewerFinding,
   evaluateLeanGate,
   collectIndependentReviewInputs,
   loadPullRequestPolicy,

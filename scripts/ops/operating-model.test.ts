@@ -7,6 +7,7 @@ import {
   loadPullRequestPolicy,
   resolveOperatingMode,
   isTrustedReviewerArtifact,
+  isTrustedReviewerFinding,
   isTrustedReviewerEscalation,
   reviewerRequestsProtected,
   scanUiContent,
@@ -693,4 +694,16 @@ test('trusted artifact helper: matches the login set evaluation and escalation r
   // Anything the helper rejects can never escalate.
   const untrusted = { user: { login: 'mallory' }, body: 'RISK-CLASS: PROTECTED' };
   assert.equal(reviewerRequestsProtected({ comments: [untrusted] }), isTrustedReviewerArtifact(untrusted, []));
+});
+
+test('isTrustedReviewerFinding mirrors the Independent Review finding test for trusted logins only (Codex P1 #1842 round 6)', () => {
+  assert.equal(isTrustedReviewerFinding({ user: { login: CODEX, type: 'Bot' }, body: '**P1** gap' }, []), true);
+  assert.equal(isTrustedReviewerFinding({ user: { login: 'chatgpt-codex-connector', type: 'User' }, body: 'P0' }, []), true);
+  assert.equal(isTrustedReviewerFinding({ author: { login: CODEX_GQL }, body: 'severity: 1' }, []), true);
+  assert.equal(isTrustedReviewerFinding({ user: { login: CODEX, type: 'Bot' }, body: 'see thread', state: 'CHANGES_REQUESTED' }, []), true);
+  assert.equal(isTrustedReviewerFinding({ user: { login: CODEX, type: 'Bot' }, body: 'P2 nit' }, []), false);
+  assert.equal(isTrustedReviewerFinding({ user: { login: 'mallory', type: 'User' }, body: 'P1', state: 'CHANGES_REQUESTED' }, []), false);
+  assert.equal(isTrustedReviewerFinding({ user: { login: CODEX, type: 'Bot' }, body: 'P1' }, ['alice']), false);
+  assert.equal(isTrustedReviewerFinding({ user: { login: 'alice', type: 'User' }, body: 'P1' }, ['alice']), true);
+  assert.equal(isTrustedReviewerFinding(null, []), false);
 });

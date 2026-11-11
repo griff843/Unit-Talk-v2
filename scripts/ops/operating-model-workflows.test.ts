@@ -750,6 +750,79 @@ test('required-check-refresh (P1): outside lean a native Merge Gate completion i
   assert.deepEqual(review.reruns, [202]);
 });
 
+// Codex P1 on #1842 (round 6): a trusted P0/P1 inline comment lands after both
+// native runs read their inputs, while both are still in flight, so the
+// review-comment refresh skips both reruns. With only an older clean summary
+// and no escalation, neither completion used to recover it.
+const FINDING_AT = '2026-12-03T01:00:05Z';
+function inlineFinding(user: Record<string, unknown> = CODEX_BOT_USER, when = FINDING_AT, body = '**P1** This drops the guard.') {
+  return { user, body, created_at: when, updated_at: when };
+}
+const OLDER_CLEAN_SUMMARY = [summaryIssueComment('2026-12-03T00:59:00Z')];
+
+test('required-check-refresh (lean, P1 round 6): a trusted P0/P1 finding written while both native runs were in flight is recovered by both completions', async () => {
+  // 1. The race: the review-comment refresh finds both native runs in progress and reruns neither.
+  const reviewCommentRun = { ...independentReviewWorkflowRun(), event: 'pull_request_review_comment' };
+  const during = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: reviewCommentRun }, env: LEAN_ENV, runs: {
+    ...ESCALATION_RUNS,
+    'independent-review.yml': [refreshRun(103, '.github/workflows/independent-review.yml', 'in_progress')],
+    'merge-gate.yml': [refreshRun(203, '.github/workflows/merge-gate.yml', 'in_progress')],
+  } });
+  assert.deepEqual(during.reruns, [303, 404]);
+  assert.match(String(during.error?.message), /in_progress/u);
+  // 2. Both stale runs then complete (green): each completion recovers the finding.
+  for (const [label, extra] of [
+    ['inline review comment', { reviewComments: [inlineFinding()] }],
+    ['inline comment at the start second', { reviewComments: [inlineFinding(CODEX_BOT_USER, RUN_STARTED)] }],
+    ['P0 inline comment', { reviewComments: [inlineFinding(CODEX_BOT_USER, FINDING_AT, 'P0: data loss')] }],
+    ['review body', { reviews: [{ user: CODEX_BOT_USER, body: 'P1: missing check', state: 'COMMENTED', submitted_at: FINDING_AT }] }],
+    ['CHANGES_REQUESTED review', { reviews: [{ user: CODEX_BOT_USER, body: 'see thread', state: 'CHANGES_REQUESTED', submitted_at: FINDING_AT }] }],
+    ['configured reviewer', { reviewComments: [inlineFinding({ login: 'alice', type: 'User' })], env: { ...LEAN_ENV, TRUSTED_REVIEWER_LOGINS: 'alice' } }],
+  ] as const) {
+    const ir = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: nativeIndependentReviewRun({ conclusion: 'success' }) }, env: LEAN_ENV, runs: ESCALATION_RUNS, issueComments: OLDER_CLEAN_SUMMARY, ...extra });
+    assert.equal(ir.error, null, `IR ${label}`);
+    assert.deepEqual(ir.reruns, [101, 202], `IR ${label}`);
+    const gate = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: nativeMergeGateRun() }, env: LEAN_ENV, runs: ESCALATION_RUNS, issueComments: OLDER_CLEAN_SUMMARY, ...extra });
+    assert.equal(gate.error, null, `gate ${label}`);
+    assert.deepEqual(gate.reruns, [202, 303, 101, 404], `gate ${label}`);
+  }
+});
+
+test('required-check-refresh (lean, P1 round 6, adversarial): finding recovery is bounded and trusted-only', async () => {
+  for (const [label, extra] of [
+    // Bounded: the rerun started after the finding, so its own completion does nothing.
+    ['finding older than the run', { reviewComments: [inlineFinding(CODEX_BOT_USER, '2026-12-03T00:59:59Z')] }],
+    ['untrusted user P1', { reviewComments: [inlineFinding({ login: 'mallory', type: 'User' })] }],
+    ['untrusted bot P1', { reviewComments: [inlineFinding({ login: 'some-app[bot]', type: 'Bot' })] }],
+    ['untrusted CHANGES_REQUESTED', { reviews: [{ user: { login: 'mallory', type: 'User' }, body: 'P1', state: 'CHANGES_REQUESTED', submitted_at: FINDING_AT }] }],
+    ['default reviewer not in configured list', { reviewComments: [inlineFinding()], env: { ...LEAN_ENV, TRUSTED_REVIEWER_LOGINS: 'alice' } }],
+    ['trusted non-finding comment', { reviewComments: [inlineFinding(CODEX_BOT_USER, FINDING_AT, 'P2 nit: rename this')] }],
+    ['P1 as part of a word', { reviewComments: [inlineFinding(CODEX_BOT_USER, FINDING_AT, 'see AP1X')] }],
+  ] as const) {
+    for (const run of [nativeIndependentReviewRun({ conclusion: 'success' }), nativeMergeGateRun()]) {
+      const result = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: run }, env: LEAN_ENV, runs: ESCALATION_RUNS, issueComments: OLDER_CLEAN_SUMMARY, ...extra });
+      assert.equal(result.error, null, `${run.name} ${label}`);
+      assert.deepEqual(result.reruns, [], `${run.name} ${label}`);
+    }
+  }
+  // A matching trusted finding without a valid timestamp fails closed.
+  const noTimestamp = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: nativeIndependentReviewRun() }, env: LEAN_ENV, runs: ESCALATION_RUNS, reviewComments: [{ user: CODEX_BOT_USER, body: 'P1: gap' }] });
+  assert.match(String(noTimestamp.error?.message), /no valid timestamp/u);
+  assert.deepEqual(noTimestamp.reruns, []);
+});
+
+test('required-check-refresh (P1 round 6): outside lean a trusted P1 finding changes nothing for native completions', async () => {
+  for (const env of [LEGACY_ENV, UNSET_ENV]) {
+    const requireFn = env === UNSET_ENV ? forbidModuleRequire : rootRequire;
+    const ir = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: nativeIndependentReviewRun() }, env, runs: ESCALATION_RUNS, issueComments: OLDER_CLEAN_SUMMARY, reviewComments: [inlineFinding()] }, requireFn);
+    assert.equal(ir.error, null);
+    assert.deepEqual(ir.reruns, []);
+    const gate = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: nativeMergeGateRun() }, env, runs: ESCALATION_RUNS, issueComments: OLDER_CLEAN_SUMMARY, reviewComments: [inlineFinding()] }, requireFn);
+    assert.match(String(gate.error?.message), /Untrusted workflow_run identity Merge Gate\/.*\/pull_request/u);
+    assert.deepEqual(gate.reruns, []);
+  }
+});
+
 test('required-check-refresh (adversarial P1): untrusted or malformed escalation comments trigger nothing new', async () => {
   for (const [label, event, env] of [
     ['untrusted user', escalationCommentEvent({ login: 'griff843', type: 'User' }), LEAN_ENV],
