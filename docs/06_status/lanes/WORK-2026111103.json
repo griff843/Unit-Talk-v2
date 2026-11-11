@@ -8,7 +8,7 @@
   "branch": "claude/work-2026111103-smart-form-e2e-drift",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1844",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/work/WORK-2026111103.md",
@@ -18,9 +18,9 @@
     "apps/smart-form/e2e/smart-form-submission.spec.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-11-11T13:06:33.441Z",
-  "heartbeat_at": "2026-11-11T13:06:33.441Z",
+  "heartbeat_at": "2026-11-11T13:15:39.015Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026111103-smart-form-e2e-drift.json",
