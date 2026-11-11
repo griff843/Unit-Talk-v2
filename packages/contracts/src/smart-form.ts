@@ -20,6 +20,23 @@ export interface CanonicalParticipantResolution {
   home?: CanonicalParticipantIdentity | null;
   team?: CanonicalParticipantIdentity | null;
   player?: CanonicalParticipantIdentity | null;
+  /**
+   * WORK-2026110802: a player the reference catalog does not carry, entered by
+   * hand alongside canonical teams. Structured team fallback only (`eventId`
+   * null, team sports), mutually exclusive with `player`, and Track Only only.
+   * The server verifies the claimed gap against reference data and refuses a
+   * name that resolves to a canonical player.
+   */
+  manualPlayer?: ManualPlayerCoverageGap | null;
+}
+
+/** Player provenance recorded on pick metadata when `manualPlayer` is used. */
+export const manualPlayerProvenance = 'manual-coverage-gap' as const;
+
+export interface ManualPlayerCoverageGap {
+  displayName: string;
+  canonicalParticipantId: null;
+  reason: 'canonical-coverage-gap';
 }
 
 export interface ManualParticipantResolution {

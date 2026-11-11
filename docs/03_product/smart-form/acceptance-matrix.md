@@ -95,6 +95,7 @@ one source the browser and the server both consult.
 |---|---|---|
 | canonical | participants resolve to real `participants` rows | `phase-one:265` (spread), and the Milestone 1 production pick (moneyline) |
 | coverage-gap | `reason: 'canonical-coverage-gap'`, honest unresolved provenance | `phase-one:351`, `:420` (both moneyline) |
+| canonical teams + manual player (WORK-2026110802) | structured team fallback (`eventId: null`, team sports) with canonical away/home/team ids and one `manualPlayer` (`canonicalParticipantId: null`, `reason: 'canonical-coverage-gap'`); metadata `playerProvenance: 'manual-coverage-gap'`, no `playerId`, no `selectedOffer`; Track Only only | row asserted, `player-prop`: `manual-player-fallback:121` (Herro and Burries, NBA; Dulcich, NFL; local QA catalog, so NBA uses Celtics @ Knicks rather than the operator's Celtics @ Bucks) asserts the receipt text, the persisted metadata and no outbox row; `manual-player-fallback:181` asserts an errored player search offers no manual entry and submits nothing. Server rules: `apps/api/src/smart-form-validation.test.ts` (covered-name refusal, search error and timeout as retryable 503, mutual exclusions, delivery-eligible refusal) |
 
 `intent.md` permits either for the contained pilot **provided the recorded provenance is truthful
 about which was used**. That truthfulness is now asserted on the canonical path for all five families, and on the

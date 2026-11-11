@@ -6,6 +6,7 @@ import type { EventBrowseResult, ReferenceDataRepository } from '@unit-talk/db';
 import type { SubmissionPayload } from '@unit-talk/contracts';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { validateSmartFormRelationships } from './smart-form-validation.js';
+import { ApiError } from './errors.js';
 
 const event: EventBrowseResult = {
   eventId: 'event-ncaaf-1',
@@ -1736,3 +1737,358 @@ test('UTV2-1938: a malformed authorization record does not read as authorization
   );
 });
 // UTV2-1938 SERVER_AUTHORIZED_HUMAN_DELIVERY_TESTS_END
+
+// ---------------------------------------------------------------------------
+// WORK-2026110802: canonical teams + one manually entered player
+//
+// The operator's 2026-11-08 reproduction: Herro (threes) and Burries (rebounds) in Celtics @
+// Bucks, and Dulcich (receptions) in Lions @ Dolphins, could not be saved because no contract
+// admitted canonical teams beside an uncovered player. These pin the new rung: accepted only as
+// Track Only, only after the server proves the gap itself, and never when the search failed.
+// ---------------------------------------------------------------------------
+
+type ManualPlayerShape = {
+  sport: 'NBA' | 'NFL';
+  away: { participantId: string; displayName: string };
+  home: { participantId: string; displayName: string };
+  team: { participantId: string; displayName: string };
+  playerName: string;
+  market: string;
+  line: number;
+};
+
+const celticsAtBucks = {
+  away: { participantId: 'team-bos', displayName: 'Boston Celtics' },
+  home: { participantId: 'team-mil', displayName: 'Milwaukee Bucks' },
+};
+const lionsAtDolphins = {
+  away: { participantId: 'team-det', displayName: 'Detroit Lions' },
+  home: { participantId: 'team-mia', displayName: 'Miami Dolphins' },
+};
+
+const herroShape: ManualPlayerShape = {
+  sport: 'NBA',
+  ...celticsAtBucks,
+  team: celticsAtBucks.home,
+  playerName: 'Tyler Herro',
+  market: 'player.threes',
+  line: 2.5,
+};
+const burriesShape: ManualPlayerShape = {
+  sport: 'NBA',
+  ...celticsAtBucks,
+  team: celticsAtBucks.away,
+  playerName: 'Burries',
+  market: 'player.rebounds',
+  line: 4.5,
+};
+const dulcichShape: ManualPlayerShape = {
+  sport: 'NFL',
+  ...lionsAtDolphins,
+  team: lionsAtDolphins.away,
+  playerName: 'Greg Dulcich',
+  market: 'player.receptions',
+  line: 3.5,
+};
+
+const teamIdentity = (side: { participantId: string; displayName: string }) => ({
+  participantId: side.participantId,
+  displayName: side.displayName,
+  participantType: 'team',
+});
+
+function manualPlayerPayload(
+  shape: ManualPlayerShape,
+  overrides: {
+    metadata?: Record<string, unknown>;
+    resolution?: Record<string, unknown>;
+    manualPlayer?: Record<string, unknown>;
+  } = {},
+): SubmissionPayload {
+  const eventName = `${shape.away.displayName} @ ${shape.home.displayName}`;
+  return {
+    source: 'smart-form',
+    market: shape.market,
+    selection: `${shape.playerName} O ${shape.line}`,
+    line: shape.line,
+    eventName,
+    odds: -110,
+    stakeUnits: 1,
+    confidence: 0.7,
+    metadata: {
+      sport: shape.sport,
+      distributionMode: 'track-only',
+      player: shape.playerName,
+      playerId: null,
+      participantId: null,
+      team: shape.team.displayName,
+      teamId: shape.team.participantId,
+      eventName,
+      eventId: null,
+      selectedOffer: null,
+      playerProvenance: 'manual-coverage-gap',
+      participantResolution: {
+        resolution: 'canonical',
+        sportId: shape.sport,
+        eventId: null,
+        eventName,
+        away: teamIdentity(shape.away),
+        home: teamIdentity(shape.home),
+        team: teamIdentity(shape.team),
+        player: null,
+        manualPlayer: {
+          displayName: shape.playerName,
+          canonicalParticipantId: null,
+          reason: 'canonical-coverage-gap',
+          ...overrides.manualPlayer,
+        },
+        ...overrides.resolution,
+      },
+      ...overrides.metadata,
+    },
+  };
+}
+
+/**
+ * Teams are canonical for both matchups. The NBA player catalog carries Jayson Tatum (the
+ * production observation: Tatum is found) and nobody else these tests name; the NFL player
+ * catalog is empty, as in production. Searches match substrings, like the real repository.
+ */
+function manualPlayerRepository(
+  options: { searchPlayers?: ReferenceDataRepository['searchPlayers'] } = {},
+): { repository: ReferenceDataRepository; playerQueries: string[] } {
+  const repository = referenceData();
+  const teams = [celticsAtBucks.away, celticsAtBucks.home, lionsAtDolphins.away, lionsAtDolphins.home];
+  repository.searchTeams = async (_sportId, query) =>
+    teams
+      .filter((team) => team.displayName.toLowerCase().includes(query.toLowerCase()))
+      .map((team) => ({ participantId: team.participantId, displayName: team.displayName }) as never);
+  const players = [{ participantId: 'player-tatum', displayName: 'Jayson Tatum', sport: 'NBA', teamId: 'team-bos' }];
+  const playerQueries: string[] = [];
+  repository.searchPlayers =
+    options.searchPlayers ??
+    (async (sportId, query) => {
+      playerQueries.push(query);
+      return players
+        .filter((player) => player.sport === sportId && player.displayName.toLowerCase().includes(query.toLowerCase()))
+        .map((player) => ({ ...player, participantType: 'player' }) as never);
+    });
+  return { repository, playerQueries };
+}
+
+for (const [label, shape] of [
+  ['Herro (NBA threes, Celtics @ Bucks)', herroShape],
+  ['Burries (NBA rebounds, Celtics @ Bucks)', burriesShape],
+  ['Dulcich (NFL receptions, Lions @ Dolphins, no player coverage at all)', dulcichShape],
+] as const) {
+  test(`WORK-2026110802: accepts canonical teams + manual player ${label} as Track Only`, async () => {
+    const { repository, playerQueries } = manualPlayerRepository();
+    const outcome = await validateSmartFormRelationships(manualPlayerPayload(shape), repository);
+    assert.deepEqual(outcome, {
+      kind: 'structured-team-fallback',
+      distributionMode: 'track-only',
+      serverAuthorizedHumanDelivery: false,
+    });
+    // Non-vacuity: the gap was proved by searching, not assumed.
+    assert.ok(playerQueries.length > 0, 'the server must search players before accepting a manual player');
+  });
+}
+
+test('WORK-2026110802: refuses a manual player whose name resolves to a canonical player, naming the match', async () => {
+  for (const playerName of ['Jayson Tatum', 'Tatum', 'jayson  TATUM.', 'Jаyson Tatum']) {
+    const { repository } = manualPlayerRepository();
+    await assert.rejects(
+      () => validateSmartFormRelationships(manualPlayerPayload({ ...herroShape, team: celticsAtBucks.away, playerName }), repository),
+      (error: unknown) => {
+        assert.ok(error instanceof ApiError);
+        assert.equal(error.code, 'SMART_FORM_RELATIONSHIP_INVALID');
+        assert.match(error.message, /claims a coverage gap, but resolves to canonical player player-tatum \(Jayson Tatum\)/);
+        return true;
+      },
+      `"${playerName}" must be refused as covered`,
+    );
+  }
+});
+
+test('WORK-2026110802: a player search error is retryable and never recorded as a coverage gap', async () => {
+  const { repository } = manualPlayerRepository({
+    searchPlayers: async () => {
+      throw new Error('connection reset');
+    },
+  });
+  await assert.rejects(
+    () => validateSmartFormRelationships(manualPlayerPayload(herroShape), repository),
+    (error: unknown) => {
+      assert.ok(error instanceof ApiError);
+      assert.equal(error.status, 503);
+      assert.equal(error.code, 'SMART_FORM_REFERENCE_SEARCH_UNAVAILABLE');
+      assert.match(error.message, /never recorded as a coverage gap/);
+      return true;
+    },
+  );
+});
+
+test('WORK-2026110802: a player search that times out is retryable and never recorded as a coverage gap', async () => {
+  const { repository } = manualPlayerRepository({
+    searchPlayers: () => new Promise(() => undefined),
+  });
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(manualPlayerPayload(dulcichShape), repository, {
+        manualPlayerSearchTimeoutMs: 20,
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof ApiError);
+      assert.equal(error.status, 503);
+      assert.equal(error.code, 'SMART_FORM_REFERENCE_SEARCH_UNAVAILABLE');
+      assert.match(error.message, /timed out/);
+      return true;
+    },
+  );
+});
+
+test('WORK-2026110802: refuses delivery-eligible with a manual player, with or without a server delivery authorization', async () => {
+  const authorized = {
+    version: 'human-capper-delivery/v1',
+    decision: 'authorized',
+    capperId: 'griff843',
+    authority: 'server-allowlist',
+    allowlistSource: 'UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST',
+    decidedAt: '2026-11-10T00:00:00.000Z',
+  };
+  for (const metadata of [
+    { distributionMode: 'delivery-eligible' },
+    { distributionMode: 'delivery-eligible', deliveryAuthorization: authorized },
+  ]) {
+    const { repository } = manualPlayerRepository();
+    await assert.rejects(
+      () => validateSmartFormRelationships(manualPlayerPayload(herroShape, { metadata }), repository),
+      (error: unknown) => {
+        assert.ok(error instanceof ApiError);
+        assert.equal(error.code, 'SMART_FORM_MANUAL_PLAYER_TRACK_ONLY_REQUIRED');
+        assert.match(error.message, /accepted only as Track Only/);
+        return true;
+      },
+    );
+  }
+});
+
+test('WORK-2026110802: refuses a manual player beside a canonical player selection', async () => {
+  const { repository } = manualPlayerRepository();
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPlayerPayload(herroShape, {
+          resolution: {
+            player: { participantId: 'player-tatum', displayName: 'Jayson Tatum', participantType: 'player', teamId: 'team-bos' },
+          },
+        }),
+        repository,
+      ),
+    /manualPlayer and a canonical player selection are mutually exclusive/,
+  );
+});
+
+test('WORK-2026110802: refuses a manual player beside a canonical event id', async () => {
+  const { repository } = manualPlayerRepository();
+  await assert.rejects(
+    () => validateSmartFormRelationships(manualPlayerPayload(herroShape, { resolution: { eventId: 'event-nba-1' } }), repository),
+    /manualPlayer cannot be combined with a canonical event/,
+  );
+});
+
+test('WORK-2026110802: refuses a manual player in a sport with no structured team fallback', async () => {
+  const { repository } = manualPlayerRepository();
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPlayerPayload(herroShape, { metadata: { sport: 'MMA' }, resolution: { sportId: 'MMA' } }),
+        repository,
+      ),
+    /manualPlayer requires a team-sport structured fallback/,
+  );
+});
+
+test('WORK-2026110802: refuses a manual player that carries a canonical participant id', async () => {
+  const { repository } = manualPlayerRepository();
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPlayerPayload(herroShape, { manualPlayer: { canonicalParticipantId: 'player-tatum' } }),
+        repository,
+      ),
+    /manualPlayer must have canonicalParticipantId=null/,
+  );
+});
+
+test('WORK-2026110802: refuses a flat canonical playerId beside a manual player', async () => {
+  for (const key of ['playerId', 'participantId']) {
+    const { repository } = manualPlayerRepository();
+    await assert.rejects(
+      () => validateSmartFormRelationships(manualPlayerPayload(herroShape, { metadata: { [key]: 'player-herro' } }), repository),
+      new RegExp(`${key} does not match participantResolution`),
+    );
+  }
+});
+
+test('WORK-2026110802: requires manual-coverage-gap player provenance and refuses it without a manual player', async () => {
+  const { repository } = manualPlayerRepository();
+  await assert.rejects(
+    () => validateSmartFormRelationships(manualPlayerPayload(herroShape, { metadata: { playerProvenance: 'provider' } }), repository),
+    /manualPlayer requires metadata.playerProvenance=manual-coverage-gap/,
+  );
+  const canonicalWithClaim = structuredNoEventPayload({ ...structuredPlayer });
+  (canonicalWithClaim.metadata as Record<string, unknown>)['playerProvenance'] = 'manual-coverage-gap';
+  await assert.rejects(
+    () => validateSmartFormRelationships(canonicalWithClaim, structuredNoEventRepository()),
+    /metadata.playerProvenance is only valid beside participantResolution.manualPlayer/,
+  );
+});
+
+test('WORK-2026110802: refuses a manual player carrying a provider offer', async () => {
+  const { repository } = manualPlayerRepository();
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPlayerPayload(herroShape, {
+          metadata: { selectedOffer: { providerKey: 'sgo', providerMarketKey: 'x', providerParticipantId: 'y', snapshotAt: null } },
+        }),
+        repository,
+      ),
+    /manual player makes no provider-verified claim/,
+  );
+});
+
+test('WORK-2026110802: refuses manualPlayer on the all-manual coverage-gap resolution', async () => {
+  const { repository } = manualPlayerRepository();
+  const built = manualPlayerPayload(herroShape);
+  (built.metadata as Record<string, unknown>)['participantResolution'] = {
+    resolution: 'manual',
+    sportId: 'NBA',
+    eventId: null,
+    manualOverride: true,
+    reason: 'canonical-coverage-gap',
+    enteredEventName: built.eventName,
+    enteredParticipants: [],
+    manualPlayer: { displayName: 'Tyler Herro', canonicalParticipantId: null, reason: 'canonical-coverage-gap' },
+  };
+  await assert.rejects(
+    () => validateSmartFormRelationships(built, repository),
+    /manualPlayer is only valid on a structured team fallback/,
+  );
+});
+
+test('WORK-2026110802: the teams beside a manual player are verified exactly as for any structured fallback', async () => {
+  const { repository } = manualPlayerRepository();
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPlayerPayload(herroShape, {
+          metadata: { team: 'Detroit Lions', teamId: 'team-det' },
+          resolution: { team: teamIdentity(lionsAtDolphins.away) },
+        }),
+        repository,
+      ),
+    /is not canonical for sport NBA|is not part of the structured matchup/,
+  );
+});

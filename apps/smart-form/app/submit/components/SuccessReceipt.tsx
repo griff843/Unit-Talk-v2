@@ -12,6 +12,11 @@ interface SuccessReceiptProps {
   result: SubmitPickResult;
   submittedValues: BetFormValues;
   onSubmitAnother: () => void;
+  /**
+   * WORK-2026110802: the player provenance this submission was sent with. A
+   * manual player is shown as manually entered, never as canonical or verified.
+   */
+  playerProvenance?: 'manual-coverage-gap' | null;
 }
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -23,7 +28,7 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function SuccessReceipt({ result, submittedValues, onSubmitAnother }: SuccessReceiptProps) {
+export function SuccessReceipt({ result, submittedValues, onSubmitAnother, playerProvenance = null }: SuccessReceiptProps) {
   const v = submittedValues;
   // UTV2-1925: read from `result` -- what the SERVER determined -- never from
   // `v.trackOnly`, which is a client form value that defaults to true and knows
@@ -52,6 +57,14 @@ export function SuccessReceipt({ result, submittedValues, onSubmitAnother }: Suc
         <Row label="Sport" value={v.sport.toUpperCase()} />
         <Row label="Market" value={marketLabel} />
         {selection && <Row label="Selection" value={selection} />}
+        {playerProvenance === 'manual-coverage-gap' && v.playerName && (
+          <div data-testid="receipt-manual-player" data-player-provenance={playerProvenance} className="space-y-1">
+            <Row label="Player" value={`${v.playerName} (manually entered)`} />
+            <p className="text-xs text-muted-foreground text-right">
+              Manual fallback: not in reference player data, no provider verification, no CLV.
+            </p>
+          </div>
+        )}
         {v.eventName && <Row label="Matchup" value={v.eventName} />}
         {v.sportsbook && <Row label="Sportsbook" value={v.sportsbook} />}
         <Row label="Odds" value={oddsDisplay} />

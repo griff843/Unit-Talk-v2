@@ -32,6 +32,7 @@ import {
 import {
   buildManualEnteredParticipants,
   buildSubmissionPayload,
+  canOfferManualPlayer,
   describeOffersState,
   easternDateIso,
   evaluateSubmissionGuards,
@@ -39,7 +40,10 @@ import {
   getStatTypesForSport,
   inferStatTypeFromMarketTypeId,
   mapOfferToFormMarketType,
+  MANUAL_PLAYER_PROVENANCE,
   resolveSportsbookId,
+  withManualPlayer,
+  type PlayerSearchResolution,
   type SmartFormIdentityMode,
 } from '@/lib/form-utils';
 import {
@@ -95,6 +99,7 @@ import { SignedNumberInput } from '@/components/SignedNumberInput';
 import { getStoredCapperClaims, clearStoredToken } from '@/lib/auth-token';
 import type {
   CanonicalParticipantIdentity,
+  CanonicalParticipantResolution,
   SmartFormParticipantResolution,
 } from '@unit-talk/contracts';
 import { BetSlipPanel } from './BetSlipPanel';
@@ -121,7 +126,7 @@ type BrowseMode = 'live-offer' | 'manual';
 type LiveEntryMode = 'browse' | 'search';
 type OfferSelectionSide = 'over' | 'under' | 'side';
 type ParticipantFieldName = 'playerName' | 'team' | 'awayParticipantName' | 'homeParticipantName';
-type ParticipantSearchResolution = 'idle' | 'searching' | 'results' | 'not-found' | 'error' | 'resolved';
+type ParticipantSearchResolution = PlayerSearchResolution;
 
 interface SelectedOfferState {
   offer: EventOfferBrowseResult;
@@ -891,6 +896,7 @@ export function BetForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successResult, setSuccessResult] = useState<SubmitPickResult | null>(null);
   const [submittedValues, setSubmittedValues] = useState<BetFormValues | null>(null);
+  const [submittedPlayerProvenance, setSubmittedPlayerProvenance] = useState<typeof MANUAL_PLAYER_PROVENANCE | null>(null);
   const [matchups, setMatchups] = useState<MatchupBrowseResult[]>([]);
   const [matchupsError, setMatchupsError] = useState<string | null>(null);
   const [isLoadingMatchups, setIsLoadingMatchups] = useState(false);
@@ -910,6 +916,10 @@ export function BetForm({
   const [identityMode, setIdentityMode] = useState<SmartFormIdentityMode>('canonical');
   const [awaySearchResolution, setAwaySearchResolution] = useState<ParticipantSearchResolution>('idle');
   const [homeSearchResolution, setHomeSearchResolution] = useState<ParticipantSearchResolution>('idle');
+  // WORK-2026110802: the player field's own search state, and whether the operator chose to
+  // enter a player the reference data does not carry.
+  const [playerSearchResolution, setPlayerSearchResolution] = useState<ParticipantSearchResolution>('idle');
+  const [manualPlayerRequested, setManualPlayerRequested] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState<SelectedOfferState | null>(null);
   const [selectedOfferParticipantId, setSelectedOfferParticipantId] = useState<string | null>(null);
   const [suspendMarketReset, setSuspendMarketReset] = useState(false);
@@ -1049,6 +1059,19 @@ export function BetForm({
     identityMode === 'structured-fallback' &&
     awaySearchResolution === 'not-found' &&
     homeSearchResolution === 'not-found';
+  // WORK-2026110802: manual player beside canonical teams, offered only after a definitive
+  // not-found. `manualPlayerActive` is what the payload is built from; it lapses on its own as
+  // soon as a player is selected or the search state stops being a definitive not-found.
+  const manualPlayerOffered = canOfferManualPlayer({
+    identityMode,
+    isPlayerProp: selectedMarketType === 'player-prop',
+    selectedPlayerId,
+    playerSearchResolution,
+  });
+  const manualPlayerActive = manualPlayerRequested && manualPlayerOffered;
+  useEffect(() => {
+    setManualPlayerRequested(false);
+  }, [identityMode, selectedSport, selectedMarketType, selectedTeamId]);
   const availableOfferFamilies = useMemo(() => {
     if (!eventBrowse) {
       return [] as MarketTypeId[];
@@ -2119,7 +2142,7 @@ export function BetForm({
       (participant.participantId === selectedPlayerId || participant.canonicalId === selectedPlayerId),
     ) ?? null;
 
-    return {
+    const canonicalResolution: CanonicalParticipantResolution = {
       resolution: 'canonical',
       sportId: values.sport,
       eventId: identityMode === 'canonical' ? (selectedMatchup?.eventId ?? null) : null,
@@ -2146,6 +2169,8 @@ export function BetForm({
         selectedPlayerParticipant?.teamId ?? selectedTeamId,
       ),
     };
+    // WORK-2026110802: canonical teams stay; the player is the manual coverage-gap claim.
+    return manualPlayerActive ? withManualPlayer(canonicalResolution, values.playerName ?? '') : canonicalResolution;
   }
 
   async function onSubmit(values: BetFormValues) {
@@ -2177,10 +2202,6 @@ export function BetForm({
       toast({ title: 'Invalid matchup', description: 'Event sides must be different.', variant: 'destructive' });
       return;
     }
-    if (identityMode !== 'manual' && selectedMarketType === 'player-prop' && !selectedPlayerId) {
-      toast({ title: 'Select a player from the results', description: 'Typing a name is not enough; select a search result.', variant: 'destructive' });
-      return;
-    }
 
     // UTV2-1786: refuse the payload shapes the API's Smart Form contract
     // rejects, before submitting rather than after a 400. Each rule is stated
@@ -2194,6 +2215,10 @@ export function BetForm({
       playerName: values.playerName,
       canonicalEventId: identityMode === 'canonical' ? (selectedMatchup?.eventId ?? null) : null,
       selectedPlayerId,
+      isPlayerProp: selectedMarketType === 'player-prop',
+      manualPlayerRequested,
+      playerSearchResolution,
+      distributionMode: values.trackOnly ? 'track-only' : 'delivery-eligible',
     });
     if (guardFailure) {
       toast({
@@ -2246,10 +2271,12 @@ export function BetForm({
         selectedOffer: selectedOffer?.offer ?? null,
         distributionMode: values.trackOnly ? 'track-only' : 'delivery-eligible',
         participantResolution: buildParticipantResolution(values),
+        playerProvenance: manualPlayerActive ? MANUAL_PLAYER_PROVENANCE : null,
       });
       const result = await submitPick(payload);
       dismiss();
       setSubmittedValues(submissionValues);
+      setSubmittedPlayerProvenance(manualPlayerActive ? MANUAL_PLAYER_PROVENANCE : null);
       setSuccessResult(result);
     } catch (err) {
       toast({
@@ -2269,6 +2296,7 @@ export function BetForm({
         <SuccessReceipt
           result={successResult}
           submittedValues={submittedValues}
+          playerProvenance={submittedPlayerProvenance}
           onSubmitAnother={() => {
             setSuccessResult(null);
             setSubmittedValues(null);
@@ -2282,6 +2310,9 @@ export function BetForm({
             setHomeParticipantId(null);
             setAwaySearchResolution('idle');
             setHomeSearchResolution('idle');
+            setPlayerSearchResolution('idle');
+            setManualPlayerRequested(false);
+            setSubmittedPlayerProvenance(null);
             setIdentityMode('canonical');
             setBrowseMode('manual');
             setLiveEntryMode('browse');
@@ -3261,9 +3292,53 @@ export function BetForm({
                 datasetAvailable={referenceAvailability?.playersAvailable ?? null}
                 allowedParticipantIds={allowedPlayerIds}
                 onSuggestionSelected={handlePlayerSuggestionSelection}
-                onManualChange={() => setSelectedPlayerId(null)}
+                onManualChange={() => {
+                  setSelectedPlayerId(null);
+                  // A manual entry is a choice about one typed name; editing the name withdraws it.
+                  setManualPlayerRequested(false);
+                }}
+                onResolutionStateChange={setPlayerSearchResolution}
                 disabledOverride={!selectedTeamId}
               />
+              {identityMode === 'structured-fallback' && (manualPlayerOffered || manualPlayerRequested) ? (
+                <div
+                  className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs leading-relaxed text-muted-foreground space-y-2"
+                  data-testid="manual-player-fallback"
+                  data-manual-player-active={manualPlayerActive ? 'true' : 'false'}
+                >
+                  {manualPlayerActive ? (
+                    <>
+                      <p>
+                        <span className="font-semibold text-foreground">Manual entry:</span>{' '}
+                        {watchedValues.playerName?.trim()} is saved as manually entered, without provider
+                        verification and with no CLV, as Track Only.
+                      </p>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setManualPlayerRequested(false)}>
+                        Cancel manual entry
+                      </Button>
+                    </>
+                  ) : manualPlayerOffered ? (
+                    <>
+                      <p>No player in the reference data matches this name.</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        data-testid="manual-player-enter"
+                        onClick={() => {
+                          setManualPlayerRequested(true);
+                          form.setValue('trackOnly', true, { shouldDirty: true });
+                        }}
+                      >
+                        Player not found: enter manually
+                      </Button>
+                      <p>Saved as a manual entry without provider verification. Track Only.</p>
+                    </>
+                  ) : (
+                    <p>Waiting for the player search to finish before manual entry is available.</p>
+                  )}
+                </div>
+              ) : null}
             </>
           )}
           <div className="grid gap-3 sm:grid-cols-2">
@@ -4571,6 +4646,7 @@ export function BetForm({
             slipRefusal={slipRefusal}
             legRefusals={legRefusals}
             multiLegRefusal={multiLegRefusal}
+            manualPlayerName={manualPlayerActive ? watchedValues.playerName?.trim() || null : null}
           />
         </aside>
       </div>

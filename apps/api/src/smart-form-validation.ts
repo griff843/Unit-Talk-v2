@@ -106,9 +106,15 @@ export function waivesEventExistenceGate(outcome: SmartFormValidationOutcome | u
 }
 // UTV2-1842 SMART_FORM_OUTCOME_END
 
+export interface SmartFormValidationOptions {
+  /** WORK-2026110802: bound on each manual-player coverage search. Tests shorten it. */
+  manualPlayerSearchTimeoutMs?: number;
+}
+
 export async function validateSmartFormRelationships(
   payload: SubmissionPayload,
   referenceData: ReferenceDataRepository,
+  options: SmartFormValidationOptions = {},
 ): Promise<SmartFormValidationOutcome> {
   if (payload.source !== 'smart-form') return { kind: 'not-smart-form' };
 
@@ -180,6 +186,11 @@ export async function validateSmartFormRelationships(
   }
   // UTV2-1672 CANONICAL_SPORT_ID_GUARD_END
 
+  // WORK-2026110802: the manual-player rung is checked before any path is chosen, so a
+  // `manualPlayer` riding on a shape that cannot admit it is refused by name rather than
+  // ignored by whichever validator happens to run.
+  assertManualPlayerAdmissible(payload, resolution, sportId, distributionMode);
+
   if (resolution.resolution === 'manual') {
     await validateManualResolution(payload, resolution, sportId, referenceData);
     return { kind: 'manual-coverage-gap', distributionMode, serverAuthorizedHumanDelivery };
@@ -191,7 +202,13 @@ export async function validateSmartFormRelationships(
     if (!TEAM_SPORTS.has(sportId.toUpperCase())) {
       fail('canonical participant resolution without an event is not verifiable; use explicit manual override');
     }
-    await validateStructuredTeamFallback(payload, resolution, sportId, referenceData);
+    await validateStructuredTeamFallback(
+      payload,
+      resolution,
+      sportId,
+      referenceData,
+      options.manualPlayerSearchTimeoutMs ?? MANUAL_PLAYER_SEARCH_TIMEOUT_MS,
+    );
     return { kind: 'structured-team-fallback', distributionMode, serverAuthorizedHumanDelivery };
   }
 
@@ -315,6 +332,7 @@ async function validateStructuredTeamFallback(
   resolution: Extract<SmartFormParticipantResolution, { resolution: 'canonical' }>,
   sportId: string,
   referenceData: ReferenceDataRepository,
+  manualPlayerSearchTimeoutMs: number,
 ) {
   if (!resolution.away || !resolution.home) {
     fail('team-sport canonical fallback requires distinct away and home participants');
@@ -360,6 +378,17 @@ async function validateStructuredTeamFallback(
     );
   }
   // UTV2-1856 STRUCTURED_FALLBACK_PLAYER_END
+
+  // WORK-2026110802: the sides and the selected team above are verified exactly as for every
+  // structured fallback; only the player differs, and its claimed gap is proved here.
+  if (resolution.manualPlayer) {
+    await verifyManualPlayerCoverageGap(
+      resolution.manualPlayer.displayName,
+      sportId,
+      referenceData,
+      manualPlayerSearchTimeoutMs,
+    );
+  }
 
   // UTV2-1842 STRUCTURED_FALLBACK_MATCHUP_NAME_START
   // The checks above verify the two *identities*. They say nothing about the name the
@@ -559,7 +588,14 @@ function assertFlatMetadataIdentity(
   assertMatchingValue(metadata?.['playerId'], resolution.player?.participantId, 'playerId');
   assertMatchingValue(metadata?.['participantId'], resolution.player?.participantId, 'participantId');
   assertMatchingDisplay(metadata?.['team'], resolution.team?.displayName, 'team');
-  assertMatchingDisplay(metadata?.['player'], resolution.player?.displayName, 'player');
+  // WORK-2026110802: a manual player is the resolved player display for this check. Its
+  // canonical ids stay unresolved, so a flat `playerId`/`participantId` beside it is refused
+  // by the two `assertMatchingValue` calls above.
+  assertMatchingDisplay(
+    metadata?.['player'],
+    resolution.player?.displayName ?? resolution.manualPlayer?.displayName,
+    'player',
+  );
 }
 
 function assertMatchingValue(flatValue: unknown, resolvedValue: unknown, field: string) {
@@ -799,18 +835,7 @@ async function findCanonicalCoverage(
     }
   }
 
-  const trimmed = displayName.trim();
-  const queries = new Set<string>([trimmed, foldConfusables(trimmed), aliasKey(trimmed)]);
-  for (const word of [...trimmed.split(/\s+/u), ...foldConfusables(trimmed).split(/\s+/u)]) {
-    if (aliasKey(word).length >= 3) {
-      queries.add(word);
-      // The alias key drops punctuation. Without it, "Knicks." is only ever
-      // searched verbatim, ILIKE '%knicks.%' matches nothing, and a name the
-      // catalog plainly carries is reported as an uncovered gap.
-      queries.add(aliasKey(word));
-    }
-  }
-  queries.delete('');
+  const queries = coverageQueries(displayName);
 
   const search = TEAM_SPORTS.has(sportId.toUpperCase())
     ? (query: string) => referenceData.searchTeams(sportId, query, 25)
@@ -826,6 +851,160 @@ async function findCanonicalCoverage(
   }
   return null;
 }
+
+/**
+ * Every query a coverage proof runs for one entered name: the name as typed, folded and
+ * alias-keyed, plus each significant word on its own, because the reference searches match
+ * substrings and a city-prefixed or full-name query can find nothing at all.
+ */
+function coverageQueries(displayName: string): Set<string> {
+  const trimmed = displayName.trim();
+  const queries = new Set<string>([trimmed, foldConfusables(trimmed), aliasKey(trimmed)]);
+  for (const word of [...trimmed.split(/\s+/u), ...foldConfusables(trimmed).split(/\s+/u)]) {
+    if (aliasKey(word).length >= 3) {
+      queries.add(word);
+      // The alias key drops punctuation. Without it, "Knicks." is only ever
+      // searched verbatim, ILIKE '%knicks.%' matches nothing, and a name the
+      // catalog plainly carries is reported as an uncovered gap.
+      queries.add(aliasKey(word));
+    }
+  }
+  queries.delete('');
+  return queries;
+}
+
+// WORK-2026110802 MANUAL_PLAYER_COVERAGE_GAP_START
+// The rung of the participant-resolution ladder between the structured team fallback and the
+// all-manual tier: canonical teams (`eventId: null`, team sports only) plus ONE manually
+// entered player the reference catalog does not carry. Before it existed no contract admitted
+// that shape -- the manual tier is all-or-nothing and refuses canonical team names, and the
+// structured tier requires a canonical player -- so a pick on Herro, Burries or Dulcich in a
+// covered matchup had no truthful path at all.
+//
+// Every fact this rung records is one the server proved: the sides and the selected team pass
+// the unchanged structured checks, and the player gap is verified against `searchPlayers` with
+// the alias and confusable folding the manual tier uses. A failed search is a retryable error,
+// never a gap (apps/smart-form/CLAUDE.md).
+//
+// It is Track Only only. A pick whose player no reference data backs carries no provider
+// verification and no CLV, so it must not reach members on the strength of an allow-list.
+
+/** Bounded so a hung reference read surfaces as a retryable error instead of holding the request. */
+export const MANUAL_PLAYER_SEARCH_TIMEOUT_MS = 8_000;
+
+/** The player provenance the pick metadata must carry beside a manual player. */
+export const MANUAL_PLAYER_PROVENANCE = 'manual-coverage-gap';
+
+function assertManualPlayerAdmissible(
+  payload: SubmissionPayload,
+  resolution: SmartFormParticipantResolution,
+  sportId: string,
+  distributionMode: SmartFormDistributionMode,
+) {
+  const metadata = payload.metadata;
+  const rawManualPlayer = (resolution as unknown as Record<string, unknown>)['manualPlayer'];
+  const declaredProvenance = metadata?.['playerProvenance'];
+
+  if (rawManualPlayer === undefined || rawManualPlayer === null) {
+    if (declaredProvenance !== undefined && declaredProvenance !== null) {
+      fail('metadata.playerProvenance is only valid beside participantResolution.manualPlayer');
+    }
+    return;
+  }
+
+  if (resolution.resolution !== 'canonical') {
+    fail('manualPlayer is only valid on a structured team fallback with canonical teams');
+  }
+  if (readOptionalString(resolution.eventId)) {
+    fail('manualPlayer cannot be combined with a canonical event; select the canonical player from the event');
+  }
+  if (!TEAM_SPORTS.has(sportId.toUpperCase())) {
+    fail('manualPlayer requires a team-sport structured fallback');
+  }
+  if (resolution.player) {
+    fail('manualPlayer and a canonical player selection are mutually exclusive');
+  }
+  if (!isRecord(rawManualPlayer)) {
+    fail('manualPlayer must be an object');
+  }
+  if (rawManualPlayer['canonicalParticipantId'] !== null) {
+    fail('manualPlayer must have canonicalParticipantId=null');
+  }
+  if (rawManualPlayer['reason'] !== 'canonical-coverage-gap') {
+    fail('manualPlayer must state canonical-coverage-gap provenance');
+  }
+  const displayName = readRequiredString(rawManualPlayer['displayName'], 'manualPlayer.displayName');
+  if (hasNonAscii(foldConfusables(displayName))) {
+    fail(
+      `manual player "${displayName}" must use Latin characters so the canonical-coverage claim can be verified`,
+    );
+  }
+
+  // The fail-closed delivery rule. It sits here, in validation, because the capper pin in
+  // handlers/submit-pick.ts lets an allow-listed capper's `delivery-eligible` request through
+  // and an operator or service-role caller is not pinned at all; both reach this line before
+  // anything is written. Neither the allow-list nor a server authorization record widens it.
+  if (distributionMode !== 'track-only') {
+    throw new ApiError(
+      422,
+      'SMART_FORM_MANUAL_PLAYER_TRACK_ONLY_REQUIRED',
+      'a manually entered player is accepted only as Track Only; delivery-eligible is refused whatever the delivery allow-list says',
+    );
+  }
+
+  if (declaredProvenance !== MANUAL_PLAYER_PROVENANCE) {
+    fail(`manualPlayer requires metadata.playerProvenance=${MANUAL_PLAYER_PROVENANCE}`);
+  }
+  // A provider offer is a provider-verified claim about the selection. A manual player has none.
+  if (metadata?.['selectedOffer'] !== undefined && metadata?.['selectedOffer'] !== null) {
+    fail('manualPlayer cannot carry a provider offer; a manual player makes no provider-verified claim');
+  }
+}
+
+async function verifyManualPlayerCoverageGap(
+  displayName: string,
+  sportId: string,
+  referenceData: ReferenceDataRepository,
+  timeoutMs: number,
+) {
+  const enteredTokens = aliasTokens(displayName);
+  if (enteredTokens.length === 0) fail('manualPlayer.displayName must name a player');
+
+  for (const query of coverageQueries(displayName)) {
+    let rows: Awaited<ReturnType<ReferenceDataRepository['searchPlayers']>>;
+    try {
+      rows = await withTimeout(
+        referenceData.searchPlayers(sportId, query, 25),
+        timeoutMs,
+      );
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new ApiError(
+        503,
+        'SMART_FORM_REFERENCE_SEARCH_UNAVAILABLE',
+        `player search failed while verifying the manual player "${displayName}"; retry the submission -- a failed search is never recorded as a coverage gap (${reason})`,
+      );
+    }
+    for (const row of rows) {
+      if (isSameEntityName(enteredTokens, aliasTokens(row.displayName))) {
+        fail(
+          `manual player "${displayName}" claims a coverage gap, but resolves to canonical player ${row.participantId} (${row.displayName}); use the canonical selection`,
+        );
+      }
+    }
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`timed out after ${timeoutMs}ms`)), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  });
+}
+// WORK-2026110802 MANUAL_PLAYER_COVERAGE_GAP_END
 
 /** True when the payload carries anything the Smart Form itself would send. */
 function carriesSmartFormFields(payload: SubmissionPayload): boolean {
