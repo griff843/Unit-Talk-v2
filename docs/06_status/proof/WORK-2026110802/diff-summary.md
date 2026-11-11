@@ -27,6 +27,15 @@ PM changes (2026-11-11, commit 234e4983e; scope expansion to `clv-service.ts` PM
 | `apps/smart-form/app/submit/components/SuccessReceipt.tsx` | uses the shared constant |
 | `apps/smart-form/test/form-utils.test.ts`, `apps/smart-form/e2e/manual-player-fallback.spec.ts` | label and constant assertions |
 
+Review round 2 (2026-11-11, commit 8a90b9730):
+
+| File | Change |
+|---|---|
+| `apps/api/src/smart-form-validation.ts` | P1-A accent-tolerant coverage queries (`accentTolerantPatterns`, `manualPlayerCoverageQueries`, row limit 500, cap 50, any saturation fails closed); P1-B `isPlausiblySamePlayer`; P1-C `assertManualPlayerBoundToPick`; P2-A `assertNoManualPlayerMarkers` at both not-smart-form returns; P3 `assertManualPlayerNameCharacters` (NFC + allow-list) |
+| `apps/api/src/smart-form-validation.test.ts` | fixture matches the form payload (statType, overUnder, marketType); ILIKE-emulating mocks; 13 new tests (111-123), F2/F4 tests updated |
+| `apps/api/src/clv-service.ts` | `resolveParticipantId` exported for its guard test |
+| `apps/api/src/clv-service.test.ts` | test 45 pins the resolver's manual-player guard |
+
 Docs and records: `docs/03_product/smart-form/acceptance-matrix.md` (new resolution row),
 `.ops/work/WORK-2026110802.md` (work order, with the PM singleton authorization recorded under Admission),
 this proof directory.

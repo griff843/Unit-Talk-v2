@@ -15,7 +15,10 @@ team fallback, `eventId: null`, team sports) as a server-verified, Track Only on
 code head under test: b64849542b6964eb7f23fb97ed6c64b06effa317. PM CHANGES REQUIRED (2026-11-11)
 fixes: commit 234e4983e, synced with main as 4361dd6efaedf188b2dea309ca39e4b48dc72987 (the head every
 result in "PM changes" below was measured on). The PM approved expanding the lane scope to
-`apps/api/src/clv-service.ts` and its focused tests for finding 1.
+`apps/api/src/clv-service.ts` and its focused tests for finding 1. Independent review round 2
+(CHANGES REQUIRED at 3fbe5b3ca) fixes: commit 8a90b9730, synced with main as
+f40e33cc5ce89c81704ba1f23a305b51f5edefcb (the sync added only `docs/06_status/readiness/readiness-score.json`);
+results in "Review round 2" below.
 
 ## ASSERTIONS:
 
@@ -27,7 +30,12 @@ result in "PM changes" below was measured on). The PM approved expanding the lan
 - [x] PM 1: a manual coverage-gap pick never receives CLV, even when its typed name equals a canonical participant with a priced offer, on the name-fallback and the pre-resolved-context paths; normal picks unchanged (clv tests 39-44).
 - [x] PM 2: punctuation/alias-token/confusable spellings of a covered player are refused; the full-name query runs first; a saturated decisive search fails closed (api tests 99-103).
 - [x] PM 3: the server stamps `playerProvenance` (contract constant), `manualEntry: true` and `player` in `manualOverrideFields`, overwriting the client; the client builds the same labels and its constant is the contract value (api tests 104-105; smart-form tests 47-49, 52-54; browser tests 1-3).
-- [x] PM 4: strict `manualPlayer` field allow-list, 80-char and 6-word name caps, control characters refused, at most 12 searches, a total search budget; budget exhaustion or a malformed response is a retryable 503 (api tests 106-110).
+- [x] PM 4: strict `manualPlayer` field allow-list, 80-char and 6-word name caps, a search-count cap (12, raised to 50 in round 2) and a total search budget; budget exhaustion or a malformed response is a retryable 503 (api tests 106-110).
+- [x] R2 P1-A: ASCII spellings of accented catalog names (Munoz, Jokic, Stutzle, Schroder, Slafkovsky, Gimenez, Ramirez, Doncic) are refused as covered via accent-tolerant ILIKE patterns; queries carry only `[a-z0-9_%]`; any saturated search (500 rows) without a covering row fails closed (api tests 111-114).
+- [x] R2 P1-B: reordered, concatenated, decorated (team, jersey, parenthetical, nickname), initialed and generational-suffix spellings are refused as covered; distinct players sharing one name part are still gaps (api tests 115-116).
+- [x] R2 P1-C: a manual player requires a player-prop market, a catalog statType, the form-built selection naming only that player, and a matching flat `metadata.player` (api tests 117-120).
+- [x] R2 P2-A: `playerProvenance` / `participantResolution.manualPlayer` are refused (422) on any non-Smart-Form submission (api test 121).
+- [x] R2 P3: displayName must be NFC and within a Latin/digit/punctuation allow-list (invisible, homoglyph, compatibility characters refused); the accepted name is persisted as validated (api tests 122-123); the CLV resolver's own manual-player guard is pinned (clv test 45).
 - [x] The teams beside a manual player are verified exactly as for any structured fallback (api test 98).
 - [x] The client offers manual entry only after a definitive not-found; an errored or unrun search keeps the refusal (smart-form tests 43-46; browser test 4).
 - [x] The client payload for each shape carries canonical teams, `manualPlayer`, Track Only and `playerProvenance: manual-coverage-gap` (smart-form tests 47-51).
@@ -214,6 +222,50 @@ A runtime value import of `@unit-talk/contracts` into the Smart Form client was 
 `next build` (`Module not found: Can't resolve './smart-form.js'` from `packages/contracts/src/index.ts`),
 so the client constant is a literal typed as `typeof manualPlayerProvenance` plus a runtime equality test.
 
+## Review round 2 (2026-11-11), code commit 8a90b9730, measured on its tree and f40e33cc5
+
+Command: `pnpm exec tsx --test apps/api/src/smart-form-validation.test.ts apps/api/src/clv-service.test.ts`
+
+```
+# pass 168
+# fail 0
+```
+
+(smart-form-validation 123 tests, clv-service 45 tests.) `cd apps/smart-form && pnpm test`: `# pass 242`,
+`# fail 0`. `pnpm lint` exit 0, `pnpm type-check` exit 0.
+
+### Round-2 mutation proofs (each applied alone, focused suite run, file restored)
+
+All 25 killed: no accent tolerance (5 fail); vowel/consonant split removed (4); contiguous-run match
+(1); player matcher replaced by `isSameEntityName` (1); no suffix stripping (1); no initials rule (1);
+no all-given-names rule (1); no concatenation probes (3); no market binding (1); no marketType binding
+(1); no selection binding (1); no statType catalog check (1); no flat-player binding (1); P2-A refusal
+disabled (1); P2-A only on the first return (1); no character allow-list (3); no NFC check (1); no
+saturation fail-closed (2); no two-literal pattern threshold (1); no smart-apostrophe allowance (1);
+CLV `resolveParticipantId` guard removed (clv 1); row limit 500 -> 100 (1); no joined-given rule (1);
+no all-tokens-in-catalog rule (1); no reversed concatenation (1).
+
+Reviewer probes (`probe.mts`, `probe2.mts`, run with `overUnder: 'over'` added so the selection binding
+does not mask the coverage result): every catalog spelling is refused; the only acceptances are the two
+label-overwrite cases, where the server stamps `manualEntry: true` and `player`.
+
+### Browser run on 8a90b9730 tree
+
+`CI=1 SMART_FORM_E2E_API_PORT=4610 SMART_FORM_E2E_PORT=4710 SMART_FORM_DIST_DIR=.next-e2e-0802 pnpm exec playwright test e2e/manual-player-fallback.spec.ts --reporter=list`
+in `apps/smart-form`: `4 passed (44.5s)` (Herro, Burries, Dulcich saved; errored search refused).
+
+### `pnpm verify` on f40e33cc5
+
+`verify:static` green: summed over 122 TAP summaries, tests 8238, pass 8225, fail 0, skipped 13.
+`test:live-db` refused locally as designed (`[assert-staging] REFUSED: target identity could not be
+resolved from its URL (host=127.0.0.1)`), so `pnpm verify` exits 1 on this host for that reason only.
+
+Unverified: the accent-tolerant `_` patterns are applied through PostgREST `.ilike()`
+(packages/db `searchPlayers`); their behaviour and saturation rates against the real staging/production
+catalog were not measured from this host (tests emulate ILIKE). Known limits: a token accented in both a
+vowel and a consonant with under two literals left ("Nunez" for "Núñez"), and multi-letter
+transliterations ("ss"/"ß"), are not matched.
+
 ## Verification (original, on b64849542)
 
 Command: `pnpm verify` (lane worktree, on the tree later committed as b64849542 except the two
@@ -240,7 +292,7 @@ only in CI's "Writable DB proof (staging only)" job on the exact PR head; that j
 `ops:proof-generate`. No production data was read or written by this lane. This lane adds no
 migration and no new write path; the persisted shape was asserted against the real local API above.
 
-Execution SHA: 4361dd6efaedf188b2dea309ca39e4b48dc72987 (PM changes; original b64849542b6964eb7f23fb97ed6c64b06effa317)
+Execution SHA: f40e33cc5ce89c81704ba1f23a305b51f5edefcb (review round 2; PM changes 4361dd6ef; original b64849542b6964eb7f23fb97ed6c64b06effa317)
 
 The staging result below is from the earlier head 900f46831; CI's staging job re-runs on the new PR
 head and its receipt is authoritative. It was not re-harvested here.
@@ -260,4 +312,4 @@ exact-head CI re-runs the same staging job.
 
 Merge SHA: pending merge
 PR: pending
-Execution SHA: 4361dd6efaedf188b2dea309ca39e4b48dc72987
+Execution SHA: f40e33cc5ce89c81704ba1f23a305b51f5edefcb
