@@ -157,6 +157,9 @@ for (const shape of shapes) {
     expect(metadata).toMatchObject({
       distributionMode: 'track-only',
       playerProvenance: 'manual-coverage-gap',
+      // PM F3: server-stamped labels agree with the provenance.
+      manualEntry: true,
+      manualOverrideFields: expect.arrayContaining(['player']),
       eventId: null,
       playerId: null,
       participantId: null,

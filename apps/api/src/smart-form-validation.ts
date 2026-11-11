@@ -1,4 +1,4 @@
-import { isHumanCapperDeliveryAuthorized } from '@unit-talk/contracts';
+import { isHumanCapperDeliveryAuthorized, manualPlayerProvenance } from '@unit-talk/contracts';
 import type {
   CanonicalParticipantIdentity,
   SmartFormParticipantResolution,
@@ -109,6 +109,8 @@ export function waivesEventExistenceGate(outcome: SmartFormValidationOutcome | u
 export interface SmartFormValidationOptions {
   /** WORK-2026110802: bound on each manual-player coverage search. Tests shorten it. */
   manualPlayerSearchTimeoutMs?: number;
+  /** WORK-2026110802: bound on ALL manual-player coverage searches together. Tests shorten it. */
+  manualPlayerSearchBudgetMs?: number;
 }
 
 export async function validateSmartFormRelationships(
@@ -202,13 +204,13 @@ export async function validateSmartFormRelationships(
     if (!TEAM_SPORTS.has(sportId.toUpperCase())) {
       fail('canonical participant resolution without an event is not verifiable; use explicit manual override');
     }
-    await validateStructuredTeamFallback(
-      payload,
-      resolution,
-      sportId,
-      referenceData,
-      options.manualPlayerSearchTimeoutMs ?? MANUAL_PLAYER_SEARCH_TIMEOUT_MS,
-    );
+    await validateStructuredTeamFallback(payload, resolution, sportId, referenceData, {
+      perSearchTimeoutMs: options.manualPlayerSearchTimeoutMs ?? MANUAL_PLAYER_SEARCH_TIMEOUT_MS,
+      totalBudgetMs: options.manualPlayerSearchBudgetMs ?? MANUAL_PLAYER_SEARCH_BUDGET_MS,
+    });
+    // WORK-2026110802: only after every check above passed does the server write the
+    // provenance labels -- whatever the client sent for them is overwritten, never trusted.
+    if (resolution.manualPlayer) stampManualPlayerProvenance(payload);
     return { kind: 'structured-team-fallback', distributionMode, serverAuthorizedHumanDelivery };
   }
 
@@ -332,7 +334,7 @@ async function validateStructuredTeamFallback(
   resolution: Extract<SmartFormParticipantResolution, { resolution: 'canonical' }>,
   sportId: string,
   referenceData: ReferenceDataRepository,
-  manualPlayerSearchTimeoutMs: number,
+  manualPlayerSearchBounds: ManualPlayerSearchBounds,
 ) {
   if (!resolution.away || !resolution.home) {
     fail('team-sport canonical fallback requires distinct away and home participants');
@@ -386,7 +388,7 @@ async function validateStructuredTeamFallback(
       resolution.manualPlayer.displayName,
       sportId,
       referenceData,
-      manualPlayerSearchTimeoutMs,
+      manualPlayerSearchBounds,
     );
   }
 
@@ -853,23 +855,78 @@ async function findCanonicalCoverage(
 }
 
 /**
- * Every query a coverage proof runs for one entered name: the name as typed, folded and
- * alias-keyed, plus each significant word on its own, because the reference searches match
- * substrings and a city-prefixed or full-name query can find nothing at all.
+ * The queries that prove or disprove coverage of one entered name, most specific first.
+ *
+ * Words are the alias tokens -- split on EVERY non-alphanumeric run after confusable
+ * folding -- not whitespace words. Splitting on whitespace alone let "Jayson.Tatum",
+ * "Jayson-Tatum", "Jayson,Tatum" and "Jayson/Tatum" reach the searches only as one
+ * unsplit word, which ILIKE matches against nothing, so a covered player read as a gap.
+ *
+ * Order matters because the reference searches are `ORDER BY display_name LIMIT n`:
+ *   1. the whole name with punctuation folded to single spaces ("jayson tatum") -- a true
+ *      full-name match is found before any one-word query can be truncated;
+ *   2. the name as typed, folded, and alias-keyed (catalog spellings with punctuation);
+ *   3. the decisive query (`decisiveCoverageQuery`): every suffix match (`isSameEntityName`)
+ *      contains it, so it is the query whose truncation could hide a true match; callers
+ *      that must prove a GAP treat its saturation as unprovable;
+ *   4. every other token of three or more characters.
  */
-function coverageQueries(displayName: string): Set<string> {
+function coreCoverageQueries(displayName: string): string[] {
   const trimmed = displayName.trim();
-  const queries = new Set<string>([trimmed, foldConfusables(trimmed), aliasKey(trimmed)]);
+  const tokens = aliasTokens(trimmed);
+  const decisive = decisiveCoverageQuery(trimmed);
+  return dedupeQueries([
+    tokens.join(' '),
+    trimmed,
+    foldConfusables(trimmed),
+    aliasKey(trimmed),
+    ...(decisive ? [decisive] : []),
+    ...tokens.filter((token) => token.length >= 3),
+  ]);
+}
+
+/**
+ * The query every true match must contain. A suffix match ends with the entered name's last
+ * token, so that token is it -- unless it is a short suffix ("Jr", "II") that would match a
+ * large share of the catalog, in which case the last two tokens together.
+ */
+function decisiveCoverageQuery(displayName: string): string | null {
+  const tokens = aliasTokens(displayName.trim());
+  const last = tokens[tokens.length - 1];
+  if (last === undefined) return null;
+  if (last.length >= 3 || tokens.length < 2) return last;
+  return tokens.slice(-2).join(' ');
+}
+
+/**
+ * Every query the manual-team coverage proof runs: the core queries plus, for continuity with
+ * earlier revisions, each whitespace word as typed and alias-keyed.
+ */
+function coverageQueries(displayName: string): string[] {
+  const trimmed = displayName.trim();
+  const legacyWords: string[] = [];
   for (const word of [...trimmed.split(/\s+/u), ...foldConfusables(trimmed).split(/\s+/u)]) {
     if (aliasKey(word).length >= 3) {
-      queries.add(word);
       // The alias key drops punctuation. Without it, "Knicks." is only ever
       // searched verbatim, ILIKE '%knicks.%' matches nothing, and a name the
       // catalog plainly carries is reported as an uncovered gap.
-      queries.add(aliasKey(word));
+      legacyWords.push(word, aliasKey(word));
     }
   }
-  queries.delete('');
+  return dedupeQueries([...coreCoverageQueries(displayName), ...legacyWords]);
+}
+
+/** Drops empties and case-only duplicates (the searches are case-insensitive ILIKE). */
+function dedupeQueries(candidates: string[]): string[] {
+  const seen = new Set<string>();
+  const queries: string[] = [];
+  for (const candidate of candidates) {
+    const query = candidate.trim();
+    const key = query.toLowerCase();
+    if (query.length === 0 || seen.has(key)) continue;
+    seen.add(key);
+    queries.push(query);
+  }
   return queries;
 }
 
@@ -889,11 +946,50 @@ function coverageQueries(displayName: string): Set<string> {
 // It is Track Only only. A pick whose player no reference data backs carries no provider
 // verification and no CLV, so it must not reach members on the strength of an allow-list.
 
-/** Bounded so a hung reference read surfaces as a retryable error instead of holding the request. */
-export const MANUAL_PLAYER_SEARCH_TIMEOUT_MS = 8_000;
+/** Bound on ONE coverage search, so a hung reference read surfaces as a retryable error. */
+export const MANUAL_PLAYER_SEARCH_TIMEOUT_MS = 4_000;
 
-/** The player provenance the pick metadata must carry beside a manual player. */
-export const MANUAL_PLAYER_PROVENANCE = 'manual-coverage-gap';
+/**
+ * Bound on ALL coverage searches for one manual player together. Exhausting it is a
+ * retryable 503, never an accepted gap: an unfinished proof proves nothing.
+ */
+export const MANUAL_PLAYER_SEARCH_BUDGET_MS = 8_000;
+
+/**
+ * Longest accepted manual player name, in UTF-16 code units, checked before any folding.
+ * 80 holds every real multi-part name with room to spare and bounds every query built from it.
+ */
+export const MANUAL_PLAYER_DISPLAY_NAME_MAX_LENGTH = 80;
+
+/** Most alias tokens a manual player name may fold to. Real names have at most five or so. */
+export const MANUAL_PLAYER_MAX_NAME_TOKENS = 6;
+
+/**
+ * Most coverage searches one manual player may cost. `coreCoverageQueries` yields at most
+ * 4 + 1 + MANUAL_PLAYER_MAX_NAME_TOKENS = 11 queries for an admitted name; the cap is an
+ * explicit fail-closed ceiling, never a truncation -- skipping a query would accept a gap the
+ * server never checked.
+ */
+export const MANUAL_PLAYER_MAX_SEARCHES = 12;
+
+/**
+ * Rows read per coverage search. Larger than the form's 25 because a search that comes back
+ * full may have cut off a true match (`ORDER BY display_name LIMIT n`); see
+ * `verifyManualPlayerCoverageGap` for what happens when even this many come back.
+ */
+export const MANUAL_PLAYER_SEARCH_ROW_LIMIT = 100;
+
+/** The only keys a `manualPlayer` object may carry (contract `ManualPlayerCoverageGap`). */
+const MANUAL_PLAYER_ALLOWED_KEYS: ReadonlySet<string> = new Set([
+  'displayName',
+  'canonicalParticipantId',
+  'reason',
+]);
+
+interface ManualPlayerSearchBounds {
+  perSearchTimeoutMs: number;
+  totalBudgetMs: number;
+}
 
 function assertManualPlayerAdmissible(
   payload: SubmissionPayload,
@@ -906,6 +1002,8 @@ function assertManualPlayerAdmissible(
   const declaredProvenance = metadata?.['playerProvenance'];
 
   if (rawManualPlayer === undefined || rawManualPlayer === null) {
+    // Provenance is server-stamped, never accepted from a client. A pick without a manual
+    // player that claims the label would mislabel a canonical pick and silently forfeit CLV.
     if (declaredProvenance !== undefined && declaredProvenance !== null) {
       fail('metadata.playerProvenance is only valid beside participantResolution.manualPlayer');
     }
@@ -927,17 +1025,35 @@ function assertManualPlayerAdmissible(
   if (!isRecord(rawManualPlayer)) {
     fail('manualPlayer must be an object');
   }
+  const unknownKeys = Object.keys(rawManualPlayer).filter((key) => !MANUAL_PLAYER_ALLOWED_KEYS.has(key));
+  if (unknownKeys.length > 0) {
+    fail(`manualPlayer carries unsupported field(s): ${unknownKeys.sort().join(', ')}`);
+  }
   if (rawManualPlayer['canonicalParticipantId'] !== null) {
     fail('manualPlayer must have canonicalParticipantId=null');
   }
   if (rawManualPlayer['reason'] !== 'canonical-coverage-gap') {
     fail('manualPlayer must state canonical-coverage-gap provenance');
   }
-  const displayName = readRequiredString(rawManualPlayer['displayName'], 'manualPlayer.displayName');
+  // Length first, on the raw value: nothing below folds or searches an unbounded string.
+  const rawDisplayName = rawManualPlayer['displayName'];
+  if (typeof rawDisplayName === 'string' && rawDisplayName.length > MANUAL_PLAYER_DISPLAY_NAME_MAX_LENGTH) {
+    fail(`manualPlayer.displayName must be at most ${MANUAL_PLAYER_DISPLAY_NAME_MAX_LENGTH} characters`);
+  }
+  const displayName = readRequiredString(rawDisplayName, 'manualPlayer.displayName');
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/u.test(displayName)) {
+    fail('manualPlayer.displayName must not contain control characters');
+  }
   if (hasNonAscii(foldConfusables(displayName))) {
     fail(
       `manual player "${displayName}" must use Latin characters so the canonical-coverage claim can be verified`,
     );
+  }
+  const tokenCount = aliasTokens(displayName).length;
+  if (tokenCount === 0) fail('manualPlayer.displayName must name a player');
+  if (tokenCount > MANUAL_PLAYER_MAX_NAME_TOKENS) {
+    fail(`manualPlayer.displayName must have at most ${MANUAL_PLAYER_MAX_NAME_TOKENS} words`);
   }
 
   // The fail-closed delivery rule. It sits here, in validation, because the capper pin in
@@ -952,38 +1068,67 @@ function assertManualPlayerAdmissible(
     );
   }
 
-  if (declaredProvenance !== MANUAL_PLAYER_PROVENANCE) {
-    fail(`manualPlayer requires metadata.playerProvenance=${MANUAL_PLAYER_PROVENANCE}`);
-  }
   // A provider offer is a provider-verified claim about the selection. A manual player has none.
   if (metadata?.['selectedOffer'] !== undefined && metadata?.['selectedOffer'] !== null) {
     fail('manualPlayer cannot carry a provider offer; a manual player makes no provider-verified claim');
   }
 }
 
+/**
+ * Writes the manual-player labels onto the pick metadata. Server-authoritative: the client's
+ * `playerProvenance`, `manualEntry` and `manualOverrideFields` are overwritten, so the
+ * persisted pick says "manual player" exactly when this validator proved the gap -- the
+ * provenance CLV exclusion (clv-service.ts) and the receipt read -- and never because a
+ * client said so. Other manual fields the client declared (e.g. `sportsbook`) are kept.
+ */
+function stampManualPlayerProvenance(payload: SubmissionPayload) {
+  const metadata = payload.metadata ?? {};
+  const declaredFields = Array.isArray(metadata['manualOverrideFields'])
+    ? metadata['manualOverrideFields'].filter(
+        (field): field is string => typeof field === 'string' && field !== 'player',
+      )
+    : [];
+  payload.metadata = {
+    ...metadata,
+    playerProvenance: manualPlayerProvenance,
+    manualEntry: true,
+    manualOverrideFields: [...new Set(declaredFields), 'player'],
+  };
+}
+
 async function verifyManualPlayerCoverageGap(
   displayName: string,
   sportId: string,
   referenceData: ReferenceDataRepository,
-  timeoutMs: number,
+  bounds: ManualPlayerSearchBounds,
 ) {
   const enteredTokens = aliasTokens(displayName);
   if (enteredTokens.length === 0) fail('manualPlayer.displayName must name a player');
 
-  for (const query of coverageQueries(displayName)) {
+  const queries = coreCoverageQueries(displayName);
+  if (queries.length > MANUAL_PLAYER_MAX_SEARCHES) {
+    fail(`manual player "${displayName}" needs more than ${MANUAL_PLAYER_MAX_SEARCHES} coverage searches to verify`);
+  }
+  const decisiveQuery = decisiveCoverageQuery(displayName)?.toLowerCase() ?? null;
+  const deadline = Date.now() + bounds.totalBudgetMs;
+  let decisiveSaturated = false;
+
+  for (const query of queries) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      throw searchUnavailable(displayName, `search budget of ${bounds.totalBudgetMs}ms exhausted`);
+    }
     let rows: Awaited<ReturnType<ReferenceDataRepository['searchPlayers']>>;
     try {
       rows = await withTimeout(
-        referenceData.searchPlayers(sportId, query, 25),
-        timeoutMs,
+        referenceData.searchPlayers(sportId, query, MANUAL_PLAYER_SEARCH_ROW_LIMIT),
+        Math.min(bounds.perSearchTimeoutMs, remainingMs),
       );
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      throw new ApiError(
-        503,
-        'SMART_FORM_REFERENCE_SEARCH_UNAVAILABLE',
-        `player search failed while verifying the manual player "${displayName}"; retry the submission -- a failed search is never recorded as a coverage gap (${reason})`,
-      );
+      throw searchUnavailable(displayName, error instanceof Error ? error.message : String(error));
+    }
+    if (!Array.isArray(rows)) {
+      throw searchUnavailable(displayName, 'player search returned no row list');
     }
     for (const row of rows) {
       if (isSameEntityName(enteredTokens, aliasTokens(row.displayName))) {
@@ -992,7 +1137,28 @@ async function verifyManualPlayerCoverageGap(
         );
       }
     }
+    if (query.toLowerCase() === decisiveQuery && rows.length >= MANUAL_PLAYER_SEARCH_ROW_LIMIT) {
+      decisiveSaturated = true;
+    }
   }
+
+  // Every true match contains the last token, and that search came back full: a match may sit
+  // past the row limit, so the gap is not proved. Fail closed rather than record it.
+  if (decisiveSaturated) {
+    throw new ApiError(
+      422,
+      'SMART_FORM_MANUAL_PLAYER_UNVERIFIABLE',
+      `manual player "${displayName}" cannot be verified as a coverage gap: at least ${MANUAL_PLAYER_SEARCH_ROW_LIMIT} catalog players match "${decisiveQuery}"; enter the full name or select the canonical player`,
+    );
+  }
+}
+
+function searchUnavailable(displayName: string, reason: string): ApiError {
+  return new ApiError(
+    503,
+    'SMART_FORM_REFERENCE_SEARCH_UNAVAILABLE',
+    `player search failed while verifying the manual player "${displayName}"; retry the submission -- a failed search is never recorded as a coverage gap (${reason})`,
+  );
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {

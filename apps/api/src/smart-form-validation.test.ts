@@ -5,7 +5,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { EventBrowseResult, ReferenceDataRepository } from '@unit-talk/db';
 import type { SubmissionPayload } from '@unit-talk/contracts';
 import { createInMemoryRepositoryBundle } from './persistence.js';
-import { validateSmartFormRelationships } from './smart-form-validation.js';
+import {
+  MANUAL_PLAYER_DISPLAY_NAME_MAX_LENGTH,
+  MANUAL_PLAYER_MAX_SEARCHES,
+  MANUAL_PLAYER_SEARCH_ROW_LIMIT,
+  validateSmartFormRelationships,
+} from './smart-form-validation.js';
+import { manualPlayerProvenance } from '@unit-talk/contracts';
 import { ApiError } from './errors.js';
 
 const event: EventBrowseResult = {
@@ -2031,12 +2037,7 @@ test('WORK-2026110802: refuses a flat canonical playerId beside a manual player'
   }
 });
 
-test('WORK-2026110802: requires manual-coverage-gap player provenance and refuses it without a manual player', async () => {
-  const { repository } = manualPlayerRepository();
-  await assert.rejects(
-    () => validateSmartFormRelationships(manualPlayerPayload(herroShape, { metadata: { playerProvenance: 'provider' } }), repository),
-    /manualPlayer requires metadata.playerProvenance=manual-coverage-gap/,
-  );
+test('WORK-2026110802: refuses a client playerProvenance claim without a manual player', async () => {
   const canonicalWithClaim = structuredNoEventPayload({ ...structuredPlayer });
   (canonicalWithClaim.metadata as Record<string, unknown>)['playerProvenance'] = 'manual-coverage-gap';
   await assert.rejects(
@@ -2090,5 +2091,240 @@ test('WORK-2026110802: the teams beside a manual player are verified exactly as 
         repository,
       ),
     /is not canonical for sport NBA|is not part of the structured matchup/,
+  );
+});
+
+// ── WORK-2026110802 PM changes (2026-11-11) ────────────────────────────────────
+
+function assertCoveredRefusal(error: unknown, participantId = 'player-tatum') {
+  assert.ok(error instanceof ApiError, `expected ApiError, got ${String(error)}`);
+  assert.equal(error.code, 'SMART_FORM_RELATIONSHIP_INVALID');
+  assert.match(error.message, new RegExp(`claims a coverage gap, but resolves to canonical player ${participantId}`));
+  return true;
+}
+
+test('WORK-2026110802 F2: punctuation, alias-token and confusable spellings of a covered player are refused', async () => {
+  // Each of these escaped the whitespace-only query split: the only queries built were the
+  // unsplit word, which ILIKE matches against nothing, so Tatum read as a coverage gap.
+  for (const playerName of [
+    'Jayson.Tatum',
+    'Jayson-Tatum',
+    'Jayson,Tatum',
+    'Jayson/Tatum',
+    'Jayson_Tatum',
+    '  Jayson .-/ Tatum  ',
+    'Jayson. Tatum,',
+    'J\u0430yson-T\u0430tum', // Cyrillic a in both words, joined by punctuation
+    '\uff2aayson/Tatum', // fullwidth J
+    'Jay\u200bson.Tatum', // zero-width space inside a word
+    'Tatum.', // last name only, trailing punctuation
+  ]) {
+    const { repository, playerQueries } = manualPlayerRepository();
+    await assert.rejects(
+      () =>
+        validateSmartFormRelationships(
+          manualPlayerPayload({ ...herroShape, team: celticsAtBucks.away, playerName }),
+          repository,
+        ),
+      (error: unknown) => assertCoveredRefusal(error),
+      `"${playerName}" must be refused as covered (queries: ${JSON.stringify(playerQueries)})`,
+    );
+  }
+});
+
+test('WORK-2026110802 F2: the full-name query runs first, so the match is found before any one-word query', async () => {
+  const { repository, playerQueries } = manualPlayerRepository();
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPlayerPayload({ ...herroShape, team: celticsAtBucks.away, playerName: 'Jayson/Tatum' }),
+        repository,
+      ),
+    (error: unknown) => assertCoveredRefusal(error),
+  );
+  assert.deepEqual(playerQueries, ['jayson tatum']);
+});
+
+/**
+ * A catalog that behaves like the real repository: `ILIKE '%q%' ORDER BY display_name LIMIT n`.
+ * 120 "Smithers" players sort before the one true "Smith".
+ */
+function truncatingRepository(): { repository: ReferenceDataRepository; limits: number[] } {
+  const { repository } = manualPlayerRepository();
+  const players = [
+    ...Array.from({ length: 120 }, (_, index) => ({
+      participantId: `player-smithers-${index}`,
+      displayName: `Aa${String(index).padStart(3, '0')} Smithers`,
+    })),
+    { participantId: 'player-zed-smith', displayName: 'Zed Smith' },
+    ...Array.from({ length: 40 }, (_, index) => ({
+      participantId: `player-tyler-${index}`,
+      displayName: `Tyler Aa${String(index).padStart(3, '0')}`,
+    })),
+  ];
+  const limits: number[] = [];
+  repository.searchPlayers = async (_sportId, query, limit = 20) => {
+    limits.push(limit);
+    return players
+      .filter((player) => player.displayName.toLowerCase().includes(query.toLowerCase()))
+      .sort((left, right) => left.displayName.localeCompare(right.displayName))
+      .slice(0, limit)
+      .map((player) => ({ ...player, sport: 'NBA', teamId: null }) as never);
+  };
+  return { repository, limits };
+}
+
+test('WORK-2026110802 F2: a true match past a common-token page is still found by the exact full-name query', async () => {
+  const { repository } = truncatingRepository();
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPlayerPayload({ ...herroShape, playerName: 'Zed.Smith' }),
+        repository,
+      ),
+    (error: unknown) => assertCoveredRefusal(error, 'player-zed-smith'),
+  );
+});
+
+test('WORK-2026110802 F2: a saturated decisive search fails closed instead of recording a gap', async () => {
+  // "Smith" alone: every true match ends in "smith", the "smith" search returns a full page
+  // of Smithers, and Zed Smith sits past the row limit. The gap is not proved.
+  const { repository, limits } = truncatingRepository();
+  await assert.rejects(
+    () => validateSmartFormRelationships(manualPlayerPayload({ ...herroShape, playerName: 'Smith' }), repository),
+    (error: unknown) => {
+      assert.ok(error instanceof ApiError);
+      assert.equal(error.status, 422);
+      assert.equal(error.code, 'SMART_FORM_MANUAL_PLAYER_UNVERIFIABLE');
+      return true;
+    },
+  );
+  assert.ok(limits.every((limit) => limit === MANUAL_PLAYER_SEARCH_ROW_LIMIT));
+});
+
+test('WORK-2026110802 F2: a saturated first-name search does not block a genuinely uncovered player', async () => {
+  // 40 Tylers exceed the form's 25-row page, but no true match can lack "herro".
+  const { repository } = truncatingRepository();
+  const outcome = await validateSmartFormRelationships(manualPlayerPayload(herroShape), repository);
+  assert.equal(outcome.kind, 'structured-team-fallback');
+});
+
+test('WORK-2026110802 F3: the server stamps provenance and manual labels, overwriting the client values', async () => {
+  for (const clientLabels of [
+    { playerProvenance: 'provider', manualEntry: false, manualOverrideFields: [] },
+    { playerProvenance: undefined, manualEntry: undefined, manualOverrideFields: undefined },
+    { playerProvenance: 'manual-coverage-gap', manualEntry: false, manualOverrideFields: ['sportsbook', 'player', 'player'] },
+    { playerProvenance: null, manualEntry: 'yes', manualOverrideFields: 'player' },
+  ]) {
+    const { repository } = manualPlayerRepository();
+    const payload = manualPlayerPayload(herroShape, { metadata: clientLabels });
+    await validateSmartFormRelationships(payload, repository);
+    assert.equal(payload.metadata?.['playerProvenance'], manualPlayerProvenance);
+    assert.equal(payload.metadata?.['manualEntry'], true);
+    const fields = payload.metadata?.['manualOverrideFields'];
+    assert.ok(Array.isArray(fields));
+    assert.deepEqual(
+      fields,
+      Array.isArray(clientLabels.manualOverrideFields) && clientLabels.manualOverrideFields.includes('sportsbook')
+        ? ['sportsbook', 'player']
+        : ['player'],
+    );
+  }
+});
+
+test('WORK-2026110802 F3: a refused manual player is never stamped', async () => {
+  const { repository } = manualPlayerRepository();
+  const payload = manualPlayerPayload(
+    { ...herroShape, team: celticsAtBucks.away, playerName: 'Jayson Tatum' },
+    { metadata: { playerProvenance: undefined, manualEntry: false, manualOverrideFields: [] } },
+  );
+  await assert.rejects(() => validateSmartFormRelationships(payload, repository));
+  assert.equal(payload.metadata?.['playerProvenance'], undefined);
+  assert.equal(payload.metadata?.['manualEntry'], false);
+});
+
+test('WORK-2026110802 F4: manualPlayer is a strict allow-list of fields', async () => {
+  for (const extra of [{ teamId: 'team-mil' }, { participantId: null }, { verified: true }]) {
+    const { repository, playerQueries } = manualPlayerRepository();
+    await assert.rejects(
+      () => validateSmartFormRelationships(manualPlayerPayload(herroShape, { manualPlayer: extra }), repository),
+      new RegExp(`manualPlayer carries unsupported field\\(s\\): ${Object.keys(extra)[0]}`),
+    );
+    assert.equal(playerQueries.length, 0, 'a malformed manualPlayer is refused before any search');
+  }
+});
+
+test('WORK-2026110802 F4: manualPlayer.displayName is length-, word- and character-bounded', async () => {
+  const atLimit = 'A'.repeat(MANUAL_PLAYER_DISPLAY_NAME_MAX_LENGTH);
+  const accepted = manualPlayerRepository();
+  const outcome = await validateSmartFormRelationships(
+    manualPlayerPayload({ ...herroShape, playerName: atLimit }),
+    accepted.repository,
+  );
+  assert.equal(outcome.kind, 'structured-team-fallback', 'a name exactly at the limit is accepted');
+
+  for (const [playerName, pattern] of [
+    [`${atLimit}B`, /at most 80 characters/],
+    ['x'.repeat(10_000), /at most 80 characters/],
+    ['Aa Bb Cc Dd Ee Ff Gg', /at most 6 words/],
+    ['Tyler\nHerro', /control characters/],
+    ['Tyler\u0000Herro', /control characters/],
+    ['.-/,', /must name a player/],
+  ] as const) {
+    const { repository, playerQueries } = manualPlayerRepository();
+    await assert.rejects(
+      () => validateSmartFormRelationships(manualPlayerPayload({ ...herroShape, playerName }), repository),
+      pattern,
+    );
+    assert.equal(playerQueries.length, 0, `"${playerName.slice(0, 20)}" is refused before any search`);
+  }
+});
+
+test('WORK-2026110802 F4: the number of coverage searches is bounded for a worst-case admitted name', async () => {
+  const { repository, playerQueries } = manualPlayerRepository();
+  await validateSmartFormRelationships(
+    manualPlayerPayload({ ...herroShape, playerName: 'Aaa.Bbb-Ccc Ddd/Eee,Fj' }),
+    repository,
+  );
+  assert.ok(playerQueries.length > 0);
+  assert.ok(
+    playerQueries.length <= MANUAL_PLAYER_MAX_SEARCHES,
+    `${playerQueries.length} searches exceed the ${MANUAL_PLAYER_MAX_SEARCHES} cap: ${JSON.stringify(playerQueries)}`,
+  );
+});
+
+test('WORK-2026110802 F4: exhausting the total search budget is retryable and never records a gap', async () => {
+  // Every search answers -- slowly. No single search times out, but together they exceed the
+  // budget, so the proof is unfinished and the gap is not recorded.
+  const { repository } = manualPlayerRepository({
+    searchPlayers: () => new Promise((resolve) => setTimeout(() => resolve([]), 25)),
+  });
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(manualPlayerPayload(herroShape), repository, {
+        manualPlayerSearchTimeoutMs: 1_000,
+        manualPlayerSearchBudgetMs: 40,
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof ApiError);
+      assert.equal(error.status, 503);
+      assert.equal(error.code, 'SMART_FORM_REFERENCE_SEARCH_UNAVAILABLE');
+      assert.match(error.message, /budget of 40ms exhausted|timed out after/);
+      return true;
+    },
+  );
+});
+
+test('WORK-2026110802 F4: a malformed search response is retryable and never records a gap', async () => {
+  const { repository } = manualPlayerRepository({
+    searchPlayers: async () => null as never,
+  });
+  await assert.rejects(
+    () => validateSmartFormRelationships(manualPlayerPayload(herroShape), repository),
+    (error: unknown) => {
+      assert.ok(error instanceof ApiError);
+      assert.equal(error.status, 503);
+      return true;
+    },
   );
 });

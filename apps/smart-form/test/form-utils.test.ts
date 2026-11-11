@@ -956,6 +956,9 @@ for (const shape of [
     });
     assert.equal(payload.metadata?.distributionMode, 'track-only');
     assert.equal(payload.metadata?.playerProvenance, 'manual-coverage-gap');
+    // PM F3: the manual labels agree with the provenance -- never manualEntry:false beside it.
+    assert.equal(payload.metadata?.manualEntry, true);
+    assert.deepEqual(payload.metadata?.manualOverrideFields, ['player']);
     assert.equal(payload.metadata?.playerId, null);
     assert.equal(payload.metadata?.participantId, null);
     assert.equal(payload.metadata?.player, shape.player);
@@ -982,4 +985,26 @@ test('WORK-2026110802: withManualPlayer drops any canonical player and event id'
 test('WORK-2026110802: a payload without a manual player carries no player provenance claim', () => {
   const payload = buildSubmissionPayload(buildBaseValues(), { playerId: 'player-1' });
   assert.equal('playerProvenance' in (payload.metadata ?? {}), false);
+});
+
+test('WORK-2026110802 F3: the client provenance constant is the contract constant', async () => {
+  const contracts = await import('@unit-talk/contracts');
+  const { MANUAL_PLAYER_PROVENANCE } = await import('../lib/form-utils');
+  assert.equal(MANUAL_PLAYER_PROVENANCE, contracts.manualPlayerProvenance);
+});
+
+test('WORK-2026110802 F3: a manual player keeps other manual fields and adds player once', () => {
+  const payload = buildSubmissionPayload(buildBaseValues({ sportsbook: 'PrizePicks' }), {
+    manualOverrideFields: ['sportsbook', 'player'],
+    playerProvenance: 'manual-coverage-gap',
+  });
+  assert.equal(payload.metadata?.manualEntry, true);
+  assert.deepEqual(payload.metadata?.manualOverrideFields, ['sportsbook', 'player']);
+});
+
+test('WORK-2026110802 F3: without a manual player no player label is added', () => {
+  const payload = buildSubmissionPayload(buildBaseValues(), { manualOverrideFields: [], playerProvenance: null });
+  assert.equal(payload.metadata?.manualEntry, false);
+  assert.deepEqual(payload.metadata?.manualOverrideFields, []);
+  assert.equal(payload.metadata?.playerProvenance, undefined);
 });

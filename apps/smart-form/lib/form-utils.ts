@@ -8,6 +8,11 @@ import type {
   SmartFormDistributionMode,
   SmartFormParticipantResolution,
 } from '@unit-talk/contracts';
+// Type-only on purpose: the contracts index uses NodeNext `.js` specifiers that the Next.js
+// bundler cannot resolve, so a runtime import breaks `next build`. The annotation below binds
+// the client value to the contract constant at compile time, and form-utils.test.ts asserts
+// runtime equality against the real contract export.
+import type { manualPlayerProvenance } from '@unit-talk/contracts';
 import {
   getMarketTypeFamily,
   getSupportedMarketTypesForSport,
@@ -337,7 +342,15 @@ export function buildSubmissionPayload(
   // rounding trick.
   const confidence = values.capperConviction >= 10 ? 0.99 : values.capperConviction / 10;
 
-  const manualOverrideFields = context.manualOverrideFields ?? [];
+  // WORK-2026110802: a manual player is a manual field. Recording it here keeps
+  // `manualEntry`/`manualOverrideFields` consistent with `playerProvenance` (the API stamps the
+  // same labels authoritatively; this is what the request says before it does).
+  const manualOverrideFields = [
+    ...new Set([
+      ...(context.manualOverrideFields ?? []).filter((field) => field !== 'player'),
+      ...(context.playerProvenance ? ['player'] : []),
+    ]),
+  ];
   return {
     source: 'smart-form',
     submittedBy: values.capper,
@@ -718,8 +731,13 @@ export function buildManualEnteredParticipants(
 /** Mirrors `ParticipantAutocompleteField`'s per-field search state. */
 export type PlayerSearchResolution = 'idle' | 'searching' | 'results' | 'not-found' | 'error' | 'resolved';
 
-/** The player provenance recorded beside a manual player (mirrors the API constant). */
-export const MANUAL_PLAYER_PROVENANCE = 'manual-coverage-gap' as const;
+/**
+ * The player provenance recorded beside a manual player, bound to the contract constant
+ * `manualPlayerProvenance` (type-checked here, value-checked in form-utils.test.ts) so the
+ * client, the API stamp and the CLV exclusion cannot drift apart. The API overwrites whatever
+ * the client sends; the client sends it so the request is self-describing.
+ */
+export const MANUAL_PLAYER_PROVENANCE: typeof manualPlayerProvenance = 'manual-coverage-gap';
 
 /**
  * Whether the form may offer "Player not found: enter manually".
