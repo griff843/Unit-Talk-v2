@@ -10,8 +10,9 @@
 # (thread comment, review body, CHANGES_REQUESTED, or a summary reporting
 # findings) blocks that head permanently - a new commit with a fresh clean
 # summary is required. Unresolved P0/P1 threads at any head block. Resolving
-# a thread, deleting a comment, dismissing a review or editing a bot comment
-# never clears a finding. Reads only
+# a thread or an untrusted edit never clears a finding; deleting the trusted
+# comment or review body does clear it at the next recompute (known limit,
+# see docs/05_operations/LEAN_MODE_ACTIVATION.md). Reads only
 # GitHub-trusted artifacts via scripts/ops/operating-model.cjs; PR-body text
 # is never consulted. Fails closed, including on connector outage.
 #
