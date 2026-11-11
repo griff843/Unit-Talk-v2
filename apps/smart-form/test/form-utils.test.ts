@@ -1008,3 +1008,31 @@ test('WORK-2026110802 F3: without a manual player no player label is added', () 
   assert.deepEqual(payload.metadata?.manualOverrideFields, []);
   assert.equal(payload.metadata?.playerProvenance, undefined);
 });
+
+test('WORK-2026110802 P3: the client player-prop market keys match the contract copy the API enforces', async () => {
+  // The API binds a manual player to EXACTLY the market the form builds
+  // (resolveSmartFormPlayerPropMarketKey). The client cannot import contract runtime values
+  // (next build), so the tables are copied; this test keeps them identical.
+  const contracts = await import('@unit-talk/contracts');
+  const source = readFileSync(new URL('../lib/form-utils.ts', import.meta.url), 'utf8');
+  const clientStats = [...source.matchAll(/^\s*(?:'([^']+)'|([a-z0-9]+)):\s*'player[._][a-z0-9_.]*',?$/gmu)].map(
+    (match) => match[1] ?? match[2],
+  );
+  assert.ok(clientStats.length > 20, `parsed ${clientStats.length} client stat keys`);
+  const stats = new Set([...clientStats, ...contracts.smartFormPlayerPropStatTypes()]);
+  const sports = new Set([...contracts.smartFormPlayerPropSports, 'SOCCER', 'MMA', 'TENNIS', 'nba', ' NFL ', '']);
+  let compared = 0;
+  for (const sport of sports) {
+    for (const stat of stats) {
+      for (const spelling of [stat, stat.toUpperCase(), ` ${stat} `]) {
+        assert.equal(
+          resolvePlayerPropMarketKey(sport, spelling),
+          contracts.resolveSmartFormPlayerPropMarketKey(sport, spelling),
+          `${JSON.stringify(sport)} / ${JSON.stringify(spelling)}`,
+        );
+        compared += 1;
+      }
+    }
+  }
+  assert.ok(compared > 500, `${compared} comparisons`);
+});

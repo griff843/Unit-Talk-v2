@@ -1,4 +1,9 @@
-import { isHumanCapperDeliveryAuthorized, manualPlayerProvenance } from '@unit-talk/contracts';
+import {
+  isHumanCapperDeliveryAuthorized,
+  manualPlayerProvenance,
+  resolveSmartFormPlayerPropMarketKey,
+  smartFormPlayerPropMarketKeysForSport,
+} from '@unit-talk/contracts';
 import type {
   CanonicalParticipantIdentity,
   SmartFormParticipantResolution,
@@ -199,7 +204,12 @@ export async function validateSmartFormRelationships(
   // ignored by whichever validator happens to run.
   assertManualPlayerAdmissible(payload, resolution, sportId, distributionMode);
   if (resolution.resolution === 'canonical' && resolution.manualPlayer) {
-    assertManualPlayerBoundToPick(payload, resolution.manualPlayer.displayName, sportId, canonicalSport.statTypes);
+    assertManualPlayerBoundToPick(
+      payload,
+      manualPlayerName(resolution.manualPlayer.displayName),
+      sportId,
+      canonicalSport.statTypes,
+    );
   }
 
   if (resolution.resolution === 'manual') {
@@ -219,7 +229,9 @@ export async function validateSmartFormRelationships(
     });
     // WORK-2026110802: only after every check above passed does the server write the
     // provenance labels -- whatever the client sent for them is overwritten, never trusted.
-    if (resolution.manualPlayer) stampManualPlayerProvenance(payload);
+    if (resolution.manualPlayer) {
+      stampManualPlayerProvenance(payload, manualPlayerName(resolution.manualPlayer.displayName));
+    }
     return { kind: 'structured-team-fallback', distributionMode, serverAuthorizedHumanDelivery };
   }
 
@@ -394,7 +406,7 @@ async function validateStructuredTeamFallback(
   // structured fallback; only the player differs, and its claimed gap is proved here.
   if (resolution.manualPlayer) {
     await verifyManualPlayerCoverageGap(
-      resolution.manualPlayer.displayName,
+      manualPlayerName(resolution.manualPlayer.displayName),
       sportId,
       referenceData,
       manualPlayerSearchBounds,
@@ -974,12 +986,13 @@ export const MANUAL_PLAYER_MAX_NAME_TOKENS = 6;
 
 /**
  * Most coverage searches one manual player may cost. `manualPlayerCoverageQueries` yields at
- * most 1 + 4 * MANUAL_PLAYER_MAX_NAME_TOKENS (plain + three accent-tolerant forms per token) +
- * 4 * MANUAL_PLAYER_MAX_NAME_TOKENS (concatenation probes) = 49 queries for an admitted name;
+ * most 2 (whole name, both orders) + 6 * MANUAL_PLAYER_MAX_NAME_TOKENS (plain, three
+ * accent-tolerant and two transliteration forms per token) + 4 * MANUAL_PLAYER_MAX_NAME_TOKENS
+ * (concatenation probes) = 62 queries for an admitted name;
  * the cap is an explicit fail-closed ceiling, never a truncation -- skipping a query would
  * accept a gap the server never checked.
  */
-export const MANUAL_PLAYER_MAX_SEARCHES = 50;
+export const MANUAL_PLAYER_MAX_SEARCHES = 64;
 
 /**
  * Rows read per coverage search. Far larger than the form's 25 because a search that comes back
@@ -1138,18 +1151,35 @@ function sameTokens(left: string[], right: string[]) {
 }
 
 /**
- * Binds the manual-player label to the pick it rides on (review P1-C). Without this a
- * `manualPlayer` could be attached to a moneyline, or to a selection naming a different --
- * canonical -- player, and the provenance stamp and CLV exclusion would describe the wrong pick.
+ * The manual player name as validated and persisted: trimmed (`readRequiredString` already
+ * trims leading/trailing whitespace and BOMs before the character check) with runs of spaces
+ * collapsed. Raw edge whitespace never reaches the pick (review round 3, P3).
+ */
+function manualPlayerName(rawDisplayName: string): string {
+  return rawDisplayName.trim().replace(/ {2,}/gu, ' ');
+}
+
+/** Flat metadata fields that name the pick's player (grading-service.ts and clv-service.ts read them). */
+const PLAYER_NAME_FIELDS = ['player', 'playerName', 'participantName'] as const;
+/** Flat metadata fields that would tie the pick to a canonical or provider player id. */
+const PLAYER_ID_FIELDS = ['playerId', 'participantId', 'providerParticipantId'] as const;
+
+/**
+ * Binds the manual-player label to the pick it rides on. Without this a `manualPlayer` could be
+ * attached to a moneyline, or to a selection or flat field naming a different -- canonical --
+ * player, and the provenance stamp and CLV exclusion would describe the wrong pick; grading
+ * resolves a player by `player` / `playerName` / `participantName` and by id fields, so every
+ * one of them is bound.
  *
- * - The market is a player prop: `market` is a `player.` / `player_` key, and the declared
- *   `metadata.marketType`, if any, is `player-prop`.
+ * - The market is EXACTLY the Smart Form player-prop key for the sport and `metadata.statType`
+ *   (`resolveSmartFormPlayerPropMarketKey`), or, without a stat type, one of the sport's
+ *   player-prop keys; `metadata.marketType`, if any, is `player-prop`.
  * - `metadata.statType`, if any, is one of the sport's catalog stat types (the list the form
- *   offers, from the catalog the sport guard already loaded), so it cannot smuggle a name
- *   into the selection.
+ *   offers, from the catalog the sport guard already loaded).
  * - The selection is exactly what the form builds -- player, stat type, O/U, line -- compared on
  *   folded tokens, so it references the manual player and nobody else.
- * - The flat `metadata.player`, if present, is the manual player.
+ * - `player`, `playerName` and `participantName`, if present, are the manual player.
+ * - `playerId`, `participantId` and `providerParticipantId` are absent (or null).
  */
 function assertManualPlayerBoundToPick(
   payload: SubmissionPayload,
@@ -1158,19 +1188,23 @@ function assertManualPlayerBoundToPick(
   catalogStatTypes: readonly string[],
 ) {
   const metadata = payload.metadata ?? {};
-  const market = typeof payload.market === 'string' ? payload.market.trim().toLowerCase() : '';
   const declaredMarketType = metadata['marketType'];
-  if (
-    !(market.startsWith('player.') || market.startsWith('player_')) ||
-    (declaredMarketType !== undefined && declaredMarketType !== null && declaredMarketType !== 'player-prop')
-  ) {
+  if (declaredMarketType !== undefined && declaredMarketType !== null && declaredMarketType !== 'player-prop') {
     fail('manualPlayer is accepted only on a player-prop market');
   }
 
   const nameTokens = aliasTokens(displayName);
-  const flatPlayer = metadata['player'];
-  if (flatPlayer !== undefined && flatPlayer !== null && !sameTokens(foldedTokens(flatPlayer), nameTokens)) {
-    fail('metadata.player must be the manual player');
+  for (const field of PLAYER_NAME_FIELDS) {
+    const value = metadata[field];
+    if (value !== undefined && value !== null && !sameTokens(foldedTokens(value), nameTokens)) {
+      fail(`metadata.${field} must be the manual player`);
+    }
+  }
+  for (const field of PLAYER_ID_FIELDS) {
+    const value = metadata[field];
+    if (value !== undefined && value !== null) {
+      fail(`metadata.${field} must be absent beside a manual player; a manual player has no canonical or provider id`);
+    }
   }
 
   const rawStatType = metadata['statType'];
@@ -1186,6 +1220,16 @@ function assertManualPlayerBoundToPick(
     if (!catalogStatTypes.some((candidate) => sameTokens(aliasTokens(candidate), wanted))) {
       fail(`metadata.statType "${statType}" is not a ${sportId} stat type`);
     }
+  }
+
+  const market = typeof payload.market === 'string' ? payload.market : '';
+  const expectedMarket = statType ? resolveSmartFormPlayerPropMarketKey(sportId, statType) : null;
+  if (statType ? market !== expectedMarket : !smartFormPlayerPropMarketKeysForSport(sportId).includes(market)) {
+    fail(
+      statType && expectedMarket
+        ? `manualPlayer is accepted only on a player-prop market; the ${sportId} ${statType} market is "${expectedMarket}"`
+        : 'manualPlayer is accepted only on a player-prop market',
+    );
   }
 
   const overUnder = metadata['overUnder'];
@@ -1213,28 +1257,6 @@ function playerNameCore(tokens: string[]): string[] {
   return tokens.filter((token) => !GENERATIONAL_SUFFIXES.has(token) && !/^\d+$/u.test(token));
 }
 
-/**
- * True when a catalog player PLAUSIBLY is the entered name, so the gap claim must be refused.
- * Deliberately broader than `isSameEntityName` (which still governs teams): for a manual player
- * a false refusal costs a retype, a false acceptance records an unverified pick against a
- * player the catalog carries. On folded tokens, with generational suffixes (Jr/Sr/II/III/IV)
- * and bare numbers dropped on BOTH sides, the catalog name C = given... surname is covered by
- * the entered tokens E when any of these holds:
- *   1. the legacy suffix/collapsed rule (`isSameEntityName`) on the cores;
- *   2. concatenation: E joined equals C joined reversed ("TatumJayson") or ANY contiguous run
- *      of C's tokens -- the whole name ("JaysonTatum"), a split given name ("DeAaron" for
- *      "De'Aaron Fox"), or a lone given name ("Jayson") -- or a single E token equals C joined
- *      in either order ("Jayson Tatum JaysonTatum");
- *   3. the surname is one of E's tokens, and E's other tokens are
- *      - none (surname alone, "Tatum"), or
- *      - accompanied by every given name in any order, extra tokens allowed ("Tatum, Jayson",
- *        "Jayson Tatum BOS", 'Jayson "JT" Tatum', "Mr Jayson Tatum"), or
- *      - the given names concatenated ("TJ McConnell" for "T.J. McConnell"), or
- *      - an initial (one or two letters) matching the given names' initials or the first
- *        given name's first letter ("J. Tatum"), or
- *      - all tokens the catalog name also carries ("Gilgeous-Alexander"); or
- *   4. the catalog name is a single token that E contains.
- */
 /** Every concatenation of one or more consecutive tokens. */
 function contiguousRuns(tokens: string[]): Set<string> {
   const runs = new Set<string>();
@@ -1244,42 +1266,154 @@ function contiguousRuns(tokens: string[]): Set<string> {
   return runs;
 }
 
-function isPlausiblySamePlayer(enteredTokens: string[], catalogTokens: string[]): boolean {
+/** True when `left` and `right` differ by at most one insertion, deletion or substitution. */
+function withinOneEdit(left: string, right: string): boolean {
+  if (left === right) return true;
+  if (Math.abs(left.length - right.length) > 1) return false;
+  const [shorter, longer] = left.length <= right.length ? [left, right] : [right, left];
+  let index = 0;
+  while (index < shorter.length && shorter[index] === longer[index]) index += 1;
+  return shorter.length === longer.length
+    ? shorter.slice(index + 1) === longer.slice(index + 1)
+    : shorter.slice(index) === longer.slice(index + 1);
+}
+
+/** `token` is within one edit of a 3+ letter prefix of `name` ("nick" / "nic" of "nicolas"). */
+function withinOneEditOfPrefix(token: string, name: string): boolean {
+  for (const length of [token.length - 1, token.length, token.length + 1]) {
+    if (length >= 3 && length < name.length && withinOneEdit(token, name.slice(0, length))) return true;
+  }
+  return false;
+}
+
+/** One name is a prefix of the other, and the shorter has at least `minimum` letters. */
+function isPrefixPair(left: string, right: string, minimum: number): boolean {
+  const [shorter, longer] = left.length <= right.length ? [left, right] : [right, left];
+  return shorter.length >= minimum && longer.startsWith(shorter);
+}
+
+/**
+ * How a catalog player matches the entered name: `resolves` when the entry denotes that player
+ * (same tokens, reordered, concatenated or decorated), `plausible` when it is only CLOSE to that
+ * player -- a near-miss spelling, a shortened name, initials or a bare surname -- and null when
+ * neither. Both refuse the gap claim; they differ only in the refusal message, which must not
+ * say a near miss "resolves to" anyone. Deliberately broader than `isSameEntityName` (which
+ * still governs teams): a false refusal costs a retype, a false acceptance records an
+ * unverified pick against a covered player. On folded tokens, with generational suffixes
+ * (Jr/Sr/II/III/IV) and bare numbers dropped on BOTH sides, catalog C = given... surname,
+ * entered E:
+ *
+ * resolves when
+ *   1. the legacy suffix/collapsed rule (`isSameEntityName`) holds;
+ *   2. E joined equals C joined reversed ("TatumJayson") or ANY contiguous run of C's tokens
+ *      ("JaysonTatum", "DeAaron" for "De'Aaron Fox", a lone given name "Jayson"), or one E token
+ *      equals C joined in either order;
+ *   3. the surname is one of E's tokens and E's other tokens include every given name
+ *      ("Tatum, Jayson", "Jayson Tatum BOS"), or the given names concatenated ("TJ McConnell"),
+ *      or are all tokens C also carries ("Gilgeous-Alexander"), or C is a single name E contains;
+ * plausible when
+ *   4. the surname is one of E's tokens and E has no other token ("Tatum");
+ *   5. the surname is one of E's tokens and another E token of 3+ letters is a near miss of a
+ *      given name: one is a prefix of the other with 3+ letters ("Steph", "Cam", "Nic", "Matt",
+ *      "Herb", "Jay"), they are within one edit ("Jason", "ayson"), or the token is within one
+ *      edit of a 3+ letter prefix of it ("Nick" / "Stef" against "Nicolas" / "Stephen");
+ *   6. the surname is one of E's tokens and E's single-letter tokens are initials: one initial
+ *      equal to the first given name's ("J. Tatum"), or several equal to ALL the given names'
+ *      initials in order ("T J McConnell"), or a two-letter token equal to all of them ("HS Kim"
+ *      for "Ha-Seong Kim"). Several initials that only share the first one ("A.J. Johnson"
+ *      against "Andre Johnson") are a different player and are NOT refused;
+ *   7. every given name is one of E's tokens and another E token is a near miss of the
+ *      surname: within one edit ("Tatem", "Tatumm", "Tatums", "Antetokoumpo"), a 4+ letter
+ *      prefix of it ("Tatu"), or its initial ("Jayson T.", "Giannis A").
+ * Each rule is also tried with German transliterations undone ("oe"/"ue"/"ae" -> o/u/a), so
+ * "Schroeder" matches "Schröder" (folded "schroder").
+ * Not handled (left to the PM): nicknames and initialisms that share no prefix with the
+ * catalog name ("Mike" for "Michael", "Wardell", "SGA", "MPJ", "KAT", "King James").
+ */
+function catalogPlayerMatch(enteredTokens: string[], catalogTokens: string[]): 'resolves' | 'plausible' | null {
+  const direct = matchPlayerTokens(enteredTokens, catalogTokens);
+  if (direct === 'resolves') return direct;
+  // German transliteration typed for an umlaut ("Schroeder" for "Schröder", folded "schroder").
+  const transliterated = enteredTokens.map((token) => token.replace(/oe/gu, 'o').replace(/ue/gu, 'u').replace(/ae/gu, 'a'));
+  if (transliterated.some((token, index) => token !== enteredTokens[index])) {
+    return matchPlayerTokens(transliterated, catalogTokens) ?? direct;
+  }
+  return direct;
+}
+
+function matchPlayerTokens(enteredTokens: string[], catalogTokens: string[]): 'resolves' | 'plausible' | null {
   const entered = playerNameCore(enteredTokens);
   const catalog = playerNameCore(catalogTokens);
-  if (entered.length === 0 || catalog.length === 0) return false;
-  if (isSameEntityName(entered, catalog)) return true;
+  if (entered.length === 0 || catalog.length === 0) return null;
+  if (isSameEntityName(entered, catalog)) return 'resolves';
 
   const catalogJoined = catalog.join('');
   const catalogReversed = [...catalog].reverse().join('');
   const enteredJoined = entered.join('');
-  if (enteredJoined === catalogReversed || contiguousRuns(catalog).has(enteredJoined)) return true;
-  if (entered.some((token) => token === catalogJoined || token === catalogReversed)) return true;
+  if (enteredJoined === catalogReversed || contiguousRuns(catalog).has(enteredJoined)) return 'resolves';
+  if (entered.some((token) => token === catalogJoined || token === catalogReversed)) return 'resolves';
 
   const surname = catalog[catalog.length - 1] as string;
   const given = catalog.slice(0, -1);
-  if (!entered.includes(surname)) return false;
-  if (given.length === 0) return true;
-  const others = entered.filter((token) => token !== surname);
-  if (others.length === 0) return true;
-  if (given.every((name) => entered.includes(name))) return true;
-  if (others.includes(given.join(''))) return true;
-  const initials = given.map((name) => name[0]).join('');
-  const firstInitial = given[0]?.[0] ?? '';
-  if (others.some((token) => token.length <= 2 && (token === initials || token === firstInitial))) return true;
-  return others.every((token) => catalog.includes(token));
+
+  if (entered.includes(surname)) {
+    if (given.length === 0) return 'resolves';
+    const others = entered.filter((token) => token !== surname);
+    if (others.length === 0) return 'plausible';
+    if (given.every((name) => entered.includes(name))) return 'resolves';
+    if (others.includes(given.join(''))) return 'resolves';
+    if (others.every((token) => catalog.includes(token))) return 'resolves';
+    if (
+      others.some(
+        (token) =>
+          token.length >= 3 &&
+          given.some(
+            (name) =>
+              isPrefixPair(token, name, 3) ||
+              withinOneEdit(token, name) ||
+              withinOneEditOfPrefix(token, name),
+          ),
+      )
+    ) {
+      return 'plausible';
+    }
+    const initials = others.filter((token) => token.length === 1).join('');
+    const givenInitials = given.map((name) => name[0]).join('');
+    if (initials.length === 1 ? initials === givenInitials[0] : initials.length > 1 && initials === givenInitials) {
+      return 'plausible';
+    }
+    if (givenInitials.length > 1 && others.some((token) => token.length === 2 && token === givenInitials)) {
+      return 'plausible';
+    }
+    return null;
+  }
+
+  if (given.length > 0 && given.every((name) => entered.includes(name))) {
+    const rest = entered.filter((token) => !given.includes(token));
+    if (
+      rest.some(
+        (token) =>
+          withinOneEdit(token, surname) ||
+          (token.length >= 4 && surname.startsWith(token)) ||
+          (token.length === 1 && token === surname[0]),
+      )
+    ) {
+      return 'plausible';
+    }
+  }
+  return null;
 }
 
 /**
- * Letters with common diacritic variants in player names (á é í ó ú ý ü ö ä ā ñ ç č ć š ž ś ź ż
- * ń). In an accent-tolerant pattern they become the ILIKE single-character wildcard `_`, so
+ * Letters with common diacritic variants in player names (á é í ó ú ý ü ö ä ā; ñ ń ņ ç č ć š ś ş
+ * ž ź ż ğ ģ ł ļ ľ ř ŗ ď đ ť ţ ķ). In an accent-tolerant pattern they become the ILIKE single-character wildcard `_`, so
  * the ASCII spelling "Munoz" finds the catalog's "Muñoz". The reference search applies the
  * pattern as `ILIKE '%<pattern>%'` and does not fold accents (packages/db
  * runtime-repositories.ts searchPlayers), so the tolerance has to live in the pattern. Patterns
  * are built only from folded [a-z0-9] tokens, so no literal `%`, `_` or `\` ever reaches them.
  */
 const DIACRITIC_VOWELS: ReadonlySet<string> = new Set(['a', 'e', 'i', 'o', 'u', 'y']);
-const DIACRITIC_CONSONANTS: ReadonlySet<string> = new Set(['c', 'n', 's', 'z']);
+const DIACRITIC_CONSONANTS: ReadonlySet<string> = new Set(['c', 'n', 's', 'z', 'g', 'l', 'r', 'd', 't', 'k']);
 const DIACRITIC_LETTERS: ReadonlySet<string> = new Set([...DIACRITIC_VOWELS, ...DIACRITIC_CONSONANTS]);
 
 /**
@@ -1296,14 +1430,21 @@ function wildcardPattern(token: string, wildcards: ReadonlySet<string>): string 
  * The accent-tolerant ILIKE patterns for one folded token. Wildcarding vowels and consonants
  * together often leaves too few literal letters ("munoz" -> "m____"), so each class is also
  * wildcarded alone: vowels ("r_m_r_z" finds "Ramírez") and consonants ("mu_o_" finds "Muñoz",
- * "do__i_" finds "Dončić"). Known limits: a token accented in BOTH a vowel and a consonant
- * whose combined pattern keeps under two literals ("Núñez" typed "Nunez") is missed, as are
- * multi-letter transliterations ("ss" for "ß", "oe" for "ö").
+ * "do__i_" finds "Dončić"). German "oe"/"ue"/"ae" transliterations get their own patterns.
+ * Known limits: a token accented in BOTH a vowel and a consonant whose combined pattern keeps
+ * under two literals ("Núñez" typed "Nunez", "Jiří" typed "Jiri") is missed, as is "ss" for "ß".
  */
 function accentTolerantPatterns(token: string): string[] {
-  return [DIACRITIC_LETTERS, DIACRITIC_VOWELS, DIACRITIC_CONSONANTS]
-    .map((wildcards) => wildcardPattern(token, wildcards))
-    .filter((pattern): pattern is string => pattern !== null && pattern !== token);
+  const patterns = [DIACRITIC_LETTERS, DIACRITIC_VOWELS, DIACRITIC_CONSONANTS].map((wildcards) =>
+    wildcardPattern(token, wildcards),
+  );
+  // German transliteration: "oe" / "ue" / "ae" typed for ö / ü / ä ("Schroeder", "Poeltl",
+  // "Mueller", "Oezil") is one catalog letter, so the digraph becomes one `_`.
+  const transliterated = token.replace(/oe|ue|ae/gu, '_');
+  if (transliterated !== token) {
+    patterns.push(wildcardPattern(transliterated, new Set()), wildcardPattern(transliterated, DIACRITIC_VOWELS));
+  }
+  return patterns.filter((pattern): pattern is string => pattern !== null && pattern !== token);
 }
 
 /** The single accent-tolerant form used inside the combined full-name query. */
@@ -1312,11 +1453,12 @@ function accentTolerantPattern(token: string): string {
 }
 
 /**
- * Every search one manual-player gap proof runs. Each row `isPlausiblySamePlayer` can accept
+ * Every search one manual-player gap proof runs. Each row `catalogPlayerMatch` can accept
  * contains, as a substring, an entered core token of three or more letters (its surname or its
  * single name, possibly accented), or -- when the entry is a concatenation ("JaysonTatum") --
  * the first or last letters of that long token. So the searches are:
- *   1. the whole name, accent-tolerant tokens joined by `%` -- the specific query, first;
+ *   1. the whole name, accent-tolerant tokens joined by `%` -- the specific query, first -- and
+ *      the same in reverse token order;
  *   2. each core token of 3+ letters, plain (the in-memory repository has no ILIKE) and in
  *      its accent-tolerant forms (`accentTolerantPatterns`: "munoz" -> "mu_o_" finds "Muñoz");
  *   3. for each core token of 5+ letters (a possible concatenation, including across a
@@ -1330,6 +1472,10 @@ function manualPlayerCoverageQueries(displayName: string): string[] {
   const core = playerNameCore(aliasTokens(displayName));
   const searchable = core.filter((token) => token.length >= 3);
   const queries = [core.map(accentTolerantPattern).join('%')];
+  // The whole name in reverse order too: "Wu A" finds "Andrew Wu" even though neither token is
+  // long enough for its own search (two-letter tokens are not searched alone -- "li" or "bo"
+  // would saturate every request).
+  if (core.length > 1) queries.push([...core].reverse().map(accentTolerantPattern).join('%'));
   for (const token of searchable) {
     queries.push(token, ...accentTolerantPatterns(token));
   }
@@ -1351,8 +1497,15 @@ function manualPlayerCoverageQueries(displayName: string): string[] {
  * provenance CLV exclusion (clv-service.ts) and the receipt read -- and never because a
  * client said so. Other manual fields the client declared (e.g. `sportsbook`) are kept.
  */
-function stampManualPlayerProvenance(payload: SubmissionPayload) {
+function stampManualPlayerProvenance(payload: SubmissionPayload, displayName: string) {
   const metadata = payload.metadata ?? {};
+  // Persist the validated name, not the raw request value, wherever the pick names its player.
+  const resolution = isRecord(metadata['participantResolution']) ? metadata['participantResolution'] : {};
+  const manualPlayer = isRecord(resolution['manualPlayer']) ? resolution['manualPlayer'] : {};
+  const nameFields: Record<string, string> = {};
+  for (const field of PLAYER_NAME_FIELDS) {
+    if (typeof metadata[field] === 'string') nameFields[field] = displayName;
+  }
   const declaredFields = Array.isArray(metadata['manualOverrideFields'])
     ? metadata['manualOverrideFields'].filter(
         (field): field is string => typeof field === 'string' && field !== 'player',
@@ -1360,6 +1513,8 @@ function stampManualPlayerProvenance(payload: SubmissionPayload) {
     : [];
   payload.metadata = {
     ...metadata,
+    ...nameFields,
+    participantResolution: { ...resolution, manualPlayer: { ...manualPlayer, displayName } },
     playerProvenance: manualPlayerProvenance,
     manualEntry: true,
     manualOverrideFields: [...new Set(declaredFields), 'player'],
@@ -1399,10 +1554,19 @@ async function verifyManualPlayerCoverageGap(
     if (!Array.isArray(rows)) {
       throw searchUnavailable(displayName, 'player search returned no row list');
     }
-    for (const row of rows) {
-      if (isPlausiblySamePlayer(enteredTokens, aliasTokens(row.displayName))) {
+    for (const row of rows as unknown[]) {
+      if (!isRecord(row) || typeof row['displayName'] !== 'string' || typeof row['participantId'] !== 'string') {
+        throw searchUnavailable(displayName, 'player search returned a malformed row');
+      }
+      const match = catalogPlayerMatch(enteredTokens, aliasTokens(row['displayName']));
+      if (match === 'resolves') {
         fail(
-          `manual player "${displayName}" claims a coverage gap, but resolves to canonical player ${row.participantId} (${row.displayName}); use the canonical selection`,
+          `manual player "${displayName}" claims a coverage gap, but resolves to canonical player ${row['participantId']} (${row['displayName']}); use the canonical selection`,
+        );
+      }
+      if (match === 'plausible') {
+        fail(
+          `manual player "${displayName}" claims a coverage gap, but may be canonical player ${row['participantId']} (${row['displayName']}); a name this close to a covered player is refused -- select the canonical player`,
         );
       }
     }
