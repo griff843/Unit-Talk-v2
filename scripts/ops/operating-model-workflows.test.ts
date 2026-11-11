@@ -456,13 +456,13 @@ function refreshRun(id: number, workflowPath: string, status = 'completed') {
   return { id, event: 'pull_request', path: workflowPath, head_sha: HEAD, status, pull_requests: [{ number: 77, head: { sha: HEAD } }] };
 }
 
-async function runRefresh({ eventName, payload, env, runs, issueComments = [] }: { eventName: string; payload: Record<string, unknown>; env: Record<string, string>; runs: Record<string, Array<Record<string, unknown>>>; issueComments?: Array<Record<string, unknown>> }, requireFn: RequireFn = rootRequire) {
+async function runRefresh({ eventName, payload, env, runs, issueComments = [], reviews = [], reviewComments = [] }: { eventName: string; payload: Record<string, unknown>; env: Record<string, string>; runs: Record<string, Array<Record<string, unknown>>>; issueComments?: Array<Record<string, unknown>>; reviews?: Array<Record<string, unknown>>; reviewComments?: Array<Record<string, unknown>> }, requireFn: RequireFn = rootRequire) {
   const reruns: number[] = [];
   const warnings: string[] = [];
   const pr = { number: 77, state: 'open', head: { sha: HEAD, repo: { full_name: REPO } }, base: { ref: 'main', repo: { full_name: REPO } } };
   const github = {
     rest: {
-      pulls: { get: async () => ({ data: pr }) },
+      pulls: { get: async () => ({ data: pr }), listReviews: async () => ({ data: reviews }), listReviewComments: async () => ({ data: reviewComments }) },
       actions: {
         listWorkflowRuns: async ({ workflow_id }: { workflow_id: string }) => ({ data: runs[workflow_id] ?? [] }),
         reRunWorkflow: async ({ run_id }: { run_id: number }) => { reruns.push(run_id); return { data: {} }; },
@@ -623,6 +623,10 @@ test('required-check-refresh (lean, P2): a summary written while the native run 
   });
   assert.equal(recovered.error, null);
   assert.deepEqual(recovered.reruns, [101, 202]);
+  // A run that succeeded but missed a newer summary (which may report findings)
+  // is recomputed too: the stale pass must not stand.
+  const stalePass = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: nativeIndependentReviewRun({ conclusion: 'success' }) }, env: LEAN_ENV, runs: ALL_RUNS, issueComments: [summaryIssueComment('2026-12-03T01:00:05Z')] });
+  assert.deepEqual(stalePass.reruns, [101, 202]);
   // A summary written exactly at the run start is also treated as possibly missed.
   const sameSecond = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: nativeIndependentReviewRun() }, env: LEAN_ENV, runs: ALL_RUNS, issueComments: [summaryIssueComment(RUN_STARTED)] });
   assert.deepEqual(sameSecond.reruns, [101, 202]);
@@ -633,7 +637,6 @@ test('required-check-refresh (lean, P2, adversarial): the native-run recovery is
     // Bounded: the rerun started after the summary, so its own completion does nothing (no loop).
     ['summary older than the run', nativeIndependentReviewRun(), [summaryIssueComment('2026-12-03T00:59:59Z')]],
     ['no summary at all', nativeIndependentReviewRun(), []],
-    ['run succeeded', nativeIndependentReviewRun({ conclusion: 'success' }), [summaryIssueComment('2026-12-03T01:00:05Z')]],
     ['summary from a user account', nativeIndependentReviewRun(), [summaryIssueComment('2026-12-03T01:00:05Z', { login: 'chatgpt-codex-connector', type: 'User' })]],
     ['summary from another bot', nativeIndependentReviewRun(), [summaryIssueComment('2026-12-03T01:00:05Z', { login: 'some-app[bot]', type: 'Bot' })]],
     ['unanchored marker', nativeIndependentReviewRun(), [summaryIssueComment('2026-12-03T01:00:05Z', CODEX_BOT_USER, `echo ${cleanSummary().body}`)]],
@@ -651,8 +654,12 @@ test('required-check-refresh (lean, P2, adversarial): the native-run recovery is
   assert.match(String(stale.error?.message), /not live PR head/u);
   assert.deepEqual(stale.reruns, []);
   // Another workflow's native pull_request run is still untrusted as a signal.
+  const ercRun = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: nativeIndependentReviewRun({ name: 'Executor Result Validator', path: '.github/workflows/executor-result-validator.yml' }) }, env: LEAN_ENV, runs: ALL_RUNS, issueComments: [summaryIssueComment('2026-12-03T01:00:05Z')] });
+  assert.match(String(ercRun.error?.message), /concluded failure; refusing refresh/u);
+  // A summary is not a Merge Gate signal: the native gate completion ignores it.
   const gateRun = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: nativeIndependentReviewRun({ name: 'Merge Gate', path: '.github/workflows/merge-gate.yml' }) }, env: LEAN_ENV, runs: ALL_RUNS, issueComments: [summaryIssueComment('2026-12-03T01:00:05Z')] });
-  assert.match(String(gateRun.error?.message), /Untrusted workflow_run identity/u);
+  assert.equal(gateRun.error, null);
+  assert.deepEqual(gateRun.reruns, []);
 });
 
 test('required-check-refresh (P2): outside lean the native Independent Review completion is a legacy no-op without loading the module', async () => {
@@ -665,6 +672,82 @@ test('required-check-refresh (P2): outside lean the native Independent Review co
   const absent = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: nativeIndependentReviewRun() }, env: LEAN_ENV, runs: ALL_RUNS, issueComments: [summaryIssueComment('2026-12-03T01:00:05Z')] }, missingModuleRequire);
   assert.equal(absent.error, null);
   assert.deepEqual(absent.reruns, []);
+});
+
+// Codex P1 on #1842 (round 2): an escalation that lands while the native Merge
+// Gate run is in flight. The comment refresh must still rerun every other
+// target before failing, and the stale gate's own completion must recover.
+function nativeMergeGateRun(overrides: Record<string, unknown> = {}) {
+  return { ...nativeIndependentReviewRun(), name: 'Merge Gate', path: '.github/workflows/merge-gate.yml', conclusion: 'success', ...overrides };
+}
+const IN_FLIGHT_GATE_RUNS = { ...ESCALATION_RUNS, 'merge-gate.yml': [refreshRun(203, '.github/workflows/merge-gate.yml', 'in_progress')] };
+
+test('required-check-refresh (lean, P1): an in-flight Merge Gate does not stop the other reruns; the broker fails closed afterwards', async () => {
+  const result = await runRefresh({ ...escalationCommentEvent(CODEX_BOT_USER), env: LEAN_ENV, runs: IN_FLIGHT_GATE_RUNS });
+  assert.deepEqual(result.reruns, [303, 101, 404], 'ERV, Independent Review and Risk Class are rerun');
+  assert.match(String(result.error?.message), /Merge Gate run 203 is in_progress/u);
+  // Several unrecoverable targets are all reported, after every possible rerun.
+  const two = await runRefresh({ ...escalationCommentEvent(CODEX_BOT_USER), env: LEAN_ENV, runs: { ...IN_FLIGHT_GATE_RUNS, 'executor-result-validator.yml': [] } });
+  assert.deepEqual(two.reruns, [101, 404]);
+  assert.match(String(two.error?.message), /Merge Gate run 203 is in_progress.*No eligible Executor Result Validation/su);
+});
+
+test('required-check-refresh (lean, P1): the stale native Merge Gate completion is recovered when an escalation was written after it started', async () => {
+  const escalation = (when: string, user: Record<string, unknown> = CODEX_BOT_USER, body = 'RISK-CLASS: PROTECTED') => ({ user, body, created_at: when, updated_at: when });
+  // Issue comment, review body and inline review comment escalations all count.
+  for (const [label, extra] of [
+    ['issue comment', { issueComments: [escalation('2026-12-03T01:00:05Z')] }],
+    ['issue comment at the start second', { issueComments: [escalation(RUN_STARTED)] }],
+    ['review body', { reviews: [{ user: CODEX_BOT_USER, body: 'Found a gap.\nRISK-CLASS: PROTECTED', submitted_at: '2026-12-03T01:00:05Z' }] }],
+    ['inline review comment', { reviewComments: [escalation('2026-12-03T01:00:05Z')] }],
+    ['configured reviewer', { issueComments: [escalation('2026-12-03T01:00:05Z', { login: 'alice', type: 'User' })], env: { ...LEAN_ENV, TRUSTED_REVIEWER_LOGINS: 'alice' } }],
+  ] as const) {
+    const result = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: nativeMergeGateRun() }, env: LEAN_ENV, runs: ESCALATION_RUNS, ...extra });
+    assert.equal(result.error, null, label);
+    assert.deepEqual(result.reruns, [202, 303, 101, 404], label);
+  }
+});
+
+test('required-check-refresh (lean, P1, adversarial): the Merge Gate recovery is bounded, trusted-only and fails closed', async () => {
+  const escalation = (when: string, user: Record<string, unknown> = CODEX_BOT_USER, body = 'RISK-CLASS: PROTECTED') => ({ user, body, created_at: when, updated_at: when });
+  for (const [label, comments] of [
+    // Bounded: the rerun started after the escalation, so its completion is a no-op.
+    ['escalation older than the run', [escalation('2026-12-03T00:59:59Z')]],
+    ['no escalation', []],
+    ['untrusted user', [escalation('2026-12-03T01:00:05Z', { login: 'griff843', type: 'User' })]],
+    ['untrusted bot', [escalation('2026-12-03T01:00:05Z', { login: 'some-app[bot]', type: 'Bot' })]],
+    ['not an exact line', [escalation('2026-12-03T01:00:05Z', CODEX_BOT_USER, 'maybe RISK-CLASS: PROTECTED?')]],
+    ['a clean summary is not an escalation', [summaryIssueComment('2026-12-03T01:00:05Z')]],
+  ] as const) {
+    const result = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: nativeMergeGateRun() }, env: LEAN_ENV, runs: ESCALATION_RUNS, issueComments: [...comments] });
+    assert.equal(result.error, null, label);
+    assert.deepEqual(result.reruns, [], label);
+  }
+  const noStart = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: nativeMergeGateRun({ run_started_at: null }) }, env: LEAN_ENV, runs: ESCALATION_RUNS, issueComments: [escalation('2026-12-03T01:00:05Z')] });
+  assert.match(String(noStart.error?.message), /run_started_at/u);
+  assert.deepEqual(noStart.reruns, []);
+  const noTimestamp = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: nativeMergeGateRun() }, env: LEAN_ENV, runs: ESCALATION_RUNS, issueComments: [{ user: CODEX_BOT_USER, body: 'RISK-CLASS: PROTECTED' }] });
+  assert.match(String(noTimestamp.error?.message), /no valid timestamp/u);
+  assert.deepEqual(noTimestamp.reruns, []);
+  const stale = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: nativeMergeGateRun({ head_sha: 'e'.repeat(40), pull_requests: [{ number: 77, head: { sha: 'e'.repeat(40) } }] }) }, env: LEAN_ENV, runs: ESCALATION_RUNS, issueComments: [escalation('2026-12-03T01:00:05Z')] });
+  assert.match(String(stale.error?.message), /not live PR head/u);
+  assert.deepEqual(stale.reruns, []);
+});
+
+test('required-check-refresh (P1): outside lean a native Merge Gate completion is refused exactly as before, without loading the module', async () => {
+  const comments = [{ user: CODEX_BOT_USER, body: 'RISK-CLASS: PROTECTED', created_at: '2026-12-03T01:00:05Z', updated_at: '2026-12-03T01:00:05Z' }];
+  for (const env of [LEGACY_ENV, UNSET_ENV]) {
+    const result = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: nativeMergeGateRun() }, env, runs: ESCALATION_RUNS, issueComments: comments }, env === UNSET_ENV ? forbidModuleRequire : rootRequire);
+    assert.match(String(result.error?.message), /Untrusted workflow_run identity Merge Gate\/.*\/pull_request/u);
+    assert.deepEqual(result.reruns, []);
+  }
+  const absent = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: nativeMergeGateRun() }, env: LEAN_ENV, runs: ESCALATION_RUNS, issueComments: comments }, missingModuleRequire);
+  assert.match(String(absent.error?.message), /Untrusted workflow_run identity/u);
+  assert.deepEqual(absent.reruns, []);
+  // The pull_request_review Merge Gate signal is unchanged in legacy.
+  const review = await runRefresh({ eventName: 'workflow_run', payload: { workflow_run: nativeMergeGateRun({ event: 'pull_request_review', pull_requests: [] }) }, env: LEGACY_ENV, runs: ESCALATION_RUNS });
+  assert.equal(review.error, null);
+  assert.deepEqual(review.reruns, [202]);
 });
 
 test('required-check-refresh (adversarial P1): untrusted or malformed escalation comments trigger nothing new', async () => {

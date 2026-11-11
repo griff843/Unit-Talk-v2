@@ -38,7 +38,7 @@ function file(filename: string, extra: Row = {}): Row {
 function addedTest(filename: string, body = "+test('adds a case', () => { assert.equal(1, 1); });\n"): Row {
   return { filename, status: 'added', additions: 1, deletions: 0, patch: `@@ -0,0 +1 @@\n${body}` };
 }
-const CLEAN_UI = "import { useState } from 'react';\nimport { Card } from '@/components/ui/Card';\nexport function Widget() { const [a] = useState(1); return <Card>{a}</Card>; }\n";
+const CLEAN_UI = "import { useState } from 'react';\nimport { cn } from '@/lib/utils';\nexport function Widget() { const [a] = useState(1); return <div className={cn('card')}>{a}</div>; }\n";
 function ui(filename: string, headContent: string | undefined = CLEAN_UI, extra: Row = {}): Row {
   return { ...file(filename), headContent, ...extra };
 }
@@ -242,11 +242,34 @@ test('classify: the allow-list admits plain docs, add-only unit tests and clean 
       addedTest('apps/api/src/odds-math.test.ts'),
       addedTest('packages/verification/src/market/market-key.test.ts'),
       ui('apps/command-center/src/components/MiniSparkline.tsx'),
-      ui('apps/command-center/src/components/ui/Badge.tsx', "import { cn } from '@/lib/utils';\nimport { Icon } from './Icon';\nexport const B = () => <span className={cn('x')}><Icon /></span>;\n"),
+      ui('apps/command-center/src/components/ui/Badge.tsx', "import { cn } from '@/lib/utils';\nimport { Star } from 'lucide-react';\nexport const B = () => <span className={cn('x')}><Star /></span>;\n"),
     ],
   });
   assert.deepEqual(result.reasons, []);
   assert.equal(result.class, 'Standard');
+});
+
+// Codex P2 on #1842: a component that imports another first-party component
+// can inherit its capabilities (InterventionAction POSTs a requeue), which the
+// single-file scan cannot see. Every such import is Protected.
+test('classify (adversarial, P2): a UI component importing any first-party component is Protected', () => {
+  const cases: Array<[string, string]> = [
+    ['alias import of a mutation-capable component', "import { InterventionAction } from '@/components/InterventionAction';\nexport const Tile = ({ id }: { id: string }) => <InterventionAction pickId={id} action=\"requeue_delivery\" />;\n"],
+    ['alias import of a nested component', "import { Card } from '@/components/ui/Card';\nexport const T = () => <Card />;\n"],
+    ['relative sibling import', "import { InterventionAction } from './InterventionAction';\nexport const Tile = () => <InterventionAction pickId=\"x\" action=\"requeue_delivery\" />;\n"],
+    ['relative nested import', "import { Icon } from './ui/Icon';\nexport const A = () => <Icon />;\n"],
+    ['export-from of a component', "export { InterventionAction as Tile } from '@/components/InterventionAction';\n"],
+    ['side-effect relative import', "import './Widget.css';\nexport const A = () => null;\n"],
+  ];
+  for (const dir of ['apps/command-center/src/components/', 'apps/smart-form/components/', 'apps/web/src/components/']) {
+    for (const [label, content] of cases) {
+      const result = classifyRisk({ files: [ui(`${dir}Tile.tsx`, content)] });
+      assert.equal(result.class, 'Protected', `${dir} ${label}`);
+      assert.equal(result.reasons[0]!.rule, 'ui-capability', `${dir} ${label}`);
+    }
+  }
+  // Package and named @/lib imports alone stay Standard.
+  assert.equal(classifyRisk({ files: [ui('apps/web/src/components/Tile.tsx')] }).class, 'Standard');
 });
 
 test('classify: a renamed file is Standard only when both sides are on the same Standard rule', () => {

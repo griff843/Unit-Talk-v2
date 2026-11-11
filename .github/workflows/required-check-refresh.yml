@@ -186,7 +186,10 @@ jobs:
               const trustedSignals = {
                 'CI': { path: '.github/workflows/ci.yml', event: 'pull_request', conclusion: 'success', targets: ['executor'] },
                 'Executor Result Validator': { path: '.github/workflows/executor-result-validator.yml', event: 'pull_request', conclusion: 'success', targets: ['merge'] },
-                'Merge Gate': { path: '.github/workflows/merge-gate.yml', event: 'pull_request_review', conclusion: null, targets: ['merge'] },
+                // WORK-2026110804: in lean only, the native pull_request Merge
+                // Gate run is also accepted, solely for the missed-escalation
+                // recovery below. Legacy keeps refusing it exactly as before.
+                'Merge Gate': { path: '.github/workflows/merge-gate.yml', event: leanActive ? ['pull_request_review', 'pull_request'] : 'pull_request_review', conclusion: null, targets: ['merge'] },
                 // WORK-2026110804: a trusted-reviewer review observed by the
                 // pull_request_review run reruns the native Independent Review
                 // and Merge Gate runs at the exact live head.
@@ -231,38 +234,60 @@ jobs:
                 throw new Error('workflow_run pull-request/head metadata mismatch; refusing refresh.');
               }
               targets = expected.targets;
-              if (run.name === 'Independent Review' && run.event === 'pull_request') {
-                // WORK-2026110804 (Codex P2 on #1842): a clean connector summary
-                // can land while the native run is in flight, after it read the
-                // comments. The issue_comment refresh then skips the in-flight
-                // run, the stale run fails, and nothing else retries it. On that
-                // run's completion, rerun it (and Merge Gate) once iff a trusted
-                // Bot summary was written at or after the run started. The
-                // rerun starts later than that write, so its own completion
-                // finds no newer summary: bounded, never a loop. The rerun
-                // re-evaluates everything itself, so this can only retry, never
-                // pass anything.
-                if (run.conclusion === 'success') {
-                  core.info(`Independent Review run ${run.id} succeeded; nothing to recover.`);
-                  return;
-                }
+              // WORK-2026110804 (Codex P2 and P1 on #1842): a trusted signal can
+              // land while a native pull_request run is in flight, after it
+              // read its inputs. The comment-driven refresh cannot rerun an
+              // in-flight run, so the stale run would stand (a stale Standard
+              // Merge Gate success, or a stale Independent Review failure).
+              // On that run's own completion, rerun once iff a trusted signal
+              // was written or updated at or after the run started. The rerun
+              // starts after that write, so its own completion finds nothing
+              // newer: bounded, never a loop. A missing run_started_at, or a
+              // matching signal without a valid timestamp, fails closed. Reruns
+              // re-evaluate everything themselves, so this only ever retries.
+              const signalWrittenSinceRunStart = async (label, isSignal, { includeReviews }) => {
                 const startedMs = Date.parse(String(run.run_started_at || ''));
                 if (!Number.isFinite(startedMs)) {
-                  throw new Error(`Independent Review run ${run.id} has no valid run_started_at; refusing refresh.`);
+                  throw new Error(`${label} run ${run.id} has no valid run_started_at; refusing refresh.`);
                 }
-                const issueComments = await github.paginate(github.rest.issues.listComments, {
+                const writes = (await github.paginate(github.rest.issues.listComments, {
                   owner, repo, issue_number: prNumber, per_page: 100,
+                })).map(node => ({ node, when: node?.updated_at || node?.created_at }));
+                if (includeReviews) {
+                  for (const node of await github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: prNumber, per_page: 100 })) {
+                    writes.push({ node, when: node?.submitted_at });
+                  }
+                  for (const node of await github.paginate(github.rest.pulls.listReviewComments, { owner, repo, pull_number: prNumber, per_page: 100 })) {
+                    writes.push({ node, when: node?.updated_at || node?.created_at });
+                  }
+                }
+                return writes.some(({ node, when }) => {
+                  if (!isSignal(node)) return false;
+                  const writtenMs = Date.parse(String(when || ''));
+                  if (!Number.isFinite(writtenMs)) {
+                    throw new Error(`A trusted signal on PR #${prNumber} has no valid timestamp; refusing refresh.`);
+                  }
+                  return writtenMs >= startedMs;
                 });
-                const missedSummary = issueComments.some(comment =>
-                  comment?.user?.type === 'Bot' &&
-                  trustedReviewerLogins.has(normLogin(comment.user.login)) &&
-                  operatingModel.parseCodexState(String(comment.body || '')) !== null &&
-                  Date.parse(String(comment.updated_at || comment.created_at || '')) >= startedMs);
-                if (!missedSummary) {
+              };
+              if (run.name === 'Independent Review' && run.event === 'pull_request') {
+                const isSummary = node =>
+                  node?.user?.type === 'Bot' &&
+                  trustedReviewerLogins.has(normLogin(node.user.login)) &&
+                  operatingModel.parseCodexState(String(node.body || '')) !== null;
+                if (!(await signalWrittenSinceRunStart('Independent Review', isSummary, { includeReviews: false }))) {
                   core.info(`Independent Review run ${run.id} saw every trusted summary; nothing to recover.`);
                   return;
                 }
                 targets = ['independent', 'merge'];
+              } else if (run.name === 'Merge Gate' && run.event === 'pull_request') {
+                // Reached only in lean (legacy refuses this event above).
+                const isEscalation = node => operatingModel.isTrustedReviewerEscalation(node, configuredReviewers);
+                if (!(await signalWrittenSinceRunStart('Merge Gate', isEscalation, { includeReviews: true }))) {
+                  core.info(`Merge Gate run ${run.id} saw every trusted escalation; nothing to recover.`);
+                  return;
+                }
+                targets = ['merge', 'executor', 'independent', 'risk'];
               } else if (run.name === 'Independent Review' && leanActive) {
                 // WORK-2026110804: a trusted review may carry RISK-CLASS:
                 // PROTECTED in its body or a thread comment. Merge Gate
@@ -291,9 +316,16 @@ jobs:
               throw new Error(`Trusted signal head ${signalHeadSha} is not live PR head ${headSha}; refusing stale refresh.`);
             }
 
+            // WORK-2026110804 (Codex P1 on #1842): a missing or in-flight
+            // required target must not stop the reruns after it (an in-flight
+            // Merge Gate would otherwise leave Executor Result Validation,
+            // Independent Review and Risk Class stale). Every rerun that can be
+            // requested is requested; the job then fails closed. Only a moved
+            // PR head aborts at once, because then no rerun is valid.
+            const refusals = [];
             for (const targetName of [...new Set(targets)]) {
               const config = configs[targetName];
-              if (!config) throw new Error(`Unknown retry target ${targetName}; refusing refresh.`);
+              if (!config) { refusals.push(`Unknown retry target ${targetName}; refusing refresh.`); continue; }
               const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
                 owner, repo,
                 workflow_id: config.workflowId,
@@ -312,12 +344,14 @@ jobs:
               if (!target) {
                 const message = `No eligible ${config.label} pull_request run exists for PR #${prNumber} at ${headSha}.`;
                 if (optional) { core.warning(`${message} Skipping; continuing with remaining targets.`); continue; }
-                throw new Error(message);
+                refusals.push(message);
+                continue;
               }
               if (target.status !== 'completed') {
                 const message = `Newest eligible ${config.label} run ${target.id} is ${target.status}; refusing older fallback.`;
                 if (optional) { core.warning(`${message} Skipping; continuing with remaining targets.`); continue; }
-                throw new Error(message);
+                refusals.push(message);
+                continue;
               }
 
               // This API read is intentionally adjacent to the only mutation.
@@ -332,4 +366,7 @@ jobs:
               }
               await github.rest.actions.reRunWorkflow({ owner, repo, run_id: target.id });
               core.info(`Requested native retry of ${config.label} run ${target.id} for PR #${prNumber} at ${headSha}.`);
+            }
+            if (refusals.length > 0) {
+              throw new Error(refusals.join(' '));
             }

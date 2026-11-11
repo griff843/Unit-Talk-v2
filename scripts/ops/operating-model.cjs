@@ -120,7 +120,8 @@ const DOCS_EXCLUDED = [
 ];
 
 // UI-only component directories. Files here are Standard only when their full
-// head content imports nothing outside the component tree and carries no
+// head content imports no first-party component or module (only allow-listed
+// packages and named @/lib helpers) and carries no
 // mutation, network, auth, env or server-action capability (see scanUiContent).
 const UI_COMPONENT_DIRS = Object.freeze([
   'apps/command-center/src/components/',
@@ -229,7 +230,13 @@ const WEAKENING_ADDITION = /(?:\b(?:it|test|describe|suite)\.(?:skip|only|todo)\
 // cannot be told apart from harmless use by a regex, so any of them is
 // Protected.
 const UI_FORBIDDEN = /(?:\bfetch\b|\bglobalThis\b|\bnavigator\b|\b(?:window|self|top|parent|frames|opener|document|globalThis)\s*\[|\bdocument\s*\.\s*cookie\b|\bcreateElement\s*\(\s*(?:['"`]\s*form\b|[^'"`\s])|\bReflect\b|\bconstructor\b|\bFunction\s*\(|\bimport\s*\.\s*meta\b|\brequire\b|use server|\bsupabase\b|\bcreateClient\b|next-auth|\bsign(?:In|Out)\s*\(|process\.env|import\.meta\.env|\.rpc\s*\(|\.from\s*\(|\.(?:insert|upsert|update|delete)\s*\(|dangerouslySetInnerHTML|\beval\s*\(|\bnew\s+Function\b|XMLHttpRequest|WebSocket|EventSource|sendBeacon|document\.cookie|localStorage|sessionStorage|\bformAction\b|\baction\s*=\s*\{|<form\b|\baxios\b|\buseMutation\b|\bmutate(?:Async)?\s*\(|window\.location\s*=|\bwindow\.open\s*\()/u;
-const UI_ALLOWED_IMPORTS = /^(?:react|react-dom|next\/link|next\/image|next\/navigation|next\/dynamic|next-themes|clsx|classnames|lucide-react|class-variance-authority|tailwind-merge|framer-motion|recharts|@radix-ui\/[a-z0-9-]+|@\/components\/[A-Za-z0-9_./-]+|@\/lib\/(?:types|utils|cn|format|formatters|site-config))$/u;
+// Codex P2 on #1842: no import of another first-party component, by the
+// `@/components/*` alias OR by a relative path, is on the allow-list. A
+// harmless-looking component can wrap a mutation-capable one (a Tile rendering
+// InterventionAction with action="requeue_delivery" POSTs a requeue), and the
+// content scan sees only this file. Such changes are Protected; import-graph
+// capability analysis is a possible future refinement, not built here.
+const UI_ALLOWED_IMPORTS = /^(?:react|react-dom|next\/link|next\/image|next\/navigation|next\/dynamic|next-themes|clsx|classnames|lucide-react|class-variance-authority|tailwind-merge|framer-motion|recharts|@radix-ui\/[a-z0-9-]+|@\/lib\/(?:types|utils|cn|format|formatters|site-config))$/u;
 // Whitespace and comments may legally sit between `from`/`import(` and the
 // specifier; tolerate them so a comment cannot hide the specifier.
 const GAP = String.raw`(?:\s|/\*[\s\S]*?\*/|//[^\n]*(?:\n|$))*`;
@@ -270,27 +277,9 @@ function scanTestContent(content) {
   return problems;
 }
 
-function posixDirname(p) {
-  const index = p.lastIndexOf('/');
-  return index < 0 ? '' : p.slice(0, index);
-}
-
-function resolveRelative(fromFile, specifier) {
-  const parts = posixDirname(fromFile).split('/').filter(Boolean);
-  for (const segment of specifier.split('/')) {
-    if (segment === '' || segment === '.') continue;
-    if (segment === '..') {
-      if (parts.length === 0) return null;
-      parts.pop();
-    } else parts.push(segment);
-  }
-  return parts.join('/');
-}
-
 /** Returns a list of problems with a UI component's full head content. */
 function scanUiContent(fileName, content) {
   const problems = [];
-  const root = UI_COMPONENT_DIRS.find(dir => fileName.startsWith(dir));
   if (/\.css$/u.test(fileName)) {
     const css = content.match(CSS_FORBIDDEN);
     if (css) problems.push(`CSS loads an external resource \`${css[0]}\``);
@@ -312,10 +301,7 @@ function scanUiContent(fileName, content) {
       continue;
     }
     if (specifier.startsWith('.')) {
-      const resolved = resolveRelative(fileName, specifier);
-      if (!resolved || !root || !(`${resolved}/`.startsWith(root) || resolved.startsWith(root))) {
-        problems.push(`relative import outside the component tree \`${specifier}\``);
-      }
+      problems.push(`relative import \`${specifier}\` of a first-party module (its capabilities are not scanned)`);
       continue;
     }
     if (!UI_ALLOWED_IMPORTS.test(specifier)) problems.push(`import \`${specifier}\` is outside the UI allow-list`);
