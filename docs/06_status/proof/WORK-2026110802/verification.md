@@ -20,7 +20,10 @@ result in "PM changes" below was measured on). The PM approved expanding the lan
 f40e33cc5ce89c81704ba1f23a305b51f5edefcb (the sync added only `docs/06_status/readiness/readiness-score.json`);
 results in "Review round 2" below. Independent review round 3 (CHANGES REQUIRED at bc8037946) fixes:
 commits df3d33296 (code) and b7692eaca (one test renamed); main was already merged, no sync needed;
-results in "Review round 3" below.
+results in "Review round 3" below. The PM fallback (operator-confirmed unverified player, commit
+6addecf2d), a sync with main (1917364eb) and the Codex P2 fix (8f4320b38) followed; the substantive
+head this bundle binds to is 8f4320b38411ac71f2af5f977fcf2ea44afef3ea, measured by its exact-head CI
+in "Exact-head CI on 8f4320b38" below.
 
 ## ASSERTIONS:
 
@@ -349,6 +352,30 @@ Mutation proofs (each applied alone, file restored): team id not switched (kille
 helper ignores the candidate's team, falls back to a side for an off-matchup player, or accepts a
 null team (each killed by the form-utils unit test).
 
+## Exact-head CI on 8f4320b38 (2026-11-11)
+
+CI run 43066546367 (`pull_request`, head 8f4320b38411ac71f2af5f977fcf2ea44afef3ea, merge ref
+0ebb18b33b56589b237670c0f5d17683e6b41a1e), read from GitHub with `gh api` and `gh run view --log`:
+
+- Job `verify` 130694795514: conclusion success. Its "Verify (static)" step runs `pnpm verify:static`
+  (`ci:db-client-boundary`, `ops:sync-check`, `ops:system-alignment-check`, `ops:automation-coverage-check`,
+  `env:check`, `lint`, `type-check`, `build`, `test`, `test:production-post-migration`, the smart-form
+  `verify` and `verify:commands`). Summed over that step's 122 TAP summaries in the job log:
+  tests 8273, pass 8260, fail 0, skipped 13. The "Command Center tests" step: tests 770, pass 770, fail 0.
+  Its "Verify staging DB proof receipt" step printed:
+
+```
+Observed project: xskgrzbteyqdufktjrjx
+Expected staging: xskgrzbteyqdufktjrjx
+Verdict: PASS
+Reason: DB proof verified: run 43066546367 attempt 1 @ 0ebb18b33b56589b237670c0f5d17683e6b41a1e, target xskgrzbteyqdufktjrjx, pass=9 fail=0 skipped=0
+```
+
+This replaces the per-round local results that the PM-fallback section above deferred to this refresh:
+the exact-head figures are CI's, not re-run on this host. Playwright specs (including
+`manual-player-fallback.spec.ts`) are not run by any CI workflow, so the e2e evidence for the PM fallback
+and the Codex P2 fix remains the operator-run results and mutation kills recorded above.
+
 ## Verification (original, on b64849542)
 
 Command: `pnpm verify` (lane worktree, on the tree later committed as b64849542 except the two
@@ -375,12 +402,32 @@ only in CI's "Writable DB proof (staging only)" job on the exact PR head; that j
 `ops:proof-generate`. No production data was read or written by this lane. This lane adds no
 migration and no new write path; the persisted shape was asserted against the real local API above.
 
-Execution SHA: b7692eacac44b95cabf6138e71f2c7a4dc502641 (review round 3; round 2 f40e33cc5; PM changes 4361dd6ef; original b64849542b6964eb7f23fb97ed6c64b06effa317)
+Execution SHA: 8f4320b38411ac71f2af5f977fcf2ea44afef3ea (Codex P2 fix; PM fallback 6addecf2d; review round 3 b7692eaca; round 2 f40e33cc5; PM changes 4361dd6ef; original b64849542b6964eb7f23fb97ed6c64b06effa317)
 
-The staging result below is from the earlier head 900f46831; CI's staging job re-runs on the new PR
-head and its receipt is authoritative. It was not re-harvested here.
+## CI staging result (PR head 8f4320b38411ac71f2af5f977fcf2ea44afef3ea): exact head
 
-## CI staging result (PR head 900f46831d2c47d35daa266743f0eaded6f0afb3): SUPERSEDED
+CI run 43066546367, job "Writable DB proof (staging only)" 130682912967: conclusion success. From its
+`ci-db-proof-receipt/v2` artifact (`utv2-1630-db-proof-receipt-43066546367-1`): command `pnpm test:db`,
+`observed_project_ref` xskgrzbteyqdufktjrjx (expected staging xskgrzbteyqdufktjrjx; production
+zfzdnfwdarxucxtaojxm not targeted), `exit_code` 0, tap tests 9, pass 9, fail 0, skipped 0,
+`github_sha` 0ebb18b33b56589b237670c0f5d17683e6b41a1e, `receipt_sha256`
+ef70ef47f97808b81cf245846df9a94561d17b6c8f79cc8c78987f45ac5dfc3f. The job log shows
+`[assert-staging] OK: target is the approved staging project` before each suite, and the T1 live proof
+suites step summed over its 31 TAP summaries: tests 160, pass 160, fail 0, skipped 0.
+
+`evidence.json` `runtime_proof` was re-harvested from this receipt and job log with the same exported steps
+of `scripts/ops/ci-db-proof-harvest.ts` (`findWorkflowJobForHeadSha`, `downloadCiDbProofReceipt`,
+`verifyHarvestedReceipt`, `verifyMergeRefDescendsFromHead`, `fetchCiDbProofJobLog`,
+`buildHarvestedRuntimeProof`): receipt hash integrity, run/job identity and merge-ref ancestry (merge ref
+0ebb18b33, parents b73171327 and the PR head 8f4320b38) verified.
+
+Unverified: `database-smoke.test.ts` is the repository's standing staging smoke and the T1 live suites
+are the repository's standing set; none of them exercises this lane's manual-player path or the
+operator-confirmed fallback specifically. The lane adds no table, column, migration or write path; the
+persisted shape was asserted against the real local API and the operator-run browser specs above, not
+against staging. Real-catalog behaviour of the near-miss patterns was not measured.
+
+## CI staging result (PR head 900f46831d2c47d35daa266743f0eaded6f0afb3): SUPERSEDED (history)
 
 **Superseded.** This receipt is from 900f46831, before the round-3 and PM-fallback code. It is not
 exact-head evidence for any later head and must not be cited as such; the final proof refresh harvests
@@ -400,4 +447,4 @@ exact-head CI re-runs the same staging job.
 
 Merge SHA: pending merge
 PR: pending
-Execution SHA: b7692eacac44b95cabf6138e71f2c7a4dc502641
+Execution SHA: 8f4320b38411ac71f2af5f977fcf2ea44afef3ea
