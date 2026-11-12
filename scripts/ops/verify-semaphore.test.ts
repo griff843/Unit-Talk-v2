@@ -587,6 +587,50 @@ function writeHolderScript(name: string, body: string[]): string {
   return scriptPath;
 }
 
+test('the signal handlers are installed before the slot has an owner record', () => {
+  // UTV2 flake: `acquireVerifySlot` used to claim the slot with mkdir, write
+  // the owner record, start the heartbeat, build the handle, and only THEN
+  // register the SIGTERM handler. A signal anywhere in that window killed the
+  // process with the slot already taken and nothing registered to give it
+  // back, so the slot leaked until the reaper reclaimed it.
+  //
+  // `processStartToken` is called while the owner record is being built, which
+  // is inside the old window and after the claim. Asserting from there proves
+  // the ordering rather than racing it: a real signal-timing test can only
+  // ever fail intermittently, which is exactly how this shipped.
+  const dir = tmpDir();
+  let listenersAtOwnerWrite = -1;
+  const before = process.listenerCount('SIGTERM');
+
+  const handle = acquireVerifySlot({
+    dir,
+    maxConcurrent: 1,
+    issueId: 'UTV2-1594',
+    enableHeartbeat: false,
+    processStartToken: () => {
+      listenersAtOwnerWrite = process.listenerCount('SIGTERM');
+      return 'token';
+    },
+  });
+
+  try {
+    assert.ok(
+      listenersAtOwnerWrite > before,
+      `a SIGTERM handler must already be installed when the owner record is written ` +
+        `(had ${listenersAtOwnerWrite}, started with ${before})`,
+    );
+  } finally {
+    handle.release();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
+  assert.equal(
+    process.listenerCount('SIGTERM'),
+    before,
+    'release must leave no listener behind',
+  );
+});
+
 test('a killed process releases its slot through the signal path', async () => {
   const dir = tmpDir();
   const scriptPath = writeHolderScript('holder.cjs', [
