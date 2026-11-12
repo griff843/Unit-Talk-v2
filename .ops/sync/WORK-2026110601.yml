@@ -1,0 +1,159 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026110601
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026110601
+  objective: Make the guard's non-data statements resilient to transient statement
+    failures without weakening detection or adding DDL. The affected statements
+    are the watermark read W, check 2, check 3 and the end count.
+  acceptance_criteria:
+    - A transient error on one guard statement is retried at the statement
+      level, bounded at 3 tries per statement. The same W is reused.
+    - "Reusing W keeps detection the same or wider: a stale W can only flag more
+      changes."
+    - When retries are exhausted, the guard fails closed.
+    - The rows from that attempt are never returned.
+    - Error messages are never empty. They carry the PostgREST code and status
+      when present, for example `57014` or HTTP 500.
+    - Drift detection, keyset paging, the redundant `created_at` bound, cursor
+      text, ordering, the 100,000-row budget and the page cap are unchanged.
+    - "Unit regressions:"
+    - check 2 throws 57014 once and then succeeds, and the result equals the
+      oracle;
+    - a persistent 57014 fails closed after the bound, with the code in the
+      message;
+    - an error on the W read is retried;
+    - all existing T1–T7 regressions still pass.
+    - "Mutation controls:"
+    - removing the retry fails the transient test;
+    - an unbounded retry fails the exhaustion test;
+    - dropping the code from the error message fails the message test.
+    - Live staging suite green at the exact PR head.
+  guardrails:
+    - No DDL. An index on `picks(updated_at)` is Griff's decision (production
+      DDL) and is out of scope.
+    - No production mutation, deploy, kill-switch change or delivery.
+    - "File scope:"
+    - "`packages/db/src/runtime-repositories.ts`"
+    - "`packages/db/src/member-performance-read-completeness.test.ts`"
+    - this lane's proof directory
+  non_goals: []
+  required_evidence:
+    - T1 evidence bundle bound to the source SHA.
+    - Exact-head staging CI.
+    - Mutation results.
+    - Verification-boundary table. It states that the slowdown's cause is not
+      identified and the index is not added.
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026110601 — Bounded statement retry for the keyset population guard
+
+      Tier: T1
+
+      Lane type: implementation
+
+      Executor: codex
+
+
+      Source: the post-merge finding on PR #1832 (comment 6690466033). `ci.yml`
+      run 42254395162 at merge SHA `6d96159dc` failed on a 57014 statement
+      timeout. The failing statement is check 2 of the `listByLifecycleStates`
+      population guard, an unindexed whole-table HEAD count on `picks`. On
+      staging, the same scan measured anywhere from 103 ms to 11.7 s within
+      minutes. The guard retries only drift errors, so it failed closed with an
+      empty error message.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026110601.md
+    title: WORK-2026110601 — Bounded statement retry for the keyset population guard
+    description: >-
+      # WORK-2026110601 — Bounded statement retry for the keyset population
+      guard
+
+
+      Tier: T1
+
+      Lane type: implementation
+
+      Executor: codex
+
+
+      Source: the post-merge finding on PR #1832 (comment 6690466033). `ci.yml`
+      run 42254395162 at merge SHA `6d96159dc` failed on a 57014 statement
+      timeout. The failing statement is check 2 of the `listByLifecycleStates`
+      population guard, an unindexed whole-table HEAD count on `picks`. On
+      staging, the same scan measured anywhere from 103 ms to 11.7 s within
+      minutes. The guard retries only drift errors, so it failed closed with an
+      empty error message.
+
+
+      ## Objective
+
+
+      Make the guard's non-data statements resilient to transient statement
+      failures without weakening detection or adding DDL. The affected
+      statements are the watermark read W, check 2, check 3 and the end count.
+
+
+      ## Acceptance Criteria
+
+
+      - A transient error on one guard statement is retried at the statement
+      level, bounded at 3 tries per statement. The same W is reused.
+        - Reusing W keeps detection the same or wider: a stale W can only flag more changes.
+        - When retries are exhausted, the guard fails closed.
+        - The rows from that attempt are never returned.
+      - Error messages are never empty. They carry the PostgREST code and status
+      when present, for example `57014` or HTTP 500.
+
+      - Drift detection, keyset paging, the redundant `created_at` bound, cursor
+      text, ordering, the 100,000-row budget and the page cap are unchanged.
+
+      - Unit regressions:
+        - check 2 throws 57014 once and then succeeds, and the result equals the oracle;
+        - a persistent 57014 fails closed after the bound, with the code in the message;
+        - an error on the W read is retried;
+        - all existing T1–T7 regressions still pass.
+      - Mutation controls:
+        - removing the retry fails the transient test;
+        - an unbounded retry fails the exhaustion test;
+        - dropping the code from the error message fails the message test.
+      - Live staging suite green at the exact PR head.
+
+
+      ## Guardrails
+
+
+      - No DDL. An index on `picks(updated_at)` is Griff's decision (production
+      DDL) and is out of scope.
+
+      - No production mutation, deploy, kill-switch change or delivery.
+
+      - File scope:
+        - `packages/db/src/runtime-repositories.ts`
+        - `packages/db/src/member-performance-read-completeness.test.ts`
+        - this lane's proof directory
+
+      ## Required Evidence
+
+
+      - T1 evidence bundle bound to the source SHA.
+
+      - Exact-head staging CI.
+
+      - Mutation results.
+
+      - Verification-boundary table. It states that the slowdown's cause is not
+      identified and the index is not added.
+    captured_at: 2026-11-06T17:59:34.438Z
+    description_sha256: c36cea835c3d0de869dd60f38e37fefa0b038f374571505af102b77efd3d4547
+  contract_hash: 652c7b3a1bde6c81d35856616c16279024f35a989ca5e3d7da6dccc3e662c903
