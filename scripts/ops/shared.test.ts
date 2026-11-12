@@ -766,11 +766,53 @@ test('deriveDeliveryUiApp fails closed when scope spans more than one app', () =
   );
 });
 
-test('deriveDeliveryUiApp fails closed when a path is outside any canonical app root', () => {
+test('deriveDeliveryUiApp fails closed when a supporting path is outside Delivery/UI policy', () => {
   assert.strictEqual(
-    deriveDeliveryUiApp(['apps/command-center/src/app/page.tsx', 'scripts/ops/shared.ts']),
+    deriveDeliveryUiApp(['apps/command-center/src/app/page.tsx', 'packages/domain/src/lifecycle/index.ts']),
     null,
   );
+});
+
+test('deriveDeliveryUiApp admits product and brand documentation beside exactly one app', () => {
+  assert.strictEqual(deriveDeliveryUiApp(['apps/web/**', 'docs/03_product/brand/**']), 'web');
+  assert.strictEqual(deriveDeliveryUiApp(['apps/web/src/components/PublicHeader.tsx', 'docs/03_product/brand/README.md']), 'web');
+  assert.strictEqual(deriveDeliveryUiApp(['docs/03_product/brand/**']), null);
+  assert.strictEqual(deriveDeliveryUiApp(['apps/web/**', 'apps/command-center/**', 'docs/03_product/brand/**']), null);
+});
+
+test('deriveDeliveryUiApp admits independently authorized lane, sync, proof and script paths', () => {
+  assert.strictEqual(deriveDeliveryUiApp([
+    'apps/web/**',
+    'docs/06_status/proof/UTV2-1976/verification.md',
+    'docs/06_status/lanes/UTV2-1976.json',
+    '.ops/sync/UTV2-1976.yml',
+  ]), 'web');
+  assert.strictEqual(deriveDeliveryUiApp(['apps/command-center/**', 'scripts/ops/shared.ts']), 'command-center');
+  assert.strictEqual(deriveDeliveryUiApp(['docs/06_status/proof/UTV2-1976/**', '.ops/sync/UTV2-1976.yml']), null);
+});
+
+test('deriveDeliveryUiApp rejects unauthorized, forbidden and malformed supporting paths', () => {
+  for (const supportingPath of ['unknown/file.ts', 'docs/governance/CONCURRENCY_CONFIG.json', 'supabase/migrations/example.sql', 'apps/unknown/page.tsx', 'docs/03_product/../../governance/file.md', '/docs/03_product/brand/README.md', '']) {
+    assert.strictEqual(deriveDeliveryUiApp(['apps/web/**', supportingPath]), null, supportingPath);
+  }
+});
+
+test('deriveDeliveryUiApp fails closed when supporting-path policy cannot be read', (t) => {
+  t.mock.method(fs, 'readFileSync', () => { throw new Error('policy unavailable'); });
+  assert.strictEqual(deriveDeliveryUiApp(['apps/web/**']), null);
+  assert.strictEqual(deriveDeliveryUiApp(['apps/web/**', 'docs/03_product/brand/**']), null);
+});
+
+test('deriveDeliveryUiApp fails closed when supporting-path policy is invalid', (t) => {
+  t.mock.method(fs, 'readFileSync', () => 'schema_version: 999\nlane_type: delivery-ui\n');
+  assert.strictEqual(deriveDeliveryUiApp(['apps/web/**']), null);
+  assert.strictEqual(deriveDeliveryUiApp(['apps/web/**', 'docs/03_product/brand/**']), null);
+});
+
+test('deriveDeliveryUiApp gives the policy denylist precedence over its allowlist', (t) => {
+  const policy = fs.readFileSync(path.join(ROOT, '.lane/lanes/delivery-ui.yml'), 'utf8');
+  t.mock.method(fs, 'readFileSync', () => policy.replace('forbidden_path_globs:', 'forbidden_path_globs:\n  - docs/03_product/brand/**'));
+  assert.strictEqual(deriveDeliveryUiApp(['apps/web/**', 'docs/03_product/brand/**']), null);
 });
 
 // ── mergeVerifierIdentity (UTV2-1642) ──────────────────────────────────────────
