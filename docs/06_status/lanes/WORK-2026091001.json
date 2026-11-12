@@ -185,9 +185,9 @@
     "docs/06_status/proof/WORK-2026091001/evidence.json",
     "docs/06_status/proof/WORK-2026091001/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "superseded",
   "started_at": "2026-09-10T12:05:29.711Z",
-  "heartbeat_at": "2026-09-10T13:24:53.646Z",
+  "heartbeat_at": "2026-11-12T17:33:15.249Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026091001-tracker-independence.json",
