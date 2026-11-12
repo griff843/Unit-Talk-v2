@@ -2,25 +2,62 @@
 
 MERGE_SHA: pending merge
 
-> Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command
-> actually executed and its real result before review. `post-merge-lane-close.yml`
-> binds the merge SHA; never write one here by hand.
+> Pre-merge the merge row is intentionally the placeholder; the code commit below carries
+> the verified implementation identity. `post-merge-lane-close.yml` binds the merge SHA.
 
 Issue: WORK-2026111104
 Tier: T2
-result: not_run
+Lane type: governance
+Branch: claude/work-2026111104-work-lane-discovery
+Code commit: f655fc5c553b558419e00b9cd50227b98ad15458 (base `main` 328b71064)
+result: pass — red on `main` without the fix, green with it; lint, type-check and `test:ops` exit 0.
 
 ## ASSERTIONS:
 
-- [ ] (state each behavior this lane proves, and the test that proves it)
+- [x] A test that fails on `main` shows an open WORK lane PR whose manifest exists only at its head is invisible to `resolveActiveLaneManifests` and `activeManifestOverlap` (`WORK-2026111104: a WORK lane whose manifest exists ONLY on its PR head ...`).
+- [x] `issueIdFromBranchName` derives its namespaces from `ISSUE_ID_NAMESPACES`.
+- [x] With the fix, the WORK lane is discovered from its PR head (`source: open_pr_head`, PR 1842) and its lock overlaps a conflicting scope.
+- [x] Fail-closed: a manifest read that throws for a WORK branch raises `ActiveLaneDiscoveryError` naming the issue and PR (`WORK-2026111104 fail-closed: ...`).
+- [x] Non-lane branches (`main`, `dependabot/...`, `claude/readiness-contract-measurement`, `codex/website-primary-logo-owner-source`, `claude/workflow-cleanup`, `claude/work-abc-slug`) still resolve to `null`.
+- [x] `pnpm lint`, `pnpm type-check` and `pnpm test:ops` exit 0.
 
 ## EVIDENCE:
 
-(paste measured output here, in fenced blocks)
+```text
+# New tests with the shared.ts fix removed (current main code)
+$ tsx --test --test-name-pattern "WORK-2026111104" scripts/ops/shared.test.ts
+not ok 1 - WORK-2026111104 issueIdFromBranchName recognizes repo-minted WORK-### lane branches
+not ok 2 - WORK-2026111104: a WORK lane whose manifest exists ONLY on its PR head is discovered, so its file lock refuses an overlapping lane-start
+not ok 3 - WORK-2026111104 fail-closed: an unreadable WORK lane manifest throws rather than being skipped
+# pass 0
+# fail 3
+
+# With the fix
+$ tsx --test scripts/ops/shared.test.ts
+# tests 145
+# pass 145
+# fail 0
+```
+
+Live read-only check (2026-11-12, patched discovery against GitHub, clean `main` checkout): `WORK-2026091001 visible: false`; `activeManifestOverlap('WORK-2026111104', [shared.ts, shared.test.ts, work order])` returned `null`. Preflight PL6 independently passed before lane start.
 
 ## Verification
 
-(record every verification command run on the final code commit, with its real result)
+Run on code commit `f655fc5c5`:
+
+```text
+$ pnpm lint          # exit 0
+$ pnpm type-check    # exit 0
+$ pnpm test:ops      # exit 0
+# tests 3798
+# pass 3788
+# fail 0
+# skipped 10
+```
+
+Also run before rebase on the same patch: `lane-link-pr` 26/26, `lane-start` 78/78, `lane-maximizer` 94/94, `execution-state` 13/13.
+
+Not run locally: `pnpm test:db` / writable-DB proof (no runtime or DB path touched; CI's staging job covers it).
 
 ## Merge SHA Binding
 
