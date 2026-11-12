@@ -15,6 +15,6 @@ database, deployment, or activation surface changed.
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: fcab7f291fa52770c538151c46a37e06c541a3d7
 PR: pending
 Execution SHA: 37f0e9df5cfcc8a9074990909a5162afde2df51c

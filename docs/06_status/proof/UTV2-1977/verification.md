@@ -1,6 +1,6 @@
 # PROOF: UTV2-1977
 
-MERGE_SHA: pending merge
+MERGE_SHA: fcab7f291fa52770c538151c46a37e06c541a3d7
 
 Issue: UTV2-1977
 Tier: T2
@@ -93,6 +93,6 @@ admission logic and tests only.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: fcab7f291fa52770c538151c46a37e06c541a3d7
 PR: pending
 Execution SHA: 37f0e9df5cfcc8a9074990909a5162afde2df51c

@@ -4,12 +4,14 @@
   "tier": "T2",
   "lane_type": "governance",
   "proof_profile": "static",
-  "status": "pre_merge",
+  "status": "merged",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "fcab7f291fa52770c538151c46a37e06c541a3d7",
     "verified_source_sha": "37f0e9df5cfcc8a9074990909a5162afde2df51c",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-11-12T07:13:12.905Z"
   },
   "static_proof": {
     "status": "PASS",
