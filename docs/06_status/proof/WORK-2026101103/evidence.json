@@ -1,0 +1,42 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101103",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "fc04137fb1b7c99f3031d2d37dc4b0493d9f6fa9",
+    "evidence_commit_sha": "pending proof commit",
+    "current_pr_head_sha": "fc04137fb1b7c99f3031d2d37dc4b0493d9f6fa9",
+    "sha_type": "pending_merge",
+    "bound_at": "2026-10-11T00:00:00.000Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "verify_static": {
+      "command": "pnpm verify:quick",
+      "status": "PASS",
+      "detail": "Local pnpm verify:quick exited 0; the required verify CI context runs the full verify on the PR head."
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "detail": "Recorded after the R-Level Compliance Check result on the PR head."
+    }
+  },
+  "runtime_proof": {
+    "status": "NOT_APPLICABLE",
+    "detail": "Documentation-only change: no runtime, schema or database change, so no live-DB proof applies."
+  },
+  "acceptance_criteria": {
+    "status_vocabulary_and_legend_added": "PASS",
+    "every_row_restatused_with_file_line_evidence": "PASS",
+    "d_const_5_annotated_history_kept": "PASS",
+    "verified_on_note_and_reproducible_commands": "PASS",
+    "code_followups_listed_not_edited": "PASS",
+    "required_ci_checks_out_of_scope": "PASS"
+  },
+  "verdict": "PASS"
+}
