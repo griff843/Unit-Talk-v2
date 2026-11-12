@@ -24,7 +24,8 @@ import { enqueueDistributionWithRunTracking } from './run-audit-service.js';
 import { checkZombiePickHealth } from './routes/health.js';
 import { checkSchemaDrift } from './model-health-scanner.js';
 import { POSTGREST_MAX_ROWS, readAllOrderedPages } from '@unit-talk/db';
-import type { CanonicalPick } from '@unit-talk/contracts';
+import type { CanonicalPick, SubmissionPayload } from '@unit-talk/contracts';
+import { submitPickController } from './controllers/submit-pick-controller.js';
 
 // Requeue/routing-preview tests assert delivery-target routing directly. This
 // depends on three ambient env vars read by distribution-service.ts (via
@@ -1069,7 +1070,7 @@ test('GET /api/reference-data/catalog returns full catalog', async () => {
     assert.equal(response.status, 200);
     assert.equal(body.ok, true);
     assert.ok(body.data);
-    assert.equal(body.data.sports.length, 9);
+    assert.equal(body.data.sports.length, 10);
     assert.equal(body.data.sportsbooks.length, 10);
     assert.ok(
       body.data.sportsbooks.some((sportsbook) => sportsbook.id === 'fanatics'),
@@ -1090,9 +1091,78 @@ test('GET /api/reference-data/catalog returns full catalog', async () => {
     assert.ok(nba.statTypes.includes('Points'));
     assert.ok(nba.statTypes.includes('Points + Rebounds + Assists'));
     assert.equal(nba.teams.length, 30);
+
+    const wnba = body.data.sports.find((s) => s.id === 'WNBA');
+    assert.ok(wnba);
+    assert.ok(wnba.marketTypes.includes('moneyline'));
+    assert.ok(wnba.marketTypes.includes('spread'));
+    assert.ok(wnba.marketTypes.includes('total'));
+    assert.ok(wnba.statTypes.includes('Points'));
+    assert.equal(wnba.teams.length, 0);
   } finally {
     server.close();
   }
+});
+
+test('WNBA Track Only team submission validates and persists governed participants and sport', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const participants = [
+    { participantId: 'wnba-lynx', displayName: 'Minnesota Lynx' },
+    { participantId: 'wnba-liberty', displayName: 'New York Liberty' },
+  ] as const;
+  repositories.referenceData.searchTeams = async (sportId, query) => {
+    assert.equal(sportId, 'WNBA');
+    return participants
+      .filter((participant) => participant.displayName === query)
+      .map((participant) => ({ ...participant, sport: 'WNBA' }));
+  };
+
+  const eventName = 'Minnesota Lynx @ New York Liberty';
+  const payload: SubmissionPayload = {
+    source: 'smart-form',
+    market: 'wnba-spread',
+    selection: 'Minnesota Lynx',
+    line: 2.5,
+    odds: -110,
+    stakeUnits: 1,
+    confidence: 0.7,
+    eventName,
+    metadata: {
+      sport: 'WNBA',
+      distributionMode: 'track-only',
+      participantResolution: {
+        resolution: 'canonical',
+        sportId: 'WNBA',
+        eventId: null,
+        enteredEventName: eventName,
+        away: {
+          participantType: 'team',
+          participantId: participants[0].participantId,
+          displayName: participants[0].displayName,
+        },
+        home: {
+          participantType: 'team',
+          participantId: participants[1].participantId,
+          displayName: participants[1].displayName,
+        },
+      },
+    },
+  };
+
+  const response = await submitPickController(payload, repositories);
+  assert.equal(response.status, 201);
+  assert.ok(response.body.ok);
+  if (!response.body.ok) return;
+  assert.equal(response.body.data.outboxEnqueued, false);
+  assert.equal(response.body.data.deliveryPosture, 'track-only');
+
+  const persisted = await repositories.picks.findPickById(response.body.data.pickId);
+  assert.ok(persisted);
+  assert.equal(persisted.sport_id, 'WNBA');
+  const metadata = persisted.metadata as Record<string, unknown>;
+  const resolution = metadata['participantResolution'] as Record<string, unknown>;
+  assert.equal((resolution['away'] as Record<string, unknown>)['participantId'], 'wnba-lynx');
+  assert.equal((resolution['home'] as Record<string, unknown>)['participantId'], 'wnba-liberty');
 });
 
 test('GET /api/reference-data/search/teams returns matching teams', async () => {
@@ -3222,9 +3292,9 @@ test('zombie detection reads past the first 1,000 candidates when the repository
 });
 
 test('readAllOrderedPages returns every row across capped pages and stops on a short page', async () => {
-  const rows = Array.from({ length: 2500 }, (_, index) => ({ index }));
+  const rows = Array.from({ length: 2500 }, (_, index) => ({ index, id: String(index), created_at: "2026-01-01T00:00:00Z" }));
   const ranges: Array<[number, number]> = [];
-  const read = await readAllOrderedPages<{ index: number }>(async (from, to) => {
+  const read = await readAllOrderedPages<{ index: number; id: string; created_at: string }>(async (from, to) => {
     ranges.push([from, to]);
     return { data: rows.slice(from, Math.min(to + 1, from + POSTGREST_MAX_ROWS)), error: null };
   });
@@ -3233,7 +3303,7 @@ test('readAllOrderedPages returns every row across capped pages and stops on a s
   assert.deepEqual(ranges, [[0, 999], [1000, 1999], [2000, 2999]]);
 
   // An exact multiple of the page size needs one empty page to prove the end.
-  const exact = await readAllOrderedPages<{ index: number }>(async (from, to) => ({
+  const exact = await readAllOrderedPages<{ index: number; id: string; created_at: string }>(async (from, to) => ({
     data: rows.slice(0, 2000).slice(from, to + 1),
     error: null,
   }));
@@ -3248,7 +3318,7 @@ test('readAllOrderedPages refuses a page size above the server cap, and surfaces
   await assert.rejects(
     readAllOrderedPages(async (from) =>
       from === 0
-        ? { data: Array.from({ length: POSTGREST_MAX_ROWS }, () => ({})), error: null }
+        ? { data: Array.from({ length: POSTGREST_MAX_ROWS }, () => ({ id: "test", created_at: "2026-01-01T00:00:00Z" })), error: null }
         : { data: null, error: { message: 'boom on page 2' } },
     ),
     /boom on page 2/u,

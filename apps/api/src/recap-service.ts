@@ -9,6 +9,7 @@ import {
 } from '@unit-talk/contracts';
 import { recordDistributionReceipt } from './distribution-receipt-service.js';
 import { isHumanCapperRecapStopped } from './human-capper-recap-gate.js';
+import { filterMemberVisibleDeliveryPicks } from './capper-delivery-authorization.js';
 
 export type RecapPeriod = 'daily' | 'weekly' | 'monthly';
 
@@ -77,7 +78,7 @@ type RecapDeliveryRepositories = Pick<
 
 type RecapComputeRepositories = Pick<
   RepositoryBundle,
-  'settlements' | 'picks' | 'killSwitch'
+  'settlements' | 'picks' | 'killSwitch' | 'outbox'
 >;
 
 /**
@@ -227,11 +228,12 @@ export async function computeRecapSummary(
 
   const pickIds = [...new Set(relevantSettlements.map((s) => s.pick_id))];
   const picksMap = await repositories.picks.findPicksByIds(pickIds);
+  const memberVisible = new Set((await filterMemberVisibleDeliveryPicks([...picksMap.values()], repositories.outbox)).map((pick) => pick.id));
 
   const joinedRows = relevantSettlements
     .map((settlement) => {
       const pick = picksMap.get(settlement.pick_id);
-      if (!pick) {
+      if (!pick || !memberVisible.has(pick.id)) {
         return null;
       }
 

@@ -2,6 +2,10 @@
 import { getDataClient, isTestFixturePick } from './client';
 import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
 import { applyPickPopulation, applyOperatorPickPopulation, readPickPopulation } from '../governed-population';
+import { pickIdPrefixRange } from '../command-palette-model';
+import { readEffectiveSettlementTruth } from './results-ops';
+import { mapPickIdentityRead } from './pick-identity';
+import { OperatorInputError } from '../describe-error';
 
 // ── Shared internal type ─────────────────────────────────────────────────────
 
@@ -114,6 +118,7 @@ export interface PromotionHistoryRow {
 }
 
 export interface OutboxRow {
+  payload?: unknown;
   id: string;
   target: string;
   status: string;
@@ -533,27 +538,38 @@ export const VIEW_DERIVED_COLUMNS = [
  * therefore cannot escape the guard in `queues-count-relation.test.ts`, and a
  * filter added anywhere else is not applied at all.
  */
-const SEARCH_PICKS_TEXT_COLUMNS = ['market', 'selection', 'source'] as const;
+const SEARCH_PICKS_TEXT_COLUMNS = ['market', 'selection', 'source', 'capper_id', 'metadata->>eventName'] as const;
 
-const SEARCH_PICKS_EQ_FILTERS = [
+// Capper handles are stored lowercase (`kingro623`) and sport ids uppercase
+// (`NHL`); normalising here lets an operator type either case.
+const SEARCH_PICKS_EQ_FILTERS: ReadonlyArray<{ param: string; column: string; normalize?: (value: string) => string }> = [
   { param: 'source', column: 'source' },
   { param: 'status', column: 'status' },
   { param: 'approval', column: 'approval_status' },
-] as const;
+  { param: 'capper', column: 'capper_id', normalize: (value) => value.toLowerCase() },
+  { param: 'sport', column: 'sport_id', normalize: (value) => value.toUpperCase() },
+];
 
 const SEARCH_PICKS_RANGE_FILTERS = [
   { param: 'dateFrom', column: 'created_at', op: 'gte' },
   { param: 'dateTo', column: 'created_at', op: 'lte' },
 ] as const;
 
-/** Every column `searchPicks` filters on. Must stay disjoint from the set above. */
+/** A search for a pick ID or ID fragment is a range on `id`, which `ilike` cannot do on a uuid. */
+const SEARCH_PICKS_ID_COLUMN = 'id';
+
+/** Base-column filters which are safe to count directly on `picks`. */
 export const SEARCH_PICKS_FILTER_COLUMNS = Array.from(
   new Set<string>([
     ...SEARCH_PICKS_TEXT_COLUMNS,
     ...SEARCH_PICKS_EQ_FILTERS.map((f) => f.column),
     ...SEARCH_PICKS_RANGE_FILTERS.map((f) => f.column),
+    SEARCH_PICKS_ID_COLUMN,
   ]),
 );
+
+export const SEARCH_PICKS_RESULT_FILTER_COLUMNS = ['id'] as const;
+
 
 export async function searchPicks(
   params: Record<string, string>,
@@ -569,7 +585,28 @@ export async function searchPicks(
     : '';
 
   try {
+    // Validate before result-filter short circuits, and share exact bounds across rows/count.
+    const rangeFilters = SEARCH_PICKS_RANGE_FILTERS.flatMap<{ column: string; op: 'gte' | 'lte' | 'lt'; value: string }>((filter) => {
+      const value = params[filter.param]?.trim();
+      if (!value) return [];
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return [{ ...filter, value }];
+      const midnight = new Date(`${value}T00:00:00.000Z`);
+      if (!Number.isFinite(midnight.getTime()) || midnight.toISOString().slice(0, 10) !== value) {
+        throw new OperatorInputError('Use a valid calendar date for pick filters.');
+      }
+      if (filter.op === 'gte') return [{ ...filter, value: midnight.toISOString() }];
+      // Exclusive next midnight includes the entire UTC day, including DB microseconds.
+      midnight.setUTCDate(midnight.getUTCDate() + 1);
+      return [{ ...filter, op: 'lt' as const, value: midnight.toISOString() }];
+    });
     const client: Client = await getDataClient();
+    const requestedResult = params['result'] ?? '';
+    const resultFilter = ['win', 'loss', 'push', 'void', 'pending'].includes(requestedResult) ? requestedResult : '';
+    const truth = resultFilter ? await readEffectiveSettlementTruth(client, { includeFixtures: population === 'fixtures' || distributionMode === 'ungoverned' }) : null;
+    const effectiveResults = new Map(truth?.settlements.map((row) => [row.pickId, row.status === 'settled' ? row.result : null]) ?? []);
+    const filteredIds = [...effectiveResults].filter(([, result]) => resultFilter === 'pending' ? result !== null : result === resultFilter).map(([id]) => id);
+    if (filteredIds.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) throw new Error('Settlement history contains an invalid pick ID');
+    if (resultFilter && resultFilter !== 'pending' && filteredIds.length === 0) return { picks: [], total: 0, limit, offset };
 
     const selectCols = [
       'id',
@@ -582,6 +619,8 @@ export async function searchPicks(
       'promotion_score',
       'created_at',
       'status',
+      'capper_id',
+      'sport_id',
       'approval_status',
       'metadata',
       'sport_display_name',
@@ -601,30 +640,39 @@ export async function searchPicks(
     /**
      * Apply the caller's filters to a query, driven by the tables above.
      *
-     * Every predicate here is on a column `picks_current_state` takes straight
-     * from its `picks` base row -- none reads a column the view's three lateral
-     * joins produce. That is what makes the count split below sound, and
-     * `queues-count-relation.test.ts` is what keeps it true.
+     * Result filters use pick IDs from the complete correction-chain reader.
+     * Every predicate therefore applies equally to the base table and view.
      */
     const applyFilters = <T extends {
       or: (f: string) => T;
       eq: (c: string, v: string) => T;
       gte: (c: string, v: string) => T;
       lte: (c: string, v: string) => T;
+      lt: (c: string, v: string) => T;
+      neq: (c: string, v: string) => T;
+      in: (c: string, v: string[]) => T;
+      not: (c: string, op: string, v: string) => T;
     }>(base: T): T => {
       let next = base;
-      if (q) {
+      const idRange = q ? pickIdPrefixRange(q) : null;
+      if (idRange) {
+        next = next.gte(SEARCH_PICKS_ID_COLUMN, idRange.from).lte(SEARCH_PICKS_ID_COLUMN, idRange.to);
+      } else if (q) {
         next = next.or(SEARCH_PICKS_TEXT_COLUMNS.map((c) => `${c}.ilike.${JSON.stringify(`%${q}%`)}`).join(','));
       }
       for (const filter of SEARCH_PICKS_EQ_FILTERS) {
         const value = params[filter.param]?.trim();
-        if (value) next = next.eq(filter.column, value);
+        if (value) next = next.eq(filter.column, filter.normalize ? filter.normalize(value) : value);
       }
-      for (const filter of SEARCH_PICKS_RANGE_FILTERS) {
-        const value = params[filter.param]?.trim();
-        if (!value) continue;
-        next = filter.op === 'gte' ? next.gte(filter.column, value) : next.lte(filter.column, value);
+      for (const filter of rangeFilters) {
+        if (filter.op === 'gte') next = next.gte(filter.column, filter.value);
+        else if (filter.op === 'lt') next = next.lt(filter.column, filter.value);
+        else next = next.lte(filter.column, filter.value);
       }
+      if (resultFilter === 'pending') {
+        next = next.neq('status', 'voided');
+        if (filteredIds.length) next = next.not('id', 'in', `(${filteredIds.join(',')})`);
+      } else if (resultFilter) next = next.in('id', filteredIds);
       return next;
     };
 
@@ -651,7 +699,7 @@ export async function searchPicks(
       .range(offset, offset + limit - 1)
       .abortSignal(AbortSignal.timeout(8_000));
 
-    // The count is taken against `picks`, not `picks_current_state`.
+    // All counts use `picks`, including the chain-resolved ID filter.
     //
     // Counting the view makes Postgres run its three correlated lateral joins
     // once per candidate row purely to discard every joined column -- 107,866
@@ -682,16 +730,53 @@ export async function searchPicks(
     assertQuerySucceeded({ error: countError }, 'searchPicks count');
 
     const rows = (data ?? []) as JsonObject[];
+    // Resolve complete histories for this page even when no result filter is
+    // selected. The view's newest timestamp is not necessarily a chain tip.
+    const pageIds = rows.map((row) => String(row.id));
+    const pageHistories = new Map<string, JsonObject[]>();
+    if (pageIds.length) {
+      let total: number | null = null;
+      let received = 0;
+      for (let from = 0; total === null || from < total; from += 1000) {
+        const page = await client.from('settlement_records')
+          .select('id, pick_id, status, result, source, settled_at, corrects_id, created_at, payload', { count: 'exact' })
+          .in('pick_id', pageIds).order('created_at', { ascending: true }).order('id', { ascending: true })
+          .range(from, from + 999).abortSignal(AbortSignal.timeout(8_000));
+        assertQuerySucceeded(page, 'pick page settlement histories');
+        const count = readAuthoritativeCount(page, 'pick page settlement histories');
+        if (total !== null && total !== count) throw new Error('Pick page settlement histories changed during pagination');
+        total = count;
+        const history = (page.data ?? []) as JsonObject[];
+        received += history.length;
+        for (const record of history) {
+          const id = String(record.pick_id);
+          const group = pageHistories.get(id) ?? [];
+          group.push(record);
+          pageHistories.set(id, group);
+        }
+        if (!history.length) break;
+      }
+      if (received !== total) throw new Error('Pick page settlement histories are incomplete');
+    }
 
     // Remap snake_case columns to camelCase expected by PickResultRow
     const picks: Array<Record<string, unknown>> = rows
-      .map((row) => ({
-        ...row,
-        matchup: eventFieldsFromRow(row).eventName,
-        eventStartTime: eventFieldsFromRow(row).eventStartTime,
-        sport: asStringOrNull(row['sport_display_name']),
-        submitter: asStringOrNull(row['capper_display_name']),
-      }));
+      .map((row) => {
+        const settlement = mapPickIdentityRead(row, pageHistories.get(String(row.id)) ?? []).settlement;
+        const effectiveResult = settlement?.status === 'settled' ? settlement.result : null;
+        if (truth && effectiveResult !== (effectiveResults.get(String(row.id)) ?? null)) {
+          throw new Error('Pick settlement changed while filtering results');
+        }
+        return {
+          ...row,
+          settlement_result: effectiveResult,
+          settlement_corrected: !!settlement?.correctsId,
+          matchup: eventFieldsFromRow(row).eventName,
+          eventStartTime: eventFieldsFromRow(row).eventStartTime,
+          sport: asStringOrNull(row['sport_display_name']) ?? asStringOrNull(row['sport_id']),
+          submitter: asStringOrNull(row['capper_display_name']) ?? asStringOrNull(row['capper_id']),
+        };
+      });
 
     return {
       picks,
@@ -768,7 +853,7 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
 
       client
         .from('distribution_outbox')
-        .select('id, pick_id, target, status, attempt_count, last_error, claimed_at, created_at, updated_at')
+        .select('id, pick_id, target, status, attempt_count, last_error, claimed_at, created_at, updated_at, payload')
         .eq('pick_id', pickId)
         .order('created_at', { ascending: false }),
 
@@ -922,6 +1007,7 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
     // ── Map outbox ────────────────────────────────────────────────────────────
 
     const outbox: OutboxRow[] = outboxRows.map((row) => ({
+      payload: row['payload'],
       id: asString(row['id']),
       target: asString(row['target']),
       status: asString(row['status']),

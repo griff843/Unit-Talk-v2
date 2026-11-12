@@ -1,0 +1,166 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026101603
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026101603
+  objective: "`.claude/hooks/pre-proof-validator.sh` unconditionally rejects a
+    staged `evidence.json` unless `sha_binding.ci_sentinels` is non-empty. The
+    canonical machine validator, `scripts/ops/proof-schema.ts` (v2 contract),
+    defines the SHA binding by flat fields instead: `merge_sha` (40-hex
+    post-merge, null pre-merge), `verified_source_sha` (40-hex), and non-empty
+    `evidence_commit_sha` / `current_pr_head_sha` (CI-resolved value or
+    sentinel). `EVIDENCE_BUNDLE_TEMPLATE.md` names `ci_sentinels` only in an
+    example block and no ratified schema defines its structure. A legitimate
+    post-merge v2 bundle (for example the merged lane's closeout) is therefore
+    blocked by a local heuristic that the canonical contract does not require."
+  acceptance_criteria:
+    - A bundle with neither sentinels nor the full canonical binding is still
+      blocked with the existing message.
+    - "Tests in `scripts/ops/proof-check.test.ts`: the canonical post-merge
+      binding is accepted; each of these is still blocked: null merge_sha
+      (pre-merge), non-40-hex merge_sha, missing or empty `evidence_commit_sha`,
+      missing `current_pr_head_sha`, `schema_version` 1 with flat fields, forged
+      non-merge `sha_type`; and a mutation test shows removing the new
+      acceptance clause turns the acceptance test red."
+    - Existing hook tests pass unchanged.
+    - No change to any proof content, CI gate, merge gate or the five generated
+      closeout files.
+  guardrails:
+    - No global or per-issue exemption; no hook disablement. No `--admin`,
+      deployment or production change.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026101603 — Pre-proof hook recognizes the canonical post-merge v2
+      SHA binding (issue #1763)
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Repo-owned work order. PM control decision (issue #1763, comment
+      6211873274): a separate minimal governed hook-compatibility repair, with
+      its own bounded scope and tests.
+
+
+      ## Change
+
+
+      In the hook's evidence check, accept EITHER a non-empty
+      `sha_binding.ci_sentinels` (unchanged) OR the canonical post-merge v2
+      binding: `schema_version` 2, `sha_binding.sha_type == "merge_sha"`,
+      `sha_binding.merge_sha` and `verified_source_sha` both 40-hex, and both
+      `evidence_commit_sha` and `current_pr_head_sha` non-empty strings.
+      Everything else is unchanged: `schema_version` required,
+      `verified_source_sha` 40-hex, a proof section, `status`, parse failures,
+      merge-aware selection, fail-closed temp-file behaviour.
+
+
+      ## File Scope
+
+
+      - .claude/hooks/pre-proof-validator.sh
+
+      - scripts/ops/proof-check.test.ts
+
+      - .ops/work/WORK-2026101603.md
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026101603.md
+    title: "WORK-2026101603 — Pre-proof hook recognizes the canonical post-merge v2
+      SHA binding (issue #1763)"
+    description: >-
+      # WORK-2026101603 — Pre-proof hook recognizes the canonical post-merge v2
+      SHA binding (issue #1763)
+
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Repo-owned work order. PM control decision (issue #1763, comment
+      6211873274): a separate minimal governed hook-compatibility repair, with
+      its own bounded scope and tests.
+
+
+      ## Objective
+
+
+      `.claude/hooks/pre-proof-validator.sh` unconditionally rejects a staged
+      `evidence.json` unless `sha_binding.ci_sentinels` is non-empty. The
+      canonical machine validator, `scripts/ops/proof-schema.ts` (v2 contract),
+      defines the SHA binding by flat fields instead: `merge_sha` (40-hex
+      post-merge, null pre-merge), `verified_source_sha` (40-hex), and non-empty
+      `evidence_commit_sha` / `current_pr_head_sha` (CI-resolved value or
+      sentinel). `EVIDENCE_BUNDLE_TEMPLATE.md` names `ci_sentinels` only in an
+      example block and no ratified schema defines its structure. A legitimate
+      post-merge v2 bundle (for example the merged lane's closeout) is therefore
+      blocked by a local heuristic that the canonical contract does not require.
+
+
+      ## Change
+
+
+      In the hook's evidence check, accept EITHER a non-empty
+      `sha_binding.ci_sentinels` (unchanged) OR the canonical post-merge v2
+      binding: `schema_version` 2, `sha_binding.sha_type == "merge_sha"`,
+      `sha_binding.merge_sha` and `verified_source_sha` both 40-hex, and both
+      `evidence_commit_sha` and `current_pr_head_sha` non-empty strings.
+      Everything else is unchanged: `schema_version` required,
+      `verified_source_sha` 40-hex, a proof section, `status`, parse failures,
+      merge-aware selection, fail-closed temp-file behaviour.
+
+
+      ## Acceptance Criteria
+
+
+      - A bundle with neither sentinels nor the full canonical binding is still
+      blocked with the existing message.
+
+      - Tests in `scripts/ops/proof-check.test.ts`: the canonical post-merge
+      binding is accepted; each of these is still blocked: null merge_sha
+      (pre-merge), non-40-hex merge_sha, missing or empty `evidence_commit_sha`,
+      missing `current_pr_head_sha`, `schema_version` 1 with flat fields, forged
+      non-merge `sha_type`; and a mutation test shows removing the new
+      acceptance clause turns the acceptance test red.
+
+      - Existing hook tests pass unchanged.
+
+      - No change to any proof content, CI gate, merge gate or the five
+      generated closeout files.
+
+
+      ## Guardrails
+
+
+      - No global or per-issue exemption; no hook disablement. No `--admin`,
+      deployment or production change.
+
+
+      ## File Scope
+
+
+      - .claude/hooks/pre-proof-validator.sh
+
+      - scripts/ops/proof-check.test.ts
+
+      - .ops/work/WORK-2026101603.md
+    captured_at: 2026-10-16T09:03:23.563Z
+    description_sha256: e9455969e1868d3cf7296cf9dac65b3bb8fcce106da3c29e94605953c5afe326
+  contract_hash: d1cc264d1523ada29870ac7f5ab0d2358c811da0afd83e96a9f8caa33d0710ba

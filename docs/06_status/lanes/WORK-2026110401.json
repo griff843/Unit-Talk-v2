@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110401",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110401/.out/worktrees/claude__work-2026110401-session-handoff",
+  "branch": "claude/work-2026110401-session-handoff",
+  "base_branch": "main",
+  "commit_sha": "0ea2c24fc99cd0dd3702d35522014c977764d52b",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1831",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/work/WORK-2026110401.md",
+    "docs/mission/plan-readings.md",
+    "docs/mission/plan.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026110401/diff-summary.md",
+    "docs/06_status/proof/WORK-2026110401/evidence.json",
+    "docs/06_status/proof/WORK-2026110401/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-11-04T14:01:04.693Z",
+  "heartbeat_at": "2026-11-04T15:04:13.717Z",
+  "closed_at": "2026-11-04T15:04:13.717Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/work-2026110401-session-handoff.json",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-11-04T15:04:11.269Z",
+      "verdict": "pass",
+      "merge_sha": "0ea2c24fc99cd0dd3702d35522014c977764d52b",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110401/.out/worktrees/claude__work-2026110401-session-handoff",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

@@ -1,0 +1,148 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102705
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102705
+  objective: WORK-2026102705 — Smart Form canonical artwork and entry corrections
+  acceptance_criteria:
+    - The final read shows the approved player headshot, team crest and matchup
+      logos, resolved only by exact canonical participant id. Responses whose
+      id, type or sport do not match are discarded, as are stale responses for a
+      previous selection.
+    - Missing, failed, unsafe or stale media falls back to initials and never
+      changes submission validity or payload.
+    - Select contrast and portal menus are corrected. Matchup-team buttons
+      replace the redundant player-team search when canonical sides exist;
+      manual fallback is unchanged. Mobile matchup text is readable, examples
+      fit the sport and stat, stale autocomplete results clear, and transient
+      failures can be retried with the same query.
+    - Source, authenticated capper attribution, signed odds and lines,
+      conviction, provenance, Track Only intent and server-authoritative
+      receipts are unchanged.
+    - node:test coverage for media parsing and examples; fixture browser
+      evidence at 1440, 390 and 320px.
+  guardrails:
+    - No change to form-utils.ts, its original tests or phase-one.spec.ts.
+    - No auth, submission service, schema, deploy, delivery or containment
+      change. No production submissions or Discord sends.
+    - Discord worker/domain integration is out of scope and unchanged.
+    - Codex's local browser evidence (originally under
+      `apps/qa-agent/artifacts/work-2026102703/`) is carried unchanged in this
+      lane's proof directory.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged through `ops:merge-wrapper pr-merge` on green required checks;
+      deployment is a separate owner-authorized step.
+  unmapped_sections:
+    - >-
+      WORK-2026102705 — Smart Form canonical artwork and entry corrections
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). Griff
+      approved the Smart Form media direction and all refinements in draft PR
+      #1791 on 2026-10-27; no further design decision is needed. This lane
+      carries the `apps/smart-form` half of #1791 unchanged. The code is
+      Codex-authored and its commits keep that authorship. The read-only media
+      endpoint it consumes lands separately under WORK-2026102704. Until that
+      endpoint is deployed, artwork falls back to initials, and submission
+      behaviour is identical either way.
+
+
+      ## File Scope
+
+
+      - apps/smart-form/**
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102705.md
+    title: WORK-2026102705 — Smart Form canonical artwork and entry corrections
+    description: >-
+      # WORK-2026102705 — Smart Form canonical artwork and entry corrections
+
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). Griff
+      approved the Smart Form media direction and all refinements in draft PR
+      #1791 on 2026-10-27; no further design decision is needed. This lane
+      carries the `apps/smart-form` half of #1791 unchanged. The code is
+      Codex-authored and its commits keep that authorship. The read-only media
+      endpoint it consumes lands separately under WORK-2026102704. Until that
+      endpoint is deployed, artwork falls back to initials, and submission
+      behaviour is identical either way.
+
+
+      ## Acceptance Criteria
+
+
+      - The final read shows the approved player headshot, team crest and
+      matchup logos, resolved only by exact canonical participant id. Responses
+      whose id, type or sport do not match are discarded, as are stale responses
+      for a previous selection.
+
+      - Missing, failed, unsafe or stale media falls back to initials and never
+      changes submission validity or payload.
+
+      - Select contrast and portal menus are corrected. Matchup-team buttons
+      replace the redundant player-team search when canonical sides exist;
+      manual fallback is unchanged. Mobile matchup text is readable, examples
+      fit the sport and stat, stale autocomplete results clear, and transient
+      failures can be retried with the same query.
+
+      - Source, authenticated capper attribution, signed odds and lines,
+      conviction, provenance, Track Only intent and server-authoritative
+      receipts are unchanged.
+
+      - node:test coverage for media parsing and examples; fixture browser
+      evidence at 1440, 390 and 320px.
+
+
+      ## File Scope
+
+
+      - apps/smart-form/**
+
+
+      ## Guardrails
+
+
+      - No change to form-utils.ts, its original tests or phase-one.spec.ts.
+
+      - No auth, submission service, schema, deploy, delivery or containment
+      change. No production submissions or Discord sends.
+
+      - Discord worker/domain integration is out of scope and unchanged.
+
+      - Codex's local browser evidence (originally under
+      `apps/qa-agent/artifacts/work-2026102703/`) is carried unchanged in this
+      lane's proof directory.
+
+
+      ## Exit Criteria
+
+
+      - PR merged through `ops:merge-wrapper pr-merge` on green required checks;
+      deployment is a separate owner-authorized step.
+    captured_at: 2026-10-27T15:33:58.401Z
+    description_sha256: 64aa396f7012c56a6efe3a9382c6faa1b9c004b61d4e3a5ec8392a5418898e5e
+  contract_hash: f37cbd48bb447da331889a384c4d720c2876f18bd9fa750c29f3a024b6869787

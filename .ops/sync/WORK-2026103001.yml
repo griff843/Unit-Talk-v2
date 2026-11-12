@@ -1,0 +1,262 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026103001
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026103001
+  objective: "WORK-2026103001 — WORK-2026092802 live proof: find run fixtures
+    through an indexed column"
+  acceptance_criteria:
+    - "`pnpm verify` green in CI on the exact head, including the staging
+      `Writable DB proof` job."
+    - The assertions of all five tests are preserved or strengthened (diff
+      recorded in diff-summary.md).
+    - The positive control (tests 1 and 2 read `capper_id = CAPPER` from the
+      database) passes in the staging job. This proves the column tests 3 and 4
+      now filter on is populated by the real submit path.
+  guardrails: []
+  non_goals:
+    - The member read itself costs about 3.5 s on staging and grows with
+      retained posted/settled fixtures. A real fix is a partial index, which is
+      DDL through a migration (production parity). Requested separately; not
+      done here.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026103001 — WORK-2026092802 live proof: find run fixtures through an
+      indexed column
+
+      Tier: T2
+
+      Lane type: hygiene
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05).
+
+
+      Griff asked on 2026-10-30 for a bounded, non-destructive,
+      behavior-preserving correction to the staging statement timeouts (57014)
+      blocking #1800. Constraints:
+
+      - no schema change on staging or production;
+
+      - no data deletion;
+
+      - no timeout increase;
+
+      - no skipped live tests;
+
+      - no weakened assertions.
+
+
+      ## Measured cause (staging `xskgrzbteyqdufktjrjx`, read-only, 2026-10-30)
+
+
+      | query | plan | time |
+
+      |---|---|---|
+
+      | `select id from picks where selection = '<run string>'` (test 3) | Seq
+      Scan, 181,870 rows removed | 1880 ms |
+
+      | `select id from picks where selection like '%<run>%'` (test 4) | Seq
+      Scan, `pg_stat_statements` max | 5941 ms |
+
+      | member read: `status in (posted,settled)` + two `metadata` JSON-path
+      filters, `order by created_at desc limit 200` | Index Scan
+      `picks_status_idx`, 30,767 rows removed by filter | 3528 ms |
+
+      | `select id from picks where capper_id = '<outsider>'` (proposed) | Index
+      Scan `idx_picks_capper_id` | 6 ms |
+
+
+      Other measurements:
+
+      - **Statement timeout:** PostgREST's `authenticator` role has
+      `statement_timeout=8s`.
+
+      - **Table size:** `picks` holds 181,565 live and 24,841 dead rows. T1
+      proofs retain their fixtures by design.
+
+      - **No index on `selection`.**
+
+      - **Slow compute:** staging counts 1M rows of `generate_series` in 476 ms,
+      about 5× a typical figure.
+
+
+      The `selection=eq` lookup on its own averages 1387 ms and peaks at 7694 ms
+      (507 calls). It failed in runs 40996055001 attempts 2 and 3, the latter
+      with ci.yml otherwise idle.
+
+
+      ## Change (test file only)
+
+
+      1. **Test 3** ("a capper not on the allow-list ... persists nothing")
+      reads `picks?capper_id=eq.<OUTSIDER>`.
+         - The outsider capper is run-namespaced and seeded by this file, so the result covers every pick it could have created under any selection. That is at least as strong as one exact selection string.
+      2. **Test 4** (member read) finds this run's fixtures with
+      `picks?capper_id=eq.<CAPPER>` instead of a leading-wildcard `like` on
+      `selection`. Every run fixture is created by CAPPER, and the `>= 2`
+      assertion is unchanged.
+
+      3. **Positive control:** tests 1 and 2 assert that the persisted pick's
+      `capper_id` equals CAPPER. This proves the submit path populates the
+      indexed column that tests 3 and 4 now read, so the outsider's zero cannot
+      be vacuous.
+
+
+      No production code changes. The member read
+      (`listMemberVisibleOfficialPicks`) keeps its query and its contract
+      re-filter.
+
+
+      ## File Scope
+
+
+      - apps/api/src/t1-proof-work-2026092802-track-only-intent-live.test.ts
+
+
+      Only `docs/06_status/proof/WORK-2026103001/*`, the lane manifest, the sync
+      file and this work order may be added outside it.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026103001.md
+    title: "WORK-2026103001 — WORK-2026092802 live proof: find run fixtures through
+      an indexed column"
+    description: >-
+      # WORK-2026103001 — WORK-2026092802 live proof: find run fixtures through
+      an indexed column
+
+
+      Tier: T2
+
+      Lane type: hygiene
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05).
+
+
+      Griff asked on 2026-10-30 for a bounded, non-destructive,
+      behavior-preserving correction to the staging statement timeouts (57014)
+      blocking #1800. Constraints:
+
+      - no schema change on staging or production;
+
+      - no data deletion;
+
+      - no timeout increase;
+
+      - no skipped live tests;
+
+      - no weakened assertions.
+
+
+      ## Measured cause (staging `xskgrzbteyqdufktjrjx`, read-only, 2026-10-30)
+
+
+      | query | plan | time |
+
+      |---|---|---|
+
+      | `select id from picks where selection = '<run string>'` (test 3) | Seq
+      Scan, 181,870 rows removed | 1880 ms |
+
+      | `select id from picks where selection like '%<run>%'` (test 4) | Seq
+      Scan, `pg_stat_statements` max | 5941 ms |
+
+      | member read: `status in (posted,settled)` + two `metadata` JSON-path
+      filters, `order by created_at desc limit 200` | Index Scan
+      `picks_status_idx`, 30,767 rows removed by filter | 3528 ms |
+
+      | `select id from picks where capper_id = '<outsider>'` (proposed) | Index
+      Scan `idx_picks_capper_id` | 6 ms |
+
+
+      Other measurements:
+
+      - **Statement timeout:** PostgREST's `authenticator` role has
+      `statement_timeout=8s`.
+
+      - **Table size:** `picks` holds 181,565 live and 24,841 dead rows. T1
+      proofs retain their fixtures by design.
+
+      - **No index on `selection`.**
+
+      - **Slow compute:** staging counts 1M rows of `generate_series` in 476 ms,
+      about 5× a typical figure.
+
+
+      The `selection=eq` lookup on its own averages 1387 ms and peaks at 7694 ms
+      (507 calls). It failed in runs 40996055001 attempts 2 and 3, the latter
+      with ci.yml otherwise idle.
+
+
+      ## Change (test file only)
+
+
+      1. **Test 3** ("a capper not on the allow-list ... persists nothing")
+      reads `picks?capper_id=eq.<OUTSIDER>`.
+         - The outsider capper is run-namespaced and seeded by this file, so the result covers every pick it could have created under any selection. That is at least as strong as one exact selection string.
+      2. **Test 4** (member read) finds this run's fixtures with
+      `picks?capper_id=eq.<CAPPER>` instead of a leading-wildcard `like` on
+      `selection`. Every run fixture is created by CAPPER, and the `>= 2`
+      assertion is unchanged.
+
+      3. **Positive control:** tests 1 and 2 assert that the persisted pick's
+      `capper_id` equals CAPPER. This proves the submit path populates the
+      indexed column that tests 3 and 4 now read, so the outsider's zero cannot
+      be vacuous.
+
+
+      No production code changes. The member read
+      (`listMemberVisibleOfficialPicks`) keeps its query and its contract
+      re-filter.
+
+
+      ## Out of scope (needs Griff authorization)
+
+
+      The member read itself costs about 3.5 s on staging and grows with
+      retained posted/settled fixtures. A real fix is a partial index, which is
+      DDL through a migration (production parity). Requested separately; not
+      done here.
+
+
+      ## Acceptance Criteria
+
+
+      - `pnpm verify` green in CI on the exact head, including the staging
+      `Writable DB proof` job.
+
+      - The assertions of all five tests are preserved or strengthened (diff
+      recorded in diff-summary.md).
+
+      - The positive control (tests 1 and 2 read `capper_id = CAPPER` from the
+      database) passes in the staging job. This proves the column tests 3 and 4
+      now filter on is populated by the real submit path.
+
+
+      ## File Scope
+
+
+      - apps/api/src/t1-proof-work-2026092802-track-only-intent-live.test.ts
+
+
+      Only `docs/06_status/proof/WORK-2026103001/*`, the lane manifest, the sync
+      file and this work order may be added outside it.
+    captured_at: 2026-10-30T04:54:25.069Z
+    description_sha256: cf56d6944dc8076b45f0d3959944a459cebcfda3a4c21f9e555d6b17a438097b
+  contract_hash: 8a8e223b0705e6e6d46b00768690da65315f8911b63ee00db97439f99562a97d

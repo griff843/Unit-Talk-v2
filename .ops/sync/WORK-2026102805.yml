@@ -1,0 +1,167 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102805
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102805
+  objective: WORK-2026102805 — Smart Form defaults the game date to today in US
+    Eastern, not UTC
+  acceptance_criteria:
+    - "`lib/form-utils.ts` exports a pure `easternDateIso(now: Date): string`,
+      which returns `YYYY-MM-DD` for `now` in `America/New_York` using
+      `Intl.DateTimeFormat`. It accounts for DST and adds no dependency."
+    - The `BetForm.tsx` default `gameDate` (the initial values at lines ~934 and
+      ~2292 and the date input fallback at ~4128) uses `easternDateIso(new
+      Date())`, evaluated when the form is created or reset, not at module load.
+    - '`getRelativeDayPrefix` and the timestamp branch of `formatTimestampLabel`
+      compare Eastern dates, so a 23:30 ET game is "Today" at 21:00 ET.'
+    - "Tests in `test/form-utils.test.ts`:"
+    - 2026-10-29T01:30:00Z → `2026-10-28` (EDT evening);
+    - 2026-12-01T04:59:00Z → `2026-11-30` (EST);
+    - 2026-12-01T05:00:00Z → `2026-12-01`;
+    - one spring-forward and one fall-back boundary instant.
+    - No change to the submission payload shape, validation rules, API contract,
+      the Track Only/delivery choice or authentication. A capper-entered date is
+      still sent exactly as entered.
+  guardrails:
+    - Smart Form remains the only composer. No change to submission, delivery,
+      containment or production data.
+    - No new dependency.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - "`pnpm verify:quick` and the Smart Form tests are green."
+    - PR merged through `ops:merge-wrapper pr-merge` on green required checks.
+      Deployment is a separate, owner-authorized release.
+  unmapped_sections:
+    - >-
+      WORK-2026102805 — Smart Form defaults the game date to today in US
+      Eastern, not UTC
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). This is
+      a data-accuracy fix for genuine Track Only picks, under the Private Capper
+      Operations goal. Product intent: `docs/03_product/smart-form/intent.md`.
+
+
+      `apps/smart-form/app/submit/components/BetForm.tsx:105` sets `const TODAY
+      = new Date().toISOString().slice(0, 10)`. That value is the UTC date, and
+      it is computed once when the module loads. From 8 pm Eastern (00:00 UTC)
+      until midnight Eastern, which is when most evening picks are entered, the
+      form's default `gameDate` is tomorrow. A capper who keeps the default
+      records the wrong game date. `getRelativeDayPrefix` (lines 161–166) and
+      `formatTimestampLabel` (line 185) also derive "Today"/"Tomorrow" from UTC
+      dates, so evening games are labelled with the wrong day. The repository
+      already treats US Eastern as the sports-day reference
+      (`lib/betting-utils.ts` formats in `America/New_York`).
+
+
+      ## File Scope
+
+
+      - apps/smart-form/app/submit/components/BetForm.tsx
+
+      - apps/smart-form/lib/form-utils.ts
+
+      - apps/smart-form/test/form-utils.test.ts
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102805.md
+    title: WORK-2026102805 — Smart Form defaults the game date to today in US
+      Eastern, not UTC
+    description: >-
+      # WORK-2026102805 — Smart Form defaults the game date to today in US
+      Eastern, not UTC
+
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). This is
+      a data-accuracy fix for genuine Track Only picks, under the Private Capper
+      Operations goal. Product intent: `docs/03_product/smart-form/intent.md`.
+
+
+      `apps/smart-form/app/submit/components/BetForm.tsx:105` sets `const TODAY
+      = new Date().toISOString().slice(0, 10)`. That value is the UTC date, and
+      it is computed once when the module loads. From 8 pm Eastern (00:00 UTC)
+      until midnight Eastern, which is when most evening picks are entered, the
+      form's default `gameDate` is tomorrow. A capper who keeps the default
+      records the wrong game date. `getRelativeDayPrefix` (lines 161–166) and
+      `formatTimestampLabel` (line 185) also derive "Today"/"Tomorrow" from UTC
+      dates, so evening games are labelled with the wrong day. The repository
+      already treats US Eastern as the sports-day reference
+      (`lib/betting-utils.ts` formats in `America/New_York`).
+
+
+      ## Acceptance Criteria
+
+
+      - `lib/form-utils.ts` exports a pure `easternDateIso(now: Date): string`,
+      which returns `YYYY-MM-DD` for `now` in `America/New_York` using
+      `Intl.DateTimeFormat`. It accounts for DST and adds no dependency.
+
+      - The `BetForm.tsx` default `gameDate` (the initial values at lines ~934
+      and ~2292 and the date input fallback at ~4128) uses `easternDateIso(new
+      Date())`, evaluated when the form is created or reset, not at module load.
+
+      - `getRelativeDayPrefix` and the timestamp branch of
+      `formatTimestampLabel` compare Eastern dates, so a 23:30 ET game is
+      "Today" at 21:00 ET.
+
+      - Tests in `test/form-utils.test.ts`:
+        - 2026-10-29T01:30:00Z → `2026-10-28` (EDT evening);
+        - 2026-12-01T04:59:00Z → `2026-11-30` (EST);
+        - 2026-12-01T05:00:00Z → `2026-12-01`;
+        - one spring-forward and one fall-back boundary instant.
+      - No change to the submission payload shape, validation rules, API
+      contract, the Track Only/delivery choice or authentication. A
+      capper-entered date is still sent exactly as entered.
+
+
+      ## File Scope
+
+
+      - apps/smart-form/app/submit/components/BetForm.tsx
+
+      - apps/smart-form/lib/form-utils.ts
+
+      - apps/smart-form/test/form-utils.test.ts
+
+
+      ## Guardrails
+
+
+      - Smart Form remains the only composer. No change to submission, delivery,
+      containment or production data.
+
+      - No new dependency.
+
+
+      ## Exit Criteria
+
+
+      - `pnpm verify:quick` and the Smart Form tests are green.
+
+      - PR merged through `ops:merge-wrapper pr-merge` on green required checks.
+      Deployment is a separate, owner-authorized release.
+    captured_at: 2026-10-28T12:52:29.176Z
+    description_sha256: 35de30b318724b178fdccd6f3621d5e59ac9f5b6a44013dbe086ea7a015f0c24
+  contract_hash: 8d15855a4372954d126f0c23c37fa8ef999de9af751f05db4c0794f075e1b936

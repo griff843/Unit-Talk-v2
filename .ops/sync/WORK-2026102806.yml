@@ -1,0 +1,501 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102806
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102806
+  objective: "WORK-2026102806 — Command Center Wave 2: result filtering,
+    correction confirmation, contextual pick discovery, settlement and
+    performance label fixes"
+  acceptance_criteria:
+    - "### A. Result filter with correct totals (`/picks`)"
+    - "`/picks` accepts a `result` URL parameter: `win`, `loss`, `push`, `void`
+      or `pending` (unsettled). It round-trips through `picks-explorer-query.ts`
+      like the existing filters, and appears as a control on the page."
+    - "The filter uses the **current effective result**: a corrected pick
+      filters by its corrected result, not by the original."
+    - "**The total must match the rows shown.**"
+    - "`settlement_result` is a view-derived column (`VIEW_DERIVED_COLUMNS` in
+      `lib/data/queues.ts`)."
+    - The existing count runs on `picks`, so naively adding the filter would
+      return a total that ignores it.
+    - Use a sound counting strategy, for example counting on
+      `picks_current_state` only when a view-derived filter is active.
+    - Extend `queues-count-relation.test.ts` so that a view-derived filter
+      counted on `picks` fails the test.
+    - Unit tests show that, for a result filter, the total equals the size of
+      the filtered population, including on page 2 or later.
+    - The result filter combines with the existing capper, sport, date,
+      ID-fragment and population filters. `pending` must not include voided
+      picks.
+    - "### B. Correction confirmation shows current → proposed"
+    - "Before a correction is submitted, the confirmation step in
+      `CorrectionForm` shows the pick's **current effective result** and the
+      **proposed result** side by side (\"Current: win → Proposed: loss\"). It
+      also states that the original settlement record is kept and a correcting
+      record is appended."
+    - A proposed result equal to the current one is blocked with a clear
+      message. A no-op correction must not be submittable.
+    - The current effective result comes from the settlement chain
+      (`pick-identity.ts`, the same source as `SettlementTargetSummary`), not
+      from `picks.status`.
+    - The logic lives in a pure, tested function (new
+      `lib/correction-confirmation.ts` and its test). The component only renders
+      it.
+    - "### C. Contextual governed pick discovery"
+    - 'From the command palette, an operator can find a pick by ID fragment,
+      capper handle or event-name text. Each result shows its context: capper,
+      sport, event, market, selection, line, status, and settlement result or
+      "pending".'
+    - "Results come only from the **governed operator population**: the same
+      population `searchPicks` and the Track Only settlement queue use
+      (`applyOperatorPickPopulation`). Fixture and test rows must never appear."
+    - If this needs a server-side lookup, put it in the new server action
+      `app/actions/pick-lookup.ts`.
+    - The action must call the shared authentication guard
+      (`resolveActorOrRefusal`, `requireAuthenticatedActor` or
+      `assertPrivilegedRequestAuthenticated`) before any data I/O.
+    - Add a behavioural pin to `lib/server-action-guard.test.ts` proving an
+      unauthenticated call is refused before outbound I/O.
+    - The palette must not import a module that pulls `node:crypto` or
+      `@unit-talk/contracts` into the client bundle. This broke Wave 1;
+      `client-bundle-boundary.test.ts` must stay green and should pin it.
+    - The input is bounded (minimum and maximum length, result limit ≤ 12). The
+      ID fragment keeps using `pickIdPrefixRange`.
+    - "### D. Browser-confirmed settlement and performance-label defects"
+    - Fix the defects in settlement and performance labeling that you observe in
+      the browser on `/settlement`, `/picks/[id]`, `/performance` and
+      `/intelligence/roi`.
+    - "Each fix is listed in the PR body with:"
+    - the page,
+    - what was shown,
+    - why it was wrong,
+    - what is shown now,
+    - before and after screenshots.
+    - "The required labeling truths:"
+    - Track Only results are labeled as internal and Track Only. They are never
+      shown as published performance.
+    - An empty published cohort reads as "no published record" with its
+      exclusion note, never as a 0% ROI or 0-0 record.
+    - Every rate carries its sample size.
+    - A corrected settlement shows its effective result marked "(corrected)".
+    - Attribution is by canonical `capper_id`.
+    - Changes to `analytics.ts` or `operator-performance.ts` are limited to
+      labels and display fields. A change to cohort membership, Track Only
+      exclusion or stat computation needs a failing unit test that demonstrates
+      the defect first.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - "`pnpm verify` is green on the branch; the command-center `test`,
+      `type-check`, `lint` and `next build` are green."
+    - The proof bundle in `docs/06_status/proof/WORK-2026102806/` has
+      verification.md, diff-summary.md and evidence.json (schema_version 2,
+      proof_profile app-runtime), with browser screenshots referenced in the PR.
+    - "The PR carries an `EXECUTOR_RESULT: READY_FOR_REVIEW` / `schema:
+      executor-result/v1` comment on the current head."
+    - Merged through `pnpm -s ops:merge-wrapper pr-merge --issue WORK-2026102806
+      --branch <branch> --pr <N>` on green required checks. Deployment is a
+      separate release that Griff authorizes.
+  unmapped_sections:
+    - >-
+      WORK-2026102806 — Command Center Wave 2: result filtering, correction
+      confirmation, contextual pick discovery, settlement and performance label
+      fixes
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli (the independent browser-enabled Codex terminal, which
+      owns the remaining Command Center UI/UX work as of 2026-10-28)
+
+
+      This is a repo-owned work order (tracker independence, ratified
+      2026-09-05), and Griff directed this lane on 2026-10-28. Production runs
+      `913235ce7` (deploy run 40727467544), which includes Wave 1 (#1798) and
+      the final-score check (#1799). This lane closes the remaining operator
+      gaps that block Private Capper Operations V1 acceptance in Command Center.
+
+
+      Real production shapes to design and test against (read-only, 2026-10-28):
+
+      - Picks from Smart Form, Track Only: `capper_id` is lowercase
+      (`kingro623`); `sport_id` is uppercase (`NHL`); `line` comes back as a
+      string (`"6.50"`).
+
+      - Markets: `game_total_ou` (`O 6.5`) and `team_total_ou` (`Ducks Over
+      3.5`).
+
+      - The event exists only as free text in `metadata.eventName` (`Devils @
+      Avalanche`).
+
+      - A settled Track Only pick keeps `picks.status = validated`, by design
+      (UTV2-1919). Its result is held only in `settlement_records` and the view
+      columns `settlement_result` and `settlement_status`.
+
+      - Corrections are append-only: a new `settlement_records` row with
+      `corrects_id`; the original row is never changed.
+
+
+      ## File Scope
+
+
+      UI:
+
+      - apps/command-center/src/app/picks/page.tsx
+
+      - apps/command-center/src/components/PicksExplorerClient.tsx
+
+      - apps/command-center/src/app/picks/[id]/page.tsx
+
+      - apps/command-center/src/components/CorrectionForm.tsx
+
+      - apps/command-center/src/components/SettlementForm.tsx
+
+      - apps/command-center/src/components/SettlementTargetSummary.tsx
+
+      - apps/command-center/src/components/SettlementWorkbench.tsx
+
+      - apps/command-center/src/app/settlement/page.tsx
+
+      - apps/command-center/src/components/CommandPalette.tsx
+
+      - apps/command-center/src/app/performance/page.tsx
+
+      - apps/command-center/src/app/intelligence/roi/page.tsx
+
+
+      Data, query and actions:
+
+      - apps/command-center/src/lib/data/queues.ts
+
+      - apps/command-center/src/lib/picks-explorer-query.ts
+
+      - apps/command-center/src/lib/command-palette-model.ts
+
+      - apps/command-center/src/lib/data/pick-identity.ts
+
+      - apps/command-center/src/lib/correction-confirmation.ts (new)
+
+      - apps/command-center/src/lib/data/analytics.ts
+
+      - apps/command-center/src/lib/data/operator-performance.ts
+
+      - apps/command-center/src/app/actions/pick-lookup.ts (new; only if a
+      lookup action is used)
+
+
+      Focused tests (all under `src/lib/` or `src/lib/data/`, which the
+      command-center `test` script globs, so no `package.json` wiring is
+      needed):
+
+      - apps/command-center/src/lib/picks-explorer-query.test.ts
+
+      - apps/command-center/src/lib/command-palette-model.test.ts
+
+      - apps/command-center/src/lib/correction-confirmation.test.ts (new)
+
+      - apps/command-center/src/lib/data/pick-identity.test.ts
+
+      - apps/command-center/src/lib/data/queues-count-relation.test.ts
+
+      - apps/command-center/src/lib/data/analytics.test.ts
+
+      - apps/command-center/src/lib/data/operator-performance.test.ts (new)
+
+      - apps/command-center/src/lib/server-action-guard.test.ts
+
+      - apps/command-center/src/lib/client-bundle-boundary.test.ts
+
+
+      The scope is immutable once the lane starts. A needed file outside it is a
+      stop-and-report, not a widening.
+
+
+      ## Guardrails (must be preserved, each one testable)
+
+
+      - **Track Only:**
+        - No change creates, enqueues or requeues delivery.
+        - No Track Only pick enters the published cohort.
+        - `results-ops.ts` (the Track Only settlement queue) is out of scope and unchanged.
+      - **Attribution:**
+        - Per-capper figures key on canonical `picks.capper_id`, never on a metadata copy.
+        - `settled_by` remains the authenticated operator.
+      - **Score validation:**
+        - `settlement-score-check.ts` is out of scope and unchanged.
+        - `SettlementForm` keeps blocking a score/result mismatch without an override reason, and keeps appending `Final score (away-home): X-Y` to `outcomeBasis`.
+      - **Append-only corrections:**
+        - No update or delete of `settlement_records`.
+        - A correction still goes through the existing `app/actions/settle.ts` path, which is out of scope and unchanged, as are the API settle contract, auth and operator identity.
+      - No schema, migration, API or worker change. No new dependency. No change
+      to containment, kill switches, delivery, Whop or access.
+
+      - Do not alter or requeue pick `706b136b`.
+
+      - Browser verification may read production only through the authenticated
+      Command Center UI. Do not settle or correct a real pick to "test" a flow.
+      Use a local or staging build with fixtures for write paths.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102806.md
+    title: "WORK-2026102806 — Command Center Wave 2: result filtering, correction
+      confirmation, contextual pick discovery, settlement and performance label
+      fixes"
+    description: >-
+      # WORK-2026102806 — Command Center Wave 2: result filtering, correction
+      confirmation, contextual pick discovery, settlement and performance label
+      fixes
+
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli (the independent browser-enabled Codex terminal, which
+      owns the remaining Command Center UI/UX work as of 2026-10-28)
+
+
+      This is a repo-owned work order (tracker independence, ratified
+      2026-09-05), and Griff directed this lane on 2026-10-28. Production runs
+      `913235ce7` (deploy run 40727467544), which includes Wave 1 (#1798) and
+      the final-score check (#1799). This lane closes the remaining operator
+      gaps that block Private Capper Operations V1 acceptance in Command Center.
+
+
+      Real production shapes to design and test against (read-only, 2026-10-28):
+
+      - Picks from Smart Form, Track Only: `capper_id` is lowercase
+      (`kingro623`); `sport_id` is uppercase (`NHL`); `line` comes back as a
+      string (`"6.50"`).
+
+      - Markets: `game_total_ou` (`O 6.5`) and `team_total_ou` (`Ducks Over
+      3.5`).
+
+      - The event exists only as free text in `metadata.eventName` (`Devils @
+      Avalanche`).
+
+      - A settled Track Only pick keeps `picks.status = validated`, by design
+      (UTV2-1919). Its result is held only in `settlement_records` and the view
+      columns `settlement_result` and `settlement_status`.
+
+      - Corrections are append-only: a new `settlement_records` row with
+      `corrects_id`; the original row is never changed.
+
+
+      ## Acceptance Criteria
+
+
+      ### A. Result filter with correct totals (`/picks`)
+
+      - `/picks` accepts a `result` URL parameter: `win`, `loss`, `push`, `void`
+      or `pending` (unsettled). It round-trips through `picks-explorer-query.ts`
+      like the existing filters, and appears as a control on the page.
+
+      - The filter uses the **current effective result**: a corrected pick
+      filters by its corrected result, not by the original.
+
+      - **The total must match the rows shown.**
+        - `settlement_result` is a view-derived column (`VIEW_DERIVED_COLUMNS` in `lib/data/queues.ts`).
+        - The existing count runs on `picks`, so naively adding the filter would return a total that ignores it.
+        - Use a sound counting strategy, for example counting on `picks_current_state` only when a view-derived filter is active.
+        - Extend `queues-count-relation.test.ts` so that a view-derived filter counted on `picks` fails the test.
+        - Unit tests show that, for a result filter, the total equals the size of the filtered population, including on page 2 or later.
+      - The result filter combines with the existing capper, sport, date,
+      ID-fragment and population filters. `pending` must not include voided
+      picks.
+
+
+      ### B. Correction confirmation shows current → proposed
+
+      - Before a correction is submitted, the confirmation step in
+      `CorrectionForm` shows the pick's **current effective result** and the
+      **proposed result** side by side ("Current: win → Proposed: loss"). It
+      also states that the original settlement record is kept and a correcting
+      record is appended.
+
+      - A proposed result equal to the current one is blocked with a clear
+      message. A no-op correction must not be submittable.
+
+      - The current effective result comes from the settlement chain
+      (`pick-identity.ts`, the same source as `SettlementTargetSummary`), not
+      from `picks.status`.
+
+      - The logic lives in a pure, tested function (new
+      `lib/correction-confirmation.ts` and its test). The component only renders
+      it.
+
+
+      ### C. Contextual governed pick discovery
+
+      - From the command palette, an operator can find a pick by ID fragment,
+      capper handle or event-name text. Each result shows its context: capper,
+      sport, event, market, selection, line, status, and settlement result or
+      "pending".
+
+      - Results come only from the **governed operator population**: the same
+      population `searchPicks` and the Track Only settlement queue use
+      (`applyOperatorPickPopulation`). Fixture and test rows must never appear.
+
+      - If this needs a server-side lookup, put it in the new server action
+      `app/actions/pick-lookup.ts`.
+        - The action must call the shared authentication guard (`resolveActorOrRefusal`, `requireAuthenticatedActor` or `assertPrivilegedRequestAuthenticated`) before any data I/O.
+        - Add a behavioural pin to `lib/server-action-guard.test.ts` proving an unauthenticated call is refused before outbound I/O.
+        - The palette must not import a module that pulls `node:crypto` or `@unit-talk/contracts` into the client bundle. This broke Wave 1; `client-bundle-boundary.test.ts` must stay green and should pin it.
+      - The input is bounded (minimum and maximum length, result limit ≤ 12).
+      The ID fragment keeps using `pickIdPrefixRange`.
+
+
+      ### D. Browser-confirmed settlement and performance-label defects
+
+      - Fix the defects in settlement and performance labeling that you observe
+      in the browser on `/settlement`, `/picks/[id]`, `/performance` and
+      `/intelligence/roi`.
+
+      - Each fix is listed in the PR body with:
+        - the page,
+        - what was shown,
+        - why it was wrong,
+        - what is shown now,
+        - before and after screenshots.
+      - The required labeling truths:
+        - Track Only results are labeled as internal and Track Only. They are never shown as published performance.
+        - An empty published cohort reads as "no published record" with its exclusion note, never as a 0% ROI or 0-0 record.
+        - Every rate carries its sample size.
+        - A corrected settlement shows its effective result marked "(corrected)".
+        - Attribution is by canonical `capper_id`.
+      - Changes to `analytics.ts` or `operator-performance.ts` are limited to
+      labels and display fields. A change to cohort membership, Track Only
+      exclusion or stat computation needs a failing unit test that demonstrates
+      the defect first.
+
+
+      ## File Scope
+
+
+      UI:
+
+      - apps/command-center/src/app/picks/page.tsx
+
+      - apps/command-center/src/components/PicksExplorerClient.tsx
+
+      - apps/command-center/src/app/picks/[id]/page.tsx
+
+      - apps/command-center/src/components/CorrectionForm.tsx
+
+      - apps/command-center/src/components/SettlementForm.tsx
+
+      - apps/command-center/src/components/SettlementTargetSummary.tsx
+
+      - apps/command-center/src/components/SettlementWorkbench.tsx
+
+      - apps/command-center/src/app/settlement/page.tsx
+
+      - apps/command-center/src/components/CommandPalette.tsx
+
+      - apps/command-center/src/app/performance/page.tsx
+
+      - apps/command-center/src/app/intelligence/roi/page.tsx
+
+
+      Data, query and actions:
+
+      - apps/command-center/src/lib/data/queues.ts
+
+      - apps/command-center/src/lib/picks-explorer-query.ts
+
+      - apps/command-center/src/lib/command-palette-model.ts
+
+      - apps/command-center/src/lib/data/pick-identity.ts
+
+      - apps/command-center/src/lib/correction-confirmation.ts (new)
+
+      - apps/command-center/src/lib/data/analytics.ts
+
+      - apps/command-center/src/lib/data/operator-performance.ts
+
+      - apps/command-center/src/app/actions/pick-lookup.ts (new; only if a
+      lookup action is used)
+
+
+      Focused tests (all under `src/lib/` or `src/lib/data/`, which the
+      command-center `test` script globs, so no `package.json` wiring is
+      needed):
+
+      - apps/command-center/src/lib/picks-explorer-query.test.ts
+
+      - apps/command-center/src/lib/command-palette-model.test.ts
+
+      - apps/command-center/src/lib/correction-confirmation.test.ts (new)
+
+      - apps/command-center/src/lib/data/pick-identity.test.ts
+
+      - apps/command-center/src/lib/data/queues-count-relation.test.ts
+
+      - apps/command-center/src/lib/data/analytics.test.ts
+
+      - apps/command-center/src/lib/data/operator-performance.test.ts (new)
+
+      - apps/command-center/src/lib/server-action-guard.test.ts
+
+      - apps/command-center/src/lib/client-bundle-boundary.test.ts
+
+
+      The scope is immutable once the lane starts. A needed file outside it is a
+      stop-and-report, not a widening.
+
+
+      ## Guardrails (must be preserved, each one testable)
+
+
+      - **Track Only:**
+        - No change creates, enqueues or requeues delivery.
+        - No Track Only pick enters the published cohort.
+        - `results-ops.ts` (the Track Only settlement queue) is out of scope and unchanged.
+      - **Attribution:**
+        - Per-capper figures key on canonical `picks.capper_id`, never on a metadata copy.
+        - `settled_by` remains the authenticated operator.
+      - **Score validation:**
+        - `settlement-score-check.ts` is out of scope and unchanged.
+        - `SettlementForm` keeps blocking a score/result mismatch without an override reason, and keeps appending `Final score (away-home): X-Y` to `outcomeBasis`.
+      - **Append-only corrections:**
+        - No update or delete of `settlement_records`.
+        - A correction still goes through the existing `app/actions/settle.ts` path, which is out of scope and unchanged, as are the API settle contract, auth and operator identity.
+      - No schema, migration, API or worker change. No new dependency. No change
+      to containment, kill switches, delivery, Whop or access.
+
+      - Do not alter or requeue pick `706b136b`.
+
+      - Browser verification may read production only through the authenticated
+      Command Center UI. Do not settle or correct a real pick to "test" a flow.
+      Use a local or staging build with fixtures for write paths.
+
+
+      ## Exit Criteria
+
+
+      - `pnpm verify` is green on the branch; the command-center `test`,
+      `type-check`, `lint` and `next build` are green.
+
+      - The proof bundle in `docs/06_status/proof/WORK-2026102806/` has
+      verification.md, diff-summary.md and evidence.json (schema_version 2,
+      proof_profile app-runtime), with browser screenshots referenced in the PR.
+
+      - The PR carries an `EXECUTOR_RESULT: READY_FOR_REVIEW` / `schema:
+      executor-result/v1` comment on the current head.
+
+      - Merged through `pnpm -s ops:merge-wrapper pr-merge --issue
+      WORK-2026102806 --branch <branch> --pr <N>` on green required checks.
+      Deployment is a separate release that Griff authorizes.
+    captured_at: 2026-10-28T20:20:17.500Z
+    description_sha256: 8151da7ebaeab6a9d601db92422ea58fe042d6b369c3b2bbd95fdd950f836af6
+  contract_hash: d2800bedc4bb98441a919268af2f1c2ed22410b158c843ea1518eee00da61bdb

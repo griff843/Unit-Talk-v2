@@ -1,3 +1,5 @@
+import { readDeliveryAudience } from './delivery-audience.js';
+
 export const smartFormDistributionModes = ['track-only', 'delivery-eligible'] as const;
 
 export type SmartFormDistributionMode = (typeof smartFormDistributionModes)[number];
@@ -94,6 +96,7 @@ export type HumanCapperDeliveryRefusalReason =
   (typeof humanCapperDeliveryRefusalReasons)[number];
 
 export interface HumanCapperDeliveryAuthorization {
+  audience?: import('./delivery-audience.js').DeliveryAudience;
   version: typeof humanCapperDeliveryAuthorizationVersion;
   decision: 'authorized' | 'refused';
   /** The canonical capper identity the decision was made about, if any. */
@@ -242,11 +245,13 @@ export const capperDiscordRoutingRefusalReasons = [
   'discussion-channel-malformed',
   /** The two are configured to the same destination — refuse both. */
   'picks-channel-is-discussion-channel',
+  'audience-unrecognized',
 ] as const;
 export type CapperDiscordRoutingRefusalReason =
   (typeof capperDiscordRoutingRefusalReasons)[number];
 
 export interface CapperDiscordRouting {
+  audience: import('./delivery-audience.js').DeliveryAudience;
   version: typeof capperDiscordRoutingVersion;
   guildId: string;
   picksChannelId: string;
@@ -303,6 +308,8 @@ export function readCapperDiscordRouting(
   }
 
   const block = raw as Record<string, unknown>;
+  const audience = readDeliveryAudience(block['audience']);
+  if (audience === null) return { ok: false, reason: 'audience-unrecognized' };
   if (!isDiscordSnowflake(block['guildId'])) {
     return { ok: false, reason: 'guild-id-missing-or-malformed' };
   }
@@ -327,6 +334,7 @@ export function readCapperDiscordRouting(
     ok: true,
     routing: {
       version: capperDiscordRoutingVersion,
+      audience,
       guildId: block['guildId'],
       picksChannelId: block['picksChannelId'],
       discussionChannelId,
@@ -349,6 +357,7 @@ export function readCapperDiscordRouting(
 export const pinnedDeliveryDestinationKey = 'deliveryDestination';
 
 export interface PinnedDeliveryDestination {
+  audience?: import('./delivery-audience.js').DeliveryAudience;
   version: typeof capperDiscordRoutingVersion;
   guildId: string;
   channelId: string;
@@ -370,6 +379,7 @@ export function readPinnedDeliveryDestination(
 
   const record = raw as Record<string, unknown>;
   if (record['version'] !== capperDiscordRoutingVersion) return null;
+  if (readDeliveryAudience(record['audience']) === null) return null;
   if (!isDiscordSnowflake(record['guildId'])) return null;
   if (!isDiscordSnowflake(record['channelId'])) return null;
   if (typeof record['capperId'] !== 'string' || record['capperId'].length === 0) return null;

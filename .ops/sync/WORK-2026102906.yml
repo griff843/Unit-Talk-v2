@@ -1,0 +1,211 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102906
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102906
+  objective: >-
+    The routing catalog (`docs/05_operations/policies/codex-model-routing.json`,
+    policy 2.0.0) still routes every enabled profile to `gpt-5.6-luna` and
+    `gpt-5.6-sol`. Version 3.0.0 moves the same profiles, tiers and reasoning
+    efforts to `gpt-6-luna` and `gpt-6.1-sol`, verified against Codex CLI
+    0.162.1. Astra and `codex-sol-max` stay disabled.
+
+    A policy version bump strands every open Codex lane. codex-exec refuses a
+    manifest whose `model_routing.policy_version` differs from the current
+    policy (`POLICY_VERSION_MISMATCH`, "Re-resolve routing before executing"),
+    and no command can re-resolve a lane. `model_routing` is written only at
+    lane-start, at manifest create, and by `reconcile-routing`, and a reconciled
+    lane can never run again. Open lane manifests already pinned to an older
+    policy:
+
+    On 2.0.0: #1800, #1776, #1772 and #1739, plus parked #1775.
+
+    On 1.0.0: #1556 and parked #1451. codex-exec already refuses these on main
+    today.
+  acceptance_criteria:
+    - The policy is at 3.0.0. Profiles, permitted tiers, reasoning efforts and
+      enabled flags are unchanged apart from the model ids and
+      `verified_against`.
+    - "`pnpm ops:lane-manifest -- re-resolve-routing <ID> [--json]` moves a
+      Codex lane's `model_routing` to the current policy version, keeping its
+      profile, `selected_by` and any audit override. The prior pin is appended
+      to `model_routing.re_resolutions`. The result passes
+      `validatePersistedModelRouting`."
+    - The profile is re-resolved through `resolveModelProfile` with the lane's
+      tier, so a profile the new policy removed, disabled, gates behind PM
+      authorization or no longer permits for the tier is refused, never
+      substituted.
+    - "Refused, writing nothing: a reconciled lane, a lane already on the
+      current policy, a done lane, a non-Codex lane, a lane without
+      `model_routing`, and a missing id."
+    - codex-exec's `POLICY_VERSION_MISMATCH`, `MODEL_MISMATCH`,
+      `REASONING_EFFORT_INVALID` and `RECONCILED_OBSERVATION` checks are
+      unchanged; only the mismatch message now names the command.
+    - "Unchanged: the proof sidecar contract, merge authority,
+      `reconcile-routing`, and lane admission."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026102906 — Codex model catalog v3 with in-flight lane re-resolution
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: PM operating-model directive (2026-10-29), priority 1: modernize
+      the automatic Codex model-routing catalog to genuinely supported models,
+      preserving cost-aware routing, exact execution provenance and the existing
+      security controls. Griff chose on 2026-10-29 to land the catalog update
+      together with a re-resolve path for in-flight lanes, keeping codex-exec's
+      fail-closed checks unchanged. Mechanical tier floor is T1
+      (`scripts/ops/lane-*.ts` is a tier-c pattern).
+
+
+      ## File Scope
+
+
+      - `docs/05_operations/policies/codex-model-routing.json`
+
+      - `scripts/ops/model-routing.ts`
+
+      - `scripts/ops/model-routing.test.ts`
+
+      - `scripts/ops/lane-manifest.ts`
+
+      - `scripts/ops/lane-manifest.test.ts`
+
+      - `scripts/ops/codex-exec.test.ts`
+
+      - `.ops/work/WORK-2026102906.md`
+
+
+      ## Rollback
+
+
+      Revert the PR. The policy returns to 2.0.0, and the `re-resolve-routing`
+      subcommand is removed. A lane already re-resolved to 3.0.0 would then be
+      refused by codex-exec until it is re-resolved again, which is the same
+      fail-closed state stranded lanes are in today.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102906.md
+    title: WORK-2026102906 — Codex model catalog v3 with in-flight lane re-resolution
+    description: >-
+      # WORK-2026102906 — Codex model catalog v3 with in-flight lane
+      re-resolution
+
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: PM operating-model directive (2026-10-29), priority 1: modernize
+      the automatic Codex model-routing catalog to genuinely supported models,
+      preserving cost-aware routing, exact execution provenance and the existing
+      security controls. Griff chose on 2026-10-29 to land the catalog update
+      together with a re-resolve path for in-flight lanes, keeping codex-exec's
+      fail-closed checks unchanged. Mechanical tier floor is T1
+      (`scripts/ops/lane-*.ts` is a tier-c pattern).
+
+
+      ## Objective
+
+
+      The routing catalog
+      (`docs/05_operations/policies/codex-model-routing.json`, policy 2.0.0)
+      still routes every enabled profile to `gpt-5.6-luna` and `gpt-5.6-sol`.
+      Version 3.0.0 moves the same profiles, tiers and reasoning efforts to
+      `gpt-6-luna` and `gpt-6.1-sol`, verified against Codex CLI 0.162.1. Astra
+      and `codex-sol-max` stay disabled.
+
+
+      A policy version bump strands every open Codex lane. codex-exec refuses a
+      manifest whose `model_routing.policy_version` differs from the current
+      policy (`POLICY_VERSION_MISMATCH`, "Re-resolve routing before executing"),
+      and no command can re-resolve a lane. `model_routing` is written only at
+      lane-start, at manifest create, and by `reconcile-routing`, and a
+      reconciled lane can never run again. Open lane manifests already pinned to
+      an older policy:
+
+
+      - On 2.0.0: #1800, #1776, #1772 and #1739, plus parked #1775.
+
+      - On 1.0.0: #1556 and parked #1451. codex-exec already refuses these on
+      main today.
+
+
+      ## Acceptance Criteria
+
+
+      - The policy is at 3.0.0. Profiles, permitted tiers, reasoning efforts and
+      enabled flags are unchanged apart from the model ids and
+      `verified_against`.
+
+      - `pnpm ops:lane-manifest -- re-resolve-routing <ID> [--json]` moves a
+      Codex lane's `model_routing` to the current policy version, keeping its
+      profile, `selected_by` and any audit override. The prior pin is appended
+      to `model_routing.re_resolutions`. The result passes
+      `validatePersistedModelRouting`.
+
+      - The profile is re-resolved through `resolveModelProfile` with the lane's
+      tier, so a profile the new policy removed, disabled, gates behind PM
+      authorization or no longer permits for the tier is refused, never
+      substituted.
+
+      - Refused, writing nothing: a reconciled lane, a lane already on the
+      current policy, a done lane, a non-Codex lane, a lane without
+      `model_routing`, and a missing id.
+
+      - codex-exec's `POLICY_VERSION_MISMATCH`, `MODEL_MISMATCH`,
+      `REASONING_EFFORT_INVALID` and `RECONCILED_OBSERVATION` checks are
+      unchanged; only the mismatch message now names the command.
+
+      - Unchanged: the proof sidecar contract, merge authority,
+      `reconcile-routing`, and lane admission.
+
+
+      ## File Scope
+
+
+      - `docs/05_operations/policies/codex-model-routing.json`
+
+      - `scripts/ops/model-routing.ts`
+
+      - `scripts/ops/model-routing.test.ts`
+
+      - `scripts/ops/lane-manifest.ts`
+
+      - `scripts/ops/lane-manifest.test.ts`
+
+      - `scripts/ops/codex-exec.test.ts`
+
+      - `.ops/work/WORK-2026102906.md`
+
+
+      ## Rollback
+
+
+      Revert the PR. The policy returns to 2.0.0, and the `re-resolve-routing`
+      subcommand is removed. A lane already re-resolved to 3.0.0 would then be
+      refused by codex-exec until it is re-resolved again, which is the same
+      fail-closed state stranded lanes are in today.
+    captured_at: 2026-10-30T03:19:00.608Z
+    description_sha256: 57b2cfa2728e4231ac85d4883c79cd7b727544661550e65500d8b584196f63c3
+  contract_hash: 52428ae84ad76941e7fb2898635b5016585ae98436b493e7adc908b4bab04df6

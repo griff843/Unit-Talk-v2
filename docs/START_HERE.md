@@ -8,13 +8,14 @@ Read this before touching any code. Estimated time: 10 minutes.
 
 Unit Talk V2 is a **contract-first, fail-closed sports-betting pick pipeline**. It accepts picks from users, scores and promotes qualified picks, routes them to Discord, grades settled bets against game results, and provides an operator dashboard.
 
-Claude Code is the execution orchestrator: work the Linear backlog, merge on green per tier policy, keep execution truth mechanical rather than narrative.
+Claude Code is the execution orchestrator: discover the work from the live mission, current code, runtime and database evidence (`docs/mission/`), run safe work in parallel in isolated lanes, and merge only through the tier, review and approval controls. Linear is workflow intent, not the authoritative priority queue. Keep execution truth mechanical rather than narrative.
 
 ---
 
 ## Where to Look First (read in this order)
 
 1. **`CLAUDE.md`** — root invariants, commands, tier policy, skill table. Read this first, every session.
+   Then the mission set it imports: `docs/mission/intent.md` (Griff-owned intent, including the 2026-10-13 quantity-first current intent), `docs/mission/spec.md`, and `docs/mission/plan.md` (live state, rebuilt from runtime evidence).
 2. **`docs/CODEBASE_GUIDE.md`** — monorepo structure, package DAG, tech stack, DB schema facts.
 3. **`docs/05_operations/EXECUTION_MAP.md`** — master phase map, what is shipped, what is next.
 4. **Relevant skill** — see Skills Quick-Reference below. Invoke before touching the relevant subsystem.
@@ -157,7 +158,7 @@ PR title, body, and commit messages must not mention other `UTV2-###` IDs. Write
 | `docs/05_operations/docs_authority_map.md` | Ranked doc authority; conflict resolution rules |
 | `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md` | SGO / odds provider integration knowledge |
 | `docs/05_operations/r1-r5-rules.json` | R-level verification rule definitions |
-| `docs/06_status/PROGRAM_STATUS.md` | High-level program status at its stated update time |
+| `docs/06_status/CURRENT_STATE.md` | Dated program-status snapshot: read its "Last verified" line; live evidence and `docs/mission/plan.md` override it. `PROGRAM_STATUS.md` is superseded audit history, not a status source |
 | `docs/06_status/KNOWN_DEBT.md` | Known-debt pointer index |
 | `docs/06_status/proof/PROOF-TEMPLATE.md` | Simple proof template (T2/T3) |
 | `docs/05_operations/schemas/executor-result-v1.md` | Executor result schema |

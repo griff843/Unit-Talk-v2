@@ -1,0 +1,167 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1978
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1978
+  objective: "Repair the contained deployment web build failure:
+    NEXT_PUBLIC_SITE_URL is required during /robots.txt page-data collection,
+    but production Docker build does not receive the existing configured website
+    origin."
+  acceptance_criteria:
+    - Pass existing UNIT_TALK_WEB_DOMAIN public HTTPS origin as
+      NEXT_PUBLIC_SITE_URL at image build time; fail closed when required input
+      is absent.
+    - Accept/export build input before Next.js build without placeholders,
+      credentials, or weakening site-config validation.
+    - Preserve Smart Form, Command Center, API-origin, canary and promotion
+      safeguards.
+    - Extend focused existing wiring tests; no package/dependency/lockfile
+      changes.
+    - Focused tests, pnpm verify, R-level artifacts, sanctioned staging T1 DB
+      proof, actual production-shaped web image build and exact-head CI support
+      the executor result.
+    - Return exact PR HEAD for independent PM review; do not merge or deploy.
+  guardrails: []
+  non_goals: []
+  required_evidence:
+    - "Failed contained deployment run:
+      [https://github.com/griff843/Unit-Talk-v2/actions/runs/38313646589](<http\
+      s://github.com/griff843/Unit-Talk-v2/actions/runs/38313646589>) Approved
+      local packet:
+      .out/discord-completion-20261012/deployment-build-blocker-packet.md Frozen
+      failed source tag release-discord-contained-20261012-695e22d must never
+      move."
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      PM plan approval
+
+      Griff explicitly approved the bounded repair plan on 2026-10-12 in the
+      Discord completion task (reply: "Approve this bounded repair plan"). This
+      authorizes implementation and proof only; independent exact-head PM merge
+      review and new-SHA deployment authorization remain required.
+    - |-
+      Tier
+      T1
+    - |-
+      Authorized scope
+      * .github/workflows/deploy.yml
+      * deploy/production/Dockerfile.nextjs
+      * scripts/ci/nextjs-deploy-wiring.test.ts
+      * Normal issue-owned lane/sync/proof artifacts only.
+    - >-
+      Safety boundaries
+
+      No app/runtime behavior, migrations, routing, Discord configuration,
+      containment, Capitals disposition, pick submission or delivery release
+      changes. Do not retry old source to evade the defect. Production remains
+      rollback SHA 1a27b8f6eb3a45d57714a5aaf4465f900eb4241f.
+    - >-
+      Where to look
+
+      * .github/workflows/deploy.yml: build-nextjs matrix, public API build
+      guard/build-args and existing UNIT_TALK_WEB_DOMAIN runtime binding.
+
+      * deploy/production/Dockerfile.nextjs: builder ARG/ENV input before pnpm
+      build.
+
+      * scripts/ci/nextjs-deploy-wiring.test.ts: existing API-origin wiring
+      tests and secret-leak/optional-surface safeguards.
+
+      * apps/web/src/lib/site-config.ts: strict website HTTPS-origin validation,
+      read-only; do not edit.
+
+      * .out/discord-completion-20261012/deployment-build-blocker-packet.md:
+      approved failure evidence and bounded plan.
+    - >-
+      Definition of Done
+
+      * Only the three approved substantive paths plus issue-owned
+      lane/sync/proof artifacts changed.
+
+      * Existing configured website origin reaches the actual production-shaped
+      public-web image build; missing web input refuses before build. No
+      placeholders or weakened app validation.
+
+      * Focused tests execute missing/present guard cases, preserve existing
+      Smart Form/Command Center/API-origin controls, and pass.
+
+      * pnpm verify and R-level pass; sanctioned staging T1 test:db proof and
+      required CI support the final exact HEAD.
+
+      * Actual local production-shaped web Docker image builds at final HEAD
+      without push, deployment or production secrets.
+
+      * Fresh executor result and PR exact HEAD returned for independent PM
+      review. No merge, new-SHA deployment, Discord mutation, pick change or
+      delivery release.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1978/supply-canonical-public-website-origin-to-production-nextjs-image
+    title: Supply canonical public website origin to production Next.js image build
+    description: |-
+      ## Objective
+
+      Repair the contained deployment web build failure: NEXT_PUBLIC_SITE_URL is required during /robots.txt page-data collection, but production Docker build does not receive the existing configured website origin.
+
+      ## PM plan approval
+
+      Griff explicitly approved the bounded repair plan on 2026-10-12 in the Discord completion task (reply: "Approve this bounded repair plan"). This authorizes implementation and proof only; independent exact-head PM merge review and new-SHA deployment authorization remain required.
+
+      ## Tier
+
+      T1
+
+      ## Authorized scope
+
+      * .github/workflows/deploy.yml
+      * deploy/production/Dockerfile.nextjs
+      * scripts/ci/nextjs-deploy-wiring.test.ts
+      * Normal issue-owned lane/sync/proof artifacts only.
+
+      ## Acceptance Criteria
+
+      * Pass existing UNIT_TALK_WEB_DOMAIN public HTTPS origin as NEXT_PUBLIC_SITE_URL at image build time; fail closed when required input is absent.
+      * Accept/export build input before Next.js build without placeholders, credentials, or weakening site-config validation.
+      * Preserve Smart Form, Command Center, API-origin, canary and promotion safeguards.
+      * Extend focused existing wiring tests; no package/dependency/lockfile changes.
+      * Focused tests, pnpm verify, R-level artifacts, sanctioned staging T1 DB proof, actual production-shaped web image build and exact-head CI support the executor result.
+      * Return exact PR HEAD for independent PM review; do not merge or deploy.
+
+      ## Safety boundaries
+
+      No app/runtime behavior, migrations, routing, Discord configuration, containment, Capitals disposition, pick submission or delivery release changes. Do not retry old source to evade the defect. Production remains rollback SHA 1a27b8f6eb3a45d57714a5aaf4465f900eb4241f.
+
+      ## Evidence
+
+      Failed contained deployment run: [https://github.com/griff843/Unit-Talk-v2/actions/runs/38313646589](<https://github.com/griff843/Unit-Talk-v2/actions/runs/38313646589>)
+      Approved local packet: .out/discord-completion-20261012/deployment-build-blocker-packet.md
+      Frozen failed source tag release-discord-contained-20261012-695e22d must never move.
+
+      ## Where to look
+
+      * .github/workflows/deploy.yml: build-nextjs matrix, public API build guard/build-args and existing UNIT_TALK_WEB_DOMAIN runtime binding.
+      * deploy/production/Dockerfile.nextjs: builder ARG/ENV input before pnpm build.
+      * scripts/ci/nextjs-deploy-wiring.test.ts: existing API-origin wiring tests and secret-leak/optional-surface safeguards.
+      * apps/web/src/lib/site-config.ts: strict website HTTPS-origin validation, read-only; do not edit.
+      * .out/discord-completion-20261012/deployment-build-blocker-packet.md: approved failure evidence and bounded plan.
+
+      ## Definition of Done
+
+      * Only the three approved substantive paths plus issue-owned lane/sync/proof artifacts changed.
+      * Existing configured website origin reaches the actual production-shaped public-web image build; missing web input refuses before build. No placeholders or weakened app validation.
+      * Focused tests execute missing/present guard cases, preserve existing Smart Form/Command Center/API-origin controls, and pass.
+      * pnpm verify and R-level pass; sanctioned staging T1 test:db proof and required CI support the final exact HEAD.
+      * Actual local production-shaped web Docker image builds at final HEAD without push, deployment or production secrets.
+      * Fresh executor result and PR exact HEAD returned for independent PM review. No merge, new-SHA deployment, Discord mutation, pick change or delivery release.
+    captured_at: 2026-10-12T22:38:40.518Z
+    description_sha256: 8c1da5854d0f362746c115cbf2b314d9fb109868a69544b824d01cdefb5d5a84
+  contract_hash: c336c8aeebb87b88e15a12c9fd45132a7ecb5014c1bb447e8b7166efd05ce23d

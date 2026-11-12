@@ -1,0 +1,160 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102704
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102704
+  objective: WORK-2026102704 — Read-only participant media lookup for Smart Form artwork
+  acceptance_criteria:
+    - "`GET /api/reference-data/participants/:id/media` resolves exactly one
+      participant by canonical `participants.id` through the existing
+      `ParticipantRepository.findById`. It has no write, enrichment or external
+      fetch."
+    - It returns only `participantId`, `participantType`, `displayName`,
+      `sport`, and either `headshotUrl` (players) or `logoUrl` (teams). URLs
+      must be HTTPS on the allow-listed image CDNs, with no credentials, port or
+      fragment; anything else becomes `null`.
+    - Unknown or mismatched participants and non player/team types return 404,
+      and so does a malformed (non-UUID) id, without querying the repository. A
+      repository failure returns 503 without internal detail.
+    - The handler and HTTP tests are listed in `apps/api/package.json` so `pnpm
+      test` runs them.
+  guardrails:
+    - No auth, schema, repository-interface, submission, delivery, deploy or
+      containment change.
+    - Same exposure class as the existing unauthenticated
+      `/api/reference-data/*` GET routes; no new data class.
+    - Discord worker/domain integration is out of scope and unchanged.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged through `ops:merge-wrapper pr-merge` on green required checks;
+      deployment is a separate owner-authorized step.
+  unmapped_sections:
+    - >-
+      WORK-2026102704 — Read-only participant media lookup for Smart Form
+      artwork
+
+      Tier: T2
+
+      Lane type: runtime
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). Griff
+      approved the Smart Form media direction and all refinements in draft PR
+      #1791 on 2026-10-27. #1791 cannot be admitted as filed: its id is already
+      the merged WORK-2026102703 lane, and no single lane type admits both
+      `apps/api` and `apps/smart-form`. Codex implements this lane by carrying
+      the `apps/api` half of #1791 (branch
+      `codex/work-2026102703-smart-form-media`, head c1c6e8843). The Smart Form
+      half already merged as #1793 and falls back to initials until this
+      endpoint is deployed.
+
+
+      ## File Scope
+
+
+      - apps/api/src/handlers/participant-media.ts
+
+      - apps/api/src/handlers/participant-media.test.ts
+
+      - apps/api/src/routes/participant-media.ts
+
+      - apps/api/src/participant-media.http.test.ts
+
+      - apps/api/src/server.ts
+
+      - apps/api/package.json
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102704.md
+    title: WORK-2026102704 — Read-only participant media lookup for Smart Form artwork
+    description: >-
+      # WORK-2026102704 — Read-only participant media lookup for Smart Form
+      artwork
+
+
+      Tier: T2
+
+      Lane type: runtime
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). Griff
+      approved the Smart Form media direction and all refinements in draft PR
+      #1791 on 2026-10-27. #1791 cannot be admitted as filed: its id is already
+      the merged WORK-2026102703 lane, and no single lane type admits both
+      `apps/api` and `apps/smart-form`. Codex implements this lane by carrying
+      the `apps/api` half of #1791 (branch
+      `codex/work-2026102703-smart-form-media`, head c1c6e8843). The Smart Form
+      half already merged as #1793 and falls back to initials until this
+      endpoint is deployed.
+
+
+      ## Acceptance Criteria
+
+
+      - `GET /api/reference-data/participants/:id/media` resolves exactly one
+      participant by canonical `participants.id` through the existing
+      `ParticipantRepository.findById`. It has no write, enrichment or external
+      fetch.
+
+      - It returns only `participantId`, `participantType`, `displayName`,
+      `sport`, and either `headshotUrl` (players) or `logoUrl` (teams). URLs
+      must be HTTPS on the allow-listed image CDNs, with no credentials, port or
+      fragment; anything else becomes `null`.
+
+      - Unknown or mismatched participants and non player/team types return 404,
+      and so does a malformed (non-UUID) id, without querying the repository. A
+      repository failure returns 503 without internal detail.
+
+      - The handler and HTTP tests are listed in `apps/api/package.json` so
+      `pnpm test` runs them.
+
+
+      ## File Scope
+
+
+      - apps/api/src/handlers/participant-media.ts
+
+      - apps/api/src/handlers/participant-media.test.ts
+
+      - apps/api/src/routes/participant-media.ts
+
+      - apps/api/src/participant-media.http.test.ts
+
+      - apps/api/src/server.ts
+
+      - apps/api/package.json
+
+
+      ## Guardrails
+
+
+      - No auth, schema, repository-interface, submission, delivery, deploy or
+      containment change.
+
+      - Same exposure class as the existing unauthenticated
+      `/api/reference-data/*` GET routes; no new data class.
+
+      - Discord worker/domain integration is out of scope and unchanged.
+
+
+      ## Exit Criteria
+
+
+      - PR merged through `ops:merge-wrapper pr-merge` on green required checks;
+      deployment is a separate owner-authorized step.
+    captured_at: 2026-10-27T16:51:57.170Z
+    description_sha256: b12cb2c1236d57d083e96e9e800e4e75cc0c4996766640b471ddff52b852e742
+  contract_hash: 5ace89fc0630acda8cac2b913f96f76d85132483d0610f41a497dc172396677f

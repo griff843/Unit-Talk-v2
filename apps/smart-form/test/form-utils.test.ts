@@ -5,10 +5,13 @@ import {
   buildSelectionString,
   buildSubmissionPayload,
   calcPayout,
+  describeOffersState,
+  easternDateIso,
   evaluateSubmissionGuards,
   getMarketTypesForSport,
   inferStatTypeFromMarketTypeId,
   mapOfferToFormMarketType,
+  resolvePlayerPropMarketKey,
   resolveSportsbookId,
 } from '../lib/form-utils.ts';
 import type { BetFormValues } from '../lib/form-schema.ts';
@@ -32,6 +35,19 @@ function buildBaseValues(overrides: Partial<BetFormValues> = {}): BetFormValues 
     ...overrides,
   };
 }
+
+test('easternDateIso returns the Eastern calendar date across standard-time boundaries', () => {
+  assert.equal(easternDateIso(new Date('2026-10-29T01:30:00Z')), '2026-10-28');
+  assert.equal(easternDateIso(new Date('2026-12-01T04:59:00Z')), '2026-11-30');
+  assert.equal(easternDateIso(new Date('2026-12-01T05:00:00Z')), '2026-12-01');
+});
+
+test('easternDateIso handles spring-forward and fall-back boundary instants', () => {
+  assert.equal(easternDateIso(new Date('2026-03-08T06:59:00Z')), '2026-03-08');
+  assert.equal(easternDateIso(new Date('2026-03-08T07:00:00Z')), '2026-03-08');
+  assert.equal(easternDateIso(new Date('2026-11-01T05:59:00Z')), '2026-11-01');
+  assert.equal(easternDateIso(new Date('2026-11-01T06:00:00Z')), '2026-11-01');
+});
 
 const catalog: CatalogData = {
   sports: [
@@ -533,6 +549,84 @@ test('buildSubmissionPayload resolves NHL stat types to canonical player prop ma
   assert.equal(pimPayload.market, 'player.pim');
 });
 
+// Every stat_types row seeded for the sports the form offers (reference-data
+// foundation plus the 391/392/393 taxonomy migrations). Each must resolve.
+const CATALOG_STAT_TYPES: Record<string, string[]> = {
+  NBA: [
+    'Points', 'Rebounds', 'Assists', 'Threes', 'Steals', 'Blocks', 'Turnovers',
+    'Points + Assists', 'Field Goals Made', 'Free Throws Made', 'Minutes Played',
+    'Plus Minus', 'Plus/Minus',
+  ],
+  NHL: [
+    'Shots on Goal', 'Saves', 'Goals', 'Assists', 'Points', 'Blocked Shots',
+    'Goals Against', 'Save Percentage', 'Plus/Minus',
+  ],
+  MLB: [
+    'Strikeouts', 'Hits', 'Home Runs', 'RBI', 'Walks', 'Total Bases',
+    'Singles', 'Doubles', 'Triples', 'Earned Runs', 'Hits Allowed', 'Pitcher Outs',
+  ],
+  NFL: [
+    'Passing Yards', 'Rushing Yards', 'Receiving Yards', 'Touchdowns', 'Receptions',
+    'Interceptions', 'Rushing Attempts', 'Passing Attempts', 'Passing Touchdowns',
+    'Rush + Rec Yards', 'Tackles', 'Sacks',
+  ],
+};
+
+test('every catalog stat type for NHL, NBA, MLB and NFL resolves a market key without throwing', () => {
+  for (const [sport, statTypes] of Object.entries(CATALOG_STAT_TYPES)) {
+    for (const statType of statTypes) {
+      const payload = buildSubmissionPayload(
+        buildBaseValues({ sport, statType, playerName: 'Test Player' }),
+      );
+      assert.ok(payload.market, `${sport} ${statType} must resolve a market`);
+      assert.equal(payload.market, resolvePlayerPropMarketKey(sport, statType));
+    }
+  }
+});
+
+test('player prop market keys are sport-aware: NHL Points is hockey, NBA Points is basketball', () => {
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Points'), 'player_hockey_points_ou');
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Points'), 'player.points');
+  assert.notEqual(
+    buildSubmissionPayload(buildBaseValues({ sport: 'NHL', statType: 'Points' })).market,
+    buildSubmissionPayload(buildBaseValues({ sport: 'NBA', statType: 'Points' })).market,
+  );
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Assists'), 'player.assists');
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Assists'), 'player.assists');
+});
+
+test('previously unmapped catalog stat types resolve to production market ids', () => {
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Goals Against'), 'player_goals_against_ou');
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Save Percentage'), 'player_save_pct_ou');
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Plus/Minus'), 'player_plus_minus_ou');
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Field Goals Made'), 'player_fgm_ou');
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Free Throws Made'), 'player_ftm_ou');
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Minutes Played'), 'player_minutes_ou');
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Plus Minus'), 'player_plus_minus_ou');
+  assert.equal(resolvePlayerPropMarketKey('NFL', 'Sacks'), 'player_sacks_ou');
+});
+
+test('an unknown stat type is refused explicitly and never falls back to another sport', () => {
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Hat Tricks'), null);
+  // No canonical market_types id exists for MLB Runs, so it is refused, not invented.
+  assert.equal(resolvePlayerPropMarketKey('MLB', 'Runs'), null);
+  // sport_market_type_availability lists FGM/FTM/Minutes/Plus-Minus for NBA and WNBA only.
+  assert.equal(resolvePlayerPropMarketKey('NCAAB', 'Field Goals Made'), null);
+  assert.equal(resolvePlayerPropMarketKey('WNBA', 'Field Goals Made'), 'player_fgm_ou');
+  assert.equal(resolvePlayerPropMarketKey('NCAAF', 'Sacks'), null);
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Rebounds'), null);
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Goals'), null);
+  assert.equal(resolvePlayerPropMarketKey('NHL', ''), null);
+  assert.throws(
+    () => buildSubmissionPayload(buildBaseValues({ sport: 'NHL', statType: 'Hat Tricks' })),
+    /Cannot resolve canonical market key/,
+  );
+  assert.throws(
+    () => buildSubmissionPayload(buildBaseValues({ sport: 'NHL', statType: 'Rebounds' })),
+    /Cannot resolve canonical market key/,
+  );
+});
+
 test('buildSubmissionPayload resolves MLB batting strikeouts to player.strikeouts', () => {
   const payload = buildSubmissionPayload(
     buildBaseValues({ sport: 'MLB', statType: 'strikeouts', playerName: 'Aaron Judge' }),
@@ -658,4 +752,44 @@ test('no client guard refuses a structured-fallback player prop that has no even
     }),
     null,
   );
+});
+
+test('WORK-2026110705: stale offers state surfaces the last-observed timestamp, distinct from the generic empty message', () => {
+  const stale = describeOffersState({
+    status: 'stale',
+    newestObservedAt: '2026-06-30T12:41:02.424Z',
+    freshSince: '2026-11-08T14:00:00.000Z',
+    truncated: false,
+  });
+  assert.ok(stale);
+  assert.equal(stale.tone, 'stale');
+  assert.match(stale.label, /Stale offers/);
+  assert.match(stale.label, /2026-06-30 12:41 UTC/);
+  assert.equal(stale.lastObservedAt, '2026-06-30T12:41:02.424Z');
+  assert.doesNotMatch(stale.label, /No live offers/);
+
+  const empty = describeOffersState({ status: 'empty', newestObservedAt: null, freshSince: 'x', truncated: false });
+  assert.equal(empty?.tone, 'none');
+  assert.notEqual(empty?.label, stale.label);
+});
+
+test('WORK-2026110705: truncated fresh offers are flagged partial; complete fresh and missing state are silent', () => {
+  const partial = describeOffersState({
+    status: 'fresh',
+    newestObservedAt: '2026-11-08T13:59:00.000Z',
+    freshSince: '2026-11-08T12:00:00.000Z',
+    truncated: true,
+  });
+  assert.match(partial?.label ?? '', /Partial offers/);
+  assert.equal(
+    describeOffersState({ status: 'fresh', newestObservedAt: '2026-11-08T13:59:00.000Z', freshSince: 'x', truncated: false }),
+    null,
+  );
+  assert.equal(describeOffersState(undefined), null);
+});
+
+test('WORK-2026110705: BetForm routes an empty offers list through the offers state before falling back to "No live offers"', () => {
+  const source = readFileSync(new URL('../app/submit/components/BetForm.tsx', import.meta.url), 'utf8');
+  assert.match(source, /describeOffersState\(eventBrowse\?\.offersState\)/);
+  assert.match(source, /offersStateNotice\.label/);
 });

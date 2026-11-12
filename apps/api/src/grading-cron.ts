@@ -1,5 +1,6 @@
 import { buildServicePresentation } from '@unit-talk/domain';
 import { fileURLToPath } from 'node:url';
+import { refreshGradingCronLiveness } from './grading-cron-health.js';
 import type { RepositoryBundle, SystemRunRecord } from '@unit-talk/db';
 import { createApiRuntimeDependencies } from './server.js';
 import {
@@ -35,6 +36,10 @@ export interface GradingCronRunnerOptions {
   sleep?: (ms: number) => Promise<void>;
   logger?: Pick<Console, 'error' | 'info' | 'warn'>;
   runGradingPass?: typeof runGradingPass;
+  maxConsecutiveFailures?: number;
+  retryBaseMs?: number;
+  retryMaxMs?: number;
+  refreshLiveness?: () => Promise<void>;
   /** Called for grading health open/clear transitions. Wire to Discord in production. */
   onStalenessAlert?: (message: string) => Promise<void>;
 }
@@ -90,71 +95,188 @@ export async function startGradingCronLoop(
   const retryState: GradingRetryState = new Map();
   let cycle = 0;
   let runGapAlertOpen = false;
+  let consecutiveFailures = 0;
+  // Set when a failed grading pass could not be evaluated for a health alert
+  // (e.g. the run listing itself failed); the next successful cycle must still
+  // evaluate it even if the newest persisted run is a no-op.
+  let healthEvaluationPending = false;
+  const failureBudget = options.maxConsecutiveFailures ?? 5;
+  const retryBaseMs = options.retryBaseMs ?? 1_000;
+  const retryMaxMs = options.retryMaxMs ?? 30_000;
+  const refreshLiveness = options.refreshLiveness ?? refreshGradingCronLiveness;
+  if (
+    !Number.isInteger(failureBudget) ||
+    failureBudget < 1 ||
+    !Number.isFinite(retryBaseMs) ||
+    retryBaseMs <= 0 ||
+    !Number.isFinite(retryMaxMs) ||
+    retryMaxMs < retryBaseMs
+  ) {
+    throw new Error('Invalid grading cron retry policy');
+  }
+
+  const emitHealthTransition = (
+    transition: GradingHealthAlertTransition | null,
+  ): void => {
+    if (!transition) return;
+    if (transition.kind === 'open') {
+      options.logger?.error?.(transition.message);
+    } else {
+      options.logger?.info?.(transition.message);
+    }
+    if (options.onStalenessAlert) {
+      void options.onStalenessAlert(transition.message).catch(() => {
+        /* fire-and-forget */
+      });
+    }
+  };
 
   while (true) {
     cycle += 1;
-    const summary = await runGradingCronCycle({
-      cycle,
-      repositories: options.repositories,
-      runPass,
-      retryState,
-      ...(options.logger ? { logger: options.logger } : {}),
-    });
+    try {
+      // Refresh the liveness marker BEFORE the pass as well as after it, so the
+      // marker's age while a pass runs is the pass duration, not pass + poll.
+      // The healthcheck reads the marker as stale beyond 3 x poll, so a
+      // 12 min pass with a 5 min poll (17 min between end-of-cycle refreshes)
+      // otherwise read unhealthy for ~2 min per cycle with nothing wrong.
+      //
+      // Deliberately NOT refreshed during the pass (no timer): a hung await
+      // must stop refreshing so it is reported unhealthy. Bound: a pass that
+      // legitimately runs longer than 3 x poll (15 min at the default poll) is
+      // indistinguishable from a hang and reads unhealthy by design. A failure
+      // here follows the same bounded-retry policy as the end-of-cycle refresh.
+      await refreshLiveness();
+      const summary = await runGradingCronCycle({
+        cycle,
+        repositories: options.repositories,
+        runPass,
+        retryState,
+        ...(options.logger ? { logger: options.logger } : {}),
+      });
 
-    if (summary.error) {
-      options.logger?.error?.(summary.error);
-    } else if (summary.result) {
-      options.logger?.info?.(
-        `Grading cron cycle ${cycle} completed: attempted=${summary.result.attempted} graded=${summary.result.graded} skipped=${summary.result.skipped} errors=${summary.result.errors}`,
+      if (summary.error) {
+        // A failed grading pass persists a grading.run row with outcome
+        // 'failed' before it throws. Evaluate it now: the throw skips the
+        // normal evaluator below, and a later no-work cycle would not reopen it.
+        try {
+          const failedRuns = await options.repositories.runs.listByType(
+            'grading.run',
+            20,
+          );
+          emitHealthTransition(evaluateGradingHealthAlertTransition(failedRuns));
+          healthEvaluationPending = false;
+        } catch {
+          healthEvaluationPending = true;
+        }
+        throw new Error(summary.error);
+      } else if (summary.result) {
+        options.logger?.info?.(
+          `Grading cron cycle ${cycle} completed: attempted=${summary.result.attempted} graded=${summary.result.graded} skipped=${summary.result.skipped} errors=${summary.result.errors}`,
+        );
+      }
+
+      // Write heartbeat so external monitoring can detect gaps
+      const heartbeatRun = await options.repositories.runs.startRun({
+        runType: 'grading.cron.heartbeat',
+        details: { cycle },
+      });
+      await options.repositories.runs.completeRun({
+        runId: heartbeatRun.id,
+        status: 'succeeded',
+        details: { cycle },
+      });
+
+      // Staleness check: warn if grading.run gap exceeds threshold
+      const recentRuns = await options.repositories.runs.listByType(
+        'grading.run',
+        20,
       );
-    }
-
-    // Write heartbeat so external monitoring can detect gaps
-    const heartbeatRun = await options.repositories.runs.startRun({
-      runType: 'grading.cron.heartbeat',
-      details: { cycle },
-    });
-    await options.repositories.runs.completeRun({
-      runId: heartbeatRun.id,
-      status: 'succeeded',
-      details: { cycle },
-    });
-
-    // Staleness check: warn if grading.run gap exceeds threshold
-    const recentRuns = await options.repositories.runs.listByType('grading.run', 20);
-    if (recentRuns.length > 0) {
-      const lastRunAt = new Date(recentRuns[0]!.created_at).getTime();
-      const gapMs = Date.now() - lastRunAt;
-      if (gapMs > GRADING_STALE_WARN_MS && !runGapAlertOpen) {
-        runGapAlertOpen = true;
-        const stalenessMsg = `[grading-cron] STALENESS WARNING: ${Math.round(gapMs / 60000)}m since last grading.run — picks may be accumulating ungraded`;
-        options.logger?.error?.(stalenessMsg);
-        if (options.onStalenessAlert) {
-          void options.onStalenessAlert(stalenessMsg).catch(() => {/* fire-and-forget */});
-        }
-      } else if (gapMs <= GRADING_STALE_WARN_MS && runGapAlertOpen) {
-        runGapAlertOpen = false;
-        const clearMessage = '[grading-cron] RECOVERY: grading.run recency returned within threshold';
-        options.logger?.info?.(clearMessage);
-        if (options.onStalenessAlert) {
-          void options.onStalenessAlert(clearMessage).catch(() => {/* fire-and-forget */});
+      if (recentRuns.length > 0) {
+        const lastRunAt = new Date(recentRuns[0]!.created_at).getTime();
+        const gapMs = Date.now() - lastRunAt;
+        if (gapMs > GRADING_STALE_WARN_MS && !runGapAlertOpen) {
+          runGapAlertOpen = true;
+          const stalenessMsg = `[grading-cron] STALENESS WARNING: ${Math.round(gapMs / 60000)}m since last grading.run — picks may be accumulating ungraded`;
+          options.logger?.error?.(stalenessMsg);
+          if (options.onStalenessAlert) {
+            void options.onStalenessAlert(stalenessMsg).catch(() => {
+              /* fire-and-forget */
+            });
+          }
+        } else if (gapMs <= GRADING_STALE_WARN_MS && runGapAlertOpen) {
+          runGapAlertOpen = false;
+          const clearMessage =
+            '[grading-cron] RECOVERY: grading.run recency returned within threshold';
+          options.logger?.info?.(clearMessage);
+          if (options.onStalenessAlert) {
+            void options.onStalenessAlert(clearMessage).catch(() => {
+              /* fire-and-forget */
+            });
+          }
         }
       }
-    }
 
-    const outcomeTransition = evaluateGradingHealthAlertTransition(recentRuns);
-    if (outcomeTransition) {
-      if (outcomeTransition.kind === 'open') {
-        options.logger?.error?.(outcomeTransition.message);
-      } else {
-        options.logger?.info?.(outcomeTransition.message);
-      }
-      if (options.onStalenessAlert) {
-        void options.onStalenessAlert(outcomeTransition.message).catch(() => {/* fire-and-forget */});
-      }
-    }
+      const evaluatedRuns = healthEvaluationPending
+        ? dropLeadingNonDecisiveRuns(recentRuns)
+        : recentRuns;
+      emitHealthTransition(evaluateGradingHealthAlertTransition(evaluatedRuns));
+      healthEvaluationPending = false;
 
+      await refreshLiveness();
+      consecutiveFailures = 0;
+    } catch (error) {
+      consecutiveFailures += 1;
+      const exhausted = consecutiveFailures >= failureBudget;
+      const event = exhausted
+        ? 'grading.cron.failure_budget_exhausted'
+        : 'grading.cron.cycle_failed';
+      const message = `${event}: cycle=${cycle} consecutive_failures=${consecutiveFailures} budget=${failureBudget} error=${error instanceof Error ? error.message : String(error)}`;
+      (options.logger ?? console).error(message);
+      if (exhausted) {
+        // Give the existing ops path a bounded opportunity to deliver before exit.
+        if (options.onStalenessAlert) {
+          let timeout: ReturnType<typeof setTimeout> | undefined;
+          try {
+            await Promise.race([
+              Promise.resolve().then(() => options.onStalenessAlert!(message)),
+              new Promise<void>((resolve) => {
+                timeout = setTimeout(resolve, 5_000);
+              }),
+            ]);
+          } catch (alertError) {
+            (options.logger ?? console).error(
+              'grading.cron.alert_failed',
+              alertError,
+            );
+          } finally {
+            clearTimeout(timeout);
+          }
+        }
+        throw new Error(message, { cause: error });
+      }
+      await sleep(
+        Math.min(
+          retryMaxMs,
+          retryBaseMs * 2 ** Math.min(consecutiveFailures - 1, 30),
+        ),
+      );
+      continue;
+    }
     await sleep(pollIntervalMs);
+  }
+}
+
+/** Convert a rejected loop into an immediate exit, even with other live handles. */
+export async function runGradingCronEntrypoint(
+  run: () => Promise<void>,
+  exit: (code: number) => void = (code) => process.exit(code),
+  logger: Pick<Console, 'error'> = console,
+): Promise<void> {
+  try {
+    await run();
+  } catch (error) {
+    logger.error('grading.cron.terminated', error);
+    exit(1);
   }
 }
 
@@ -170,6 +292,20 @@ function readOutcomeClass(run: SystemRunRecord | undefined): string | null {
   }
   const outcomeClass = (details as Record<string, unknown>)['outcome_class'];
   return typeof outcomeClass === 'string' ? outcomeClass : null;
+}
+
+function dropLeadingNonDecisiveRuns(
+  runs: readonly SystemRunRecord[],
+): readonly SystemRunRecord[] {
+  const index = runs.findIndex((run) => {
+    const outcome = readOutcomeClass(run);
+    return (
+      outcome === 'succeeded_with_work' ||
+      outcome === 'degraded_stale_input' ||
+      outcome === 'failed'
+    );
+  });
+  return index < 0 ? [] : runs.slice(index);
 }
 
 /**
@@ -329,30 +465,20 @@ async function postOpsAlert(webhookUrl: string, message: string): Promise<void> 
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const runtime = createGradingCronRuntimeDependencies();
-  const opsAlertWebhookUrl = process.env['UNIT_TALK_OPS_ALERT_WEBHOOK_URL']?.trim() || undefined;
+  const opsAlertWebhookUrl =
+    process.env['UNIT_TALK_OPS_ALERT_WEBHOOK_URL']?.trim() || undefined;
 
   if (runtime.autorun) {
-    void startGradingCronLoop({
-      repositories: runtime.repositories,
-      pollIntervalMs: runtime.pollIntervalMs,
-      logger: console,
-      ...(opsAlertWebhookUrl
-        ? { onStalenessAlert: (msg) => postOpsAlert(opsAlertWebhookUrl, msg) }
-        : {}),
-    }).catch((error: unknown) => {
-      console.error(
-        JSON.stringify(
-          {
-            ...createGradingCronRuntimeSummary(),
-            status: 'error',
-            error: error instanceof Error ? error.message : 'unknown grading cron error',
-          },
-          null,
-          2,
-        ),
-      );
-      process.exitCode = 1;
-    });
+    void runGradingCronEntrypoint(() =>
+      startGradingCronLoop({
+        repositories: runtime.repositories,
+        pollIntervalMs: runtime.pollIntervalMs,
+        logger: console,
+        ...(opsAlertWebhookUrl
+          ? { onStalenessAlert: (msg) => postOpsAlert(opsAlertWebhookUrl, msg) }
+          : {}),
+      }),
+    );
   } else {
     console.log(JSON.stringify(createGradingCronRuntimeSummary(), null, 2));
   }

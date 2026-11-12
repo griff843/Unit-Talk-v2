@@ -1,0 +1,20 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102306",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "eec005c9d07ae9da2f122dc8315e3002eaf90abc",
+    "verified_source_sha": "a13133f11b90c9a214c2718661d813bd2f75342e",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-25T19:51:42.005Z"
+  },
+  "static_proof": {
+    "status": "not_run",
+    "note": "Populate with measured gate results before review; proof-generate does not execute verification."
+  }
+}

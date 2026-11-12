@@ -1,0 +1,2429 @@
+{
+  "capturedAt": "2026-10-10T16:25:41.983981+00:00",
+  "season": 2026,
+  "academicYear": 2027,
+  "sources": [
+    {
+      "url": "https://web3.ncaa.org/directory/api/directory/memberList?division=I-FBS&sportCode=MFB&type=12",
+      "sha256": "7a54773b2982b050a3141e10f14bc3cc7f8c574041e5f08afe07a3438187864c",
+      "count": 138
+    },
+    {
+      "url": "https://web3.ncaa.org/directory/api/directory/memberList?division=I-FCS&sportCode=MFB&type=12",
+      "sha256": "db5087dc6f788b09ff0d861764fe359ce88646a271d3cbca6a84f73c443d3e54",
+      "count": 128
+    }
+  ],
+  "reconciliation": {
+    "standingsMatched": 264,
+    "membershipOnly": [
+      470,
+      11740
+    ],
+    "excludedStandingsOnly": [
+      "Saint Francis"
+    ],
+    "reason": "Current NCAA membership controls; official school announcements confirm New Haven and West Florida FCS membership and Saint Francis Division III transition.",
+    "sources": [
+      "https://newhavenchargers.com/news/2025/5/6/general-charging-ahead-university-of-new-haven-accepts-northeast-conference-membership-invite.aspx",
+      "https://goargos.com/news/2026/5/21/uwf-announces-first-fcs-football-schedule-opens-season-ticket-renewals.aspx?path=general",
+      "https://www.francis.edu/D3TransitionFAQ"
+    ]
+  },
+  "participants": [
+    {
+      "id": "e6c79bd3-540a-565a-9f18-8d5d24447e21",
+      "externalId": "unit-talk:ncaaf:ncaa:5",
+      "displayName": "University of Akron",
+      "ncaaOrgId": 5,
+      "subdivision": "FBS",
+      "abbreviation": "Akron",
+      "institutionConference": "Mid-American Conference"
+    },
+    {
+      "id": "91272167-98b5-58d1-9f0e-3f3f89a3a16a",
+      "externalId": "unit-talk:ncaaf:ncaa:8",
+      "displayName": "University of Alabama",
+      "ncaaOrgId": 8,
+      "subdivision": "FBS",
+      "abbreviation": "Alabama",
+      "institutionConference": "Southeastern Conference"
+    },
+    {
+      "id": "1bcbdb81-122a-5740-bf81-8d86c792047f",
+      "externalId": "unit-talk:ncaaf:ncaa:9",
+      "displayName": "University of Alabama at Birmingham",
+      "ncaaOrgId": 9,
+      "subdivision": "FBS",
+      "abbreviation": "UAB",
+      "institutionConference": "American Conference"
+    },
+    {
+      "id": "2654cbdf-4b60-5cca-8347-1895eb9f99b4",
+      "externalId": "unit-talk:ncaaf:ncaa:27",
+      "displayName": "Appalachian State University",
+      "ncaaOrgId": 27,
+      "subdivision": "FBS",
+      "abbreviation": "App State",
+      "institutionConference": "Sun Belt Conference"
+    },
+    {
+      "id": "74464714-3cd4-5081-adbf-0b5779621248",
+      "externalId": "unit-talk:ncaaf:ncaa:29",
+      "displayName": "University of Arizona",
+      "ncaaOrgId": 29,
+      "subdivision": "FBS",
+      "abbreviation": "Arizona",
+      "institutionConference": "Big 12 Conference"
+    },
+    {
+      "id": "3c009d5a-12e9-5715-99ae-1c916c98f20b",
+      "externalId": "unit-talk:ncaaf:ncaa:28",
+      "displayName": "Arizona State University",
+      "ncaaOrgId": 28,
+      "subdivision": "FBS",
+      "abbreviation": "Arizona St.",
+      "institutionConference": "Big 12 Conference"
+    },
+    {
+      "id": "b5b6ad76-1f8c-56b8-993b-62a75806a8bd",
+      "externalId": "unit-talk:ncaaf:ncaa:30",
+      "displayName": "Arkansas State University",
+      "ncaaOrgId": 30,
+      "subdivision": "FBS",
+      "abbreviation": "Arkansas St.",
+      "institutionConference": "Sun Belt Conference"
+    },
+    {
+      "id": "d7fdc9a0-a5e4-58e7-aeae-3ccc9815d168",
+      "externalId": "unit-talk:ncaaf:ncaa:31",
+      "displayName": "University of Arkansas, Fayetteville",
+      "ncaaOrgId": 31,
+      "subdivision": "FBS",
+      "abbreviation": "Arkansas",
+      "institutionConference": "Southeastern Conference"
+    },
+    {
+      "id": "c963b63c-a0fb-5663-b4e2-582fa40ccae4",
+      "externalId": "unit-talk:ncaaf:ncaa:37",
+      "displayName": "Auburn University",
+      "ncaaOrgId": 37,
+      "subdivision": "FBS",
+      "abbreviation": "Auburn",
+      "institutionConference": "Southeastern Conference"
+    },
+    {
+      "id": "55fa81e3-70e4-59e4-bac6-f36355984834",
+      "externalId": "unit-talk:ncaaf:ncaa:47",
+      "displayName": "Ball State University",
+      "ncaaOrgId": 47,
+      "subdivision": "FBS",
+      "abbreviation": "Ball St.",
+      "institutionConference": "Mid-American Conference"
+    },
+    {
+      "id": "a2303793-851f-554f-b6ae-516f30e1101f",
+      "externalId": "unit-talk:ncaaf:ncaa:51",
+      "displayName": "Baylor University",
+      "ncaaOrgId": 51,
+      "subdivision": "FBS",
+      "abbreviation": "Baylor",
+      "institutionConference": "Big 12 Conference"
+    },
+    {
+      "id": "f70fa3b1-18be-5086-b7cd-1f28a54d5766",
+      "externalId": "unit-talk:ncaaf:ncaa:66",
+      "displayName": "Boise State University",
+      "ncaaOrgId": 66,
+      "subdivision": "FBS",
+      "abbreviation": "Boise St.",
+      "institutionConference": "Pac-12 Conference"
+    },
+    {
+      "id": "08d4dba6-3aab-5933-93ac-004af9996299",
+      "externalId": "unit-talk:ncaaf:ncaa:67",
+      "displayName": "Boston College",
+      "ncaaOrgId": 67,
+      "subdivision": "FBS",
+      "abbreviation": "Boston College",
+      "institutionConference": "Atlantic Coast Conference"
+    },
+    {
+      "id": "7d8b8603-0922-56a9-a250-d3e357afe343",
+      "externalId": "unit-talk:ncaaf:ncaa:71",
+      "displayName": "Bowling Green State University",
+      "ncaaOrgId": 71,
+      "subdivision": "FBS",
+      "abbreviation": "Bowling Green",
+      "institutionConference": "Mid-American Conference"
+    },
+    {
+      "id": "44e89161-ecd7-5d76-b1f8-b93abbf22a0c",
+      "externalId": "unit-talk:ncaaf:ncaa:77",
+      "displayName": "Brigham Young University",
+      "ncaaOrgId": 77,
+      "subdivision": "FBS",
+      "abbreviation": "BYU",
+      "institutionConference": "Big 12 Conference"
+    },
+    {
+      "id": "c0991978-a38a-5c7f-8fde-2b8c098eeee5",
+      "externalId": "unit-talk:ncaaf:ncaa:86",
+      "displayName": "University at Buffalo, the State University of New York",
+      "ncaaOrgId": 86,
+      "subdivision": "FBS",
+      "abbreviation": "Buffalo",
+      "institutionConference": "Mid-American Conference"
+    },
+    {
+      "id": "a44c3d67-420c-5797-a6a0-0d5e85854601",
+      "externalId": "unit-talk:ncaaf:ncaa:96",
+      "displayName": "California State University, Fresno",
+      "ncaaOrgId": 96,
+      "subdivision": "FBS",
+      "abbreviation": "Fresno St.",
+      "institutionConference": "Pac-12 Conference"
+    },
+    {
+      "id": "aa489306-151f-55b9-9b25-d1ded150eb72",
+      "externalId": "unit-talk:ncaaf:ncaa:102",
+      "displayName": "California State University, Sacramento",
+      "ncaaOrgId": 102,
+      "subdivision": "FBS",
+      "abbreviation": "Sacramento St.",
+      "institutionConference": "Mid-American Conference"
+    },
+    {
+      "id": "726b17a3-a8c4-5ad5-bad1-dd6162f35c3b",
+      "externalId": "unit-talk:ncaaf:ncaa:107",
+      "displayName": "University of California, Berkeley",
+      "ncaaOrgId": 107,
+      "subdivision": "FBS",
+      "abbreviation": "California",
+      "institutionConference": "Atlantic Coast Conference"
+    },
+    {
+      "id": "2ada0966-3e2a-5d85-9ab1-9c66e5260f2f",
+      "externalId": "unit-talk:ncaaf:ncaa:110",
+      "displayName": "University of California, Los Angeles",
+      "ncaaOrgId": 110,
+      "subdivision": "FBS",
+      "abbreviation": "UCLA",
+      "institutionConference": "Big Ten Conference"
+    },
+    {
+      "id": "4407dc61-085d-59d7-99fe-90a7cb499dd1",
+      "externalId": "unit-talk:ncaaf:ncaa:128",
+      "displayName": "University of Central Florida",
+      "ncaaOrgId": 128,
+      "subdivision": "FBS",
+      "abbreviation": "UCF",
+      "institutionConference": "Big 12 Conference"
+    },
+    {
+      "id": "55e25c8a-b596-5bde-9b58-939f69dcdf4f",
+      "externalId": "unit-talk:ncaaf:ncaa:129",
+      "displayName": "Central Michigan University",
+      "ncaaOrgId": 129,
+      "subdivision": "FBS",
+      "abbreviation": "Central Mich.",
+      "institutionConference": "Mid-American Conference"
+    },
+    {
+      "id": "880f25ed-b665-5c00-8665-53c229b6b178",
+      "externalId": "unit-talk:ncaaf:ncaa:140",
+      "displayName": "University of Cincinnati",
+      "ncaaOrgId": 140,
+      "subdivision": "FBS",
+      "abbreviation": "Cincinnati",
+      "institutionConference": "Big 12 Conference"
+    },
+    {
+      "id": "509cadec-12ce-59cd-8a6c-7772bf69bfe2",
+      "externalId": "unit-talk:ncaaf:ncaa:147",
+      "displayName": "Clemson University",
+      "ncaaOrgId": 147,
+      "subdivision": "FBS",
+      "abbreviation": "Clemson",
+      "institutionConference": "Atlantic Coast Conference"
+    },
+    {
+      "id": "fa266d41-6bd0-5332-b95a-68e7d259651a",
+      "externalId": "unit-talk:ncaaf:ncaa:149",
+      "displayName": "Coastal Carolina University",
+      "ncaaOrgId": 149,
+      "subdivision": "FBS",
+      "abbreviation": "Coastal Carolina",
+      "institutionConference": "Sun Belt Conference"
+    },
+    {
+      "id": "3f7b05fb-28f5-586a-8013-9492d874ca31",
+      "externalId": "unit-talk:ncaaf:ncaa:157",
+      "displayName": "University of Colorado Boulder",
+      "ncaaOrgId": 157,
+      "subdivision": "FBS",
+      "abbreviation": "Colorado",
+      "institutionConference": "Big 12 Conference"
+    },
+    {
+      "id": "c54e71e6-9aaa-5481-b670-8f80e069a336",
+      "externalId": "unit-talk:ncaaf:ncaa:156",
+      "displayName": "Colorado State University",
+      "ncaaOrgId": 156,
+      "subdivision": "FBS",
+      "abbreviation": "Colorado St.",
+      "institutionConference": "Pac-12 Conference"
+    },
+    {
+      "id": "41e6356d-519b-53b2-82c8-8a84baee91b4",
+      "externalId": "unit-talk:ncaaf:ncaa:164",
+      "displayName": "University of Connecticut",
+      "ncaaOrgId": 164,
+      "subdivision": "FBS",
+      "abbreviation": "UConn",
+      "institutionConference": "Independent"
+    },
+    {
+      "id": "e7e1aed3-fc93-505d-8380-e5ab00d5faf7",
+      "externalId": "unit-talk:ncaaf:ncaa:180",
+      "displayName": "University of Delaware",
+      "ncaaOrgId": 180,
+      "subdivision": "FBS",
+      "abbreviation": "Delaware",
+      "institutionConference": "Conference USA"
+    },
+    {
+      "id": "d0f6ae15-2526-5444-8dee-42a97c1b416e",
+      "externalId": "unit-talk:ncaaf:ncaa:193",
+      "displayName": "Duke University",
+      "ncaaOrgId": 193,
+      "subdivision": "FBS",
+      "abbreviation": "Duke",
+      "institutionConference": "Atlantic Coast Conference"
+    },
+    {
+      "id": "45129ef9-d0de-5dc7-8ab0-29caadd9abb4",
+      "externalId": "unit-talk:ncaaf:ncaa:196",
+      "displayName": "East Carolina University",
+      "ncaaOrgId": 196,
+      "subdivision": "FBS",
+      "abbreviation": "East Carolina",
+      "institutionConference": "American Conference"
+    },
+    {
+      "id": "bfeeb13f-671e-51eb-8287-45bc352504dc",
+      "externalId": "unit-talk:ncaaf:ncaa:204",
+      "displayName": "Eastern Michigan University",
+      "ncaaOrgId": 204,
+      "subdivision": "FBS",
+      "abbreviation": "Eastern Mich.",
+      "institutionConference": "Mid-American Conference"
+    },
+    {
+      "id": "a2d28518-c831-5219-8e61-7d8ae28e4ec8",
+      "externalId": "unit-talk:ncaaf:ncaa:235",
+      "displayName": "University of Florida",
+      "ncaaOrgId": 235,
+      "subdivision": "FBS",
+      "abbreviation": "Florida",
+      "institutionConference": "Southeastern Conference"
+    },
+    {
+      "id": "bc1e7bdf-717c-57eb-8c1a-8a144cea4e3c",
+      "externalId": "unit-talk:ncaaf:ncaa:229",
+      "displayName": "Florida Atlantic University",
+      "ncaaOrgId": 229,
+      "subdivision": "FBS",
+      "abbreviation": "Fla. Atlantic",
+      "institutionConference": "American Conference"
+    },
+    {
+      "id": "75da7d1c-593f-5856-a40a-834eb2cd0e9f",
+      "externalId": "unit-talk:ncaaf:ncaa:231",
+      "displayName": "Florida International University",
+      "ncaaOrgId": 231,
+      "subdivision": "FBS",
+      "abbreviation": "FIU",
+      "institutionConference": "Conference USA"
+    },
+    {
+      "id": "c16995c2-15a4-55e6-8b49-02007d4ff52e",
+      "externalId": "unit-talk:ncaaf:ncaa:234",
+      "displayName": "Florida State University",
+      "ncaaOrgId": 234,
+      "subdivision": "FBS",
+      "abbreviation": "Florida St.",
+      "institutionConference": "Atlantic Coast Conference"
+    },
+    {
+      "id": "45cfb58c-1f7a-554a-ac06-4b4e706d9a00",
+      "externalId": "unit-talk:ncaaf:ncaa:257",
+      "displayName": "University of Georgia",
+      "ncaaOrgId": 257,
+      "subdivision": "FBS",
+      "abbreviation": "Georgia",
+      "institutionConference": "Southeastern Conference"
+    },
+    {
+      "id": "99de9216-511b-59ed-9978-d0e0c331fa6b",
+      "externalId": "unit-talk:ncaaf:ncaa:255",
+      "displayName": "Georgia Institute of Technology",
+      "ncaaOrgId": 255,
+      "subdivision": "FBS",
+      "abbreviation": "Georgia Tech",
+      "institutionConference": "Atlantic Coast Conference"
+    },
+    {
+      "id": "b5d25c91-c0ae-5974-8536-a78c04c118a3",
+      "externalId": "unit-talk:ncaaf:ncaa:253",
+      "displayName": "Georgia Southern University",
+      "ncaaOrgId": 253,
+      "subdivision": "FBS",
+      "abbreviation": "Ga. Southern",
+      "institutionConference": "Sun Belt Conference"
+    },
+    {
+      "id": "264018b7-dbc1-5f98-a1d9-2141c958a50e",
+      "externalId": "unit-talk:ncaaf:ncaa:254",
+      "displayName": "Georgia State University",
+      "ncaaOrgId": 254,
+      "subdivision": "FBS",
+      "abbreviation": "Georgia St.",
+      "institutionConference": "Sun Belt Conference"
+    },
+    {
+      "id": "1a4302a2-4915-5e71-9d23-8a5c62c12954",
+      "externalId": "unit-talk:ncaaf:ncaa:277",
+      "displayName": "University of Hawaii, Manoa",
+      "ncaaOrgId": 277,
+      "subdivision": "FBS",
+      "abbreviation": "Hawaii",
+      "institutionConference": "Mountain West Conference"
+    },
+    {
+      "id": "4d5e1cae-6ec5-5550-a2d5-8029f8ff4f28",
+      "externalId": "unit-talk:ncaaf:ncaa:288",
+      "displayName": "University of Houston",
+      "ncaaOrgId": 288,
+      "subdivision": "FBS",
+      "abbreviation": "Houston",
+      "institutionConference": "Big 12 Conference"
+    },
+    {
+      "id": "4d983da6-ec80-5ca3-b72a-03e0eae62199",
+      "externalId": "unit-talk:ncaaf:ncaa:301",
+      "displayName": "University of Illinois Urbana-Champaign",
+      "ncaaOrgId": 301,
+      "subdivision": "FBS",
+      "abbreviation": "Illinois",
+      "institutionConference": "Big Ten Conference"
+    },
+    {
+      "id": "c5fff69a-ba31-52b3-9432-77c27eb4a868",
+      "externalId": "unit-talk:ncaaf:ncaa:306",
+      "displayName": "Indiana University, Bloomington",
+      "ncaaOrgId": 306,
+      "subdivision": "FBS",
+      "abbreviation": "Indiana",
+      "institutionConference": "Big Ten Conference"
+    },
+    {
+      "id": "b47f6af9-b534-5947-bf6f-03c28ec39f5d",
+      "externalId": "unit-talk:ncaaf:ncaa:312",
+      "displayName": "University of Iowa",
+      "ncaaOrgId": 312,
+      "subdivision": "FBS",
+      "abbreviation": "Iowa",
+      "institutionConference": "Big Ten Conference"
+    },
+    {
+      "id": "bb8ec0ac-0d61-5622-873d-6af4d995bac9",
+      "externalId": "unit-talk:ncaaf:ncaa:311",
+      "displayName": "Iowa State University",
+      "ncaaOrgId": 311,
+      "subdivision": "FBS",
+      "abbreviation": "Iowa St.",
+      "institutionConference": "Big 12 Conference"
+    },
+    {
+      "id": "aed8b9c8-925d-5f54-9f60-494dcaae2e5a",
+      "externalId": "unit-talk:ncaaf:ncaa:315",
+      "displayName": "Jacksonville State University",
+      "ncaaOrgId": 315,
+      "subdivision": "FBS",
+      "abbreviation": "Jacksonville St.",
+      "institutionConference": "Conference USA"
+    },
+    {
+      "id": "eaf2f9ba-ebb0-5114-bfa4-a16a2e78461e",
+      "externalId": "unit-talk:ncaaf:ncaa:317",
+      "displayName": "James Madison University",
+      "ncaaOrgId": 317,
+      "subdivision": "FBS",
+      "abbreviation": "James Madison",
+      "institutionConference": "Sun Belt Conference"
+    },
+    {
+      "id": "c4bfdf71-4b5a-54ce-ba41-e09ceb09079f",
+      "externalId": "unit-talk:ncaaf:ncaa:328",
+      "displayName": "University of Kansas",
+      "ncaaOrgId": 328,
+      "subdivision": "FBS",
+      "abbreviation": "Kansas",
+      "institutionConference": "Big 12 Conference"
+    },
+    {
+      "id": "0d375092-a756-5c0a-82e2-e1780eff6a51",
+      "externalId": "unit-talk:ncaaf:ncaa:327",
+      "displayName": "Kansas State University",
+      "ncaaOrgId": 327,
+      "subdivision": "FBS",
+      "abbreviation": "Kansas St.",
+      "institutionConference": "Big 12 Conference"
+    },
+    {
+      "id": "7eeddb05-9772-5eeb-bfa9-151ee1c0efa9",
+      "externalId": "unit-talk:ncaaf:ncaa:1157",
+      "displayName": "Kennesaw State University",
+      "ncaaOrgId": 1157,
+      "subdivision": "FBS",
+      "abbreviation": "Kennesaw St.",
+      "institutionConference": "Conference USA"
+    },
+    {
+      "id": "1b40dbfc-e1b8-5936-bbe4-92128215f982",
+      "externalId": "unit-talk:ncaaf:ncaa:331",
+      "displayName": "Kent State University",
+      "ncaaOrgId": 331,
+      "subdivision": "FBS",
+      "abbreviation": "Kent St.",
+      "institutionConference": "Mid-American Conference"
+    },
+    {
+      "id": "0446fa41-3b55-5d8f-85a9-dd76d3839f10",
+      "externalId": "unit-talk:ncaaf:ncaa:334",
+      "displayName": "University of Kentucky",
+      "ncaaOrgId": 334,
+      "subdivision": "FBS",
+      "abbreviation": "Kentucky",
+      "institutionConference": "Southeastern Conference"
+    },
+    {
+      "id": "3d6da807-d36b-5163-b9fb-4c39cc574394",
+      "externalId": "unit-talk:ncaaf:ncaa:355",
+      "displayName": "Liberty University",
+      "ncaaOrgId": 355,
+      "subdivision": "FBS",
+      "abbreviation": "Liberty",
+      "institutionConference": "Conference USA"
+    },
+    {
+      "id": "3f292516-fbab-595a-a5b9-ff40bf28e63b",
+      "externalId": "unit-talk:ncaaf:ncaa:365",
+      "displayName": "Louisiana State University",
+      "ncaaOrgId": 365,
+      "subdivision": "FBS",
+      "abbreviation": "LSU",
+      "institutionConference": "Southeastern Conference"
+    },
+    {
+      "id": "8112379d-304f-5932-8eb0-0265e5222b37",
+      "externalId": "unit-talk:ncaaf:ncaa:366",
+      "displayName": "Louisiana Tech University",
+      "ncaaOrgId": 366,
+      "subdivision": "FBS",
+      "abbreviation": "Louisiana Tech",
+      "institutionConference": "Sun Belt Conference"
+    },
+    {
+      "id": "d90cfdc8-e50c-54a1-ae2b-49b6141d25f6",
+      "externalId": "unit-talk:ncaaf:ncaa:671",
+      "displayName": "University of Louisiana at Lafayette",
+      "ncaaOrgId": 671,
+      "subdivision": "FBS",
+      "abbreviation": "Louisiana",
+      "institutionConference": "Sun Belt Conference"
+    },
+    {
+      "id": "dddf13a9-64f0-56e8-8400-4d5825360797",
+      "externalId": "unit-talk:ncaaf:ncaa:498",
+      "displayName": "University of Louisiana Monroe",
+      "ncaaOrgId": 498,
+      "subdivision": "FBS",
+      "abbreviation": "ULM",
+      "institutionConference": "Sun Belt Conference"
+    },
+    {
+      "id": "ed62c38f-f484-54f5-b4de-e6618c24e562",
+      "externalId": "unit-talk:ncaaf:ncaa:367",
+      "displayName": "University of Louisville",
+      "ncaaOrgId": 367,
+      "subdivision": "FBS",
+      "abbreviation": "Louisville",
+      "institutionConference": "Atlantic Coast Conference"
+    },
+    {
+      "id": "08cfd214-1d49-571c-95ee-7da56beec063",
+      "externalId": "unit-talk:ncaaf:ncaa:388",
+      "displayName": "Marshall University",
+      "ncaaOrgId": 388,
+      "subdivision": "FBS",
+      "abbreviation": "Marshall",
+      "institutionConference": "Sun Belt Conference"
+    },
+    {
+      "id": "c8286f79-494c-5508-9525-52044d25fdfe",
+      "externalId": "unit-talk:ncaaf:ncaa:392",
+      "displayName": "University of Maryland, College Park",
+      "ncaaOrgId": 392,
+      "subdivision": "FBS",
+      "abbreviation": "Maryland",
+      "institutionConference": "Big Ten Conference"
+    },
+    {
+      "id": "a6d90d83-2f9b-56e2-8062-250eabea5727",
+      "externalId": "unit-talk:ncaaf:ncaa:400",
+      "displayName": "University of Massachusetts, Amherst",
+      "ncaaOrgId": 400,
+      "subdivision": "FBS",
+      "abbreviation": "Massachusetts",
+      "institutionConference": "Mid-American Conference"
+    },
+    {
+      "id": "281fc969-756d-5b0f-8e08-cc9cec8d8428",
+      "externalId": "unit-talk:ncaaf:ncaa:404",
+      "displayName": "University of Memphis",
+      "ncaaOrgId": 404,
+      "subdivision": "FBS",
+      "abbreviation": "Memphis",
+      "institutionConference": "American Conference"
+    },
+    {
+      "id": "8fb141c4-877e-5802-bfee-fcb6e295723f",
+      "externalId": "unit-talk:ncaaf:ncaa:415",
+      "displayName": "University of Miami (Florida)",
+      "ncaaOrgId": 415,
+      "subdivision": "FBS",
+      "abbreviation": "Miami (FL)",
+      "institutionConference": "Atlantic Coast Conference"
+    },
+    {
+      "id": "86ce7861-6c77-5776-aa61-e58987db1624",
+      "externalId": "unit-talk:ncaaf:ncaa:414",
+      "displayName": "Miami University (Ohio)",
+      "ncaaOrgId": 414,
+      "subdivision": "FBS",
+      "abbreviation": "Miami (OH)",
+      "institutionConference": "Mid-American Conference"
+    },
+    {
+      "id": "07e6e607-69ce-5390-83d2-42f5c5b96823",
+      "externalId": "unit-talk:ncaaf:ncaa:418",
+      "displayName": "University of Michigan",
+      "ncaaOrgId": 418,
+      "subdivision": "FBS",
+      "abbreviation": "Michigan",
+      "institutionConference": "Big Ten Conference"
+    },
+    {
+      "id": "c142bf2b-a852-5ac2-8b21-8a6305130b3a",
+      "externalId": "unit-talk:ncaaf:ncaa:416",
+      "displayName": "Michigan State University",
+      "ncaaOrgId": 416,
+      "subdivision": "FBS",
+      "abbreviation": "Michigan St.",
+      "institutionConference": "Big Ten Conference"
+    },
+    {
+      "id": "f2d92eec-96b9-5951-808b-31f90f501fd1",
+      "externalId": "unit-talk:ncaaf:ncaa:419",
+      "displayName": "Middle Tennessee State University",
+      "ncaaOrgId": 419,
+      "subdivision": "FBS",
+      "abbreviation": "Middle Tenn.",
+      "institutionConference": "Conference USA"
+    },
+    {
+      "id": "221b5786-0ae7-51d4-b51c-8b75a3dc0e37",
+      "externalId": "unit-talk:ncaaf:ncaa:428",
+      "displayName": "University of Minnesota, Twin Cities",
+      "ncaaOrgId": 428,
+      "subdivision": "FBS",
+      "abbreviation": "Minnesota",
+      "institutionConference": "Big Ten Conference"
+    },
+    {
+      "id": "bd36d467-e8ec-5d6c-b37c-7411a4063da9",
+      "externalId": "unit-talk:ncaaf:ncaa:433",
+      "displayName": "University of Mississippi",
+      "ncaaOrgId": 433,
+      "subdivision": "FBS",
+      "abbreviation": "Ole Miss",
+      "institutionConference": "Southeastern Conference"
+    },
+    {
+      "id": "7d7a5562-7576-54f8-9ec1-f2d8f0846c4a",
+      "externalId": "unit-talk:ncaaf:ncaa:430",
+      "displayName": "Mississippi State University",
+      "ncaaOrgId": 430,
+      "subdivision": "FBS",
+      "abbreviation": "Mississippi St.",
+      "institutionConference": "Southeastern Conference"
+    },
+    {
+      "id": "c3eec750-ff21-5c28-a73d-56b346e02532",
+      "externalId": "unit-talk:ncaaf:ncaa:669",
+      "displayName": "Missouri State University",
+      "ncaaOrgId": 669,
+      "subdivision": "FBS",
+      "abbreviation": "Missouri St.",
+      "institutionConference": "Conference USA"
+    },
+    {
+      "id": "628cf47a-33e2-5bec-9c62-c4148f71c043",
+      "externalId": "unit-talk:ncaaf:ncaa:434",
+      "displayName": "University of Missouri, Columbia",
+      "ncaaOrgId": 434,
+      "subdivision": "FBS",
+      "abbreviation": "Missouri",
+      "institutionConference": "Southeastern Conference"
+    },
+    {
+      "id": "ef6246a1-bd68-5882-842c-8ea05263fe4f",
+      "externalId": "unit-talk:ncaaf:ncaa:463",
+      "displayName": "University of Nebraska-Lincoln",
+      "ncaaOrgId": 463,
+      "subdivision": "FBS",
+      "abbreviation": "Nebraska",
+      "institutionConference": "Big Ten Conference"
+    },
+    {
+      "id": "e9477f8d-82f9-5d22-a7c8-5b8073f28181",
+      "externalId": "unit-talk:ncaaf:ncaa:465",
+      "displayName": "University of Nevada, Las Vegas",
+      "ncaaOrgId": 465,
+      "subdivision": "FBS",
+      "abbreviation": "UNLV",
+      "institutionConference": "Mountain West Conference"
+    },
+    {
+      "id": "e217630c-f1b5-567b-90f9-bd41c7e8bc4b",
+      "externalId": "unit-talk:ncaaf:ncaa:466",
+      "displayName": "University of Nevada, Reno",
+      "ncaaOrgId": 466,
+      "subdivision": "FBS",
+      "abbreviation": "Nevada",
+      "institutionConference": "Mountain West Conference"
+    },
+    {
+      "id": "38292bcc-f5e3-5363-996c-d8ff57897641",
+      "externalId": "unit-talk:ncaaf:ncaa:473",
+      "displayName": "University of New Mexico",
+      "ncaaOrgId": 473,
+      "subdivision": "FBS",
+      "abbreviation": "New Mexico",
+      "institutionConference": "Mountain West Conference"
+    },
+    {
+      "id": "f2e4dccf-ef99-5605-8db7-40cad9b54c52",
+      "externalId": "unit-talk:ncaaf:ncaa:472",
+      "displayName": "New Mexico State University",
+      "ncaaOrgId": 472,
+      "subdivision": "FBS",
+      "abbreviation": "New Mexico St.",
+      "institutionConference": "Conference USA"
+    },
+    {
+      "id": "fb3b4e83-efce-5fcc-99ae-0cf222d4a516",
+      "externalId": "unit-talk:ncaaf:ncaa:490",
+      "displayName": "North Carolina State University",
+      "ncaaOrgId": 490,
+      "subdivision": "FBS",
+      "abbreviation": "NC State",
+      "institutionConference": "Atlantic Coast Conference"
+    },
+    {
+      "id": "d76b1911-6afb-5d9b-b138-8f7fe6271716",
+      "externalId": "unit-talk:ncaaf:ncaa:457",
+      "displayName": "University of North Carolina, Chapel Hill",
+      "ncaaOrgId": 457,
+      "subdivision": "FBS",
+      "abbreviation": "North Carolina",
+      "institutionConference": "Atlantic Coast Conference"
+    },
+    {
+      "id": "6f0011aa-7e47-54a3-8f3e-2e4479e6400f",
+      "externalId": "unit-talk:ncaaf:ncaa:458",
+      "displayName": "The University of North Carolina at Charlotte",
+      "ncaaOrgId": 458,
+      "subdivision": "FBS",
+      "abbreviation": "Charlotte",
+      "institutionConference": "American Conference"
+    },
+    {
+      "id": "1643029c-2412-5289-bcd6-5f81b73d3c48",
+      "externalId": "unit-talk:ncaaf:ncaa:493",
+      "displayName": "North Dakota State University",
+      "ncaaOrgId": 493,
+      "subdivision": "FBS",
+      "abbreviation": "North Dakota St.",
+      "institutionConference": "Mountain West Conference"
+    },
+    {
+      "id": "4904853a-02e7-5ba3-9bb3-3ce36097f0cf",
+      "externalId": "unit-talk:ncaaf:ncaa:497",
+      "displayName": "University of North Texas",
+      "ncaaOrgId": 497,
+      "subdivision": "FBS",
+      "abbreviation": "North Texas",
+      "institutionConference": "American Conference"
+    },
+    {
+      "id": "6db644d4-bca7-5bfb-86f3-8d41d395948a",
+      "externalId": "unit-talk:ncaaf:ncaa:503",
+      "displayName": "Northern Illinois University",
+      "ncaaOrgId": 503,
+      "subdivision": "FBS",
+      "abbreviation": "NIU",
+      "institutionConference": "Mountain West Conference"
+    },
+    {
+      "id": "a718a69b-97f3-5c97-b5c2-72b0c4a83f28",
+      "externalId": "unit-talk:ncaaf:ncaa:509",
+      "displayName": "Northwestern University",
+      "ncaaOrgId": 509,
+      "subdivision": "FBS",
+      "abbreviation": "Northwestern",
+      "institutionConference": "Big Ten Conference"
+    },
+    {
+      "id": "ebf184f7-413f-5017-95f0-3d40bb939402",
+      "externalId": "unit-talk:ncaaf:ncaa:513",
+      "displayName": "University of Notre Dame",
+      "ncaaOrgId": 513,
+      "subdivision": "FBS",
+      "abbreviation": "Notre Dame",
+      "institutionConference": "Independent"
+    },
+    {
+      "id": "bd05ae0a-ea95-5eaa-9761-28475ef83da2",
+      "externalId": "unit-talk:ncaaf:ncaa:518",
+      "displayName": "The Ohio State University",
+      "ncaaOrgId": 518,
+      "subdivision": "FBS",
+      "abbreviation": "Ohio St.",
+      "institutionConference": "Big Ten Conference"
+    },
+    {
+      "id": "e8b6cd25-be1c-56f0-ad3a-5a7dd549d01c",
+      "externalId": "unit-talk:ncaaf:ncaa:519",
+      "displayName": "Ohio University",
+      "ncaaOrgId": 519,
+      "subdivision": "FBS",
+      "abbreviation": "Ohio",
+      "institutionConference": "Mid-American Conference"
+    },
+    {
+      "id": "652c7ab5-927f-53f4-9aeb-b128c301cd3d",
+      "externalId": "unit-talk:ncaaf:ncaa:522",
+      "displayName": "University of Oklahoma",
+      "ncaaOrgId": 522,
+      "subdivision": "FBS",
+      "abbreviation": "Oklahoma",
+      "institutionConference": "Southeastern Conference"
+    },
+    {
+      "id": "90f584fc-d897-52a1-ab37-daeb889138b6",
+      "externalId": "unit-talk:ncaaf:ncaa:521",
+      "displayName": "Oklahoma State University",
+      "ncaaOrgId": 521,
+      "subdivision": "FBS",
+      "abbreviation": "Oklahoma St.",
+      "institutionConference": "Big 12 Conference"
+    },
+    {
+      "id": "5fe499a5-dcad-5ebf-ac8e-60d24b81cca1",
+      "externalId": "unit-talk:ncaaf:ncaa:523",
+      "displayName": "Old Dominion University",
+      "ncaaOrgId": 523,
+      "subdivision": "FBS",
+      "abbreviation": "Old Dominion",
+      "institutionConference": "Sun Belt Conference"
+    },
+    {
+      "id": "5103f224-7c3a-5911-a921-b678809af164",
+      "externalId": "unit-talk:ncaaf:ncaa:529",
+      "displayName": "University of Oregon",
+      "ncaaOrgId": 529,
+      "subdivision": "FBS",
+      "abbreviation": "Oregon",
+      "institutionConference": "Big Ten Conference"
+    },
+    {
+      "id": "089aadf4-adce-5ca0-b888-1cdb0451c76a",
+      "externalId": "unit-talk:ncaaf:ncaa:528",
+      "displayName": "Oregon State University",
+      "ncaaOrgId": 528,
+      "subdivision": "FBS",
+      "abbreviation": "Oregon St.",
+      "institutionConference": "Pac-12 Conference"
+    },
+    {
+      "id": "ba98d702-6a0f-54de-9344-f23ecfb9c30d",
+      "externalId": "unit-talk:ncaaf:ncaa:539",
+      "displayName": "Pennsylvania State University",
+      "ncaaOrgId": 539,
+      "subdivision": "FBS",
+      "abbreviation": "Penn St.",
+      "institutionConference": "Big Ten Conference"
+    },
+    {
+      "id": "86c48938-3f05-52bb-8d01-97fcc19f2fb8",
+      "externalId": "unit-talk:ncaaf:ncaa:545",
+      "displayName": "University of Pittsburgh",
+      "ncaaOrgId": 545,
+      "subdivision": "FBS",
+      "abbreviation": "Pittsburgh",
+      "institutionConference": "Atlantic Coast Conference"
+    },
+    {
+      "id": "b0fdf7da-5dc3-571d-9fd2-9f08caea3aee",
+      "externalId": "unit-talk:ncaaf:ncaa:559",
+      "displayName": "Purdue University",
+      "ncaaOrgId": 559,
+      "subdivision": "FBS",
+      "abbreviation": "Purdue",
+      "institutionConference": "Big Ten Conference"
+    },
+    {
+      "id": "8c869336-88de-5ceb-9673-b9dcb2752f4d",
+      "externalId": "unit-talk:ncaaf:ncaa:574",
+      "displayName": "Rice University",
+      "ncaaOrgId": 574,
+      "subdivision": "FBS",
+      "abbreviation": "Rice",
+      "institutionConference": "American Conference"
+    },
+    {
+      "id": "ec153105-5c27-5553-8cd7-bf0c4f165835",
+      "externalId": "unit-talk:ncaaf:ncaa:587",
+      "displayName": "Rutgers, The State University of New Jersey, New Brunswick",
+      "ncaaOrgId": 587,
+      "subdivision": "FBS",
+      "abbreviation": "Rutgers",
+      "institutionConference": "Big Ten Conference"
+    },
+    {
+      "id": "eeed093c-6e58-5406-9f5d-42c61d57988e",
+      "externalId": "unit-talk:ncaaf:ncaa:624",
+      "displayName": "Sam Houston State University",
+      "ncaaOrgId": 624,
+      "subdivision": "FBS",
+      "abbreviation": "Sam Houston",
+      "institutionConference": "Conference USA"
+    },
+    {
+      "id": "a1c287db-7150-5dc6-af22-43353995c613",
+      "externalId": "unit-talk:ncaaf:ncaa:626",
+      "displayName": "San Diego State University",
+      "ncaaOrgId": 626,
+      "subdivision": "FBS",
+      "abbreviation": "San Diego St.",
+      "institutionConference": "Pac-12 Conference"
+    },
+    {
+      "id": "c3a76ab5-ed1d-52a4-a81e-a8cd81ddd59f",
+      "externalId": "unit-talk:ncaaf:ncaa:630",
+      "displayName": "San Jose State University",
+      "ncaaOrgId": 630,
+      "subdivision": "FBS",
+      "abbreviation": "San Jose St.",
+      "institutionConference": "Mountain West Conference"
+    },
+    {
+      "id": "8c2b3478-60b2-5f0a-87b2-b62efc92d589",
+      "externalId": "unit-talk:ncaaf:ncaa:646",
+      "displayName": "University of South Alabama",
+      "ncaaOrgId": 646,
+      "subdivision": "FBS",
+      "abbreviation": "South Alabama",
+      "institutionConference": "Sun Belt Conference"
+    },
+    {
+      "id": "f9fcc315-de6b-5416-8612-7168184c0a60",
+      "externalId": "unit-talk:ncaaf:ncaa:648",
+      "displayName": "University of South Carolina, Columbia",
+      "ncaaOrgId": 648,
+      "subdivision": "FBS",
+      "abbreviation": "South Carolina",
+      "institutionConference": "Southeastern Conference"
+    },
+    {
+      "id": "9c37b379-79b1-535d-b174-67e6a8c30c2d",
+      "externalId": "unit-talk:ncaaf:ncaa:651",
+      "displayName": "University of South Florida",
+      "ncaaOrgId": 651,
+      "subdivision": "FBS",
+      "abbreviation": "South Fla.",
+      "institutionConference": "American Conference"
+    },
+    {
+      "id": "ceb9f70e-88f9-5fbf-a823-46a79421c72e",
+      "externalId": "unit-talk:ncaaf:ncaa:657",
+      "displayName": "University of Southern California",
+      "ncaaOrgId": 657,
+      "subdivision": "FBS",
+      "abbreviation": "Southern California",
+      "institutionConference": "Big Ten Conference"
+    },
+    {
+      "id": "0c6f29a4-64c0-55c3-adc2-2a8388d49157",
+      "externalId": "unit-talk:ncaaf:ncaa:663",
+      "displayName": "Southern Methodist University",
+      "ncaaOrgId": 663,
+      "subdivision": "FBS",
+      "abbreviation": "SMU",
+      "institutionConference": "Atlantic Coast Conference"
+    },
+    {
+      "id": "07a1ff55-a29f-5c42-8348-884a1fcaa57a",
+      "externalId": "unit-talk:ncaaf:ncaa:664",
+      "displayName": "The University of Southern Mississippi",
+      "ncaaOrgId": 664,
+      "subdivision": "FBS",
+      "abbreviation": "Southern Miss.",
+      "institutionConference": "Sun Belt Conference"
+    },
+    {
+      "id": "2060f40f-3098-56af-a06a-0a125c284b37",
+      "externalId": "unit-talk:ncaaf:ncaa:674",
+      "displayName": "Stanford University",
+      "ncaaOrgId": 674,
+      "subdivision": "FBS",
+      "abbreviation": "Stanford",
+      "institutionConference": "Atlantic Coast Conference"
+    },
+    {
+      "id": "ebd3958b-1495-505f-8f5e-de639ac8e903",
+      "externalId": "unit-talk:ncaaf:ncaa:688",
+      "displayName": "Syracuse University",
+      "ncaaOrgId": 688,
+      "subdivision": "FBS",
+      "abbreviation": "Syracuse",
+      "institutionConference": "Atlantic Coast Conference"
+    },
+    {
+      "id": "0e8d3803-0b4e-5d1c-b1cb-c774e0d05cbc",
+      "externalId": "unit-talk:ncaaf:ncaa:690",
+      "displayName": "Temple University",
+      "ncaaOrgId": 690,
+      "subdivision": "FBS",
+      "abbreviation": "Temple",
+      "institutionConference": "American Conference"
+    },
+    {
+      "id": "20f36e35-000c-54ef-9bd8-c8681a36de21",
+      "externalId": "unit-talk:ncaaf:ncaa:694",
+      "displayName": "University of Tennessee, Knoxville",
+      "ncaaOrgId": 694,
+      "subdivision": "FBS",
+      "abbreviation": "Tennessee",
+      "institutionConference": "Southeastern Conference"
+    },
+    {
+      "id": "48a3e898-77c8-5e4e-9156-af8e85390914",
+      "externalId": "unit-talk:ncaaf:ncaa:697",
+      "displayName": "Texas A&M University, College Station",
+      "ncaaOrgId": 697,
+      "subdivision": "FBS",
+      "abbreviation": "Texas A&M",
+      "institutionConference": "Southeastern Conference"
+    },
+    {
+      "id": "3af9de6c-0ec7-5a24-8a5b-24e3bc3019aa",
+      "externalId": "unit-talk:ncaaf:ncaa:698",
+      "displayName": "Texas Christian University",
+      "ncaaOrgId": 698,
+      "subdivision": "FBS",
+      "abbreviation": "TCU",
+      "institutionConference": "Big 12 Conference"
+    },
+    {
+      "id": "d4c7e17b-7249-5d2c-928c-a3ba6d7a2642",
+      "externalId": "unit-talk:ncaaf:ncaa:670",
+      "displayName": "Texas State University",
+      "ncaaOrgId": 670,
+      "subdivision": "FBS",
+      "abbreviation": "Texas St.",
+      "institutionConference": "Pac-12 Conference"
+    },
+    {
+      "id": "eb814d98-4747-5a66-9a93-56abcf8dabf7",
+      "externalId": "unit-talk:ncaaf:ncaa:700",
+      "displayName": "Texas Tech University",
+      "ncaaOrgId": 700,
+      "subdivision": "FBS",
+      "abbreviation": "Texas Tech",
+      "institutionConference": "Big 12 Conference"
+    },
+    {
+      "id": "477b8a16-5461-5ea2-903d-a7f22ecc690a",
+      "externalId": "unit-talk:ncaaf:ncaa:703",
+      "displayName": "University of Texas at Austin",
+      "ncaaOrgId": 703,
+      "subdivision": "FBS",
+      "abbreviation": "Texas",
+      "institutionConference": "Southeastern Conference"
+    },
+    {
+      "id": "6c1577fc-8506-5597-83d0-cd66141fe87e",
+      "externalId": "unit-talk:ncaaf:ncaa:704",
+      "displayName": "University of Texas at El Paso",
+      "ncaaOrgId": 704,
+      "subdivision": "FBS",
+      "abbreviation": "UTEP",
+      "institutionConference": "Mountain West Conference"
+    },
+    {
+      "id": "c45e3316-58d6-5398-be57-4e457d7d2698",
+      "externalId": "unit-talk:ncaaf:ncaa:706",
+      "displayName": "University of Texas at San Antonio",
+      "ncaaOrgId": 706,
+      "subdivision": "FBS",
+      "abbreviation": "UTSA",
+      "institutionConference": "American Conference"
+    },
+    {
+      "id": "ea034379-d7f4-5a4d-80a9-99e49e26fe7a",
+      "externalId": "unit-talk:ncaaf:ncaa:709",
+      "displayName": "University of Toledo",
+      "ncaaOrgId": 709,
+      "subdivision": "FBS",
+      "abbreviation": "Toledo",
+      "institutionConference": "Mid-American Conference"
+    },
+    {
+      "id": "d3d513d0-6dd2-5eaf-8745-610b656db3bb",
+      "externalId": "unit-talk:ncaaf:ncaa:716",
+      "displayName": "Troy University",
+      "ncaaOrgId": 716,
+      "subdivision": "FBS",
+      "abbreviation": "Troy",
+      "institutionConference": "Sun Belt Conference"
+    },
+    {
+      "id": "61628aab-0cec-59a2-86b3-d33361f38121",
+      "externalId": "unit-talk:ncaaf:ncaa:718",
+      "displayName": "Tulane University",
+      "ncaaOrgId": 718,
+      "subdivision": "FBS",
+      "abbreviation": "Tulane",
+      "institutionConference": "American Conference"
+    },
+    {
+      "id": "b0a284bb-8c9b-520d-aff1-d905e8fe4516",
+      "externalId": "unit-talk:ncaaf:ncaa:719",
+      "displayName": "The University of Tulsa",
+      "ncaaOrgId": 719,
+      "subdivision": "FBS",
+      "abbreviation": "Tulsa",
+      "institutionConference": "American Conference"
+    },
+    {
+      "id": "7690de4d-8118-5d56-af1b-43c62be0e925",
+      "externalId": "unit-talk:ncaaf:ncaa:721",
+      "displayName": "U.S. Air Force Academy",
+      "ncaaOrgId": 721,
+      "subdivision": "FBS",
+      "abbreviation": "Air Force",
+      "institutionConference": "Mountain West Conference"
+    },
+    {
+      "id": "d7da0330-728b-5b46-b4a2-e7f9d5a22302",
+      "externalId": "unit-talk:ncaaf:ncaa:725",
+      "displayName": "U.S. Military Academy",
+      "ncaaOrgId": 725,
+      "subdivision": "FBS",
+      "abbreviation": "Army West Point",
+      "institutionConference": "American Conference"
+    },
+    {
+      "id": "7158d941-a48e-55d4-bcfa-0a80a133463f",
+      "externalId": "unit-talk:ncaaf:ncaa:726",
+      "displayName": "U.S. Naval Academy",
+      "ncaaOrgId": 726,
+      "subdivision": "FBS",
+      "abbreviation": "Navy",
+      "institutionConference": "American Conference"
+    },
+    {
+      "id": "a8fbe0a1-0a92-520b-a042-c089be9f7d46",
+      "externalId": "unit-talk:ncaaf:ncaa:732",
+      "displayName": "University of Utah",
+      "ncaaOrgId": 732,
+      "subdivision": "FBS",
+      "abbreviation": "Utah",
+      "institutionConference": "Big 12 Conference"
+    },
+    {
+      "id": "9494ec14-74cf-5fb8-aa43-2b967da37a3c",
+      "externalId": "unit-talk:ncaaf:ncaa:731",
+      "displayName": "Utah State University",
+      "ncaaOrgId": 731,
+      "subdivision": "FBS",
+      "abbreviation": "Utah St.",
+      "institutionConference": "Pac-12 Conference"
+    },
+    {
+      "id": "e8638a0a-38a7-5f6e-9da7-473e3a2802b8",
+      "externalId": "unit-talk:ncaaf:ncaa:736",
+      "displayName": "Vanderbilt University",
+      "ncaaOrgId": 736,
+      "subdivision": "FBS",
+      "abbreviation": "Vanderbilt",
+      "institutionConference": "Southeastern Conference"
+    },
+    {
+      "id": "3e9def6e-5699-5bdc-8343-60111090389b",
+      "externalId": "unit-talk:ncaaf:ncaa:746",
+      "displayName": "University of Virginia",
+      "ncaaOrgId": 746,
+      "subdivision": "FBS",
+      "abbreviation": "Virginia",
+      "institutionConference": "Atlantic Coast Conference"
+    },
+    {
+      "id": "604697f8-0a87-55c1-95a8-79f06d6cc579",
+      "externalId": "unit-talk:ncaaf:ncaa:742",
+      "displayName": "Virginia Polytechnic Institute and State University",
+      "ncaaOrgId": 742,
+      "subdivision": "FBS",
+      "abbreviation": "Virginia Tech",
+      "institutionConference": "Atlantic Coast Conference"
+    },
+    {
+      "id": "94fb32de-cf48-5d2f-9950-50aa3d338f0c",
+      "externalId": "unit-talk:ncaaf:ncaa:749",
+      "displayName": "Wake Forest University",
+      "ncaaOrgId": 749,
+      "subdivision": "FBS",
+      "abbreviation": "Wake Forest",
+      "institutionConference": "Atlantic Coast Conference"
+    },
+    {
+      "id": "d5ebb913-5238-5de8-a19a-61b30aa3bbd5",
+      "externalId": "unit-talk:ncaaf:ncaa:756",
+      "displayName": "University of Washington",
+      "ncaaOrgId": 756,
+      "subdivision": "FBS",
+      "abbreviation": "Washington",
+      "institutionConference": "Big Ten Conference"
+    },
+    {
+      "id": "a630310c-44ad-5f37-9d6d-a934fd70565c",
+      "externalId": "unit-talk:ncaaf:ncaa:754",
+      "displayName": "Washington State University",
+      "ncaaOrgId": 754,
+      "subdivision": "FBS",
+      "abbreviation": "Washington St.",
+      "institutionConference": "Pac-12 Conference"
+    },
+    {
+      "id": "d8a2a1cd-55ed-5282-8fe2-1681dadc70d2",
+      "externalId": "unit-talk:ncaaf:ncaa:768",
+      "displayName": "West Virginia University",
+      "ncaaOrgId": 768,
+      "subdivision": "FBS",
+      "abbreviation": "West Virginia",
+      "institutionConference": "Big 12 Conference"
+    },
+    {
+      "id": "e6588267-49e9-5f8d-92e5-9539dc99a4a0",
+      "externalId": "unit-talk:ncaaf:ncaa:772",
+      "displayName": "Western Kentucky University",
+      "ncaaOrgId": 772,
+      "subdivision": "FBS",
+      "abbreviation": "Western Ky.",
+      "institutionConference": "Conference USA"
+    },
+    {
+      "id": "2e267f0a-88da-5c36-9b8b-c6364e746773",
+      "externalId": "unit-talk:ncaaf:ncaa:774",
+      "displayName": "Western Michigan University",
+      "ncaaOrgId": 774,
+      "subdivision": "FBS",
+      "abbreviation": "Western Mich.",
+      "institutionConference": "Mid-American Conference"
+    },
+    {
+      "id": "b75bc57f-211d-571e-bbd9-d375b7536060",
+      "externalId": "unit-talk:ncaaf:ncaa:796",
+      "displayName": "University of Wisconsin-Madison",
+      "ncaaOrgId": 796,
+      "subdivision": "FBS",
+      "abbreviation": "Wisconsin",
+      "institutionConference": "Big Ten Conference"
+    },
+    {
+      "id": "d9ec74de-af8e-566f-9911-51739f882842",
+      "externalId": "unit-talk:ncaaf:ncaa:811",
+      "displayName": "University of Wyoming",
+      "ncaaOrgId": 811,
+      "subdivision": "FBS",
+      "abbreviation": "Wyoming",
+      "institutionConference": "Mountain West Conference"
+    },
+    {
+      "id": "f669fd3d-3154-55fc-b317-d3b78c60fb5c",
+      "externalId": "unit-talk:ncaaf:ncaa:2",
+      "displayName": "Abilene Christian University",
+      "ncaaOrgId": 2,
+      "subdivision": "FCS",
+      "abbreviation": "Abilene Christian",
+      "institutionConference": "United Athletic Conference "
+    },
+    {
+      "id": "eadb7074-8872-5d6d-8b02-d7f618dfd093",
+      "externalId": "unit-talk:ncaaf:ncaa:6",
+      "displayName": "Alabama A&M University",
+      "ncaaOrgId": 6,
+      "subdivision": "FCS",
+      "abbreviation": "Alabama A&M",
+      "institutionConference": "Southwestern Athletic Conf."
+    },
+    {
+      "id": "86b6506b-c10b-5d66-a139-aa3382820279",
+      "externalId": "unit-talk:ncaaf:ncaa:7",
+      "displayName": "Alabama State University",
+      "ncaaOrgId": 7,
+      "subdivision": "FCS",
+      "abbreviation": "Alabama St.",
+      "institutionConference": "Southwestern Athletic Conf."
+    },
+    {
+      "id": "4fc67e65-b3cb-5b93-b3e0-375b1c51ece6",
+      "externalId": "unit-talk:ncaaf:ncaa:14",
+      "displayName": "University at Albany",
+      "ncaaOrgId": 14,
+      "subdivision": "FCS",
+      "abbreviation": "UAlbany",
+      "institutionConference": "Coastal Athletic Association"
+    },
+    {
+      "id": "7fdf7153-dc68-591b-b801-74454805ebfa",
+      "externalId": "unit-talk:ncaaf:ncaa:17",
+      "displayName": "Alcorn State University",
+      "ncaaOrgId": 17,
+      "subdivision": "FCS",
+      "abbreviation": "Alcorn",
+      "institutionConference": "Southwestern Athletic Conf."
+    },
+    {
+      "id": "8d95ebe6-a768-5525-8031-f0cf236ed5e8",
+      "externalId": "unit-talk:ncaaf:ncaa:2678",
+      "displayName": "University of Arkansas, Pine Bluff",
+      "ncaaOrgId": 2678,
+      "subdivision": "FCS",
+      "abbreviation": "Ark.-Pine Bluff",
+      "institutionConference": "Southwestern Athletic Conf."
+    },
+    {
+      "id": "3533aad1-eb60-5d42-b28d-2f68432464bd",
+      "externalId": "unit-talk:ncaaf:ncaa:43",
+      "displayName": "Austin Peay State University",
+      "ncaaOrgId": 43,
+      "subdivision": "FCS",
+      "abbreviation": "Austin Peay",
+      "institutionConference": "United Athletic Conference "
+    },
+    {
+      "id": "92eeed1e-d84b-5684-8fbd-cfe0512dcc64",
+      "externalId": "unit-talk:ncaaf:ncaa:61",
+      "displayName": "Bethune-Cookman University",
+      "ncaaOrgId": 61,
+      "subdivision": "FCS",
+      "abbreviation": "Bethune-Cookman",
+      "institutionConference": "Southwestern Athletic Conf."
+    },
+    {
+      "id": "85cd8736-9198-5e95-ad17-0ca5f7116349",
+      "externalId": "unit-talk:ncaaf:ncaa:80",
+      "displayName": "Brown University",
+      "ncaaOrgId": 80,
+      "subdivision": "FCS",
+      "abbreviation": "Brown",
+      "institutionConference": "The Ivy League"
+    },
+    {
+      "id": "ce6f0609-040d-5dbf-a142-4d56ebab04fb",
+      "externalId": "unit-talk:ncaaf:ncaa:81",
+      "displayName": "Bryant University",
+      "ncaaOrgId": 81,
+      "subdivision": "FCS",
+      "abbreviation": "Bryant",
+      "institutionConference": "Coastal Athletic Association"
+    },
+    {
+      "id": "360a483f-8eaf-5aeb-9d85-20880528bb55",
+      "externalId": "unit-talk:ncaaf:ncaa:83",
+      "displayName": "Bucknell University",
+      "ncaaOrgId": 83,
+      "subdivision": "FCS",
+      "abbreviation": "Bucknell",
+      "institutionConference": "Patriot League"
+    },
+    {
+      "id": "08bc0637-c4e5-5500-b2de-3237dc8d7559",
+      "externalId": "unit-talk:ncaaf:ncaa:87",
+      "displayName": "Butler University",
+      "ncaaOrgId": 87,
+      "subdivision": "FCS",
+      "abbreviation": "Butler",
+      "institutionConference": "Pioneer Football League"
+    },
+    {
+      "id": "44523813-4c8f-58ef-a650-80b640009657",
+      "externalId": "unit-talk:ncaaf:ncaa:90",
+      "displayName": "California Polytechnic State University",
+      "ncaaOrgId": 90,
+      "subdivision": "FCS",
+      "abbreviation": "Cal Poly",
+      "institutionConference": "Big Sky Conference"
+    },
+    {
+      "id": "7ef815c0-350e-536b-a451-9c19137938f7",
+      "externalId": "unit-talk:ncaaf:ncaa:108",
+      "displayName": "University of California, Davis",
+      "ncaaOrgId": 108,
+      "subdivision": "FCS",
+      "abbreviation": "UC Davis",
+      "institutionConference": "Big Sky Conference"
+    },
+    {
+      "id": "4fc43ea0-bbd8-5723-8895-95f1d29723b1",
+      "externalId": "unit-talk:ncaaf:ncaa:115",
+      "displayName": "Campbell University",
+      "ncaaOrgId": 115,
+      "subdivision": "FCS",
+      "abbreviation": "Campbell",
+      "institutionConference": "Coastal Athletic Association"
+    },
+    {
+      "id": "c8bb9d9c-7bd4-51ff-9359-d61b3b05923e",
+      "externalId": "unit-talk:ncaaf:ncaa:1004",
+      "displayName": "University of Central Arkansas",
+      "ncaaOrgId": 1004,
+      "subdivision": "FCS",
+      "abbreviation": "Central Ark.",
+      "institutionConference": "United Athletic Conference "
+    },
+    {
+      "id": "563b6924-942e-500e-9cbe-c6d1bfba3e18",
+      "externalId": "unit-talk:ncaaf:ncaa:127",
+      "displayName": "Central Connecticut State University",
+      "ncaaOrgId": 127,
+      "subdivision": "FCS",
+      "abbreviation": "Central Conn. St.",
+      "institutionConference": "Northeast Conference"
+    },
+    {
+      "id": "b4fba315-8a67-503b-aae5-5542b29c775a",
+      "externalId": "unit-talk:ncaaf:ncaa:48",
+      "displayName": "Charleston Southern University",
+      "ncaaOrgId": 48,
+      "subdivision": "FCS",
+      "abbreviation": "Charleston So.",
+      "institutionConference": "Ohio Valley Conference"
+    },
+    {
+      "id": "1b236d4b-d716-5aab-aafd-4dc4885df573",
+      "externalId": "unit-talk:ncaaf:ncaa:136",
+      "displayName": "Chicago State University",
+      "ncaaOrgId": 136,
+      "subdivision": "FCS",
+      "abbreviation": "Chicago St.",
+      "institutionConference": "Northeast Conference"
+    },
+    {
+      "id": "4820d1c7-d73a-5d7a-82dd-9dfe7c7f1a0f",
+      "externalId": "unit-talk:ncaaf:ncaa:141",
+      "displayName": "The Citadel",
+      "ncaaOrgId": 141,
+      "subdivision": "FCS",
+      "abbreviation": "The Citadel",
+      "institutionConference": "Southern Conference"
+    },
+    {
+      "id": "cb1f46d2-3895-5af1-9a1d-2ba11e00cc77",
+      "externalId": "unit-talk:ncaaf:ncaa:153",
+      "displayName": "Colgate University",
+      "ncaaOrgId": 153,
+      "subdivision": "FCS",
+      "abbreviation": "Colgate",
+      "institutionConference": "Patriot League"
+    },
+    {
+      "id": "0d716cf6-7b32-5c3c-85ef-699310a919ef",
+      "externalId": "unit-talk:ncaaf:ncaa:158",
+      "displayName": "Columbia University-Barnard College",
+      "ncaaOrgId": 158,
+      "subdivision": "FCS",
+      "abbreviation": "Columbia",
+      "institutionConference": "The Ivy League"
+    },
+    {
+      "id": "66fb6e67-7f6e-51f5-96f4-e0285d8baa57",
+      "externalId": "unit-talk:ncaaf:ncaa:167",
+      "displayName": "Cornell University",
+      "ncaaOrgId": 167,
+      "subdivision": "FCS",
+      "abbreviation": "Cornell",
+      "institutionConference": "The Ivy League"
+    },
+    {
+      "id": "b3a1933e-7bc8-5e31-8378-cc8aa99546e0",
+      "externalId": "unit-talk:ncaaf:ncaa:172",
+      "displayName": "Dartmouth College",
+      "ncaaOrgId": 172,
+      "subdivision": "FCS",
+      "abbreviation": "Dartmouth",
+      "institutionConference": "The Ivy League"
+    },
+    {
+      "id": "99adbe83-1dfa-54b0-bdb8-69cd627c28e9",
+      "externalId": "unit-talk:ncaaf:ncaa:173",
+      "displayName": "Davidson College",
+      "ncaaOrgId": 173,
+      "subdivision": "FCS",
+      "abbreviation": "Davidson",
+      "institutionConference": "Pioneer Football League"
+    },
+    {
+      "id": "d85cdbbc-2573-53b4-a6c0-84db15376fca",
+      "externalId": "unit-talk:ncaaf:ncaa:175",
+      "displayName": "University of Dayton",
+      "ncaaOrgId": 175,
+      "subdivision": "FCS",
+      "abbreviation": "Dayton",
+      "institutionConference": "Pioneer Football League"
+    },
+    {
+      "id": "5681d7f6-602f-5572-a90f-248c2c96e82d",
+      "externalId": "unit-talk:ncaaf:ncaa:178",
+      "displayName": "Delaware State University",
+      "ncaaOrgId": 178,
+      "subdivision": "FCS",
+      "abbreviation": "Delaware St.",
+      "institutionConference": "Mid-Eastern Athletic Conf."
+    },
+    {
+      "id": "d1bdd389-c20c-557c-bb26-4f0b17c8a5e4",
+      "externalId": "unit-talk:ncaaf:ncaa:189",
+      "displayName": "Drake University",
+      "ncaaOrgId": 189,
+      "subdivision": "FCS",
+      "abbreviation": "Drake",
+      "institutionConference": "Pioneer Football League"
+    },
+    {
+      "id": "77ba61a0-8e0f-5ce6-b5ca-6c4fe87d4f8e",
+      "externalId": "unit-talk:ncaaf:ncaa:194",
+      "displayName": "Duquesne University",
+      "ncaaOrgId": 194,
+      "subdivision": "FCS",
+      "abbreviation": "Duquesne",
+      "institutionConference": "Northeast Conference"
+    },
+    {
+      "id": "6e2c3cc4-f844-5c70-a3a9-5715d17e5668",
+      "externalId": "unit-talk:ncaaf:ncaa:198",
+      "displayName": "East Tennessee State University",
+      "ncaaOrgId": 198,
+      "subdivision": "FCS",
+      "abbreviation": "ETSU",
+      "institutionConference": "Southern Conference"
+    },
+    {
+      "id": "44bd679f-4916-57cf-adfc-50d7e5e03aba",
+      "externalId": "unit-talk:ncaaf:ncaa:199",
+      "displayName": "East Texas A&M University",
+      "ncaaOrgId": 199,
+      "subdivision": "FCS",
+      "abbreviation": "East Texas A&M",
+      "institutionConference": "Southland Conference"
+    },
+    {
+      "id": "9d6cabdb-0781-5c6f-993e-fbe195381584",
+      "externalId": "unit-talk:ncaaf:ncaa:201",
+      "displayName": "Eastern Illinois University",
+      "ncaaOrgId": 201,
+      "subdivision": "FCS",
+      "abbreviation": "Eastern Ill.",
+      "institutionConference": "Ohio Valley Conference"
+    },
+    {
+      "id": "acbd245d-2b58-5710-a12f-20becbb928db",
+      "externalId": "unit-talk:ncaaf:ncaa:202",
+      "displayName": "Eastern Kentucky University",
+      "ncaaOrgId": 202,
+      "subdivision": "FCS",
+      "abbreviation": "Eastern Ky.",
+      "institutionConference": "United Athletic Conference "
+    },
+    {
+      "id": "127905f0-942d-57e3-ae10-8230d01ace52",
+      "externalId": "unit-talk:ncaaf:ncaa:207",
+      "displayName": "Eastern Washington University",
+      "ncaaOrgId": 207,
+      "subdivision": "FCS",
+      "abbreviation": "Eastern Wash.",
+      "institutionConference": "Big Sky Conference"
+    },
+    {
+      "id": "b1178ee7-3dd5-58c5-841a-5518692f572d",
+      "externalId": "unit-talk:ncaaf:ncaa:1068",
+      "displayName": "Elon University",
+      "ncaaOrgId": 1068,
+      "subdivision": "FCS",
+      "abbreviation": "Elon",
+      "institutionConference": "Coastal Athletic Association"
+    },
+    {
+      "id": "d927ea55-c04b-505e-8364-f8d0b7bb4840",
+      "externalId": "unit-talk:ncaaf:ncaa:228",
+      "displayName": "Florida A&M University",
+      "ncaaOrgId": 228,
+      "subdivision": "FCS",
+      "abbreviation": "Florida A&M",
+      "institutionConference": "Southwestern Athletic Conf."
+    },
+    {
+      "id": "c30e1732-5830-54ef-9bd3-59ce4c6d373d",
+      "externalId": "unit-talk:ncaaf:ncaa:236",
+      "displayName": "Fordham University",
+      "ncaaOrgId": 236,
+      "subdivision": "FCS",
+      "abbreviation": "Fordham",
+      "institutionConference": "Patriot League"
+    },
+    {
+      "id": "1da237bf-7f2c-5ee9-a245-e7f95487f9f1",
+      "externalId": "unit-talk:ncaaf:ncaa:244",
+      "displayName": "Furman University",
+      "ncaaOrgId": 244,
+      "subdivision": "FCS",
+      "abbreviation": "Furman",
+      "institutionConference": "Southern Conference"
+    },
+    {
+      "id": "fa58a5d2-89e5-53be-91fc-3f55d515d08d",
+      "externalId": "unit-talk:ncaaf:ncaa:1092",
+      "displayName": "Gardner-Webb University",
+      "ncaaOrgId": 1092,
+      "subdivision": "FCS",
+      "abbreviation": "Gardner-Webb",
+      "institutionConference": "Ohio Valley Conference"
+    },
+    {
+      "id": "c3c8c088-2d98-5078-ae79-4e461190fdab",
+      "externalId": "unit-talk:ncaaf:ncaa:251",
+      "displayName": "Georgetown University",
+      "ncaaOrgId": 251,
+      "subdivision": "FCS",
+      "abbreviation": "Georgetown",
+      "institutionConference": "Patriot League"
+    },
+    {
+      "id": "482a0221-d439-5870-b24f-911700e7ee90",
+      "externalId": "unit-talk:ncaaf:ncaa:261",
+      "displayName": "Grambling State University",
+      "ncaaOrgId": 261,
+      "subdivision": "FCS",
+      "abbreviation": "Grambling",
+      "institutionConference": "Southwestern Athletic Conf."
+    },
+    {
+      "id": "2af85832-420a-53bf-84d0-cd17d93afbe0",
+      "externalId": "unit-talk:ncaaf:ncaa:270",
+      "displayName": "Hampton University",
+      "ncaaOrgId": 270,
+      "subdivision": "FCS",
+      "abbreviation": "Hampton",
+      "institutionConference": "Coastal Athletic Association"
+    },
+    {
+      "id": "f82bba28-1f6a-51ae-816e-068ea38b1d40",
+      "externalId": "unit-talk:ncaaf:ncaa:275",
+      "displayName": "Harvard University",
+      "ncaaOrgId": 275,
+      "subdivision": "FCS",
+      "abbreviation": "Harvard",
+      "institutionConference": "The Ivy League"
+    },
+    {
+      "id": "e79a31c1-ca7d-5af9-b9ee-36b2d62b2dd4",
+      "externalId": "unit-talk:ncaaf:ncaa:285",
+      "displayName": "College of the Holy Cross",
+      "ncaaOrgId": 285,
+      "subdivision": "FCS",
+      "abbreviation": "Holy Cross",
+      "institutionConference": "Patriot League"
+    },
+    {
+      "id": "09113e61-da0a-53c6-a0ce-af4f31f54bed",
+      "externalId": "unit-talk:ncaaf:ncaa:287",
+      "displayName": "Houston Christian University",
+      "ncaaOrgId": 287,
+      "subdivision": "FCS",
+      "abbreviation": "Houston Christian",
+      "institutionConference": "Southland Conference"
+    },
+    {
+      "id": "6ee2c5e7-0489-5aa6-a774-976594a3cb9a",
+      "externalId": "unit-talk:ncaaf:ncaa:290",
+      "displayName": "Howard University",
+      "ncaaOrgId": 290,
+      "subdivision": "FCS",
+      "abbreviation": "Howard",
+      "institutionConference": "Mid-Eastern Athletic Conf."
+    },
+    {
+      "id": "db95d402-0e61-5c48-8e3e-c395955a017e",
+      "externalId": "unit-talk:ncaaf:ncaa:295",
+      "displayName": "University of Idaho",
+      "ncaaOrgId": 295,
+      "subdivision": "FCS",
+      "abbreviation": "Idaho",
+      "institutionConference": "Big Sky Conference"
+    },
+    {
+      "id": "dce5aed2-5d09-5e80-9434-46946dbd6728",
+      "externalId": "unit-talk:ncaaf:ncaa:294",
+      "displayName": "Idaho State University",
+      "ncaaOrgId": 294,
+      "subdivision": "FCS",
+      "abbreviation": "Idaho St.",
+      "institutionConference": "Big Sky Conference"
+    },
+    {
+      "id": "15475517-35ee-59a7-b155-e220b4b690dc",
+      "externalId": "unit-talk:ncaaf:ncaa:299",
+      "displayName": "Illinois State University",
+      "ncaaOrgId": 299,
+      "subdivision": "FCS",
+      "abbreviation": "Illinois St.",
+      "institutionConference": "Missouri Valley Football Conference"
+    },
+    {
+      "id": "a3d83342-2833-58ff-b108-c6c34f906350",
+      "externalId": "unit-talk:ncaaf:ncaa:2743",
+      "displayName": "University of the Incarnate Word",
+      "ncaaOrgId": 2743,
+      "subdivision": "FCS",
+      "abbreviation": "UIW",
+      "institutionConference": "Southland Conference"
+    },
+    {
+      "id": "1123f614-38a7-5362-b4c4-58b9cafcde8a",
+      "externalId": "unit-talk:ncaaf:ncaa:305",
+      "displayName": "Indiana State University",
+      "ncaaOrgId": 305,
+      "subdivision": "FCS",
+      "abbreviation": "Indiana St.",
+      "institutionConference": "Missouri Valley Football Conference"
+    },
+    {
+      "id": "a6bc9360-d0a5-5f32-8622-4daff7fe1f9a",
+      "externalId": "unit-talk:ncaaf:ncaa:314",
+      "displayName": "Jackson State University",
+      "ncaaOrgId": 314,
+      "subdivision": "FCS",
+      "abbreviation": "Jackson St.",
+      "institutionConference": "Southwestern Athletic Conf."
+    },
+    {
+      "id": "414c9c16-79d5-5fd5-a21c-e057cbf1b2b3",
+      "externalId": "unit-talk:ncaaf:ncaa:342",
+      "displayName": "Lafayette College",
+      "ncaaOrgId": 342,
+      "subdivision": "FCS",
+      "abbreviation": "Lafayette",
+      "institutionConference": "Patriot League"
+    },
+    {
+      "id": "ac902dbc-1149-59ab-9c26-1ffead307b60",
+      "externalId": "unit-talk:ncaaf:ncaa:346",
+      "displayName": "Lamar University",
+      "ncaaOrgId": 346,
+      "subdivision": "FCS",
+      "abbreviation": "Lamar University",
+      "institutionConference": "Southland Conference"
+    },
+    {
+      "id": "d012b168-c2cb-5275-b74e-64f7917f123b",
+      "externalId": "unit-talk:ncaaf:ncaa:352",
+      "displayName": "Lehigh University",
+      "ncaaOrgId": 352,
+      "subdivision": "FCS",
+      "abbreviation": "Lehigh",
+      "institutionConference": "Patriot League"
+    },
+    {
+      "id": "9244ad14-89de-53f8-87e6-8c00352164e0",
+      "externalId": "unit-talk:ncaaf:ncaa:30136",
+      "displayName": "Lindenwood University",
+      "ncaaOrgId": 30136,
+      "subdivision": "FCS",
+      "abbreviation": "Lindenwood",
+      "institutionConference": "Ohio Valley Conference"
+    },
+    {
+      "id": "1242b096-e63c-5930-8dcc-bdfacce173e1",
+      "externalId": "unit-talk:ncaaf:ncaa:361",
+      "displayName": "Long Island University",
+      "ncaaOrgId": 361,
+      "subdivision": "FCS",
+      "abbreviation": "LIU",
+      "institutionConference": "Northeast Conference"
+    },
+    {
+      "id": "f3477123-3bd6-5c98-a010-fa6bd3846328",
+      "externalId": "unit-talk:ncaaf:ncaa:380",
+      "displayName": "University of Maine",
+      "ncaaOrgId": 380,
+      "subdivision": "FCS",
+      "abbreviation": "Maine",
+      "institutionConference": "Coastal Athletic Association"
+    },
+    {
+      "id": "b6d49c74-d3ff-5892-a6c2-138ceef77047",
+      "externalId": "unit-talk:ncaaf:ncaa:386",
+      "displayName": "Marist University",
+      "ncaaOrgId": 386,
+      "subdivision": "FCS",
+      "abbreviation": "Marist",
+      "institutionConference": "Pioneer Football League"
+    },
+    {
+      "id": "76a203f4-ff55-5531-bb6d-c13998d0c245",
+      "externalId": "unit-talk:ncaaf:ncaa:402",
+      "displayName": "McNeese State University",
+      "ncaaOrgId": 402,
+      "subdivision": "FCS",
+      "abbreviation": "McNeese",
+      "institutionConference": "Southland Conference"
+    },
+    {
+      "id": "af97ff7d-1dae-5e97-861f-7d056f7dfd5e",
+      "externalId": "unit-talk:ncaaf:ncaa:406",
+      "displayName": "Mercer University",
+      "ncaaOrgId": 406,
+      "subdivision": "FCS",
+      "abbreviation": "Mercer",
+      "institutionConference": "Southern Conference"
+    },
+    {
+      "id": "d3db0bab-d6ac-53bb-8b47-7bc40209d2f8",
+      "externalId": "unit-talk:ncaaf:ncaa:408",
+      "displayName": "Mercyhurst University",
+      "ncaaOrgId": 408,
+      "subdivision": "FCS",
+      "abbreviation": "Mercyhurst",
+      "institutionConference": "Northeast Conference"
+    },
+    {
+      "id": "8358b97b-2d49-55ae-8a04-5938d13595f4",
+      "externalId": "unit-talk:ncaaf:ncaa:410",
+      "displayName": "Merrimack College",
+      "ncaaOrgId": 410,
+      "subdivision": "FCS",
+      "abbreviation": "Merrimack",
+      "institutionConference": "Independent"
+    },
+    {
+      "id": "cb01f48d-2ca7-5fb6-80fe-ac143ae7076a",
+      "externalId": "unit-talk:ncaaf:ncaa:432",
+      "displayName": "Mississippi Valley State University",
+      "ncaaOrgId": 432,
+      "subdivision": "FCS",
+      "abbreviation": "Mississippi Val.",
+      "institutionConference": "Southwestern Athletic Conf."
+    },
+    {
+      "id": "d0ed1b0b-8464-5e8f-9f8e-b8a2adcbddae",
+      "externalId": "unit-talk:ncaaf:ncaa:439",
+      "displayName": "Monmouth University",
+      "ncaaOrgId": 439,
+      "subdivision": "FCS",
+      "abbreviation": "Monmouth",
+      "institutionConference": "Coastal Athletic Association"
+    },
+    {
+      "id": "90f39773-8795-5cbc-b18b-eeb33ef9e0a4",
+      "externalId": "unit-talk:ncaaf:ncaa:441",
+      "displayName": "University of Montana",
+      "ncaaOrgId": 441,
+      "subdivision": "FCS",
+      "abbreviation": "Montana",
+      "institutionConference": "Big Sky Conference"
+    },
+    {
+      "id": "3df7732f-f585-5b5a-8a9f-81e50d0a8321",
+      "externalId": "unit-talk:ncaaf:ncaa:440",
+      "displayName": "Montana State University-Bozeman",
+      "ncaaOrgId": 440,
+      "subdivision": "FCS",
+      "abbreviation": "Montana St.",
+      "institutionConference": "Big Sky Conference"
+    },
+    {
+      "id": "40f51c29-ad66-597d-9c3b-b0277e67d885",
+      "externalId": "unit-talk:ncaaf:ncaa:444",
+      "displayName": "Morehead State University",
+      "ncaaOrgId": 444,
+      "subdivision": "FCS",
+      "abbreviation": "Morehead St.",
+      "institutionConference": "Pioneer Football League"
+    },
+    {
+      "id": "1a86b3a9-4772-52ca-9e77-ff0f79ba2420",
+      "externalId": "unit-talk:ncaaf:ncaa:446",
+      "displayName": "Morgan State University",
+      "ncaaOrgId": 446,
+      "subdivision": "FCS",
+      "abbreviation": "Morgan St.",
+      "institutionConference": "Mid-Eastern Athletic Conf."
+    },
+    {
+      "id": "d680a9af-48ed-535a-890d-b1fdeae6612b",
+      "externalId": "unit-talk:ncaaf:ncaa:454",
+      "displayName": "Murray State University",
+      "ncaaOrgId": 454,
+      "subdivision": "FCS",
+      "abbreviation": "Murray St.",
+      "institutionConference": "Missouri Valley Football Conference"
+    },
+    {
+      "id": "33d3b6d0-0b25-50d1-80c3-cf2eabd5c46e",
+      "externalId": "unit-talk:ncaaf:ncaa:469",
+      "displayName": "University of New Hampshire",
+      "ncaaOrgId": 469,
+      "subdivision": "FCS",
+      "abbreviation": "New Hampshire",
+      "institutionConference": "Coastal Athletic Association"
+    },
+    {
+      "id": "358fa53f-28d4-588a-9210-2ce1cc0e3667",
+      "externalId": "unit-talk:ncaaf:ncaa:470",
+      "displayName": "University of New Haven",
+      "ncaaOrgId": 470,
+      "subdivision": "FCS",
+      "abbreviation": "New Haven",
+      "institutionConference": "Northeast Conference"
+    },
+    {
+      "id": "e566dc3b-0e09-5b88-88c0-c0e13ccd0621",
+      "externalId": "unit-talk:ncaaf:ncaa:483",
+      "displayName": "Nicholls State University",
+      "ncaaOrgId": 483,
+      "subdivision": "FCS",
+      "abbreviation": "Nicholls",
+      "institutionConference": "Southland Conference"
+    },
+    {
+      "id": "5ac1aebf-ffcc-5002-89b1-aa5e43e1b040",
+      "externalId": "unit-talk:ncaaf:ncaa:485",
+      "displayName": "Norfolk State University",
+      "ncaaOrgId": 485,
+      "subdivision": "FCS",
+      "abbreviation": "Norfolk St.",
+      "institutionConference": "Mid-Eastern Athletic Conf."
+    },
+    {
+      "id": "e2ee8eee-984f-5e61-8e91-54a59552c2a8",
+      "externalId": "unit-talk:ncaaf:ncaa:487",
+      "displayName": "University of North Alabama",
+      "ncaaOrgId": 487,
+      "subdivision": "FCS",
+      "abbreviation": "North Ala.",
+      "institutionConference": "United Athletic Conference "
+    },
+    {
+      "id": "fd06df15-71f8-574d-b0ea-536269458c72",
+      "externalId": "unit-talk:ncaaf:ncaa:488",
+      "displayName": "North Carolina A&T State University",
+      "ncaaOrgId": 488,
+      "subdivision": "FCS",
+      "abbreviation": "N.C. A&T",
+      "institutionConference": "Coastal Athletic Association"
+    },
+    {
+      "id": "10225a2f-01fd-523c-958e-17a0da2b7cd4",
+      "externalId": "unit-talk:ncaaf:ncaa:489",
+      "displayName": "North Carolina Central University",
+      "ncaaOrgId": 489,
+      "subdivision": "FCS",
+      "abbreviation": "N.C. Central",
+      "institutionConference": "Mid-Eastern Athletic Conf."
+    },
+    {
+      "id": "f75f4191-a0bb-5cc9-aeaf-8642fa29c268",
+      "externalId": "unit-talk:ncaaf:ncaa:494",
+      "displayName": "University of North Dakota",
+      "ncaaOrgId": 494,
+      "subdivision": "FCS",
+      "abbreviation": "North Dakota",
+      "institutionConference": "Missouri Valley Football Conference"
+    },
+    {
+      "id": "cb9eafd5-d6e5-550a-8f32-98265f75472e",
+      "externalId": "unit-talk:ncaaf:ncaa:501",
+      "displayName": "Northern Arizona University",
+      "ncaaOrgId": 501,
+      "subdivision": "FCS",
+      "abbreviation": "Northern Ariz.",
+      "institutionConference": "Big Sky Conference"
+    },
+    {
+      "id": "549669ba-bd4a-55cc-b954-839ef4cefbfb",
+      "externalId": "unit-talk:ncaaf:ncaa:502",
+      "displayName": "University of Northern Colorado",
+      "ncaaOrgId": 502,
+      "subdivision": "FCS",
+      "abbreviation": "Northern Colo.",
+      "institutionConference": "Big Sky Conference"
+    },
+    {
+      "id": "70d94da4-27a4-5239-9e3f-6eb1e06dce09",
+      "externalId": "unit-talk:ncaaf:ncaa:504",
+      "displayName": "University of Northern Iowa",
+      "ncaaOrgId": 504,
+      "subdivision": "FCS",
+      "abbreviation": "UNI",
+      "institutionConference": "Missouri Valley Football Conference"
+    },
+    {
+      "id": "d7be82b9-970d-5729-b72d-6d332bf6bd7d",
+      "externalId": "unit-talk:ncaaf:ncaa:508",
+      "displayName": "Northwestern State University",
+      "ncaaOrgId": 508,
+      "subdivision": "FCS",
+      "abbreviation": "Northwestern St.",
+      "institutionConference": "Southland Conference"
+    },
+    {
+      "id": "8dd15ed7-e99a-5933-a628-dab26d634aef",
+      "externalId": "unit-talk:ncaaf:ncaa:540",
+      "displayName": "University of Pennsylvania",
+      "ncaaOrgId": 540,
+      "subdivision": "FCS",
+      "abbreviation": "Penn",
+      "institutionConference": "The Ivy League"
+    },
+    {
+      "id": "ae0fdb45-6abd-51ce-b86d-419b63742c9a",
+      "externalId": "unit-talk:ncaaf:ncaa:550",
+      "displayName": "Portland State University",
+      "ncaaOrgId": 550,
+      "subdivision": "FCS",
+      "abbreviation": "Portland St.",
+      "institutionConference": "Big Sky Conference"
+    },
+    {
+      "id": "c2d4fb08-605b-561e-a0d6-c0cc28e9b242",
+      "externalId": "unit-talk:ncaaf:ncaa:553",
+      "displayName": "Prairie View A&M University",
+      "ncaaOrgId": 553,
+      "subdivision": "FCS",
+      "abbreviation": "Prairie View",
+      "institutionConference": "Southwestern Athletic Conf."
+    },
+    {
+      "id": "833bba45-35a9-58c4-a1c2-73dbd38441a6",
+      "externalId": "unit-talk:ncaaf:ncaa:1320",
+      "displayName": "Presbyterian College",
+      "ncaaOrgId": 1320,
+      "subdivision": "FCS",
+      "abbreviation": "Presbyterian",
+      "institutionConference": "Pioneer Football League"
+    },
+    {
+      "id": "69a9e566-ea3b-5d13-b407-60c0ef0b7169",
+      "externalId": "unit-talk:ncaaf:ncaa:554",
+      "displayName": "Princeton University",
+      "ncaaOrgId": 554,
+      "subdivision": "FCS",
+      "abbreviation": "Princeton",
+      "institutionConference": "The Ivy League"
+    },
+    {
+      "id": "3b83d56e-3f45-5828-9fc0-fb8fcd962be0",
+      "externalId": "unit-talk:ncaaf:ncaa:572",
+      "displayName": "University of Rhode Island",
+      "ncaaOrgId": 572,
+      "subdivision": "FCS",
+      "abbreviation": "Rhode Island",
+      "institutionConference": "Coastal Athletic Association"
+    },
+    {
+      "id": "e6aef80c-c223-55b9-b6a7-dea7048120dc",
+      "externalId": "unit-talk:ncaaf:ncaa:575",
+      "displayName": "University of Richmond",
+      "ncaaOrgId": 575,
+      "subdivision": "FCS",
+      "abbreviation": "Richmond",
+      "institutionConference": "Patriot League"
+    },
+    {
+      "id": "58031f4c-2fe7-5d3e-9f82-9c75b6eb0873",
+      "externalId": "unit-talk:ncaaf:ncaa:579",
+      "displayName": "Robert Morris University",
+      "ncaaOrgId": 579,
+      "subdivision": "FCS",
+      "abbreviation": "Robert Morris",
+      "institutionConference": "Northeast Conference"
+    },
+    {
+      "id": "94dd3144-4220-5ebf-8d02-72703958f74a",
+      "externalId": "unit-talk:ncaaf:ncaa:590",
+      "displayName": "Sacred Heart University",
+      "ncaaOrgId": 590,
+      "subdivision": "FCS",
+      "abbreviation": "Sacred Heart",
+      "institutionConference": "Coastal Athletic Association"
+    },
+    {
+      "id": "dcd65419-90d8-56c6-a875-258d0f2d9461",
+      "externalId": "unit-talk:ncaaf:ncaa:625",
+      "displayName": "Samford University",
+      "ncaaOrgId": 625,
+      "subdivision": "FCS",
+      "abbreviation": "Samford",
+      "institutionConference": "Southern Conference"
+    },
+    {
+      "id": "7d02e722-679b-548d-a727-2de7e3df03f2",
+      "externalId": "unit-talk:ncaaf:ncaa:627",
+      "displayName": "University of San Diego",
+      "ncaaOrgId": 627,
+      "subdivision": "FCS",
+      "abbreviation": "San Diego",
+      "institutionConference": "Pioneer Football League"
+    },
+    {
+      "id": "8ae2530d-684f-5f06-9a4f-e13534c012f9",
+      "externalId": "unit-talk:ncaaf:ncaa:647",
+      "displayName": "South Carolina State University",
+      "ncaaOrgId": 647,
+      "subdivision": "FCS",
+      "abbreviation": "South Carolina St.",
+      "institutionConference": "Mid-Eastern Athletic Conf."
+    },
+    {
+      "id": "6297f50c-9211-561e-a724-9c386334f00e",
+      "externalId": "unit-talk:ncaaf:ncaa:650",
+      "displayName": "University of South Dakota",
+      "ncaaOrgId": 650,
+      "subdivision": "FCS",
+      "abbreviation": "South Dakota",
+      "institutionConference": "Missouri Valley Football Conference"
+    },
+    {
+      "id": "6f9d61fd-3f42-5f80-8c22-0d217186d23f",
+      "externalId": "unit-talk:ncaaf:ncaa:649",
+      "displayName": "South Dakota State University",
+      "ncaaOrgId": 649,
+      "subdivision": "FCS",
+      "abbreviation": "South Dakota St.",
+      "institutionConference": "Missouri Valley Football Conference"
+    },
+    {
+      "id": "3e5dac8f-581a-5ed6-a208-833ac068b3e6",
+      "externalId": "unit-talk:ncaaf:ncaa:654",
+      "displayName": "Southeast Missouri State University",
+      "ncaaOrgId": 654,
+      "subdivision": "FCS",
+      "abbreviation": "Southeast Mo. St.",
+      "institutionConference": "Ohio Valley Conference"
+    },
+    {
+      "id": "884c0b55-e58c-580f-876b-6ccc2ba15173",
+      "externalId": "unit-talk:ncaaf:ncaa:655",
+      "displayName": "Southeastern Louisiana University",
+      "ncaaOrgId": 655,
+      "subdivision": "FCS",
+      "abbreviation": "Southeastern La.",
+      "institutionConference": "Southland Conference"
+    },
+    {
+      "id": "c7134995-1be7-54f7-8e1e-2237cda2dadf",
+      "externalId": "unit-talk:ncaaf:ncaa:659",
+      "displayName": "Southern Illinois University at Carbondale",
+      "ncaaOrgId": 659,
+      "subdivision": "FCS",
+      "abbreviation": "Southern Ill.",
+      "institutionConference": "Missouri Valley Football Conference"
+    },
+    {
+      "id": "28819e80-2e33-5319-8b28-7a41ce9d4c04",
+      "externalId": "unit-talk:ncaaf:ncaa:665",
+      "displayName": "Southern University, Baton Rouge",
+      "ncaaOrgId": 665,
+      "subdivision": "FCS",
+      "abbreviation": "Southern U.",
+      "institutionConference": "Southwestern Athletic Conf."
+    },
+    {
+      "id": "5a0a9714-caa6-5e73-8be7-a6056c2aaa55",
+      "externalId": "unit-talk:ncaaf:ncaa:667",
+      "displayName": "Southern Utah University",
+      "ncaaOrgId": 667,
+      "subdivision": "FCS",
+      "abbreviation": "Southern Utah",
+      "institutionConference": "Big Sky Conference"
+    },
+    {
+      "id": "9317bdf8-09ff-5ed2-bf2d-b5a16620ad24",
+      "externalId": "unit-talk:ncaaf:ncaa:620",
+      "displayName": "University of St. Thomas (Minnesota)",
+      "ncaaOrgId": 620,
+      "subdivision": "FCS",
+      "abbreviation": "St. Thomas (MN)",
+      "institutionConference": "Pioneer Football League"
+    },
+    {
+      "id": "ce11507c-9270-55e4-adec-087937386c67",
+      "externalId": "unit-talk:ncaaf:ncaa:676",
+      "displayName": "Stephen F. Austin State University",
+      "ncaaOrgId": 676,
+      "subdivision": "FCS",
+      "abbreviation": "SFA",
+      "institutionConference": "Southland Conference"
+    },
+    {
+      "id": "14de546e-1456-5933-88bb-fcdf83d8863b",
+      "externalId": "unit-talk:ncaaf:ncaa:678",
+      "displayName": "Stetson University",
+      "ncaaOrgId": 678,
+      "subdivision": "FCS",
+      "abbreviation": "Stetson",
+      "institutionConference": "Pioneer Football League"
+    },
+    {
+      "id": "645b5631-16f5-5f47-adc4-e12aa992c95d",
+      "externalId": "unit-talk:ncaaf:ncaa:682",
+      "displayName": "Stonehill College",
+      "ncaaOrgId": 682,
+      "subdivision": "FCS",
+      "abbreviation": "Stonehill",
+      "institutionConference": "Northeast Conference"
+    },
+    {
+      "id": "74d0268c-e564-5d1f-a567-69c7c2e21fd9",
+      "externalId": "unit-talk:ncaaf:ncaa:683",
+      "displayName": "Stony Brook University",
+      "ncaaOrgId": 683,
+      "subdivision": "FCS",
+      "abbreviation": "Stony Brook",
+      "institutionConference": "Coastal Athletic Association"
+    },
+    {
+      "id": "89399d86-5d3a-5f09-8f33-3910eb1295cc",
+      "externalId": "unit-talk:ncaaf:ncaa:1395",
+      "displayName": "Tarleton State University",
+      "ncaaOrgId": 1395,
+      "subdivision": "FCS",
+      "abbreviation": "Tarleton St.",
+      "institutionConference": "United Athletic Conference "
+    },
+    {
+      "id": "f5122300-55bb-5edc-9265-0b48a166ad1a",
+      "externalId": "unit-talk:ncaaf:ncaa:691",
+      "displayName": "Tennessee State University",
+      "ncaaOrgId": 691,
+      "subdivision": "FCS",
+      "abbreviation": "Tennessee St.",
+      "institutionConference": "Ohio Valley Conference"
+    },
+    {
+      "id": "0643b6f0-05c0-50bf-951a-c830520a671c",
+      "externalId": "unit-talk:ncaaf:ncaa:692",
+      "displayName": "Tennessee Technological University",
+      "ncaaOrgId": 692,
+      "subdivision": "FCS",
+      "abbreviation": "Tennessee Tech",
+      "institutionConference": "Southern Conference"
+    },
+    {
+      "id": "fa9ae4b7-9734-5c81-85d6-b78f7202667f",
+      "externalId": "unit-talk:ncaaf:ncaa:693",
+      "displayName": "University of Tennessee at Chattanooga",
+      "ncaaOrgId": 693,
+      "subdivision": "FCS",
+      "abbreviation": "Chattanooga",
+      "institutionConference": "Southern Conference"
+    },
+    {
+      "id": "791ab83f-9126-594b-85e9-3d2f7b285dd3",
+      "externalId": "unit-talk:ncaaf:ncaa:695",
+      "displayName": "University of Tennessee at Martin",
+      "ncaaOrgId": 695,
+      "subdivision": "FCS",
+      "abbreviation": "UT Martin",
+      "institutionConference": "Ohio Valley Conference"
+    },
+    {
+      "id": "e0c3c99d-5c28-561f-99d4-98563b0a7de1",
+      "externalId": "unit-talk:ncaaf:ncaa:536",
+      "displayName": "The University of Texas Rio Grande Valley",
+      "ncaaOrgId": 536,
+      "subdivision": "FCS",
+      "abbreviation": "UTRGV",
+      "institutionConference": "Southland Conference"
+    },
+    {
+      "id": "fb85bb59-7124-56fc-9eaa-7513e16b48b5",
+      "externalId": "unit-talk:ncaaf:ncaa:699",
+      "displayName": "Texas Southern University",
+      "ncaaOrgId": 699,
+      "subdivision": "FCS",
+      "abbreviation": "Texas Southern",
+      "institutionConference": "Southwestern Athletic Conf."
+    },
+    {
+      "id": "4e01cacf-9ce2-5c77-9c2d-969b134ff7c5",
+      "externalId": "unit-talk:ncaaf:ncaa:711",
+      "displayName": "Towson University",
+      "ncaaOrgId": 711,
+      "subdivision": "FCS",
+      "abbreviation": "Towson",
+      "institutionConference": "Coastal Athletic Association"
+    },
+    {
+      "id": "5d395414-0bea-5dd0-a680-a5aae027ceed",
+      "externalId": "unit-talk:ncaaf:ncaa:30095",
+      "displayName": "Utah Tech University",
+      "ncaaOrgId": 30095,
+      "subdivision": "FCS",
+      "abbreviation": "Utah Tech",
+      "institutionConference": "Big Sky Conference"
+    },
+    {
+      "id": "473a851a-7d62-5b37-bead-46ce55662b16",
+      "externalId": "unit-talk:ncaaf:ncaa:735",
+      "displayName": "Valparaiso University",
+      "ncaaOrgId": 735,
+      "subdivision": "FCS",
+      "abbreviation": "Valparaiso",
+      "institutionConference": "Pioneer Football League"
+    },
+    {
+      "id": "3cdcdd9f-f535-5975-b2c5-fda21a96fdee",
+      "externalId": "unit-talk:ncaaf:ncaa:739",
+      "displayName": "Villanova University",
+      "ncaaOrgId": 739,
+      "subdivision": "FCS",
+      "abbreviation": "Villanova",
+      "institutionConference": "Patriot League"
+    },
+    {
+      "id": "07889be0-f0db-553d-8ae3-04836bc42bde",
+      "externalId": "unit-talk:ncaaf:ncaa:741",
+      "displayName": "Virginia Military Institute",
+      "ncaaOrgId": 741,
+      "subdivision": "FCS",
+      "abbreviation": "VMI",
+      "institutionConference": "Southern Conference"
+    },
+    {
+      "id": "257bc099-25fc-5e41-bb55-67c089b40c61",
+      "externalId": "unit-talk:ncaaf:ncaa:748",
+      "displayName": "Wagner College",
+      "ncaaOrgId": 748,
+      "subdivision": "FCS",
+      "abbreviation": "Wagner",
+      "institutionConference": "Northeast Conference"
+    },
+    {
+      "id": "7e5a02bd-6b5f-5508-84d1-97588dbe3f93",
+      "externalId": "unit-talk:ncaaf:ncaa:758",
+      "displayName": "Weber State University",
+      "ncaaOrgId": 758,
+      "subdivision": "FCS",
+      "abbreviation": "Weber St.",
+      "institutionConference": "Big Sky Conference"
+    },
+    {
+      "id": "d6a1f1bd-40be-59ed-8fc4-73cc4e84ee91",
+      "externalId": "unit-talk:ncaaf:ncaa:11740",
+      "displayName": "University of West Florida",
+      "ncaaOrgId": 11740,
+      "subdivision": "FCS",
+      "abbreviation": "West Florida",
+      "institutionConference": "United Athletic Conference "
+    },
+    {
+      "id": "0502391f-74be-51c1-9b8b-c400150c2219",
+      "externalId": "unit-talk:ncaaf:ncaa:766",
+      "displayName": "University of West Georgia",
+      "ncaaOrgId": 766,
+      "subdivision": "FCS",
+      "abbreviation": "West Ga.",
+      "institutionConference": "United Athletic Conference "
+    },
+    {
+      "id": "1626e318-8c03-5048-8400-bf8efb2b49a3",
+      "externalId": "unit-talk:ncaaf:ncaa:769",
+      "displayName": "Western Carolina University",
+      "ncaaOrgId": 769,
+      "subdivision": "FCS",
+      "abbreviation": "Western Caro.",
+      "institutionConference": "Southern Conference"
+    },
+    {
+      "id": "6c5bf7bc-1b15-5ac5-8422-0dc99c89a1f6",
+      "externalId": "unit-talk:ncaaf:ncaa:771",
+      "displayName": "Western Illinois University",
+      "ncaaOrgId": 771,
+      "subdivision": "FCS",
+      "abbreviation": "Western Ill.",
+      "institutionConference": "Ohio Valley Conference"
+    },
+    {
+      "id": "1f34aaf8-18aa-5126-90b9-50ee786e3866",
+      "externalId": "unit-talk:ncaaf:ncaa:786",
+      "displayName": "William & Mary",
+      "ncaaOrgId": 786,
+      "subdivision": "FCS",
+      "abbreviation": "William & Mary",
+      "institutionConference": "Patriot League"
+    },
+    {
+      "id": "14c96520-695b-5bc7-8320-88812ad1bac8",
+      "externalId": "unit-talk:ncaaf:ncaa:2915",
+      "displayName": "Wofford College",
+      "ncaaOrgId": 2915,
+      "subdivision": "FCS",
+      "abbreviation": "Wofford",
+      "institutionConference": "Southern Conference"
+    },
+    {
+      "id": "6b9ca93a-b45f-5494-a383-63c4a3b45130",
+      "externalId": "unit-talk:ncaaf:ncaa:813",
+      "displayName": "Yale University",
+      "ncaaOrgId": 813,
+      "subdivision": "FCS",
+      "abbreviation": "Yale",
+      "institutionConference": "The Ivy League"
+    },
+    {
+      "id": "82bff77a-3e7b-5e35-b11b-7d24215d388a",
+      "externalId": "unit-talk:ncaaf:ncaa:817",
+      "displayName": "Youngstown State University",
+      "ncaaOrgId": 817,
+      "subdivision": "FCS",
+      "abbreviation": "Youngstown St.",
+      "institutionConference": "Missouri Valley Football Conference"
+    }
+  ]
+}

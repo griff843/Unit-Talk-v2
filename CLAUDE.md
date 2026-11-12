@@ -14,22 +14,27 @@ Unit Talk V2 is a contract-first, fail-closed sports-betting pick pipeline. Clau
 
 ## Mission — mandatory context
 
-Before planning, executing, reviewing, delegating, or resuming work, read:
+Mission card (compact; the full files are read on demand, not imported). Unit Talk is recovering to a finished, trustworthy, revenue-generating product. Current goal (Griff, 2026-10-13): quantity, diversity, truthful completion and reconciliation of real **Track Only** pick lifecycles with zero member delivery; no calendar pilot. SGO purchase/activation is a separate Griff gate.
 
-@docs/mission/intent.md
-@docs/mission/spec.md
-@docs/mission/plan.md
+**Reserved for Griff (never decide or act on these yourself; surface with prepared evidence and one recommendation):**
+1. Production DDL and production data deletion
+2. Member-delivery activation
+3. Paid provider / subscription commitments
+4. Secrets
+5. Pricing and tier authority
+6. Changes to production containment while containment is mandated
+7. Changes to merge authority itself — the merge gate, its policy inputs, CODEOWNERS, branch protection
+8. Dispatching a production deployment (`deploy.yml` is `workflow_dispatch`-only and nothing promotes on its own)
+
+**Standing holds (until Griff changes them):** all four delivery targets (`official-picks`, `best-bets`, `trader-insights`, `exclusive-insights`) stay kill-switched; Track Only never creates delivery, and `human-capper` containment cannot deliver on its own; do not requeue or alter pick `706b136b`; never unpark anything on your own initiative (no provider or syndicate-machine unparking, containment change or member delivery); no clearing of stranded canary `processing` rows or re-enabling cron job 5; no direct-`main` bypass (all work lands by PR on green CI). Manual-fallback picks are labeled and claim neither provider verification nor CLV; never fabricate provider evidence. `docs/05_operations/T1_PRODUCTION_READINESS_CONTRACT.md` is the only readiness threshold. PRs #1491, #1492 and #1495 are frozen pending PM architecture review (do not commit to, resume or design against them); #1451 is production DDL.
+
+**Operating model:** changes to execution authority, merge authority, tiering, agent routing or the lane/dispatch system are PM architecture decisions, proposed in their own PR and never adopted unilaterally or bundled into a PR about something else.
+
+**Stop conditions:** the mission runs continuously. Return to Griff only at a reserved decision with nothing else safe executable, a hard safety boundary that cannot be resolved within existing authority, or mission completion. These are NOT stop conditions: waiting on CI, review or a PR; finishing a lane or PR; having something to report; Griff asking a question, issuing a correction or giving steering (answer it, fold it in, continue). A reserved gate blocks only the work that depends on it: surface it and continue every other safe path. Continuing never licenses working around the lane, tier, proof or merge-authority contracts.
+
+**Before planning, executing, reviewing, delegating or resuming work (including after compaction), Read `docs/mission/intent.md` and `docs/mission/plan.md` (and `docs/mission/spec.md` for contract questions).** `intent.md` is Griff-owned: do not change its intent without Griff ratification. `plan.md` is Claude-owned: reconcile it against live GitHub and runtime truth. Live evidence establishes current state, and canonical contracts remain authoritative for their domains. Dated readings (current truth, production position, evidence batch) live in `docs/mission/plan-readings.md`; re-measure before relying on any figure. If the card and those files disagree, the files win. Claude owns orchestration from this context; do not require Griff to restate the mission in chat.
+
 @docs/05_operations/STANDING_GUARDRAILS.md
-
-These define the current mission.
-
-- `intent.md` is Griff-owned. Do not change its intent without Griff ratification.
-- `spec.md` defines the required outcome and points to canonical contracts.
-- `plan.md` is Claude-owned. Reconcile it against live GitHub/runtime truth and update it as reality changes.
-- Live evidence establishes current state.
-- Relevant canonical contracts remain authoritative for their governed domains.
-
-Claude owns orchestration from this context. Do not require Griff to restate the mission in chat.
 
 ---
 
@@ -127,12 +132,12 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | Tier | Verification | Proof | Merge Authority |
 |---|---|---|---|
 | T1 | type-check + test + test:db + runtime proof | Evidence bundle v1, SHA-tied | `t1-approved` label **and** `pm-verdict/v1` APPROVED comment from CODEOWNERS |
-| T2 | type-check + test + issue-specific | Diff summary + verification log | GitHub PR review approval **or** `pm-verdict/v1` APPROVED comment |
+| T2 | type-check + test + issue-specific | Diff summary + verification log | GitHub PR review approval, **or** `pm-verdict/v1` APPROVED comment, **or** `executor-result/v1` self-attestation comment from a CODEOWNERS member |
 | T3 | type-check + test | Green CI on merge SHA | Green CI + valid executor result — no PM verdict |
 
 **Static proof** alone is never sufficient for T1. **Runtime proof** must run against real Supabase, not in-memory repos. Details: `/verification` skill.
 
-**Merge Authority is defined once, mechanically, by `.github/workflows/merge-gate.yml`** (ratified 2026-05-18 under UTV2-979 for T2; this table must always match that workflow — if they diverge, the workflow wins and this table is stale). For T2, the orchestrator's own `gh pr review --approve` after diff review satisfies the "GitHub PR review approval" branch — no PM presence or PM_VERDICT comment is mechanically required, for any executor (Claude or Codex). PM approval is never satisfied by a chat message; only the `t1-approved` label, a GitHub PR review approval, or a `pm-verdict/v1` comment (schema: `docs/05_operations/schemas/pm-verdict-v1.md`) count as approval artifacts.
+**Merge Authority is defined once, mechanically, by `.github/workflows/merge-gate.yml`** (ratified 2026-05-18 under UTV2-979 for T2; this table must always match that workflow — if they diverge, the workflow wins and this table is stale). For T2, no PM presence or PM_VERDICT comment is mechanically required, for any executor (Claude or Codex). GitHub rejects `gh pr review --approve` when the reviewer is the PR's author, and Claude and Codex both open PRs as the same account, so the artifact that actually satisfies T2 in practice is the `EXECUTOR_RESULT: READY_FOR_REVIEW` / `schema: executor-result/v1` self-attestation comment (UTV2-1523; the T2 branch of `merge-gate.yml`). A GitHub PR review approval or a `pm-verdict/v1` comment also satisfies it. PM approval is never satisfied by a chat message; only the `t1-approved` label, a GitHub PR review approval, a `pm-verdict/v1` comment (schema: `docs/05_operations/schemas/pm-verdict-v1.md`) or, for T2 only, the `executor-result/v1` self-attestation count as approval artifacts.
 
 ---
 
@@ -150,7 +155,7 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | Sonnet-5-era operating model (Outcome Contracts, PM gates, runtime validation by tier, cutover) | `docs/05_operations/OPERATING_MODEL_SONNET5.md` |
 | Evidence bundle template | `docs/05_operations/EVIDENCE_BUNDLE_TEMPLATE.md` |
 | Docs authority map | `docs/05_operations/docs_authority_map.md` |
-| Program status | `docs/06_status/PROGRAM_STATUS.md` |
+| Program status snapshot (dated; check its "Last verified" line; live evidence and `docs/mission/plan.md` override it. `PROGRAM_STATUS.md` is superseded audit history) | `docs/06_status/CURRENT_STATE.md` |
 | Codebase guide (architecture reference) | `docs/CODEBASE_GUIDE.md` |
 | Phase 7 ratification + execution plan | `docs/06_status/PHASE7R_RATIFICATION.md`, `docs/06_status/PHASE7E_EXECUTION_PLAN.md` |
 | SGO / provider knowledge | `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md` |

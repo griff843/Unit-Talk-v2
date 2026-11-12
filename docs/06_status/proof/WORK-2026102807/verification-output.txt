@@ -1,0 +1,128 @@
+pnpm exec tsx --test apps/command-center/src/lib/data/queues-count-relation.test.ts apps/command-center/src/lib/data/operations-home.test.ts
+  duration_ms: 5.284626
+  type: 'test'
+  ...
+1..16
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1542.541131
+
+temporary view-result mutation; targeted direct test
+TAP version 13
+# Subtest: unfiltered corrected pick uses the chain tip instead of the view result
+not ok 1 - unfiltered corrected pick uses the chain tip instead of the view result
+  ---
+  duration_ms: 76.894948
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102807-cc-unfiltered-corrected-result/apps/command-center/src/lib/data/queues-count-relation.test.ts:2:8455'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    'loss' !== 'win'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'win'
+  actual: 'loss'
+  operator: 'strictEqual'
+  stack: |-
+    <anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102807-cc-unfiltered-corrected-result/apps/command-center/src/lib/data/queues-count-relation.test.ts:162:12)
+    async withPageHistoryFixture (/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102807-cc-unfiltered-corrected-result/apps/command-center/src/lib/data/queues-count-relation.test.ts:144:5)
+    async TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102807-cc-unfiltered-corrected-result/apps/command-center/src/lib/data/queues-count-relation.test.ts:160:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1452.858181
+
+
+restored source; targeted direct test
+TAP version 13
+# Subtest: unfiltered corrected pick uses the chain tip instead of the view result
+ok 1 - unfiltered corrected pick uses the chain tip instead of the view result
+  ---
+  duration_ms: 58.338266
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1199.717549
+
+
+pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 8
+Rules matched: operator-ui
+
+
+pnpm test:db
+
+> @unit-talk/v2@0.1.0 test:db /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102807-cc-unfiltered-corrected-result
+> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts
+
+
+> @unit-talk/v2@0.1.0 ci:assert-staging /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102807-cc-unfiltered-corrected-result
+> tsx scripts/ci/assert-staging-target.ts
+
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
+ ELIFECYCLE  Command failed with exit code 1.
+ ELIFECYCLE  Command failed with exit code 1.
+
+
+pnpm verify (final output; all static stages completed before writable DB guard)
+# skipped 0
+# todo 0
+# duration_ms 2851.666507
+smart-form e2e: not run (UNIT_TALK_SMART_FORM_E2E is not set).
+Set UNIT_TALK_SMART_FORM_E2E=1 to run it. It requires a Playwright browser:
+  pnpm exec playwright install chromium --with-deps
+
+> @unit-talk/v2@0.1.0 verify:commands /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102807-cc-unfiltered-corrected-result
+> pnpm --filter @unit-talk/discord-bot command-manifest:check && node scripts/check-migration-versions.mjs && node scripts/lint-migrations.mjs
+
+
+> @unit-talk/discord-bot@0.1.0 command-manifest:check /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102807-cc-unfiltered-corrected-result/apps/discord-bot
+> tsx scripts/sync-command-manifest.ts --check
+
+[command-manifest] Verified 14 command definition(s) against /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102807-cc-unfiltered-corrected-result/apps/discord-bot/command-manifest.json
+[check-migration-versions] 139 migration file(s) verified — no duplicate versions.
+[lint-migrations] Skipping schema baseline replay-root 00000000000000_baseline_live_schema.sql (snapshot, not a forward migration; fidelity verified by Live Schema Parity).
+[lint-migrations] 138 migration file(s) checked — no findings.
+
+> @unit-talk/v2@0.1.0 test:live-db /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102807-cc-unfiltered-corrected-result
+> pnpm test:db && pnpm test:t1-proof:live
+
+
+> @unit-talk/v2@0.1.0 test:db /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102807-cc-unfiltered-corrected-result
+> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts
+
+
+> @unit-talk/v2@0.1.0 ci:assert-staging /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102807-cc-unfiltered-corrected-result
+> tsx scripts/ci/assert-staging-target.ts
+
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
+ ELIFECYCLE  Command failed with exit code 1.
+ ELIFECYCLE  Command failed with exit code 1.
+ ELIFECYCLE  Command failed with exit code 1.
+ ELIFECYCLE  Command failed with exit code 1.

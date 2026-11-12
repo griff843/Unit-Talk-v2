@@ -1,0 +1,92 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101501",
+  "lane_type": "delivery-ui",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026101501/.out/worktrees/codex__work-2026101501-retired-onboarding-buttons",
+  "branch": "codex/work-2026101501-retired-onboarding-buttons",
+  "base_branch": "main",
+  "commit_sha": "e22d68f9c8153afbabf4d88ad0ca102660cba26f",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1767",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/discord-bot/src/discord-bot-foundation.test.ts",
+    "apps/discord-bot/src/router.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026101501/diff-summary.md",
+    "docs/06_status/proof/WORK-2026101501/evidence.json",
+    "docs/06_status/proof/WORK-2026101501/verification.md",
+    "docs/06_status/proof/WORK-2026101501/model-routing.json"
+  ],
+  "status": "merged",
+  "started_at": "2026-10-17T10:49:10.982Z",
+  "heartbeat_at": "2026-10-17T11:14:06.533Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/work-2026101501-retired-onboarding-buttons.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-18T14:57:19.877Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 27.7h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-10-18T19:44:33.979Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 32.5h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-10-19T02:00:12.324Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 38.8h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-10-19T11:22:03.896Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 48.1h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-10-19T11:45:45.518Z",
+      "verdict": "fail",
+      "merge_sha": "e22d68f9c8153afbabf4d88ad0ca102660cba26f",
+      "failures": [
+        "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1767 merged while manifest status was \"blocked\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
+      ],
+      "runner": "ops:reconcile"
+    }
+  ],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-luna-medium",
+    "model": "gpt-5.6-luna",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "2.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026101501/.out/worktrees/codex__work-2026101501-retired-onboarding-buttons",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

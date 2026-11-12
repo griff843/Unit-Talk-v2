@@ -146,6 +146,14 @@ export interface PickRepository {
     limit?: number | undefined,
     offset?: number | undefined,
   ): Promise<PickRecord[]>;
+  /**
+   * Lists only Track Only picks in one lifecycle state. Optional so narrow
+   * repository fakes remain source-compatible; callers fall back to paging
+   * `listByLifecycleState` and filtering the result.
+   */
+  listTrackOnlyByLifecycleState?(
+    lifecycleState: CanonicalPick['lifecycleState'],
+  ): Promise<PickRecord[]>;
   listByLifecycleStates(
     lifecycleStates: CanonicalPick['lifecycleState'][],
     limit?: number | undefined,
@@ -1170,6 +1178,21 @@ export interface EventOfferBrowseResult {
   providerParticipantId: string | null;
 }
 
+/**
+ * Explicit freshness state of the canonical current-offer projection for one
+ * event (WORK-2026110705). `empty` = no rows at all; `stale` = rows exist but
+ * none are newer than `freshSince`; `fresh` = at least one row observed at/after
+ * `freshSince`. Consumers must not treat `stale`/`empty` as "no data was ever
+ * recorded". `truncated` = a read hit the PostgREST row cap, so the offers are
+ * a sample, not the full set.
+ */
+export interface EventOffersState {
+  status: 'fresh' | 'stale' | 'empty';
+  newestObservedAt: string | null;
+  freshSince: string;
+  truncated: boolean;
+}
+
 export interface EventBrowseResult {
   eventId: string;
   externalId: string | null;
@@ -1182,6 +1205,8 @@ export interface EventBrowseResult {
   leagueId: string | null;
   participants: EventParticipantBrowseResult[];
   offers: EventOfferBrowseResult[];
+  /** Freshness of `offers`; absent only from non-database repositories. */
+  offersState?: EventOffersState;
 }
 
 export interface ReferenceDataRepository {

@@ -72,6 +72,14 @@ export interface EventOfferBrowseResult {
   providerParticipantId: string | null;
 }
 
+/** Freshness of `EventBrowseResult.offers` (WORK-2026110705). Mirrors @unit-talk/db EventOffersState. */
+export interface EventOffersState {
+  status: 'fresh' | 'stale' | 'empty';
+  newestObservedAt: string | null;
+  freshSince: string;
+  truncated: boolean;
+}
+
 export interface EventBrowseResult {
   eventId: string;
   externalId: string | null;
@@ -83,6 +91,7 @@ export interface EventBrowseResult {
   leagueId: string | null;
   participants: EventParticipantBrowseResult[];
   offers: EventOfferBrowseResult[];
+  offersState?: EventOffersState;
 }
 
 export interface SubmitPickPayload {

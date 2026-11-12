@@ -40,9 +40,9 @@ function cx(...values: Array<string | false | null | undefined>) {
 
 function LogoMark() {
   return (
-    <svg className="h-10 w-10" viewBox="0 0 1000 800" role="img" aria-label="Unit Talk">
-      <path fill="#ffffff" d="M110 80h175v385c0 71 44 115 115 115h105V335h175v385H395c-176 0-285-109-285-285V80z"/>
-        <path fill="#ffffff" d="M355 80h535v175H710v465H535V255H355V80z"/>
+    <svg width="40" height="40" className="h-10 w-10 shrink-0" viewBox="0 0 740 500" fill="none" role="img" aria-label="Unit Talk">
+      <path fill="#ffffff" d="M18 20h42c57 0 92 39 92 95v176c0 45 23 70 63 70h84V210h86v272H202C85 482 18 412 18 299V20Z"/>
+      <path fill="#ffffff" d="M241 20h481v126H585v210c0 79-54 126-139 126V146H241V20Z"/>
     </svg>
   );
 }

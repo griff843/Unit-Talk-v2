@@ -1,0 +1,181 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026103002
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026103002
+  objective: >-
+    `post-merge-lane-close.yml` starts on the merge push. `ci.yml` on the same
+    merge SHA takes 13 to 17 minutes. A lane that deferred its T1 live-DB
+    precondition to CI therefore always fails G6 on its push closeout ("the
+    staging receipt is not green at merge SHA ... Missing or failing: verify,
+    Writable DB proof (staging only)"). It then needs a manual
+    `workflow_dispatch` replay once CI is green. The last three such lanes all
+    followed this sequence:
+
+    | Merge | Push closeout (G6 FAIL) | ci.yml on merge SHA | Replay |
+    |---|---|---|---| | `cd350ef8b` (#1802) | 40987061159, 01:38 | 01:38 to
+    01:52, success | 40988392742 success | | `b4ab31a3a` (#1801) | 40994374430,
+    02:54 | 02:54 to 03:11, success | 40995965707 success | | `104185674`
+    (#1804) | 41004630969, 04:45 | 04:45 to (running) | pending |
+  acceptance_criteria:
+    - "On `push`, a new `wait-for-merge-ci` job polls `ci.yml` runs for the
+      merge SHA. `lane-close` starts after the job:"
+    - The job finishes once every such run has completed, whatever its
+      conclusion. It decides nothing, and every closeout gate still runs
+      unchanged in `lane-close`.
+    - It never blocks a closeout indefinitely. The job proceeds with a warning
+      if no run appears within 5 minutes, if the API is unreadable until the
+      deadline, or once 50 minutes have elapsed.
+    - The wait job holds no concurrency group. The `merge-closeout-mutex` moves
+      from the workflow to the `lane-close` job, so waiting never occupies the
+      mutex or its single pending slot.
+    - "`workflow_dispatch` replays skip the wait and still run `lane-close`
+      (`!cancelled()`), and bot pushes still skip both jobs."
+    - "`scripts/ops/workflow-hardening.test.ts` executes the wait step's script,
+      as written, against a stubbed `gh`. Each of these mutations fails it:"
+    - completion judged by any run instead of all runs;
+    - no absent grace;
+    - unreadable treated as completed;
+    - "`needs` removed;"
+    - the mutex put on the wait job;
+    - "`!cancelled()` removed."
+    - "Unchanged: every closeout gate (G6 included), Merge Gate, the required
+      checks, lane admission and `ci.yml`."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026103002 — Push-triggered closeout waits for merge-SHA CI
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: PM directive (2026-10-30), "Keep one meaningful operating-model
+      improvement lane active", measured by closeouts that need a manual replay.
+      Mechanical tier floor is T1 (`.github/workflows/**` is a tier-c prefix);
+      the tier is not lowered.
+
+
+      ## File Scope
+
+
+      - `.github/workflows/post-merge-lane-close.yml`
+
+      - `scripts/ops/workflow-hardening.test.ts`
+
+      - `.ops/work/WORK-2026103002.md`
+
+
+      ## Rollback
+
+
+      Revert the PR. Push closeouts then start immediately again, and
+      deferred-precondition lanes go back to needing a manual replay. No data,
+      state or required-check configuration changes.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026103002.md
+    title: WORK-2026103002 — Push-triggered closeout waits for merge-SHA CI
+    description: >-
+      # WORK-2026103002 — Push-triggered closeout waits for merge-SHA CI
+
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: PM directive (2026-10-30), "Keep one meaningful operating-model
+      improvement lane active", measured by closeouts that need a manual replay.
+      Mechanical tier floor is T1 (`.github/workflows/**` is a tier-c prefix);
+      the tier is not lowered.
+
+
+      ## Objective
+
+
+      `post-merge-lane-close.yml` starts on the merge push. `ci.yml` on the same
+      merge SHA takes 13 to 17 minutes. A lane that deferred its T1 live-DB
+      precondition to CI therefore always fails G6 on its push closeout ("the
+      staging receipt is not green at merge SHA ... Missing or failing: verify,
+      Writable DB proof (staging only)"). It then needs a manual
+      `workflow_dispatch` replay once CI is green. The last three such lanes all
+      followed this sequence:
+
+
+      | Merge | Push closeout (G6 FAIL) | ci.yml on merge SHA | Replay |
+
+      |---|---|---|---|
+
+      | `cd350ef8b` (#1802) | 40987061159, 01:38 | 01:38 to 01:52, success |
+      40988392742 success |
+
+      | `b4ab31a3a` (#1801) | 40994374430, 02:54 | 02:54 to 03:11, success |
+      40995965707 success |
+
+      | `104185674` (#1804) | 41004630969, 04:45 | 04:45 to (running) | pending
+      |
+
+
+      ## Acceptance Criteria
+
+
+      - On `push`, a new `wait-for-merge-ci` job polls `ci.yml` runs for the
+      merge SHA. `lane-close` starts after the job:
+        - The job finishes once every such run has completed, whatever its conclusion. It decides nothing, and every closeout gate still runs unchanged in `lane-close`.
+        - It never blocks a closeout indefinitely. The job proceeds with a warning if no run appears within 5 minutes, if the API is unreadable until the deadline, or once 50 minutes have elapsed.
+      - The wait job holds no concurrency group. The `merge-closeout-mutex`
+      moves from the workflow to the `lane-close` job, so waiting never occupies
+      the mutex or its single pending slot.
+
+      - `workflow_dispatch` replays skip the wait and still run `lane-close`
+      (`!cancelled()`), and bot pushes still skip both jobs.
+
+      - `scripts/ops/workflow-hardening.test.ts` executes the wait step's
+      script, as written, against a stubbed `gh`. Each of these mutations fails
+      it:
+        - completion judged by any run instead of all runs;
+        - no absent grace;
+        - unreadable treated as completed;
+        - `needs` removed;
+        - the mutex put on the wait job;
+        - `!cancelled()` removed.
+      - Unchanged: every closeout gate (G6 included), Merge Gate, the required
+      checks, lane admission and `ci.yml`.
+
+
+      ## File Scope
+
+
+      - `.github/workflows/post-merge-lane-close.yml`
+
+      - `scripts/ops/workflow-hardening.test.ts`
+
+      - `.ops/work/WORK-2026103002.md`
+
+
+      ## Rollback
+
+
+      Revert the PR. Push closeouts then start immediately again, and
+      deferred-precondition lanes go back to needing a manual replay. No data,
+      state or required-check configuration changes.
+    captured_at: 2026-10-30T05:50:27.518Z
+    description_sha256: e47841f081cbac608aaa6bc1fb2abe3d7627e3840257f9d75a74701c8f2cc3d6
+  contract_hash: be600b677e93d1dbf1734c3277d724b716e664afe016703b96953cab91f2658f

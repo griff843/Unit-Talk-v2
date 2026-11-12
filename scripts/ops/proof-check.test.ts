@@ -432,6 +432,93 @@ test('pre-proof hook retains fail-closed validation for a normal non-merge commi
   }
 });
 
+function canonicalBindingEvidence(overrides: {
+  schemaVersion?: unknown;
+  binding?: Record<string, unknown>;
+} = {}): string {
+  return `${JSON.stringify({
+    schema_version: overrides.schemaVersion ?? 2,
+    status: 'READY_FOR_REVIEW',
+    static_proof: { status: 'PASS' },
+    sha_binding: {
+      merge_sha: VALID_SHA,
+      verified_source_sha: OTHER_SHA,
+      evidence_commit_sha: 'set-by-ci',
+      current_pr_head_sha: 'set-by-ci',
+      sha_type: 'merge_sha',
+      ...overrides.binding,
+    },
+  })}\n`;
+}
+
+function stageCanonicalBinding(content: string): { repo: string; hook: string } {
+  const repo = initGitFixture();
+  const proofPath = 'docs/06_status/proof/TOPIC/evidence.json';
+  writeFixture(repo, proofPath, content);
+  runGit(repo, ['add', proofPath]);
+  return { repo, hook: PRE_PROOF_HOOK };
+}
+
+test('pre-proof hook accepts the canonical post-merge v2 binding that carries no ci_sentinels', () => {
+  const { repo, hook } = stageCanonicalBinding(canonicalBindingEvidence());
+  try {
+    const result = runPreProofHook(repo, hook);
+    assert.equal(result.status, 0, result.stderr);
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('pre-proof hook still blocks every incomplete or forged canonical binding', () => {
+  const cases: Array<[string, string]> = [
+    ['pre-merge null merge_sha', canonicalBindingEvidence({ binding: { merge_sha: null } })],
+    ['non-hex merge_sha', canonicalBindingEvidence({ binding: { merge_sha: 'pending merge' } })],
+    ['short merge_sha', canonicalBindingEvidence({ binding: { merge_sha: 'abc1234' } })],
+    ['missing evidence_commit_sha', canonicalBindingEvidence({ binding: { evidence_commit_sha: undefined } })],
+    ['empty evidence_commit_sha', canonicalBindingEvidence({ binding: { evidence_commit_sha: '  ' } })],
+    ['missing current_pr_head_sha', canonicalBindingEvidence({ binding: { current_pr_head_sha: undefined } })],
+    ['schema_version 1 with flat fields', canonicalBindingEvidence({ schemaVersion: 1 })],
+    ['string schema_version "2"', canonicalBindingEvidence({ schemaVersion: '2' })],
+    ['boolean schema_version', canonicalBindingEvidence({ schemaVersion: true })],
+    ['non-integer schema_version 2.5', canonicalBindingEvidence({ schemaVersion: 2.5 })],
+    ['non-merge sha_type', canonicalBindingEvidence({ binding: { sha_type: 'head_sha' } })],
+    ['invalid verified_source_sha', canonicalBindingEvidence({ binding: { verified_source_sha: 'nope' } })],
+  ];
+  for (const [label, content] of cases) {
+    const { repo, hook } = stageCanonicalBinding(content);
+    try {
+      const result = runPreProofHook(repo, hook);
+      assert.equal(result.status, 2, `${label} must be blocked`);
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true });
+    }
+  }
+});
+
+test('the canonical-binding acceptance clause is load-bearing', () => {
+  const repo = initGitFixture();
+  const proofPath = 'docs/06_status/proof/TOPIC/evidence.json';
+  try {
+    const current = fs.readFileSync(PRE_PROOF_HOOK, 'utf8');
+    const clause = "if not sb.get('ci_sentinels') and not canonical_v2_post_merge:";
+    assert.ok(current.includes(clause), 'acceptance clause must be present verbatim');
+    const mutatedHook = path.join(repo, 'no-canonical-binding-pre-proof-validator.sh');
+    fs.writeFileSync(
+      mutatedHook,
+      current.replace(clause, "if not sb.get('ci_sentinels'):"),
+    );
+    writeFixture(repo, proofPath, canonicalBindingEvidence());
+    runGit(repo, ['add', proofPath]);
+
+    assert.equal(runPreProofHook(repo, PRE_PROOF_HOOK).status, 0);
+    const mutated = runPreProofHook(repo, mutatedHook);
+    assert.equal(mutated.status, 2);
+    assert.match(mutated.stderr, /ci_sentinels missing or empty/);
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
+});
+
 test('pre-proof hook blocks malformed JSON rather than treating parse failure as valid', () => {
   const repo = initGitFixture();
   const proofPath = 'docs/06_status/proof/TOPIC/evidence.json';

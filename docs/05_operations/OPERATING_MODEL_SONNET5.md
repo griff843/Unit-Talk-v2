@@ -10,6 +10,8 @@
 
 This document is the canonical source for the Sonnet-5-era operating model: what Claude decides unilaterally, what still requires a PM gate, what an Outcome Contract is and is not, and how runtime validation scales by tier. It exists because a chat-proposed version of this model was adversarially reviewed and found to narrow the PM-gate trigger list relative to `three-brain.md` Rule 9 — an oversight that would have silently widened agent autonomy if adopted without a real diff. See [[feedback-governance-changes-require-pr-not-chat]] (session memory) for the precedent this document sets: governance changes land as a reviewable PR, never purely from a chat directive.
 
+**Cutover status (reconciled 2026-10-23, WORK-2026102301):** complete. The reset merged to `main` as UTV2-1390 (#1135, `eca310c23`, 2026-07-01); the lane ID was UTV2-1390, not the `UTV2-WORKFLOW-RESET` name used below. The original cutover wording follows unchanged as history.
+
 **Cutover:** This model applies only to lanes opened after this document (and the accompanying diffs to `three-brain.md`, `dispatch.md`, `agent-role-contracts.md`, `AGENT_SKILL_CONTRACTS.md`, `contract-validator.ts`) merge to main via `UTV2-WORKFLOW-RESET`. It does not retroactively apply to lanes already open at merge time. Existing governance (current CLAUDE.md invariants, current `three-brain.md` Rule 9, current lane/proof mechanics) remains binding until then.
 
 ---
@@ -78,6 +80,8 @@ The principle: by the time a PR opens, CI should be confirming what local prefli
 **Known tooling gap surfaced while implementing this lane:** `pnpm ops:preflight` requires a clean working tree (PG2) for T1, but also requires the T1 proof directory to already exist (PX5, non-waivable) with structurally valid content (PX3/PX4, non-waivable). For a brand-new T1 lane, these two requirements can only both be satisfied by committing proof-directory stub files (and any new canonical doc placeholders referenced in `file_scope_lock`) directly to `main` before running preflight — the same pattern already used for lane-registry files. This is a real gap in the preflight tool itself (not a lane-specific workaround); it is out of this lane's declared scope (`scripts/ops/preflight.ts` is not in `file_scope_lock`) and is called out here as a follow-up rather than silently patched.
 
 **Circular SHA note:** `evidence.json`/`verification.md` are written pre-merge with the branch-head SHA (`sha_type: "branch_head"`) because the merge SHA does not exist yet. `ops:proof-generate --merge-sha` (run automatically by `post-merge-lane-close.yml`) regenerates `diff-summary.md`/`runtime-verification.md` with the real merge SHA but does **not** rewrite `evidence.json`/`verification.md` — those need a manual post-merge SHA rebind (`sha_type: "merge_sha"`) before `ops:lane-close`'s C4/P3 checks will pass. This is a known gap, not new to this lane (see UTV2-1373 proof).
+
+**Superseded by UTV2-1392 (reconciled 2026-10-23):** `post-merge-lane-close.yml` now rebinds `evidence.json` and `verification.md` to the merge SHA (`ops:proof-generate` last-write-wins rebind), so a normally closed lane needs no manual rebind. A lane whose bundle is malformed or whose closeout cannot run still needs the repair path. The paragraph above is kept as history.
 
 ## 5. Runtime validation by tier
 

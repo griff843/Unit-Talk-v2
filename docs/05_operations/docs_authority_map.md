@@ -9,18 +9,21 @@ This file defines how Unit Talk V2 documentation is ranked, what is current auth
 | Owner        | Program Owner                    |
 | Status       | Ratified                         |
 | Ratified     | 2026-03-20                       |
-| Last Updated | 2026-05-18 docs convergence pass |
+| Last Updated | 2026-10-23 truth-order reconciliation (WORK-2026102301) |
 
 ## Truth Rules
 
 Docs are authority for contracts, policies, and historical proof. Docs are not automatically proof that the runtime is currently healthy.
 
-When current state is disputed, use this order:
+When current state is disputed, `docs/05_operations/EXECUTION_TRUTH_MODEL.md` §1 (canonical, T0) is the authority and wins over this file. Its order is:
 
-1. Live systems: Linear for issue state, GitHub for PR/check state, and runtime commands such as `pnpm runtime:health`, `pnpm pipeline:health`, and `pnpm readiness:report`.
-2. Repo execution truth: lane manifests in `docs/06_status/lanes/*.json`, filtered to active statuses only.
-3. Current status views: `docs/06_status/PROGRAM_STATUS.md` and `docs/06_status/SYSTEM_STATE.md`.
-4. Historical records: `ISSUE_QUEUE.md`, closed proof bundles, dated audits, archived phase evidence, and superseded schemas.
+1. GitHub `main`: shipped code, merge SHAs, CI on the merge.
+2. The proof bundle tied to the merge SHA.
+3. The lane manifest in `docs/06_status/lanes/*.json`, active statuses only.
+4. Linear issue state: workflow intent, ownership and tier label; never proof that code is merged.
+5. Chat, memory and agent claims: context only, never authoritative.
+
+Runtime commands such as `pnpm runtime:health`, `pnpm pipeline:health` and `pnpm readiness:report` establish current runtime state and override any status snapshot. `docs/06_status/CURRENT_STATE.md` is the dated status snapshot (its "Last verified" line states when; it is not current runtime or readiness truth, and `docs/mission/plan.md` plus the readiness ledger are newer); `docs/06_status/PROGRAM_STATUS.md` is superseded (its first line says so, and `docs/mission/spec.md` agrees) and is audit history only, as are `ISSUE_QUEUE.md`, closed proof bundles, dated audits, archived phase evidence, and superseded schemas.
 
 If a status doc says something is green but a live command fails, the live command wins until the status doc is regenerated.
 
@@ -51,6 +54,7 @@ If a status doc says something is green but a live command fails, the live comma
 | `docs/03_product/MEMBER_ROLE_ACCESS_AUTHORITY.md` | Primary member tier and role access authority | Product      |
 | `docs/03_product/DISCORD_COMMAND_CATALOG.md`      | Live Discord command registry                 | Product      |
 | `docs/03_product/*CONTRACT.md`                    | Product-surface contracts                     | Product      |
+| `docs/mission/intent.md`, `spec.md`, `plan.md` | Mission set. `intent.md` is Griff-owned (current intent ratified 2026-10-13: quantity-first, Milestone 1 historical, SGO a separate gate); `spec.md` is an outcome and contract index; `plan.md` is Claude-owned live state rebuilt from runtime evidence. Introduce no readiness threshold; `T1_PRODUCTION_READINESS_CONTRACT.md` stays the sole definition. | Griff / Claude |
 | `docs/03_product/*/intent.md`                     | Product intent — what a product is for and must do; indexes the canonical contracts that govern it, reconciles contradictions by correcting them in place, and marks gaps. Not a contract, not a gate, introduces no threshold. Where it disagrees with a canonical contract, the contract wins. | Product      |
 | `docs/discord/*.md`                               | Discord message, embed, and cadence contracts | Product      |
 | `docs/03_contracts/*.md`                          | Domain consumer contracts                     | Architecture |
@@ -119,7 +123,8 @@ defines no product behaviour and points at the contract.
 
 | File                                    | Purpose                                                                                                                                               | Authority Within Tier |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
-| `docs/06_status/PROGRAM_STATUS.md`      | High-level program status at its stated update time                                                                                                   | Primary status view   |
+| `docs/06_status/CURRENT_STATE.md`       | Dated program-status snapshot; check its "Last verified" line, live evidence overrides it                                                              | Status snapshot       |
+| `docs/06_status/PROGRAM_STATUS.md`      | Superseded (its first line says so); audit history only, not a status source                                                                          | Historical only       |
 | `docs/06_status/SYSTEM_STATE.md`        | Volatile generated/current checkout snapshot                                                                                                          | Current snapshot      |
 | `docs/06_status/lanes/*.json`           | Repo-local lane manifests. Active state is determined by filtering to active statuses only; closed/done/merged files are historical records in place. | Execution truth       |
 | `docs/06_status/proof/**`               | Proof and evidence archive. Current only when referenced by an active lane, PR, or recent closeout.                                                   | Evidence archive      |
@@ -134,7 +139,7 @@ defines no product behaviour and points at the contract.
 
 1. Tier 5 never overrides Tier 2 or Tier 3.
 2. Operational docs must not contradict principles, contracts, or product identity.
-3. `PROGRAM_STATUS.md` is not runtime proof; live runtime commands win.
+3. Status snapshots (`CURRENT_STATE.md`; `PROGRAM_STATUS.md` is superseded history) are not runtime proof; live runtime commands win.
 4. Linear is authoritative for current issue state. GitHub is authoritative for PR/check state.
 5. Lane manifests are the repo-local execution record. Closed/done/merged manifests are history, not active work.
 6. `ISSUE_QUEUE.md` is historical only.

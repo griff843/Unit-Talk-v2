@@ -13,7 +13,7 @@ on:
 jobs:
   qa-regression:
     name: QA Experience Regression (Advisory)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Advisory only: never block the PR. Exit code is always 0.
     continue-on-error: true
 

@@ -56,3 +56,4 @@ export * from './adversarial/manipulation-detector.js';
 export * from './adversarial/provider-anomaly.js';
 export * from './adversarial/escalation.js';
 export * from './adversarial/burn-in.js';
+export * from './member-performance.js';

@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026103010",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "3ab0e13884bd92522c27f0f8bff79934a9b6e742",
+    "verified_source_sha": "3adab53724f885bd0dcea946bc2caec4e5686619",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-11-02T10:52:57.455Z"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm test",
+    "conclusion": "success",
+    "verified_source_sha": "3adab53724f885bd0dcea946bc2caec4e5686619",
+    "full_suite": {
+      "command": "pnpm test",
+      "tests": 7740,
+      "pass": 7727,
+      "fail": 0,
+      "skipped": 13
+    },
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/lane-start.test.ts",
+      "tests": 78,
+      "pass": 78,
+      "fail": 0,
+      "skipped": 0
+    },
+    "type_check": "pass",
+    "r_level": "PASS",
+    "mutation_checks": "2 of 2 caught",
+    "note": "Measured on 3adab53724f885bd0dcea946bc2caec4e5686619. Protected exact-head CI and the staging DB receipt remain pending."
+  },
+  "db_verification": {
+    "command": "pnpm test:db",
+    "status": "blocked_deferred_to_protected_ci",
+    "required_staging_ref": "xskgrzbteyqdufktjrjx",
+    "production_accessed": false,
+    "write_attempted": false
+  }
+}

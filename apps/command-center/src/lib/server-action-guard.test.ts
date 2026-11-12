@@ -305,6 +305,12 @@ const BEHAVIOURAL_ACTIONS: Array<{
   assertRefusal: (value: unknown) => void;
 }> = [
   {
+    path: 'app/actions/pick-lookup.ts',
+    name: 'lookupPicks',
+    invoke: async () => (await import('../app/actions/pick-lookup')).lookupPicks('example'),
+    assertRefusal: (value) => assert.equal(refusalError(value), UNAUTHENTICATED_ACTION_ERROR),
+  },
+  {
     path: 'app/actions/board.ts',
     name: 'writeSystemPicks',
     invoke: async () => (await import('../app/actions/board')).writeSystemPicks(),

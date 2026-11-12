@@ -1,0 +1,104 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102806",
+  "lane_type": "delivery-ui",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102806-cc-wave2-results-corrections",
+  "branch": "codex/work-2026102806-cc-wave2-results-corrections",
+  "base_branch": "main",
+  "commit_sha": "28c6836ec2cf62d2ea79601477835542c4ff4764",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1800",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/command-center/src/app/actions/pick-lookup.ts",
+    "apps/command-center/src/app/intelligence/roi/page.tsx",
+    "apps/command-center/src/app/performance/page.tsx",
+    "apps/command-center/src/app/picks/[id]/page.tsx",
+    "apps/command-center/src/app/picks/page.tsx",
+    "apps/command-center/src/app/settlement/page.tsx",
+    "apps/command-center/src/components/CommandPalette.tsx",
+    "apps/command-center/src/components/CorrectionForm.tsx",
+    "apps/command-center/src/components/PicksExplorerClient.tsx",
+    "apps/command-center/src/components/SettlementForm.tsx",
+    "apps/command-center/src/components/SettlementTargetSummary.tsx",
+    "apps/command-center/src/components/SettlementWorkbench.tsx",
+    "apps/command-center/src/lib/client-bundle-boundary.test.ts",
+    "apps/command-center/src/lib/command-palette-model.test.ts",
+    "apps/command-center/src/lib/command-palette-model.ts",
+    "apps/command-center/src/lib/correction-confirmation.test.ts",
+    "apps/command-center/src/lib/correction-confirmation.ts",
+    "apps/command-center/src/lib/data/analytics.test.ts",
+    "apps/command-center/src/lib/data/analytics.ts",
+    "apps/command-center/src/lib/data/operator-performance.test.ts",
+    "apps/command-center/src/lib/data/operator-performance.ts",
+    "apps/command-center/src/lib/data/pick-identity.test.ts",
+    "apps/command-center/src/lib/data/pick-identity.ts",
+    "apps/command-center/src/lib/data/queues-count-relation.test.ts",
+    "apps/command-center/src/lib/data/queues.ts",
+    "apps/command-center/src/lib/picks-explorer-query.test.ts",
+    "apps/command-center/src/lib/picks-explorer-query.ts",
+    "apps/command-center/src/lib/server-action-guard.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026102806/diff-summary.md",
+    "docs/06_status/proof/WORK-2026102806/evidence.json",
+    "docs/06_status/proof/WORK-2026102806/verification.md",
+    "docs/06_status/proof/WORK-2026102806/model-routing.json"
+  ],
+  "status": "done",
+  "started_at": "2026-10-28T20:20:28.945Z",
+  "heartbeat_at": "2026-10-30T11:47:45.915Z",
+  "closed_at": "2026-10-30T11:47:45.915Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/work-2026102806-cc-wave2-results-corrections.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-30T11:47:43.994Z",
+      "verdict": "pass",
+      "merge_sha": "28c6836ec2cf62d2ea79601477835542c4ff4764",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "session-default",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "unavailable",
+    "selected_by": "manual-override",
+    "policy_version": "2.0.0",
+    "override": {
+      "authorized_by": "griff843",
+      "reason": "pm-verdict/v1 APPROVED https://github.com/griff843/Unit-Talk-v2/pull/1800#issuecomment-6521305731",
+      "at": "2026-10-30T11:15:14.291Z",
+      "declared": {
+        "profile": "codex-luna-medium",
+        "model": "gpt-5.6-luna",
+        "reasoning_effort": "medium",
+        "selected_by": "three-brain"
+      },
+      "observation": {
+        "verification": "unverified-external-session",
+        "source": "Codex executor report in docs/06_status/proof/WORK-2026102806/model-routing.json: the session explicitly exposed gpt-6.1-sol; reasoning effort and CLI telemetry not exposed",
+        "unavailable_fields": [
+          "reasoning_effort"
+        ]
+      },
+      "approval": {
+        "comment_url": "https://github.com/griff843/Unit-Talk-v2/pull/1800#issuecomment-6521305731",
+        "reviewer": "griff843",
+        "pr_number": 1800,
+        "head_sha": "14d250fee626f4b7c7ab674f664cf30f4de4a693"
+      }
+    }
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102806-cc-wave2-results-corrections",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

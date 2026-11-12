@@ -1,0 +1,99 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101303",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "review_pending_exact_head_ci",
+  "sha_binding": {
+    "merge_sha": "bd5e079398d393293dd5577ea05038ba3ca8098f",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1754",
+    "verified_source_sha": "bc679de4e3dfc46cb1a78ebbc6aa3ce83b758313",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-14T10:33:18.991Z"
+  },
+  "static_proof": {
+    "status": "pass_with_t1_live_db_deferred_to_ci",
+    "measured_against_sha": "d6dabe87e30dddebb4cc338bb9e35ea52cbabe57",
+    "commands": [
+      {
+        "command": "pnpm exec tsx --test apps/api/src/grading-cron.test.ts apps/api/src/grading-service.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "tests": 115,
+        "pass": 115,
+        "fail": 0
+      },
+      {
+        "command": "pnpm verify:static",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm test:db",
+        "exit_code": 1,
+        "result": "refused_by_staging_isolation",
+        "note": "Target host 127.0.0.1 was unidentified rather than sanctioned staging project xskgrzbteyqdufktjrjx. Writable proof is delegated to exact-head staging-ci."
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "No R-level rules matched the changed paths."
+      },
+      {
+        "command": "git diff --check origin/main...HEAD",
+        "exit_code": 0,
+        "result": "pass"
+      }
+    ]
+  },
+  "runtime_proof": {
+    "status": "writable_db_proof_deferred_to_exact_head_staging_ci",
+    "environment": "contained lane worktree; no database access; no push or deploy",
+    "queries": [
+      {
+        "source": "packages/db/src/runtime-repositories.ts DatabasePickRepository.listTrackOnlyByLifecycleState",
+        "environment": "not executed by this executor; exercised against staging only by exact-head staging-ci",
+        "description": "SELECT * FROM picks WHERE status = <state> AND metadata->>'distributionMode' = 'track-only' ORDER BY created_at, id, paged via readAllOrderedPages; used by runGradingPass for state 'validated'"
+      }
+    ],
+    "row_counts": [
+      {
+        "source": "PM read-only staging measurement quoted in .ops/work/WORK-2026101303.md (2026-10-13); not re-measured by this executor",
+        "environment": "staging xskgrzbteyqdufktjrjx",
+        "picks": 159661,
+        "picks_validated": 50840,
+        "picks_validated_with_proof_fixture_id": 716
+      }
+    ],
+    "t1_database_proof": "deferred_to_exact_head_staging_ci"
+  },
+  "scope": {
+    "implementation_paths": [
+      "apps/api/src/grading-service.ts",
+      "apps/api/src/grading-service.test.ts",
+      "packages/db/src/repositories.ts",
+      "packages/db/src/runtime-repositories.ts"
+    ],
+    "migrations": 0,
+    "package_changes": 0,
+    "production_deployments": 0,
+    "production_mutations": 0,
+    "discord_mutations": 0,
+    "pick_mutations": 0,
+    "delivery_releases": 0
+  },
+  "known_gaps": [
+    "Exact-head CI verify and Writable DB proof (staging only) remain required; the acceptance criterion that the writable proof passes on its first attempt is not demonstrated locally.",
+    "runtime_proof.row_counts are the PM-measured baseline from the work order, not a re-measurement by this executor; no post-change production-shaped row counts exist.",
+    "Merge, lane finalization and independent PM T1 review remain pending."
+  ]
+}

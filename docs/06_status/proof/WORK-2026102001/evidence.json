@@ -1,0 +1,44 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102001",
+  "tier": "T2",
+  "lane_type": "hygiene",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "7755809faa0417337f088a8855be50f7354bfb4d",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "command": "pnpm verify:static",
+    "exit_code": 0,
+    "static_checks": "PASS",
+    "writable_db": "NOT_RUN_LOCALLY_PROTECTED_STAGING_CI_ON_PR_HEAD",
+    "focused_suites": {
+      "command": "pnpm exec tsx --test scripts/ops/proof-generate.test.ts scripts/ops/proof-rebind.test.ts scripts/ops/ci-db-proof-harvest.test.ts",
+      "tests": 220,
+      "passed": 220,
+      "failed": 0
+    },
+    "r_level": {
+      "result": "PASS",
+      "required_artifacts": []
+    }
+  },
+  "repair_target": {
+    "original_lane": "WORK-2026101604",
+    "original_pr": 1768,
+    "original_merge_sha": "3afaa0fa3858ec9b7aa75b3f24c8db47ee20472f",
+    "runtime_evidence_source": "ops:proof-generate CI-DB-proof harvest, ci.yml run 39192328761, job 117867623770",
+    "model_routing_json_untouched": true
+  },
+  "production_actions": {
+    "deployment": false,
+    "grading_activation": false,
+    "database_mutation": false,
+    "delivery": false,
+    "kill_switch_change": false
+  }
+}

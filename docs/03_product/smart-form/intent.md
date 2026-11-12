@@ -43,6 +43,7 @@ record the degradation truthfully** — the three-tier ladder in §4.
 Ratified delivery order (`docs/mission/intent.md` § "Delivery order"):
 
 1. **Milestone 1** — a contained internal Track Only pilot: Griff, personally, once, end to end.
+   *(Historically complete, 2026-09-09; re-proved 2026-09-28.)*
 2. **Milestone 2** — the same path made *routine* for internal operators, producing a real graded
    and settled performance history.
 3. **Member-facing delivery** — separately reserved, and explicitly not part of either.
@@ -313,7 +314,15 @@ Free text is offered only where coverage is genuinely absent, and is labelled as
 
 ## 5. Pilot versus finished — these are different states and must not be conflated
 
-**The contained pilot (Milestone 1)** proves the path works **once**, for **one pick**, submitted by
+> **Current framing (ratified by Griff 2026-10-13, `docs/mission/intent.md` § "Current intent").**
+> Milestone 1 is historical evidence, not the remaining finish line, and there is no calendar-based
+> pilot. The next measurement is quantity-first: real Track Only picks from authorized identities,
+> manually settled and reconciled, with zero member delivery. The working batch lives in
+> `docs/mission/plan.md`; it is a working measurement, not a readiness threshold. Neither SGO nor an
+> event feed is required to submit and manually settle a Track Only pick. The text below is the
+> 2026-09-06 framing and is kept as written.
+
+**The contained pilot (Milestone 1)** proved the path works **once**, for **one pick**, submitted by
 **one person**, under containment. It is defined to complete with provider ingestion, system picks
 and member delivery all parked, and it does not require canonical reference-data coverage. Its
 seven steps are enumerated in `docs/mission/intent.md`.
@@ -512,6 +521,11 @@ check or a passing unit test establishes none of these states on its own (§7):
 | Receipt | `SuccessReceipt` | e2e | **Implemented; blocked in the deployed flow** — downstream of a submission that cannot succeed |
 | Track Only persisted truth | UTV2-1672 guard set | **mutation-tested** | **Implemented; blocked in the deployed flow** — the guards are proven by inversion, and no live pick has yet passed through them |
 | Read-only observation | `GET /api/picks/:id/trace` (authenticated) | — | **Implemented; blocked in the deployed flow** — there is no persisted pilot pick to observe |
+
+> **Superseded reading (2026-10-13).** The "blocked in the deployed flow" and "no persisted pilot
+> pick" statements in the rows above describe the 2026-09-06 measurement only. Production now holds
+> persisted governed picks submitted through the deployed form (14 as of 2026-10-13, all by
+> `griff843`), observed read-only and in Command Center. Current state: `docs/mission/plan.md`.
 
 **Read the table by that vocabulary and the shape of the work is unambiguous.** Milestone 1 steps 1
 and 2 are *exercised*; step 3 is established only to the extent §3.2 states. **Step 4 is blocked by

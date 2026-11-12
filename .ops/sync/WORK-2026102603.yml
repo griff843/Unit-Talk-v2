@@ -1,0 +1,141 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102603
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102603
+  objective: >-
+    Four lanes merged but cannot close:
+
+    Class A, missing merge binding: WORK-2026102601 (#1785,
+    ebfbc0a74db2dcb98f231a67a52854c79caab7a7) and WORK-2026102602 (#1786,
+    1d5c8b1e8057e0f183c98efdbffdc9d13879c016). `lane-pr-binding` does not bind
+    WORK ids, so `manifest.pr_url` is null and `post-merge-lane-close` refuses
+    at "Resolve merge SHA". Repair: `pnpm ops:lane-manifest record-merge <ID>
+    --pr <url>` for each.
+
+    Class B, identity conflict: WORK-2026102501 (#1780,
+    a7e63b48452e2f771411fda52d21f70422296328) and WORK-2026102506 (#1784,
+    ac01bf667ab6cb4e3c76b53c3bed526acd1aecaf). The lanes were started by
+    codex-cli and readmitted by Claude under PM direction; the manifests were
+    rewritten with executor/created_by claude and a new started_at, so the
+    immutable-preflight-evidence check refuses at `executor`. Repair: restore
+    the three immutable fields to the original admission values (codex-cli,
+    original started_at) so the evidence matches, record the Claude readmission
+    in `notes` so both facts survive, then `record-merge`.
+  acceptance_criteria:
+    - All four manifests carry pr_url, the GitHub merge SHA as commit_sha, and
+      status merged; the two class B manifests carry the original admission
+      identity and a note recording the Claude readmission.
+    - No proof content, product code or workflow file is changed. Closing still
+      goes through `post-merge-lane-close.yml` (dispatched without the `pr`
+      input) and a passing `ops:truth-check`.
+  guardrails:
+    - No hand edit of status. No bypass of direct-main, review, CI, proof or
+      merge controls.
+    - The temporary admission accommodation (one parked lane slot, one
+      --force-unsafe-substrate on lane-start) is used once and ends when this
+      lane closes.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged through `ops:merge-wrapper pr-merge`; the four closeouts
+      dispatched; each lane `done`; lane admission capacity verified.
+  unmapped_sections:
+    - >-
+      WORK-2026102603 — Recover four merged lanes whose closeout is blocked
+
+      Tier: T3
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. Same shape as
+      WORK-2026101202 (#1743) and WORK-2026092305 (#1633). PM direction
+      2026-10-27 authorises one bounded recovery of exactly these four lanes.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102603.md
+    title: WORK-2026102603 — Recover four merged lanes whose closeout is blocked
+    description: >-
+      # WORK-2026102603 — Recover four merged lanes whose closeout is blocked
+
+
+      Tier: T3
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. Same shape as
+      WORK-2026101202 (#1743) and WORK-2026092305 (#1633). PM direction
+      2026-10-27 authorises one bounded recovery of exactly these four lanes.
+
+
+      ## Objective
+
+
+      Four lanes merged but cannot close:
+
+
+      - Class A, missing merge binding: WORK-2026102601 (#1785,
+      ebfbc0a74db2dcb98f231a67a52854c79caab7a7) and WORK-2026102602 (#1786,
+      1d5c8b1e8057e0f183c98efdbffdc9d13879c016). `lane-pr-binding` does not bind
+      WORK ids, so `manifest.pr_url` is null and `post-merge-lane-close` refuses
+      at "Resolve merge SHA". Repair: `pnpm ops:lane-manifest record-merge <ID>
+      --pr <url>` for each.
+
+      - Class B, identity conflict: WORK-2026102501 (#1780,
+      a7e63b48452e2f771411fda52d21f70422296328) and WORK-2026102506 (#1784,
+      ac01bf667ab6cb4e3c76b53c3bed526acd1aecaf). The lanes were started by
+      codex-cli and readmitted by Claude under PM direction; the manifests were
+      rewritten with executor/created_by claude and a new started_at, so the
+      immutable-preflight-evidence check refuses at `executor`. Repair: restore
+      the three immutable fields to the original admission values (codex-cli,
+      original started_at) so the evidence matches, record the Claude
+      readmission in `notes` so both facts survive, then `record-merge`.
+
+
+      ## Acceptance Criteria
+
+
+      - All four manifests carry pr_url, the GitHub merge SHA as commit_sha, and
+      status merged; the two class B manifests carry the original admission
+      identity and a note recording the Claude readmission.
+
+      - No proof content, product code or workflow file is changed. Closing
+      still goes through `post-merge-lane-close.yml` (dispatched without the
+      `pr` input) and a passing `ops:truth-check`.
+
+
+      ## Guardrails
+
+
+      - No hand edit of status. No bypass of direct-main, review, CI, proof or
+      merge controls.
+
+      - The temporary admission accommodation (one parked lane slot, one
+      --force-unsafe-substrate on lane-start) is used once and ends when this
+      lane closes.
+
+
+      ## Exit Criteria
+
+
+      - PR merged through `ops:merge-wrapper pr-merge`; the four closeouts
+      dispatched; each lane `done`; lane admission capacity verified.
+    captured_at: 2026-10-27T04:27:48.574Z
+    description_sha256: d3fcb66fb75bc6837a55fad43ca6386f62b3b9665ed569abbf642ee71a60aecc
+  contract_hash: d554eb4ca56a8ad7dcd5ade2c80d6232cfc4172772c2f39abee5dd8d12bb2ce3

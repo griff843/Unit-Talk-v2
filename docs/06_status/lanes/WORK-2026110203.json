@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110203",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/wo-2026110101/.out/worktrees/claude__work-2026110203-codex-exec-observed-routing",
+  "branch": "claude/work-2026110203-codex-exec-observed-routing",
+  "base_branch": "main",
+  "commit_sha": "f4843d8d8856709a3cd74134cd9bf525bbc848be",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1820",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/work/WORK-2026110203.md",
+    "scripts/ops/codex-exec.test.ts",
+    "scripts/ops/codex-exec.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026110203/diff-summary.md",
+    "docs/06_status/proof/WORK-2026110203/evidence.json",
+    "docs/06_status/proof/WORK-2026110203/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-11-02T09:36:54.534Z",
+  "heartbeat_at": "2026-11-02T12:54:59.520Z",
+  "closed_at": "2026-11-02T12:54:59.520Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/work-2026110203-codex-exec-observed-routing.json",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-11-02T12:54:57.380Z",
+      "verdict": "pass",
+      "merge_sha": "f4843d8d8856709a3cd74134cd9bf525bbc848be",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/wo-2026110101/.out/worktrees/claude__work-2026110203-codex-exec-observed-routing",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

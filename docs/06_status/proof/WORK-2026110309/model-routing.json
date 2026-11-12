@@ -1,0 +1,43 @@
+{
+  "issue_id": "WORK-2026110309",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-medium",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "medium",
+  "policy_version": "3.0.0",
+  "codex_cli_version": "codex-cli 0.162.1",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": 0,
+  "prompt_bytes": 34170,
+  "estimated_prompt_tokens": 8543,
+  "wall_time_ms": 1257568,
+  "generated_at": "2026-11-04T15:41:09.809Z",
+  "routing_source": "declared",
+  "observation": {
+    "status": "observed",
+    "reason": null,
+    "session_id": "01a1a725-7922-78d2-b9e2-0147543fea75",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "medium",
+    "cli_version": "0.162.1",
+    "turns": 1,
+    "token_usage": {
+      "input_tokens": 4629187,
+      "cached_input_tokens": 4540416,
+      "cache_write_input_tokens": 0,
+      "output_tokens": 15729,
+      "reasoning_output_tokens": 4173,
+      "total_tokens": 4644916
+    },
+    "unavailable_fields": [],
+    "mismatched_fields": []
+  },
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": "760a2c8a67a8e385aa857a7af7ed37cb97c140bc",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1830",
+    "bound_at": "2026-11-05T12:44:37.277Z"
+  }
+}

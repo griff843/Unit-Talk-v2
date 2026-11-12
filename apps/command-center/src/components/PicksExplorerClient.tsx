@@ -208,7 +208,14 @@ export function PicksExplorerClient({ picks, sourceTotal, offset = 0 }: PicksExp
                   <td className="px-4 py-2 text-right font-mono text-xs">{formatOdds(num(pick['odds']))}</td>
                   <td className="px-4 py-2 text-right font-mono text-xs">{num(pick['line']) ?? '—'}</td>
                   <td className="px-4 py-2 text-xs">
-                    {result ? <StatusBadge status={result} /> : <span className="text-gray-600">pending</span>}
+                    {result ? (
+                      <>
+                        <StatusBadge status={result} />
+                        {pick['settlement_corrected'] === true && (
+                          <span className="ml-1 text-gray-400">(corrected)</span>
+                        )}
+                      </>
+                    ) : <span className="text-gray-600">pending</span>}
                   </td>
                   <td className="px-4 py-2 text-xs text-gray-500">
                     {pick['created_at'] ? new Date(String(pick['created_at'])).toLocaleString('en-US', { timeZone: 'America/New_York', timeZoneName: 'short' }) : '—'}

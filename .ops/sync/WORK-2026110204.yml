@@ -1,0 +1,373 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026110204
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026110204
+  objective: WORK-2026110204 — the Codex child records phases into the parent's
+    checkpoint directory
+  acceptance_criteria:
+    - "`buildCodexChildEnv` returns `UNIT_TALK_EXECUTION_CHECKPOINT_DIR` equal
+      to the directory it was given (unit test)."
+    - "`execution-checkpoint` CLI precedence, covered by tests that run the real
+      CLI as a child process against temporary directories:"
+    - an explicit `--dir` wins over the environment variable;
+    - with only the environment variable set, `phase-complete` writes under that
+      directory;
+    - with neither set, behaviour is unchanged.
+    - "An end-to-end test in `scripts/ops/codex-exec.test.ts`:"
+    - set up two separate git repositories, a "launch root" and a "lane
+      worktree";
+    - run the child-side `phase-complete` from inside the worktree with the
+      environment `buildCodexChildEnv` produced;
+    - assert the phase lands in the launch root's checkpoint directory and not
+      in the worktree's.
+    - The refusal and `checkpointRootMismatch` are gone, and no test references
+      them.
+    - Every temporary directory a test allocates is released in a `finally`
+      block. The repository's temp-workspace guard fails the full suite
+      otherwise.
+    - "Mutation checks, each of which must make at least one test fail:"
+    - "M1: `buildCodexChildEnv` omits the new variable;"
+    - "M2: `runCli()` ignores the environment variable;"
+    - "M3: `runCli()` lets the environment variable win over `--dir`."
+    - "Local checks:"
+    - "`npx tsx --test scripts/ops/codex-exec.test.ts
+      scripts/ops/execution-checkpoint.test.ts` all pass;"
+    - "`npx eslint` on the four changed files exits 0;"
+    - "`pnpm test` exits 0 after `pnpm build`."
+  guardrails:
+    - No change to the checkpoint file format, phase list, identity checks, the
+      `mutate()` lock or any other command's behaviour.
+    - No change to `lane-start`, the manifest schema, the routing policy,
+      `proof-generate`, the merge gate or CI workflows.
+    - No new test file, so no `package.json` change.
+    - Commit messages, the PR title and the PR body name only WORK-2026110204.
+      `Check issue references` scans every commit message. Describe other lanes
+      in words.
+  non_goals:
+    - Codex Desktop registration (`launch_mode`), the packet's default handoff
+      step, and automatic review or merge. These are separate proposals.
+  required_evidence:
+    - "Standard WORK proof in `docs/06_status/proof/WORK-2026110204/`:"
+    - "`diff-summary.md`;"
+    - "`evidence.json`;"
+    - "`verification.md`, containing a literal `## Verification` heading, the
+      execution SHA, and every command above with its pasted `# tests` / `#
+      pass` / `# fail 0` output;"
+    - "the mutation table: one row per mutation, naming the failing test
+      numbers;"
+    - "`model-routing.json`, written by `codex-exec`."
+    - Every number in the proof is pasted command output. Write nothing that was
+      not run.
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026110204 — the Codex child records phases into the parent's
+      checkpoint directory
+
+      Tier: T2
+
+      Lane type: governance
+
+      Executor: codex-cli
+
+
+      Repo-owned work order. Admitted by Production Claude under Griff's
+      "OPERATING-MODEL CLAUDE — ADOPT HYBRID CODEX EXECUTION" directive
+      (2026-11-02):
+
+      - "Claude can admit and launch bounded Codex jobs from registered
+      worktrees automatically."
+
+      - "Missing telemetry fails honestly rather than generating a fabricated
+      value."
+
+
+      This lane follows the codex-exec observed-routing lane, merged as
+      f4843d8d8. It changes no approval artifact, merge authority, branch
+      protection, checkpoint schema or production authorization.
+
+
+      ## Problem
+
+
+      - `EXECUTION_CHECKPOINT_DIR` is `<git toplevel of the
+      process>/.out/ops/execution-checkpoints`
+      (`scripts/ops/execution-checkpoint.ts:36`).
+
+      - `codex-exec` begins the attempt in the checkpoint under the *launch*
+      checkout's root.
+
+      - The Codex child records its phases by running `pnpm ops:exec-checkpoint
+      phase-complete` inside the lane worktree. The CLI resolves its directory
+      at `scripts/ops/execution-checkpoint.ts` `runCli()` (`getFlag(flags,
+      'dir') ?? EXECUTION_CHECKPOINT_DIR`), so those records land under the
+      *worktree's* root.
+
+      - From a control checkout the two roots differ. The run then ends
+      `INCOMPLETE_PHASE_PROGRESSION` even when the work is complete.
+
+      - On 2026-11-02 this hit two of the first four hybrid-model wrapper runs.
+      One recovered only because Codex improvised `--dir`.
+
+      - As a stopgap, the previous lane added a refusal:
+      `checkpointRootMismatch` and its `PRECONDITION_FAILED` exit in `main()` of
+      `scripts/ops/codex-exec.ts`.
+
+
+      ## Change (smallest)
+
+
+      1. `buildCodexChildEnv` in `scripts/ops/codex-exec.ts` also sets
+      `UNIT_TALK_EXECUTION_CHECKPOINT_DIR` to the parent's resolved checkpoint
+      directory, as an absolute path. This follows the existing
+      `UNIT_TALK_EXECUTION_EPOCH_ID`, `_ATTEMPT` and `_MINIMUM_REVISION`
+      pattern. Pass the directory in as a parameter; do not recompute it inside
+      the function.
+
+      2. `runCli()` in `scripts/ops/execution-checkpoint.ts` resolves its
+      directory in this order:
+         - `--dir`;
+         - then `process.env.UNIT_TALK_EXECUTION_CHECKPOINT_DIR`, when it is set and non-empty;
+         - then `EXECUTION_CHECKPOINT_DIR`.
+      3. Remove the launch-root refusal from `main()` in
+      `scripts/ops/codex-exec.ts`, together with `checkpointRootMismatch` and
+      its tests. A control-checkout launch must now work, because the child
+      writes to the same checkpoint the parent reads.
+
+
+      ## File Scope
+
+
+      - `scripts/ops/codex-exec.ts`
+
+      - `scripts/ops/codex-exec.test.ts`
+
+      - `scripts/ops/execution-checkpoint.ts`
+
+      - `scripts/ops/execution-checkpoint.test.ts`
+
+      - `.ops/work/WORK-2026110204.md`
+
+
+      ## PR opening is sequenced (overrides any generic "open a draft PR" step)
+
+
+      Every pull request, including a draft, runs the shared `staging-ci-db`
+      job. That job holds one running and one pending slot, and a third arrival
+      cancels the pending proof of another lane. So:
+
+
+      - Commit and push the lane branch as normal.
+
+      - **Do not open a pull request.** When implementation and local
+      verification are complete, write
+      `.out/ops/ready-for-pr/WORK-2026110204.md` in the lane worktree. List the
+      head SHA, the commands and their results, and the observed model and
+      effort.
+
+      - Production Claude opens the PR when the staging slot is free.
+
+
+      ## Rollback
+
+
+      Revert the PR. That restores the launch-root refusal, which is the safe
+      prior behaviour.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026110204.md
+    title: WORK-2026110204 — the Codex child records phases into the parent's
+      checkpoint directory
+    description: >-
+      # WORK-2026110204 — the Codex child records phases into the parent's
+      checkpoint directory
+
+
+      Tier: T2
+
+      Lane type: governance
+
+      Executor: codex-cli
+
+
+      Repo-owned work order. Admitted by Production Claude under Griff's
+      "OPERATING-MODEL CLAUDE — ADOPT HYBRID CODEX EXECUTION" directive
+      (2026-11-02):
+
+      - "Claude can admit and launch bounded Codex jobs from registered
+      worktrees automatically."
+
+      - "Missing telemetry fails honestly rather than generating a fabricated
+      value."
+
+
+      This lane follows the codex-exec observed-routing lane, merged as
+      f4843d8d8. It changes no approval artifact, merge authority, branch
+      protection, checkpoint schema or production authorization.
+
+
+      ## Problem
+
+
+      - `EXECUTION_CHECKPOINT_DIR` is `<git toplevel of the
+      process>/.out/ops/execution-checkpoints`
+      (`scripts/ops/execution-checkpoint.ts:36`).
+
+      - `codex-exec` begins the attempt in the checkpoint under the *launch*
+      checkout's root.
+
+      - The Codex child records its phases by running `pnpm ops:exec-checkpoint
+      phase-complete` inside the lane worktree. The CLI resolves its directory
+      at `scripts/ops/execution-checkpoint.ts` `runCli()` (`getFlag(flags,
+      'dir') ?? EXECUTION_CHECKPOINT_DIR`), so those records land under the
+      *worktree's* root.
+
+      - From a control checkout the two roots differ. The run then ends
+      `INCOMPLETE_PHASE_PROGRESSION` even when the work is complete.
+
+      - On 2026-11-02 this hit two of the first four hybrid-model wrapper runs.
+      One recovered only because Codex improvised `--dir`.
+
+      - As a stopgap, the previous lane added a refusal:
+      `checkpointRootMismatch` and its `PRECONDITION_FAILED` exit in `main()` of
+      `scripts/ops/codex-exec.ts`.
+
+
+      ## Change (smallest)
+
+
+      1. `buildCodexChildEnv` in `scripts/ops/codex-exec.ts` also sets
+      `UNIT_TALK_EXECUTION_CHECKPOINT_DIR` to the parent's resolved checkpoint
+      directory, as an absolute path. This follows the existing
+      `UNIT_TALK_EXECUTION_EPOCH_ID`, `_ATTEMPT` and `_MINIMUM_REVISION`
+      pattern. Pass the directory in as a parameter; do not recompute it inside
+      the function.
+
+      2. `runCli()` in `scripts/ops/execution-checkpoint.ts` resolves its
+      directory in this order:
+         - `--dir`;
+         - then `process.env.UNIT_TALK_EXECUTION_CHECKPOINT_DIR`, when it is set and non-empty;
+         - then `EXECUTION_CHECKPOINT_DIR`.
+      3. Remove the launch-root refusal from `main()` in
+      `scripts/ops/codex-exec.ts`, together with `checkpointRootMismatch` and
+      its tests. A control-checkout launch must now work, because the child
+      writes to the same checkpoint the parent reads.
+
+
+      ## Acceptance Criteria
+
+
+      - `buildCodexChildEnv` returns `UNIT_TALK_EXECUTION_CHECKPOINT_DIR` equal
+      to the directory it was given (unit test).
+
+      - `execution-checkpoint` CLI precedence, covered by tests that run the
+      real CLI as a child process against temporary directories:
+        - an explicit `--dir` wins over the environment variable;
+        - with only the environment variable set, `phase-complete` writes under that directory;
+        - with neither set, behaviour is unchanged.
+      - An end-to-end test in `scripts/ops/codex-exec.test.ts`:
+        - set up two separate git repositories, a "launch root" and a "lane worktree";
+        - run the child-side `phase-complete` from inside the worktree with the environment `buildCodexChildEnv` produced;
+        - assert the phase lands in the launch root's checkpoint directory and not in the worktree's.
+      - The refusal and `checkpointRootMismatch` are gone, and no test
+      references them.
+
+      - Every temporary directory a test allocates is released in a `finally`
+      block. The repository's temp-workspace guard fails the full suite
+      otherwise.
+
+      - Mutation checks, each of which must make at least one test fail:
+        - M1: `buildCodexChildEnv` omits the new variable;
+        - M2: `runCli()` ignores the environment variable;
+        - M3: `runCli()` lets the environment variable win over `--dir`.
+      - Local checks:
+        - `npx tsx --test scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.test.ts` all pass;
+        - `npx eslint` on the four changed files exits 0;
+        - `pnpm test` exits 0 after `pnpm build`.
+
+      ## Guardrails
+
+
+      - No change to the checkpoint file format, phase list, identity checks,
+      the `mutate()` lock or any other command's behaviour.
+
+      - No change to `lane-start`, the manifest schema, the routing policy,
+      `proof-generate`, the merge gate or CI workflows.
+
+      - No new test file, so no `package.json` change.
+
+      - Commit messages, the PR title and the PR body name only WORK-2026110204.
+      `Check issue references` scans every commit message. Describe other lanes
+      in words.
+
+
+      ## Required Evidence
+
+
+      - Standard WORK proof in `docs/06_status/proof/WORK-2026110204/`:
+        - `diff-summary.md`;
+        - `evidence.json`;
+        - `verification.md`, containing a literal `## Verification` heading, the execution SHA, and every command above with its pasted `# tests` / `# pass` / `# fail 0` output;
+        - the mutation table: one row per mutation, naming the failing test numbers;
+        - `model-routing.json`, written by `codex-exec`.
+      - Every number in the proof is pasted command output. Write nothing that
+      was not run.
+
+
+      ## File Scope
+
+
+      - `scripts/ops/codex-exec.ts`
+
+      - `scripts/ops/codex-exec.test.ts`
+
+      - `scripts/ops/execution-checkpoint.ts`
+
+      - `scripts/ops/execution-checkpoint.test.ts`
+
+      - `.ops/work/WORK-2026110204.md`
+
+
+      ## Out of Scope
+
+
+      - Codex Desktop registration (`launch_mode`), the packet's default handoff
+      step, and automatic review or merge. These are separate proposals.
+
+
+      ## PR opening is sequenced (overrides any generic "open a draft PR" step)
+
+
+      Every pull request, including a draft, runs the shared `staging-ci-db`
+      job. That job holds one running and one pending slot, and a third arrival
+      cancels the pending proof of another lane. So:
+
+
+      - Commit and push the lane branch as normal.
+
+      - **Do not open a pull request.** When implementation and local
+      verification are complete, write
+      `.out/ops/ready-for-pr/WORK-2026110204.md` in the lane worktree. List the
+      head SHA, the commands and their results, and the observed model and
+      effort.
+
+      - Production Claude opens the PR when the staging slot is free.
+
+
+      ## Rollback
+
+
+      Revert the PR. That restores the launch-root refusal, which is the safe
+      prior behaviour.
+    captured_at: 2026-11-02T13:17:38.588Z
+    description_sha256: 39ace50e00ba5adf7987e81bfc9004ed03564ecd02c66e7ea6c48e665b4d3ae6
+  contract_hash: 7dda7743b5c240abc767e01d1fa33de068c4f93049252dc9d737602b7f35e56f

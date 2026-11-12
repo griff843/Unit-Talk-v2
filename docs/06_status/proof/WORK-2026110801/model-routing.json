@@ -1,0 +1,24 @@
+{
+  "issue_id": "WORK-2026110801",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-medium",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "medium",
+  "policy_version": "3.0.0",
+  "override_used": false,
+  "routing_source": "declared",
+  "execution_actor": "claude-orchestrator",
+  "execution_note": "The lane manifest declares codex-cli routing, but the implementation was written directly by the Claude orchestrator inside the admitted lane; codex-cli was not run. The model fields above are the declared manifest routing, not an observation of this execution.",
+  "codex_exit_code": null,
+  "observation": {
+    "status": "not_observed",
+    "reason": "codex-cli was not executed for this lane; implemented by the Claude orchestrator"
+  },
+  "generated_at": "2026-11-08T18:30:00.000Z",
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": "71ddbd0de05b7059a4797e0eb636e2bd296796fc",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1838",
+    "bound_at": "2026-11-09T00:56:09.892Z"
+  }
+}

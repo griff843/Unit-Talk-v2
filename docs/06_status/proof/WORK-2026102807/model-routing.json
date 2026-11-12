@@ -1,0 +1,38 @@
+{
+  "issue_id": "WORK-2026102807",
+  "manifest_schema_version": 2,
+  "model_profile": "session-default",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "unavailable",
+  "policy_version": "3.0.0",
+  "codex_cli_version": null,
+  "legacy_compatibility_used": false,
+  "override_used": true,
+  "override_authorized_by": "griff843",
+  "codex_exit_code": null,
+  "prompt_bytes": null,
+  "estimated_prompt_tokens": null,
+  "wall_time_ms": null,
+  "execution_sha": "943303fafeae286863184451f6b23d301990f7c3",
+  "execution_verification": "unverified-external-session",
+  "unavailable_fields": [
+    "reasoning_effort"
+  ],
+  "routing_reconciliation": {
+    "status": "reconciled",
+    "approval_comment": "https://github.com/griff843/Unit-Talk-v2/pull/1808#issuecomment-6523836873",
+    "approved_head_sha": "4f5d64a9712c96ce7a3869f22f38f1c40c1ca153",
+    "declared": {
+      "profile": "codex-sol-medium",
+      "model": "gpt-6.1-sol",
+      "reasoning_effort": "medium"
+    },
+    "note": "Reconciled with pnpm ops:lane-manifest reconcile-routing. gpt-6.1-sol is the model the Codex session reported exposing; it is not independently attested. Reasoning effort and CLI telemetry were not exposed and are recorded as unavailable, not inferred."
+  },
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": "d169ff9289bea044b533bf1aa0f4fad9625f9ad1",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1808",
+    "bound_at": "2026-10-30T14:04:39.172Z"
+  }
+}

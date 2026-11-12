@@ -1,0 +1,124 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102702
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102702
+  objective: "Add one sentence to that lane's `verification.md` stating what CI
+    actually ran: the R-Level Compliance Check (run 40508756273) executed `pnpm
+    exec tsx scripts/ci/r-level-check.ts` and passed at PR head
+    `1cfa63eea13e1e16f8b2227b204b86887c4ba92a`. No assertion, evidence or result
+    is changed or removed."
+  acceptance_criteria:
+    - The verification log names `scripts/ci/r-level-check.ts` with its measured
+      run and result.
+    - No other proof content, product code, workflow, hook, gate or control
+      changes.
+    - This lane's own manifest carries its `pr_url` in the PR so its closeout
+      resolves after merge.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026102702 — Name the R-level check in the mission-card lane's
+      verification log
+
+      Tier: T3
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: closeout of the lane merged in #1789 (merge
+      `41f3bbf257580c142428c1e277718652852ed878`) failed only at truth-check P14
+      ("verification log must reference scripts/ci/r-level-check.ts"),
+      Post-Merge Lane Close run 40511401436. A merged lane cannot take a new PR
+      of its own, so this separate lane supplies the missing sentence, following
+      the #1788 precedent.
+
+
+      ## File Scope
+
+
+      - .ops/work/WORK-2026102702.md
+
+      - docs/06_status/proof/WORK-2026102701/verification.md
+
+
+      ## Rollback
+
+
+      Revert the squash commit; proof text only.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102702.md
+    title: WORK-2026102702 — Name the R-level check in the mission-card lane's
+      verification log
+    description: >-
+      # WORK-2026102702 — Name the R-level check in the mission-card lane's
+      verification log
+
+
+      Tier: T3
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: closeout of the lane merged in #1789 (merge
+      `41f3bbf257580c142428c1e277718652852ed878`) failed only at truth-check P14
+      ("verification log must reference scripts/ci/r-level-check.ts"),
+      Post-Merge Lane Close run 40511401436. A merged lane cannot take a new PR
+      of its own, so this separate lane supplies the missing sentence, following
+      the #1788 precedent.
+
+
+      ## Objective
+
+
+      Add one sentence to that lane's `verification.md` stating what CI actually
+      ran: the R-Level Compliance Check (run 40508756273) executed `pnpm exec
+      tsx scripts/ci/r-level-check.ts` and passed at PR head
+      `1cfa63eea13e1e16f8b2227b204b86887c4ba92a`. No assertion, evidence or
+      result is changed or removed.
+
+
+      ## Acceptance Criteria
+
+
+      - The verification log names `scripts/ci/r-level-check.ts` with its
+      measured run and result.
+
+      - No other proof content, product code, workflow, hook, gate or control
+      changes.
+
+      - This lane's own manifest carries its `pr_url` in the PR so its closeout
+      resolves after merge.
+
+
+      ## File Scope
+
+
+      - .ops/work/WORK-2026102702.md
+
+      - docs/06_status/proof/WORK-2026102701/verification.md
+
+
+      ## Rollback
+
+
+      Revert the squash commit; proof text only.
+    captured_at: 2026-10-27T13:31:14.349Z
+    description_sha256: 82932a095a9f5f2544003eb7359869f9531e72f5110ceb56d4cc9183aeb9efc3
+  contract_hash: e548c55a8d6f03e6034c2dcb22f4b41e42bf3077586fd7949f6b5dcb09da5270

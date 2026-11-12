@@ -56,6 +56,7 @@ import {
   humanDeliveryTargets,
   isHumanCapperDeliveryAuthorized,
   isMemberVisibleOfficialPick,
+  isMemberVisibleDeliveryAudience,
   readHumanCapperDeliveryAuthorization,
 } from '@unit-talk/contracts';
 import {
@@ -65,6 +66,7 @@ import {
 } from '@unit-talk/db';
 
 import { handleSubmitPick } from './handlers/submit-pick.js';
+import { filterMemberVisibleDeliveryPicks } from './capper-delivery-authorization.js';
 
 function readEnv(): ReturnType<typeof loadEnvironment> | null {
   try {
@@ -123,6 +125,11 @@ before(async () => {
       'SUPABASE_SERVICE_ROLE_KEY are not configured. Failing rather than skipping.',
   );
   supabaseUrl = env['SUPABASE_URL']!;
+  assert.equal(
+    new URL(supabaseUrl).origin,
+    'https://xskgrzbteyqdufktjrjx.supabase.co',
+    'live proof fixtures may only be written to the approved staging project',
+  );
   assert.ok(
     !supabaseUrl.includes(PRODUCTION_PROJECT_REF),
     'refusing to write proof fixtures to the production project',
@@ -226,13 +233,14 @@ function auth(capperId: string) {
 
 interface PickRow {
   id: string;
+  capper_id: string | null;
   status: string;
   source: string;
   metadata: Record<string, unknown>;
 }
 
 async function readPick(pickId: string): Promise<PickRow> {
-  const rows = await restQuery<PickRow>(`picks?id=eq.${pickId}&select=id,status,source,metadata`);
+  const rows = await restQuery<PickRow>(`picks?id=eq.${pickId}&select=id,capper_id,status,source,metadata`);
   assert.equal(rows.length, 1, `pick ${pickId} must exist`);
   return rows[0]!;
 }
@@ -266,6 +274,8 @@ test(
 
     const pick = await readPick(response.body.data.pickId);
     assert.equal(pick.source, 'smart-form');
+    // Positive control for the capper_id reads below: the submit path populates it.
+    assert.equal(pick.capper_id, CAPPER, 'persisted capper_id, read from the database');
     assert.notEqual(pick.status, 'queued', 'a Track Only pick is never queued');
     assert.equal(pick.metadata['distributionMode'], 'track-only', 'persisted mode, read from the database');
     assert.equal(isHumanCapperDeliveryAuthorized(pick.metadata), false);
@@ -298,6 +308,7 @@ test(
 
     const pick = await readPick(response.body.data.pickId);
     assert.equal(pick.metadata['distributionMode'], 'delivery-eligible');
+    assert.equal(pick.capper_id, CAPPER, 'persisted capper_id, read from the database');
     assert.equal(isHumanCapperDeliveryAuthorized(pick.metadata), true);
     assert.equal(readHumanCapperDeliveryAuthorization(pick.metadata)?.capperId, CAPPER);
 
@@ -324,11 +335,85 @@ test(
     assert.ok(!response.body.ok);
     if (!response.body.ok) assert.equal(response.body.error.code, 'CAPPER_TRACK_ONLY_REQUIRED');
 
-    const selection = encodeURIComponent(`Northgate Foundry ${RUN_NAMESPACE} ML ${label}`);
-    const rows = await restQuery<{ id: string }>(`picks?selection=eq.${selection}&select=id`);
+    // Every pick the run-namespaced outsider could have created, under any selection.
+    // capper_id is indexed; selection is not, and a scan of it outruns staging's
+    // statement timeout as retained fixtures accumulate (WORK-2026103001).
+    const rows = await restQuery<{ id: string }>(`picks?capper_id=eq.${encodeURIComponent(OUTSIDER)}&select=id`);
     assert.equal(rows.length, 0, 'a refused request persists no pick');
   },
 );
+
+// WORK-2026103005: prove the release-time outbox audience pin through the actual
+// handler and Database repositories. These fixtures remain queued; no worker,
+// Discord adapter, receipt fabrication or kill-switch change is involved.
+for (const audience of ['staff-canary', 'members'] as const) {
+  test(
+    `WORK-2026103005 live: ${audience} release persists its outbox pin and member-reader decision`,
+    { skip: skipReason },
+    async () => {
+      const capperId = `t1-proof-3005-${audience}-${RUN_NAMESPACE}`.toLowerCase();
+      await restUpsert('cappers', {
+        id: capperId,
+        display_name: `WORK-2026103005 ${audience} fixture`,
+        active: true,
+        metadata: {
+          discord: {
+            guildId: GUILD_ID,
+            picksChannelId: PICKS_CHANNEL_ID,
+            discussionChannelId: DISCUSSION_CHANNEL_ID,
+            audience,
+          },
+        },
+      });
+      const request = body(capperId, `3005-${audience}`, 'delivery-eligible');
+      request.metadata.proof_issue = 'WORK-2026103005';
+      const response = await withEnv(
+        { ...PRODUCTION_POSTURE, UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST: capperId },
+        () => handleSubmitPick({ body: request, auth: auth(capperId) }, repositories),
+      );
+      assert.equal(response.status, 201, JSON.stringify(response.body));
+      assert.ok(response.body.ok);
+      if (!response.body.ok) return;
+
+      const pick = await readPick(response.body.data.pickId);
+      assert.equal(pick.capper_id, capperId);
+      assert.equal(pick.status, 'queued');
+      assert.equal(pick.metadata['distributionMode'], 'delivery-eligible');
+      assert.equal(readHumanCapperDeliveryAuthorization(pick.metadata)?.decision, 'authorized');
+      // The insert-time pick audience pin belongs to the separately scoped
+      // successor. This assertion must detect the outbox pin independently.
+      const rows = await restQuery<{
+        id: string;
+        pick_id: string;
+        target: string;
+        status: string;
+        payload: Record<string, unknown>;
+      }>(`distribution_outbox?pick_id=eq.${pick.id}&select=id,pick_id,target,status,payload`);
+      assert.equal(rows.length, 1, 'one persisted outbox row for this canonical pick');
+      const outbox = rows[0]!;
+      assert.equal(outbox.pick_id, pick.id);
+      assert.equal(outbox.target, HUMAN_DELIVERY_TARGET);
+      assert.equal(outbox.status, 'pending');
+      assert.deepEqual(outbox.payload['deliveryDestination'], {
+        version: 'capper-discord-routing/v1',
+        guildId: GUILD_ID,
+        channelId: PICKS_CHANNEL_ID,
+        audience,
+        capperId,
+        source: 'cappers.metadata.discord.picksChannelId',
+      });
+      const visible = audience === 'members';
+      assert.equal(isMemberVisibleDeliveryAudience(pick.metadata, [outbox.payload]), visible);
+      const persistedPick = await repositories.picks.findPickById(pick.id);
+      assert.ok(persistedPick, 'real Database repository reads the canonical pick');
+      const memberRows = await filterMemberVisibleDeliveryPicks([persistedPick], repositories.outbox);
+      assert.deepEqual(memberRows.map((row) => row.id), visible ? [pick.id] : []);
+      const artifacts = await deliveryArtifacts(pick.id);
+      assert.equal(artifacts.receipts.length, 0, 'no Discord delivery is performed');
+      assert.equal(artifacts.intents.length, 0, 'no delivery intent is fabricated');
+    },
+  );
+}
 
 // ---------------------------------------------------------------------------
 // WORK-2026092901: the member read and the dispatch-ledger read, against real
@@ -358,9 +443,8 @@ test(
       assert.ok((rows[index - 1]?.created_at ?? '') >= (rows[index]?.created_at ?? ''), 'rows are newest first');
     }
 
-    const runPicks = await restQuery<{ id: string }>(
-      `picks?selection=like.*${encodeURIComponent(RUN_NAMESPACE)}*&select=id`,
-    );
+    // This run's fixtures are all CAPPER's; read them through the indexed capper_id.
+    const runPicks = await restQuery<{ id: string }>(`picks?capper_id=eq.${encodeURIComponent(CAPPER)}&select=id`);
     assert.ok(
       runPicks.length >= 2,
       `expected this run's Track Only and queued delivery-eligible fixtures, found ${runPicks.length}`,

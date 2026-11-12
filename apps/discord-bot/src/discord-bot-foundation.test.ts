@@ -973,7 +973,31 @@ test('buildTrialStatusEmbed includes capper guidance when the member is also a c
 
   assert.equal(embed.title, 'Your Unit Talk Access - VIP');
   assert.equal(embed.color, 0xc7a34b);
-  assert.equal(embed.fields?.[0]?.name, 'Capper Role');
+  assert.equal(embed.fields?.[0]?.name, 'Submitting picks');
+  assert.equal(
+    embed.fields?.[0]?.value,
+    'Use the [Unit Talk pick form](https://picks.unit-talk.com/submit).',
+  );
+  assert.doesNotMatch(String(embed.fields?.[0]?.value), /\/pick\b/);
+});
+
+test('/trial-status uses the prepared description for every resolved tier', () => {
+  const expected = {
+    free: 'Welcome to Unit Talk. Join the conversation in our public channels. For help with your access, open a private ticket in <#1285609124050108436>.',
+    trial: 'Your trial includes access to the VIP channels. For help with your trial or access, open a private ticket in <#1285609124050108436>.',
+    vip: 'Your access includes the VIP channels. For help finding your way around, visit <#1559933414281322586>.',
+    'vip-plus': 'Your access includes the VIP and VIP+ channels. For help finding your way around, visit <#1559933414281322586>.',
+    'black-label': 'For help with your access, open a private ticket in <#1285609124050108436>.',
+  } as const;
+
+  for (const [tier, description] of Object.entries(expected)) {
+    assert.equal(
+      buildTrialStatusEmbed(tierContext(tier as keyof typeof expected))
+        .toJSON().description,
+      description,
+      `${tier} description`,
+    );
+  }
 });
 
 test('/trial-status command replies privately with the resolved tier embed', async () => {
@@ -1700,6 +1724,150 @@ test('router ignores non-chat-input interactions silently', async () => {
   assert.equal(mock.replies.length, 0, 'no reply for non-chat-input');
 });
 
+test('router privately acknowledges current bot retired onboarding buttons in guilds and DMs', async () => {
+  for (const guildId of ['guild-1', null] as const) {
+    for (const customId of [
+      'capper_submit_first_pick',
+      'capper_handbook',
+      'capper_dashboard',
+    ]) {
+      const replies: unknown[] = [];
+      const interaction = {
+        customId,
+        isButton: () => true,
+        isChatInputCommand: () => false,
+        message: { author: { id: 'bot-1' } },
+        client: { user: { id: 'bot-1' } },
+        guildId,
+        inGuild: () => guildId !== null,
+        replied: false,
+        deferred: false,
+        reply: async (options: unknown) => replies.push(options),
+      } as unknown as Interaction;
+
+      await createInteractionHandler(makeRegistry([]))(interaction);
+
+      assert.deepEqual(replies, [
+        {
+          content:
+            'This older onboarding button is no longer available. Open the Unit Talk server and use /help for current commands.',
+          ...(guildId !== null ? { ephemeral: true } : {}),
+        },
+      ]);
+    }
+  }
+});
+
+test('router ignores unknown, foreign, malformed, and already acknowledged buttons', async () => {
+  const cases = [
+    { customId: 'unknown', message: { author: { id: 'bot-1' } } },
+    { customId: 'capper_handbook', message: { author: { id: 'foreign' } } },
+    { customId: 'capper_handbook', message: undefined },
+    { customId: 'capper_handbook', message: { author: { id: '' } } },
+    { customId: 'capper_handbook', message: { author: { id: 123 } } },
+    { customId: 'capper_handbook', message: { author: { id: 'bot-1' } }, replied: true },
+    { customId: 'capper_handbook', message: { author: { id: 'bot-1' } }, deferred: true },
+  ];
+
+  for (const options of cases) {
+    let replyCount = 0;
+    const interaction = {
+      ...options,
+      isButton: () => true,
+      isChatInputCommand: () => false,
+      client: { user: { id: 'bot-1' } },
+      guildId: 'guild-1',
+      inGuild: () => true,
+      replied: options.replied ?? false,
+      deferred: options.deferred ?? false,
+      reply: async () => {
+        replyCount += 1;
+      },
+    } as unknown as Interaction;
+
+    await createInteractionHandler(makeRegistry([]))(interaction);
+    assert.equal(replyCount, 0);
+  }
+
+  for (const botUser of [{ id: '' }, {}, { id: 123 }] as const) {
+    let replyCount = 0;
+    const interaction = {
+      customId: 'capper_handbook',
+      isButton: () => true,
+      isChatInputCommand: () => false,
+      message: { author: { id: 'bot-1' } },
+      client: { user: botUser },
+      inGuild: () => true,
+      replied: false,
+      deferred: false,
+      reply: async () => {
+        replyCount += 1;
+      },
+    } as unknown as Interaction;
+
+    await createInteractionHandler(makeRegistry([]))(interaction);
+    assert.equal(replyCount, 0);
+  }
+});
+
+test('router retired-button acknowledgement bypasses registry, member, and defer paths', async () => {
+  let replyCount = 0;
+  const interaction = {
+    customId: 'capper_dashboard',
+    isButton: () => true,
+    isChatInputCommand: () => false,
+    message: { author: { id: 'bot-1' } },
+    client: { user: { id: 'bot-1' } },
+    inGuild: () => true,
+    replied: false,
+    deferred: false,
+    get commandName(): never {
+      throw new Error('commandName should not be read');
+    },
+    get member(): never {
+      throw new Error('member should not be read');
+    },
+    deferReply: async () => {
+      throw new Error('deferReply should not be called');
+    },
+    reply: async () => {
+      replyCount += 1;
+    },
+  } as unknown as Interaction;
+  const registry = {
+    get: () => {
+      throw new Error('registry should not be read');
+    },
+  } as unknown as CommandRegistry;
+
+  await createInteractionHandler(registry)(interaction);
+  assert.equal(replyCount, 1);
+});
+
+test('router logs retired-button reply failures without retrying or logging private content', async () => {
+  const errors: string[] = [];
+  const interaction = {
+    customId: 'capper_handbook',
+    isButton: () => true,
+    isChatInputCommand: () => false,
+    message: { author: { id: 'bot-1' } },
+    client: { user: { id: 'bot-1' } },
+    guildId: 'guild-1',
+    inGuild: () => true,
+    replied: false,
+    deferred: false,
+    reply: async () => {
+      throw new Error('private reply payload');
+    },
+  } as unknown as Interaction;
+
+  await createInteractionHandler(makeRegistry([]), {
+    error: (message: string) => errors.push(message),
+  })(interaction);
+
+  assert.deepEqual(errors, ['[router] Retired onboarding button reply failed']);
+});
+
 test('router replies with unknown-command when command not in registry', async () => {
   const registry = makeRegistry([]);
   const handler = createInteractionHandler(registry);
@@ -2373,7 +2541,7 @@ test('/help command registers with name "help" and no role gate or public visibi
   assert.notEqual(command.responseVisibility, 'public');
 });
 
-test('/help command execute calls editReply with a single embed containing all command names', async () => {
+test('/help command execute shows only the prepared member entries and support links', async () => {
   const command = createHelpCommand();
 
   let repliedWith: unknown = null;
@@ -2390,32 +2558,19 @@ test('/help command execute calls editReply with a single embed containing all c
 
   assert.ok(repliedWith !== null, 'editReply was not called');
   const payload = repliedWith as {
-    embeds: Array<{ toJSON(): { description?: string } }>;
+    embeds: Array<{ toJSON(): { title?: string; description?: string } }>;
   };
   assert.ok(Array.isArray(payload.embeds), 'embeds must be an array');
   assert.equal(payload.embeds.length, 1, 'exactly one embed expected');
 
-  const description = payload.embeds[0]?.toJSON().description ?? '';
-  for (const name of [
-    'alerts-setup',
-    'heat-signal',
-    'live',
-    'today',
-    'my-picks',
-    'results',
-    'pick',
-    'stats',
-    'leaderboard',
-    'trial-status',
-    'upgrade',
-    'help',
-    'recap',
-  ]) {
-    assert.ok(
-      description.includes(`/${name}`),
-      `embed description missing /${name}`,
-    );
-  }
+  const embed = payload.embeds[0]?.toJSON();
+  assert.equal(embed?.title, 'Unit Talk — Member Tools');
+  assert.equal(
+    embed?.description,
+    '**/stats** — View settled server results.\n**/leaderboard** — Compare capper results.\n**/trial-status** — Check your server access.\n\nNeed a hand? Visit <#1559933414281322586> or open a private ticket in <#1285609124050108436>.',
+  );
+  assert.doesNotMatch(embed?.description ?? '', /\/pick\b/i);
+  assert.doesNotMatch(embed?.description ?? '', /alerts-setup|ops-restart|heat-signal|recap|upgrade/i);
 });
 
 test('buildHeatSignalEmbed preserves the dormant capability renderer', () => {
@@ -2748,30 +2903,79 @@ test('createApiClient.syncMemberTier calls POST /api/member-tiers with correct b
   });
 });
 
-test('createApiClient.syncMemberTier swallows errors and does not throw', async () => {
+function captureConsoleError(): { lines: string[]; restore: () => void } {
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => {
+    lines.push(args.map(String).join(' '));
+  };
+  return { lines, restore: () => { console.error = original; } };
+}
+
+test('createApiClient.syncMemberTier does not throw but logs a structured member_tier_sync.failed error', async () => {
   const mockFetch: typeof fetch = async () => {
     return new Response('{"error":"server error"}', {
-      status: 500,
+      status: 403,
       headers: { 'Content-Type': 'application/json' },
     });
   };
 
+  const client = createApiClient('http://localhost:4000', 'super-secret-key', mockFetch);
+  const captured = captureConsoleError();
+  try {
+    await assert.doesNotReject(async () => {
+      await client.syncMemberTier?.({
+        discord_id: 'user-123',
+        tier: 'vip',
+        action: 'activate',
+        source: 'discord-role',
+      });
+    });
+  } finally {
+    captured.restore();
+  }
+
+  assert.equal(captured.lines.length, 1, 'a failed sync must not be silent');
+  const logged = JSON.parse(captured.lines[0] ?? '{}') as Record<string, unknown>;
+  assert.equal(logged.event, 'member_tier_sync.failed');
+  assert.equal(logged.status, 403);
+  assert.equal(logged.discordId, 'user-123');
+  assert.equal(logged.tier, 'vip');
+  assert.equal(logged.action, 'activate');
+  assert.equal(logged.code, 'http_403');
+  assert.ok(!captured.lines[0]?.includes('super-secret-key'), 'the API key must never be logged');
+  assert.ok(!captured.lines[0]?.includes('server error'), 'the response body must never be logged');
+});
+
+test('createApiClient.syncMemberTier logs a network failure with a null status', async () => {
+  const mockFetch: typeof fetch = async () => {
+    throw new Error('connect ECONNREFUSED');
+  };
   const client = createApiClient('http://localhost:4000', undefined, mockFetch);
-  await assert.doesNotReject(async () => {
+  const captured = captureConsoleError();
+  try {
     await client.syncMemberTier?.({
-      discord_id: 'user-123',
-      tier: 'vip',
-      action: 'activate',
+      discord_id: 'user-124',
+      tier: 'trial',
+      action: 'deactivate',
       source: 'discord-role',
     });
-  });
+  } finally {
+    captured.restore();
+  }
+  const logged = JSON.parse(captured.lines[0] ?? '{}') as Record<string, unknown>;
+  assert.equal(logged.event, 'member_tier_sync.failed');
+  assert.equal(logged.status, null);
+  assert.equal(logged.code, 'network_error');
+  assert.equal(logged.action, 'deactivate');
+  assert.ok(!('error' in logged), 'no free-text error field is logged');
 });
 
 // ---------------------------------------------------------------------------
 // createMemberTierSyncHandler tests
 // ---------------------------------------------------------------------------
 
-test('createMemberTierSyncHandler activates tier when a tier-relevant role is added', async () => {
+test('createMemberTierSyncHandler activates all five configured Discord-mapped tiers', async () => {
   const synced: Array<{ discord_id: string; tier: string; action: string }> =
     [];
   const mockApiClient: ApiClient = {
@@ -2795,15 +2999,23 @@ test('createMemberTierSyncHandler activates tier when a tier-relevant role is ad
   };
   const newMember = {
     id: 'user-999',
-    roles: { cache: { keys: () => ['role-vip'].values() } },
+    roles: {
+      cache: {
+        keys: () => ['role-trial', 'role-vip', 'role-vip-plus', 'role-capper', 'role-operator'].values(),
+      },
+    },
   };
 
   await handler(oldMember as never, newMember as never);
 
-  assert.equal(synced.length, 1);
-  assert.equal(synced[0]?.discord_id, 'user-999');
-  assert.equal(synced[0]?.tier, 'vip');
-  assert.equal(synced[0]?.action, 'activate');
+  assert.deepEqual(
+    synced.sort((left, right) => left.tier.localeCompare(right.tier)),
+    ['capper', 'operator', 'trial', 'vip', 'vip-plus'].map((tier) => ({
+      discord_id: 'user-999',
+      tier,
+      action: 'activate',
+    })),
+  );
 });
 
 test('createMemberTierSyncHandler deactivates tier when a tier-relevant role is removed', async () => {
@@ -2870,12 +3082,16 @@ test('createMemberTierSyncHandler ignores roles not in the tier map', async () =
   assert.equal(synced.length, 0, 'No syncs for unrecognized roles');
 });
 
-test('createMemberTierSyncHandler swallows errors from apiClient.syncMemberTier', async () => {
+test('createMemberTierSyncHandler never crashes, logs a failed sync visibly, and still syncs the other roles', async () => {
+  const attempted: string[] = [];
   const mockApiClient: ApiClient = {
     get: async () => ({}) as never,
     post: async () => ({}) as never,
-    syncMemberTier: async () => {
-      throw new Error('network failure');
+    syncMemberTier: async (params) => {
+      attempted.push(params.tier);
+      if (params.tier === 'vip') {
+        throw new Error('network failure');
+      }
     },
   };
 
@@ -2888,13 +3104,24 @@ test('createMemberTierSyncHandler swallows errors from apiClient.syncMemberTier'
   };
   const newMember = {
     id: 'user-555',
-    roles: { cache: { keys: () => ['role-vip'].values() } },
+    roles: { cache: { keys: () => ['role-vip', 'role-vip-plus'].values() } },
   };
 
-  // Must not throw — handler swallows all errors
-  await assert.doesNotReject(async () =>
-    handler(oldMember as never, newMember as never),
-  );
+  const captured = captureConsoleError();
+  try {
+    await assert.doesNotReject(async () =>
+      handler(oldMember as never, newMember as never),
+    );
+  } finally {
+    captured.restore();
+  }
+
+  assert.deepEqual(attempted.sort(), ['vip', 'vip-plus'], 'the failing role must not block the other');
+  assert.equal(captured.lines.length, 1);
+  const logged = JSON.parse(captured.lines[0] ?? '{}') as Record<string, unknown>;
+  assert.equal(logged.event, 'member_tier_sync.failed');
+  assert.equal(logged.discordId, 'user-555');
+  assert.equal(logged.tier, 'vip');
 });
 
 // ---------------------------------------------------------------------------
@@ -2904,7 +3131,9 @@ test('createMemberTierSyncHandler swallows errors from apiClient.syncMemberTier'
 
 const NOT_LIVE_CLAIMS = [/Best Bets/, /Trader Insights/, /permanently/];
 
-function tierContext(tier: 'free' | 'trial' | 'vip' | 'vip-plus') {
+function tierContext(
+  tier: 'free' | 'trial' | 'vip' | 'vip-plus' | 'black-label',
+) {
   return {
     discordUserId: 'user-123',
     tier,
@@ -2930,12 +3159,6 @@ test('UTV2-1960: /trial-status and /upgrade name no surface that is not live', (
       }
     }
   }
-  assert.match(
-    String(
-      buildTrialStatusEmbed(tierContext('vip-plus')).toJSON().description ?? '',
-    ),
-    /not live yet/,
-  );
   assert.match(
     String(buildUpgradeEmbed(tierContext('free')).toJSON().description ?? ''),
     /Settled results and recaps are available to all members/,

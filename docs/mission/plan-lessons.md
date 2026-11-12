@@ -450,3 +450,20 @@ cites it. Full narrative in [plan-history-2026-09.md](plan-history-2026-09.md).
   **canary residue from 2026-07-30, not live failures**, yet the metric is written as an absolute
   snapshot count so it fails as written. Clearing them is reserved and is not requested. A bundle
   cannot claim a threshold it did not demonstrate.
+
+- **A rollback that deletes what a migration created must prove nothing else now depends on it
+  (2026-10-12, UTV2-1972).** The first WNBA rollback would have deleted a migration-created `sports`
+  row without a downstream check. Production FKs differ per child: `picks.sport_id` is `SET NULL`
+  (silently detaches picks), `stat_types`, `events`, `sport_market_type_availability`,
+  `combo_stat_types` and `provider_market_aliases` CASCADE (silently destroys rows), and `leagues`,
+  `teams.league_id` and `player_team_assignments.league_id` RESTRICT. Discover dependents
+  dynamically from `pg_constraint` (composite keys included), lock the seed-owned rows, and refuse
+  before any DELETE. A test that only exercises a clean baseline cannot fail on this.
+- **A staging statement timeout in the writable proof is usually collision, not a regression
+  (2026-10-12/13).** The T1 Proof Gate ran against staging concurrently with the CI writable proof
+  and both attempts timed out once. Check for a competing staging run, then rerun the **full**
+  `ci.yml` attempt once (never `--failed`, which breaks the attempt-scoped receipt). A repeat with
+  staging idle is a staging-health blocker to report, not to retry.
+- **A resync is not free on a head-pinned T1 PR.** `pr-update-branch` creates a merge commit, which
+  invalidates the executor-result, the `pm-verdict/v1` and `t1-approved`. Confirm protected files by
+  git blob hash after the merge, rebind proof only, and ask for approval on the final head.

@@ -1,0 +1,166 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026101301
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026101301
+  objective: "WORK-2026101301 — Canonical mission refresh: quantity-gated manual
+    picks and pre-SGO readiness"
+  acceptance_criteria:
+    - "`docs/mission/plan.md` is rebuilt from live evidence (current main,
+      deployed runtime, #1745 WNBA migration, NCAAF, Smart Form / Command
+      Center, SGO paused, the independent Discord program); the 2026-09-28
+      current-truth table, old PR list and SHAs are removed or relocated to the
+      plan archives."
+    - No active canonical document defines a calendar-based pilot; the
+      quantity-based evidence batch (25 submissions from >= 2 authorized
+      identities, 10 independently verified settled picks, 100% reconciliation,
+      0 unauthorized deliveries, no unresolved critical identity/data-truth
+      defects) is stated as a working pilot measurement, not a readiness
+      threshold.
+    - "`docs/mission/intent.md` records Griff's 2026-10-13 ratification,
+      Milestone 1 as historical, the commercial-operating milestone and the
+      pre-SGO second milestone; historical ratifications, reserved decisions and
+      the T1 definition are preserved."
+    - "`docs/mission/spec.md` and `docs/03_product/smart-form/intent.md` reflect
+      the quantity-driven milestone and pre-SGO readiness as intermediate
+      outcomes with no competing readiness definition; stale assertions are
+      corrected or labeled historical with dates."
+    - "`docs/05_operations/docs_authority_map.md`, `docs/START_HERE.md`,
+      `AGENTS.md` and `CLAUDE.md`: pointer hygiene only."
+    - "`T1_PRODUCTION_READINESS_CONTRACT.md` thresholds, membership entitlements
+      and Discord entitlements are unchanged. SGO activation, provider unparking
+      and member delivery remain separate Griff gates."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026101301 — Canonical mission refresh: quantity-gated manual picks
+      and pre-SGO readiness
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: GitHub issue #1747 (PM-ratified mission correction, Griff,
+      2026-10-13).
+
+
+      ## File Scope
+
+
+      - docs/mission/intent.md
+
+      - docs/mission/plan.md
+
+      - docs/mission/spec.md
+
+      - docs/mission/plan-history-2026-09.md
+
+      - docs/mission/plan-lessons.md
+
+      - docs/03_product/smart-form/intent.md
+
+      - docs/05_operations/docs_authority_map.md
+
+      - docs/START_HERE.md
+
+      - AGENTS.md
+
+      - CLAUDE.md
+
+      - .ops/work/WORK-2026101301.md
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026101301.md
+    title: "WORK-2026101301 — Canonical mission refresh: quantity-gated manual picks
+      and pre-SGO readiness"
+    description: >-
+      # WORK-2026101301 — Canonical mission refresh: quantity-gated manual picks
+      and pre-SGO readiness
+
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: GitHub issue #1747 (PM-ratified mission correction, Griff,
+      2026-10-13).
+
+
+      ## Acceptance Criteria
+
+
+      - `docs/mission/plan.md` is rebuilt from live evidence (current main,
+      deployed runtime, #1745 WNBA migration, NCAAF, Smart Form / Command
+      Center, SGO paused, the independent Discord program); the 2026-09-28
+      current-truth table, old PR list and SHAs are removed or relocated to the
+      plan archives.
+
+      - No active canonical document defines a calendar-based pilot; the
+      quantity-based evidence batch (25 submissions from >= 2 authorized
+      identities, 10 independently verified settled picks, 100% reconciliation,
+      0 unauthorized deliveries, no unresolved critical identity/data-truth
+      defects) is stated as a working pilot measurement, not a readiness
+      threshold.
+
+      - `docs/mission/intent.md` records Griff's 2026-10-13 ratification,
+      Milestone 1 as historical, the commercial-operating milestone and the
+      pre-SGO second milestone; historical ratifications, reserved decisions and
+      the T1 definition are preserved.
+
+      - `docs/mission/spec.md` and `docs/03_product/smart-form/intent.md`
+      reflect the quantity-driven milestone and pre-SGO readiness as
+      intermediate outcomes with no competing readiness definition; stale
+      assertions are corrected or labeled historical with dates.
+
+      - `docs/05_operations/docs_authority_map.md`, `docs/START_HERE.md`,
+      `AGENTS.md` and `CLAUDE.md`: pointer hygiene only.
+
+      - `T1_PRODUCTION_READINESS_CONTRACT.md` thresholds, membership
+      entitlements and Discord entitlements are unchanged. SGO activation,
+      provider unparking and member delivery remain separate Griff gates.
+
+
+      ## File Scope
+
+
+      - docs/mission/intent.md
+
+      - docs/mission/plan.md
+
+      - docs/mission/spec.md
+
+      - docs/mission/plan-history-2026-09.md
+
+      - docs/mission/plan-lessons.md
+
+      - docs/03_product/smart-form/intent.md
+
+      - docs/05_operations/docs_authority_map.md
+
+      - docs/START_HERE.md
+
+      - AGENTS.md
+
+      - CLAUDE.md
+
+      - .ops/work/WORK-2026101301.md
+    captured_at: 2026-10-13T13:22:47.928Z
+    description_sha256: 58f38f1ea18398683b2fa44a16a2f202a89dc6f93adf3a60fcbb8fb1940882fe
+  contract_hash: 0fc322e61f0690044290488027da301315a7ae6f06f1f692709846a5a321e0b8

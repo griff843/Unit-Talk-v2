@@ -422,7 +422,21 @@ try:
     sha = sb.get('verified_source_sha', '')
     if not re.fullmatch(r'[0-9a-f]{40}', sha):
         failures.append('sha_binding.verified_source_sha must be 40 hex chars (got: ' + repr(sha) + ')')
-    if not sb.get('ci_sentinels'):
+    # Accept non-empty ci_sentinels, or the canonical post-merge v2 binding that
+    # scripts/ops/proof-schema.ts defines with flat fields (no ci_sentinels).
+    full_sha = lambda v: isinstance(v, str) and re.fullmatch(r'[0-9a-f]{40}', v) is not None
+    flat_text = lambda v: isinstance(v, str) and v.strip() != ''
+    canonical_v2_post_merge = (
+        isinstance(d.get('schema_version'), int)
+        and not isinstance(d.get('schema_version'), bool)
+        and d.get('schema_version') == 2
+        and sb.get('sha_type') == 'merge_sha'
+        and full_sha(sb.get('merge_sha'))
+        and full_sha(sb.get('verified_source_sha'))
+        and flat_text(sb.get('evidence_commit_sha'))
+        and flat_text(sb.get('current_pr_head_sha'))
+    )
+    if not sb.get('ci_sentinels') and not canonical_v2_post_merge:
         failures.append('sha_binding.ci_sentinels missing or empty')
     if not any(k in d for k in ('static_proof', 'runtime_proof', 'R1', 'R2')):
         failures.append('at least one of static_proof, runtime_proof, R1, R2 required')

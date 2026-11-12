@@ -59,11 +59,9 @@
  *
  * Gated on SUPABASE_SERVICE_ROLE_KEY. Test-created rows are NOT deleted.
  *
- * Run it ONLY through `pnpm test:t1-proof:live`, whose `&&` chain begins with
- * `pnpm ci:assert-staging`. That guard is what pins the target to the staging
- * project; this file writes fixture rows and carries no guard of its own, so a
- * standalone `tsx --test` run would write to whatever `SUPABASE_URL` names.
- * The 22 sibling proofs in that chain share the same contract.
+ * Run through `pnpm test:t1-proof:live`, whose chain begins with
+ * `pnpm ci:assert-staging`. This file also checks the approved staging identity
+ * before constructing repositories, including during direct focused execution.
  */
 
 import test, { before } from 'node:test';
@@ -74,6 +72,7 @@ import type { SubmissionPayload } from '@unit-talk/contracts';
 import {
   createDatabaseRepositoryBundle,
   createServiceRoleDatabaseConnectionConfig,
+  isApprovedStagingTarget,
   type RepositoryBundle,
 } from '@unit-talk/db';
 import { submitPickController } from './controllers/submit-pick-controller.js';
@@ -108,10 +107,17 @@ const C_CLV = [-40.0, -40.0]; // would drag A's mean negative if the cohorts mer
 let repositories: RepositoryBundle;
 let supabaseUrl: string;
 let serviceRoleKey: string;
+const proofPickIds: string[] = [];
+const proofSettlementClv = new Map<string, number>();
 
 before(() => {
   if (skipReason) return;
   const env = loadEnvironment();
+  assert.equal(
+    isApprovedStagingTarget(env.SUPABASE_URL),
+    true,
+    'Capper attribution and performance reader proof requires approved staging',
+  );
   supabaseUrl = env.SUPABASE_URL!;
   serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY!;
   repositories = createDatabaseRepositoryBundle(
@@ -183,6 +189,7 @@ async function submitPickAs(capperCandidate: string, label: string): Promise<str
   ).data;
   assert.equal(data.lifecycleState, 'validated');
   assert.equal(data.outboxEnqueued, false, 'a Track Only submission must not enqueue delivery');
+  proofPickIds.push(data.pickId);
   return data.pickId;
 }
 
@@ -206,6 +213,7 @@ async function seedGradingSettlement(pickId: string, clvPercent: number): Promis
       payload: { clvPercent, proof_run: RUN_ID },
     },
   ]);
+  proofSettlementClv.set(pickId, clvPercent);
 }
 
 test(
@@ -228,6 +236,7 @@ test(
     assert.equal(isUnattributedCapper(resolveCapperIdentity(record)), false);
   },
 );
+
 
 test(
   'UTV2-1907 behaviour 2: an unresolved capper_id remains explicitly unattributed',
@@ -356,5 +365,104 @@ test(
       null,
       'an identity that exists only in metadata must aggregate no settlements at all',
     );
+  },
+);
+
+async function exactReaderCount(path: string): Promise<number> {
+  const response = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
+    method: 'HEAD',
+    headers: restHeaders({ Prefer: 'count=exact' }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  assert.ok(response.ok, 'independent staging count query must succeed');
+  const denominator = response.headers.get('content-range')?.split('/').at(-1);
+  assert.ok(denominator && /^\d+$/.test(denominator), 'exact count must be present');
+  const count = Number(denominator);
+  assert.ok(Number.isSafeInteger(count) && count >= 0, 'exact count must be valid');
+  return count;
+}
+
+function assertReaderOrder(
+  rows: ReadonlyArray<{ id: string; created_at: string }>,
+  ascending: boolean,
+): void {
+  assert.equal(new Set(rows.map((row) => row.id)).size, rows.length, 'no duplicate reader IDs');
+  for (let index = 1; index < rows.length; index++) {
+    const previous = rows[index - 1]!;
+    const current = rows[index]!;
+    const instant = (timestamp: string): bigint => {
+      const milliseconds = Date.parse(timestamp);
+      assert.ok(Number.isFinite(milliseconds), 'valid reader timestamp');
+      const fractionalDigits = timestamp.match(/\.(\d+)/)?.[1] ?? '';
+      return BigInt(milliseconds) * 1_000_000n
+        + BigInt(fractionalDigits.padEnd(9, '0').slice(3, 9));
+    };
+    const delta = instant(previous.created_at) - instant(current.created_at);
+    const comparison = delta < 0n ? -1 : delta > 0n ? 1 : previous.id.localeCompare(current.id);
+    assert.ok(ascending ? comparison < 0 : comparison > 0, 'created_at/id total order');
+  }
+}
+
+test(
+  'WORK-2026101401: repaired performance readers reconcile with exact live PostgREST counts',
+  { skip: skipReason },
+  async (t) => {
+    assert.ok(proofPickIds.length > 0, 'original controller fixtures must exist');
+    assert.ok(proofSettlementClv.size > 0, 'original settled fixtures must exist');
+
+    const pickQuery = 'picks?select=id&status=in.(validated)';
+    const pickCount = await exactReaderCount(pickQuery);
+    const picks = await repositories.picks.listByLifecycleStates(['validated']);
+    assert.equal(await exactReaderCount(pickQuery), pickCount, 'population changed during proof');
+    assert.equal(picks.length, pickCount, 'reader must return the complete validated population');
+    assertReaderOrder(picks, true);
+    const picksById = new Map(picks.map((pick) => [pick.id, pick]));
+    for (const pickId of proofPickIds) {
+      const pick = picksById.get(pickId);
+      assert.ok(pick, 'complete read must include every original controller fixture');
+      assert.equal(pick.status, 'validated');
+      assert.ok(pick.metadata && typeof pick.metadata === 'object' && !Array.isArray(pick.metadata));
+      assert.equal(pick.metadata?.['distributionMode'], 'track-only');
+      assert.equal(pick.metadata?.['proof_run'], RUN_ID);
+    }
+    assert.ok(picks.every((pick) => pick.status === 'validated'), 'status filter must hold');
+    for (const offset of [0, 1]) {
+      if (offset >= picks.length) continue;
+      const limit = Math.min(3, picks.length - offset);
+      const slice = await repositories.picks.listByLifecycleStates(['validated'], limit, offset);
+      assert.deepEqual(slice.map((pick) => pick.id), picks.slice(offset, offset + limit).map((pick) => pick.id));
+    }
+    assert.equal(await exactReaderCount(pickQuery), pickCount, 'population changed during slice proof');
+    t.diagnostic(`live validated population=${pickCount}; cross-page=${pickCount > 1000}`);
+
+    for (const [pickId, clvPercent] of proofSettlementClv) {
+      const settlementQuery = `settlement_records?select=id&pick_id=eq.${pickId}`;
+      const settlementCount = await exactReaderCount(settlementQuery);
+      const settlements = await repositories.settlements.listByPick(pickId);
+      assert.equal(await exactReaderCount(settlementQuery), settlementCount, 'settlements changed during proof');
+      assert.equal(settlements.length, settlementCount, 'complete per-pick settlement history');
+      assert.equal(settlementCount, 1, 'this fixture has one original grading settlement');
+      assertReaderOrder(settlements, false);
+      for (const settlement of settlements) {
+        assert.equal(settlement.pick_id, pickId, 'no cross-pick history contamination');
+        assert.equal(settlement.source, 'grading');
+        assert.equal(settlement.confidence, 'confirmed');
+        assert.equal(settlement.corrects_id, null);
+        assert.ok(settlement.payload && typeof settlement.payload === 'object' && !Array.isArray(settlement.payload));
+        assert.equal(settlement.payload?.['clvPercent'], clvPercent);
+        assert.equal(settlement.payload?.['proof_run'], RUN_ID);
+      }
+
+      const outboxQuery = `distribution_outbox?select=id&pick_id=eq.${pickId}`;
+      const outboxCount = await exactReaderCount(outboxQuery);
+      const outboxes = await repositories.outbox.listByPickId(pickId);
+      assert.equal(await exactReaderCount(outboxQuery), outboxCount, 'outboxes changed during proof');
+      assert.equal(outboxes.length, outboxCount, 'complete per-pick outbox read');
+      assert.equal(outboxCount, 0, 'Track Only controller fixtures must never enqueue delivery');
+      t.diagnostic(`live fixture history=${settlementCount}; outbox=${outboxCount}; no live cross-page claim`);
+    }
+    // Larger correction/outbox pages and adversarial count drift are covered by
+    // member-performance-read-completeness.test.ts, not claimed as live here.
+    // These new assertions add no writes, receipts, public data or delivery.
   },
 );

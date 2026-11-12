@@ -1,0 +1,59 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110309",
+  "lane_type": "runtime",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110309/.out/worktrees/codex__work-2026110309-submission-idempotency-scope",
+  "branch": "codex/work-2026110309-submission-idempotency-scope",
+  "base_branch": "main",
+  "commit_sha": "760a2c8a67a8e385aa857a7af7ed37cb97c140bc",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1830",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/submission-service.test.ts",
+    "apps/api/src/submission-service.ts",
+    "apps/api/src/t1-proof-work-2026110309-submission-idempotency-live.test.ts",
+    "docs/05_operations/db-writer-classification.json",
+    "package.json",
+    "scripts/ci/db-writer-inventory.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026110309/diff-summary.md",
+    "docs/06_status/proof/WORK-2026110309/evidence.json",
+    "docs/06_status/proof/WORK-2026110309/verification.md",
+    "docs/06_status/proof/WORK-2026110309/model-routing.json"
+  ],
+  "status": "done",
+  "started_at": "2026-11-04T05:40:27.695Z",
+  "heartbeat_at": "2026-11-05T12:44:40.238Z",
+  "closed_at": "2026-11-05T12:44:40.238Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/work-2026110309-submission-idempotency-scope.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-11-05T12:44:37.281Z",
+      "verdict": "pass",
+      "merge_sha": "760a2c8a67a8e385aa857a7af7ed37cb97c140bc",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-medium",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "3.0.0"
+  },
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110309/.out/worktrees/codex__work-2026110309-submission-idempotency-scope",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

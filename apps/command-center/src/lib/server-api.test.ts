@@ -279,3 +279,52 @@ test('runtime health rejects a missing or invented status instead of calling it 
     }), /recognized status/);
   }
 });
+
+// WORK-2026102703: settlement attribution is the middleware actor, so a Basic
+// login authenticates as the operator who holds the credential.
+function productionEnv(overrides: Record<string, string>): NodeJS.ProcessEnv {
+  return createEnv({ NODE_ENV: 'production', UNIT_TALK_APP_ENV: 'production', ...overrides });
+}
+
+test('Basic login without an explicit identity authenticates as the canonical username', () => {
+  const env = productionEnv({
+    COMMAND_CENTER_AUTH_TOKEN: 'machine-token',
+    COMMAND_CENTER_AUTH_USERNAME: 'griff843',
+    COMMAND_CENTER_AUTH_PASSWORD: 'secret',
+  });
+  const basic = authenticateCommandCenterRequest({ env, headers: { authorization: createBasicAuthHeader('griff843', 'secret') } });
+  assert.equal(basic.ok && basic.auth.actor, 'griff843');
+  assert.equal(basic.ok && basic.auth.method, 'basic');
+  // The machine token on the same configuration is never attributed to the human.
+  const bearer = authenticateCommandCenterRequest({ env, headers: { authorization: 'Bearer machine-token' } });
+  assert.equal(bearer.ok && bearer.auth.actor, 'command-center');
+});
+
+test('a non-canonical Basic username never becomes the actor', () => {
+  for (const username of ['Griff843', 'griff 843', 'ops@example.com', '-griff']) {
+    const env = productionEnv({ COMMAND_CENTER_AUTH_USERNAME: username, COMMAND_CENTER_AUTH_PASSWORD: 'secret' });
+    const result = authenticateCommandCenterRequest({ env, headers: { authorization: createBasicAuthHeader(username, 'secret') } });
+    assert.equal(result.ok && result.auth.actor, 'command-center', username);
+  }
+});
+
+test('an explicit operator identity still wins over the Basic username', () => {
+  const env = productionEnv({
+    COMMAND_CENTER_AUTH_USERNAME: 'griff843',
+    COMMAND_CENTER_AUTH_PASSWORD: 'secret',
+    COMMAND_CENTER_OPERATOR_IDENTITY: 'ops-alice',
+  });
+  const result = authenticateCommandCenterRequest({ env, headers: { authorization: createBasicAuthHeader('griff843', 'secret') } });
+  assert.equal(result.ok && result.auth.actor, 'ops-alice');
+});
+
+test('wrong or missing Basic credentials are still refused', () => {
+  const env = productionEnv({ COMMAND_CENTER_AUTH_USERNAME: 'griff843', COMMAND_CENTER_AUTH_PASSWORD: 'secret' });
+  for (const headers of [
+    { authorization: createBasicAuthHeader('griff843', 'wrong') },
+    { authorization: createBasicAuthHeader('kingro623', 'secret') },
+    {},
+  ]) {
+    assert.equal(authenticateCommandCenterRequest({ env, headers }).ok, false);
+  }
+});

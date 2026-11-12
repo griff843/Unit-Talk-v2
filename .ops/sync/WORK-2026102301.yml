@@ -1,0 +1,134 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102301
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102301
+  objective: Correct statements that contradict what the executable controls
+    actually enforce, so agents stop acting on stale text. Each edit cites the
+    code that decides the question; where code and prose disagree, the code wins
+    and the prose is corrected to match.
+  acceptance_criteria:
+    - "`CLAUDE.md` T2 merge-authority text names every approval artifact
+      `merge-gate.yml` accepts for T2 (GitHub review approval, `pm-verdict/v1`,
+      and the `executor-result/v1` self-attestation added by UTV2-1523), and
+      states that GitHub blocks self-approval when reviewer and author share an
+      account. Enforcement is unchanged."
+    - "`OPERATING_MODEL_SONNET5.md` records that its cutover merged (UTV2-1390,
+      #1135) and that the evidence.json/verification.md merge-SHA rebind is
+      automated by `post-merge-lane-close.yml` (UTV2-1392); the preflight
+      consolidation follow-up stays listed as undelivered."
+    - "`docs_authority_map.md` truth ordering defers to
+      `EXECUTION_TRUTH_MODEL.md` (canonical, T0) instead of ranking Linear and
+      `PROGRAM_STATUS.md` above manifests."
+    - Contradictions that need a policy decision are NOT edited; they are listed
+      in the PR body for independent review.
+    - No change to a workflow, hook, script, gate, tier rule, containment, kill
+      switch, or reserved decision.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026102301 — Reconcile active operating instructions with the
+      executable controls
+
+      Tier: T2
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: PM approval of the first controlled modernization wave (ChatGPT
+      PM, 2026-10-23). Documentation accuracy only. No policy, merge-authority,
+      tier or gate change.
+
+
+      ## File Scope
+
+
+      - CLAUDE.md
+
+      - docs/05_operations/OPERATING_MODEL_SONNET5.md
+
+      - docs/05_operations/docs_authority_map.md
+
+      - .ops/work/WORK-2026102301.md
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102301.md
+    title: WORK-2026102301 — Reconcile active operating instructions with the
+      executable controls
+    description: >-
+      # WORK-2026102301 — Reconcile active operating instructions with the
+      executable controls
+
+
+      Tier: T2
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: PM approval of the first controlled modernization wave (ChatGPT
+      PM, 2026-10-23). Documentation accuracy only. No policy, merge-authority,
+      tier or gate change.
+
+
+      ## Objective
+
+
+      Correct statements that contradict what the executable controls actually
+      enforce, so agents stop acting on stale text. Each edit cites the code
+      that decides the question; where code and prose disagree, the code wins
+      and the prose is corrected to match.
+
+
+      ## Acceptance Criteria
+
+
+      - `CLAUDE.md` T2 merge-authority text names every approval artifact
+      `merge-gate.yml` accepts for T2 (GitHub review approval, `pm-verdict/v1`,
+      and the `executor-result/v1` self-attestation added by UTV2-1523), and
+      states that GitHub blocks self-approval when reviewer and author share an
+      account. Enforcement is unchanged.
+
+      - `OPERATING_MODEL_SONNET5.md` records that its cutover merged (UTV2-1390,
+      #1135) and that the evidence.json/verification.md merge-SHA rebind is
+      automated by `post-merge-lane-close.yml` (UTV2-1392); the preflight
+      consolidation follow-up stays listed as undelivered.
+
+      - `docs_authority_map.md` truth ordering defers to
+      `EXECUTION_TRUTH_MODEL.md` (canonical, T0) instead of ranking Linear and
+      `PROGRAM_STATUS.md` above manifests.
+
+      - Contradictions that need a policy decision are NOT edited; they are
+      listed in the PR body for independent review.
+
+      - No change to a workflow, hook, script, gate, tier rule, containment,
+      kill switch, or reserved decision.
+
+
+      ## File Scope
+
+
+      - CLAUDE.md
+
+      - docs/05_operations/OPERATING_MODEL_SONNET5.md
+
+      - docs/05_operations/docs_authority_map.md
+
+      - .ops/work/WORK-2026102301.md
+    captured_at: 2026-10-23T12:06:07.248Z
+    description_sha256: ea41aeeb15f0988ec8d22052b346e01fda9aed2d25e5aa5602e04088659f4746
+  contract_hash: 3a1b4cea9c290770fec01ecf40d28a92bcfb7a33ad26b81e74ec291a431070f1

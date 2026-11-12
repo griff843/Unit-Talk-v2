@@ -1,0 +1,97 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1972
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1972
+  objective: WNBA canonical participants and manual human submission support
+  acceptance_criteria:
+    - |-
+      PM APPROVE PLAN received from Griff in current Codex conversation 2026-10-10. T1/Tier C plan approval only. Separate safe admission required; serialize after NCAAF lane [UTV2-1971](https://linear.app/unit-talk-v2/issue/UTV2-1971/ncaaf-canonical-participants-additive-2026-division-i-football-catalog) because migration/runtime singletons and canonical-reference-schema.test.ts lock may not overlap.
+
+      Approved substantive files only:
+
+      * one additive supabase/migrations/\*\_wnba_participant_catalog.sql
+      * packages/contracts/src/reference-data.ts
+      * apps/api/src/smart-form-validation.ts and smart-form-validation.test.ts
+      * apps/smart-form/app/submit/components/BetForm.tsx
+      * apps/smart-form/lib/form-utils.ts and apps/smart-form/test/form-utils.test.ts
+      * packages/db/src/pick-foreign-keys.ts and pick-foreign-keys.test.ts
+      * packages/db/src/canonical-reference-schema.test.ts
+      * issue-owned lane/proof artifacts.
+
+      Acceptance criteria:
+
+      * participants is canonical. Do not touch teams.
+      * Freeze all 15 active 2026 franchises from [https://www.wnba.com/teams](<https://www.wnba.com/teams>) including Golden State, Portland Fire and Toronto Tempo. Cleveland 2028 excluded.
+      * Stable participant UUIDs, idempotent additive seed, preserve existing identities/references, no invented provider IDs.
+      * WNBA sport/league and existing basketball market/stat availability sufficient for manual human Smart Form submissions; API/UI team-sport validation and DB sport FK normalization agree.
+      * Manual human capability only. No provider ingestion, system WNBA picks, modeling/promotion activation, grading expansion, new delivery targets or paid provider activation.
+      * Focused direct tsx tests; pnpm verify; R-level and sanctioned T1 staging DB proof; exact-head CI and independent PM review.
+      * No scope expansion without PM. No merge/production migration/deployment/event seeding/provider activation/delivery release authorized. Preserve all containment and Capitals candidate.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      PM APPROVE PLAN received from Griff in current Codex conversation 2026-10-10. T1/Tier C plan approval only. Separate safe admission required; serialize after NCAAF lane [UTV2-1971](https://linear.app/unit-talk-v2/issue/UTV2-1971/ncaaf-canonical-participants-additive-2026-division-i-football-catalog) because migration/runtime singletons and canonical-reference-schema.test.ts lock may not overlap.
+
+      Approved substantive files only:
+
+      * one additive supabase/migrations/\*\_wnba_participant_catalog.sql
+      * packages/contracts/src/reference-data.ts
+      * apps/api/src/smart-form-validation.ts and smart-form-validation.test.ts
+      * apps/smart-form/app/submit/components/BetForm.tsx
+      * apps/smart-form/lib/form-utils.ts and apps/smart-form/test/form-utils.test.ts
+      * packages/db/src/pick-foreign-keys.ts and pick-foreign-keys.test.ts
+      * packages/db/src/canonical-reference-schema.test.ts
+      * issue-owned lane/proof artifacts.
+
+      Acceptance criteria:
+
+      * participants is canonical. Do not touch teams.
+      * Freeze all 15 active 2026 franchises from [https://www.wnba.com/teams](<https://www.wnba.com/teams>) including Golden State, Portland Fire and Toronto Tempo. Cleveland 2028 excluded.
+      * Stable participant UUIDs, idempotent additive seed, preserve existing identities/references, no invented provider IDs.
+      * WNBA sport/league and existing basketball market/stat availability sufficient for manual human Smart Form submissions; API/UI team-sport validation and DB sport FK normalization agree.
+      * Manual human capability only. No provider ingestion, system WNBA picks, modeling/promotion activation, grading expansion, new delivery targets or paid provider activation.
+      * Focused direct tsx tests; pnpm verify; R-level and sanctioned T1 staging DB proof; exact-head CI and independent PM review.
+      * No scope expansion without PM. No merge/production migration/deployment/event seeding/provider activation/delivery release authorized. Preserve all containment and Capitals candidate.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1972/wnba-canonical-participants-and-manual-human-submission-support
+    title: WNBA canonical participants and manual human submission support
+    description: |-
+      PM APPROVE PLAN received from Griff in current Codex conversation 2026-10-10. T1/Tier C plan approval only. Separate safe admission required; serialize after NCAAF lane [UTV2-1971](https://linear.app/unit-talk-v2/issue/UTV2-1971/ncaaf-canonical-participants-additive-2026-division-i-football-catalog) because migration/runtime singletons and canonical-reference-schema.test.ts lock may not overlap.
+
+      Approved substantive files only:
+
+      * one additive supabase/migrations/\*\_wnba_participant_catalog.sql
+      * packages/contracts/src/reference-data.ts
+      * apps/api/src/smart-form-validation.ts and smart-form-validation.test.ts
+      * apps/smart-form/app/submit/components/BetForm.tsx
+      * apps/smart-form/lib/form-utils.ts and apps/smart-form/test/form-utils.test.ts
+      * packages/db/src/pick-foreign-keys.ts and pick-foreign-keys.test.ts
+      * packages/db/src/canonical-reference-schema.test.ts
+      * issue-owned lane/proof artifacts.
+
+      Acceptance criteria:
+
+      * participants is canonical. Do not touch teams.
+      * Freeze all 15 active 2026 franchises from [https://www.wnba.com/teams](<https://www.wnba.com/teams>) including Golden State, Portland Fire and Toronto Tempo. Cleveland 2028 excluded.
+      * Stable participant UUIDs, idempotent additive seed, preserve existing identities/references, no invented provider IDs.
+      * WNBA sport/league and existing basketball market/stat availability sufficient for manual human Smart Form submissions; API/UI team-sport validation and DB sport FK normalization agree.
+      * Manual human capability only. No provider ingestion, system WNBA picks, modeling/promotion activation, grading expansion, new delivery targets or paid provider activation.
+      * Focused direct tsx tests; pnpm verify; R-level and sanctioned T1 staging DB proof; exact-head CI and independent PM review.
+      * No scope expansion without PM. No merge/production migration/deployment/event seeding/provider activation/delivery release authorized. Preserve all containment and Capitals candidate.
+    captured_at: 2026-10-12T20:50:12.172Z
+    description_sha256: c6847c71bb15d8c12ea31b5232e7111eca0047a23939c70d92c220555a9b4aeb
+  contract_hash: d18841a00c3e349abee2cde5b1f6512fa83774c9576acf9f0ac1e0433f76dada

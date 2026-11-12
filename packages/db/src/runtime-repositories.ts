@@ -69,6 +69,7 @@ import type {
   ConfirmDeliveryAtomicInput,
   ConfirmDeliveryAtomicResult,
   EventBrowseResult,
+  EventOffersState,
   EventOfferBrowseResult,
   EventParticipantBrowseResult,
   EnqueueDistributionAtomicInput,
@@ -166,7 +167,7 @@ import type {
   PickReviewRecord,
   ExecutionIntentRow,
 } from './types.js';
-import type { Json } from './database.types.js';
+import type { Database, Json } from './database.types.js';
 import {
   createDatabaseClientFromConnection,
   type DatabaseConnectionConfig,
@@ -493,20 +494,57 @@ export class InMemorySubmissionRepository implements SubmissionRepository {
   }
 }
 
+// PostgreSQL orders timestamp instants, not their variable-precision text.
+// Retain submillisecond digits so distinct database microseconds stay ordered.
+function performanceTimestampKey(timestamp: string): bigint {
+  const milliseconds = Date.parse(timestamp);
+  if (!Number.isFinite(milliseconds)) throw new Error('Invalid reader timestamp');
+  const fraction = timestamp.match(/\.(\d+)/)?.[1] ?? '';
+  return BigInt(milliseconds) * 1_000_000n
+    + BigInt(fraction.slice(3, 9).padEnd(6, '0'));
+}
+
+function comparePerformanceReaderRows(
+  left: { created_at: string; id: string },
+  right: { created_at: string; id: string },
+): number {
+  const leftTime = performanceTimestampKey(left.created_at);
+  const rightTime = performanceTimestampKey(right.created_at);
+  return leftTime < rightTime ? -1 : leftTime > rightTime ? 1 : left.id.localeCompare(right.id);
+}
+
 /** PostgREST `max-rows` on this project: the most rows any single response carries. */
 export const POSTGREST_MAX_ROWS = 1000;
 
-/**
- * Reads every row of an ordered query by requesting consecutive
- * `[from, to]` ranges of `pageSize` until a page comes back short. The caller
- * must order on a total order, or rows can move between pages mid-read.
- * `pageSize` must not exceed the server cap: a capped page would read as short
- * and end the read early, which is exactly the truncation this exists to stop.
+type OrderedPageCursor = { created_at: string; id: string };
+
+export function orderedPageFilter(cursor: OrderedPageCursor, ascending = true): string {
+  const operator = ascending ? 'gt' : 'lt';
+  // Pass the exact database text to supabase-js. Its URLSearchParams encoding
+  // preserves '+' as %2B; pre-encoding here would double-encode the timestamp.
+  return `created_at.${operator}.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.${operator}.${cursor.id})`;
+}
+
+/** Redundant timestamp bound lets Postgres seek into the ordered index. */
+export function applyOrderedPageCursor<Q extends {
+  gte(column: string, value: string): Q;
+  lte(column: string, value: string): Q;
+  or(filter: string): Q;
+}>(query: Q, cursor: OrderedPageCursor, ascending = true): Q {
+  const bounded = ascending
+    ? query.gte('created_at', cursor.created_at)
+    : query.lte('created_at', cursor.created_at);
+  return bounded.or(orderedPageFilter(cursor, ascending));
+}
+
+/** Read a total (created_at, id) order until a short page, retaining DB precision.
+ * from/to describe logical progress only; subsequent queries use the cursor.
  */
-export async function readAllOrderedPages<T>(
+export async function readAllOrderedPages<T extends OrderedPageCursor>(
   fetchPage: (
     from: number,
     to: number,
+    cursor: OrderedPageCursor | undefined,
   ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
   pageSize: number = POSTGREST_MAX_ROWS,
 ): Promise<T[]> {
@@ -514,16 +552,14 @@ export async function readAllOrderedPages<T>(
     throw new Error(`pageSize must be an integer from 1 to ${POSTGREST_MAX_ROWS}; received ${pageSize}`);
   }
   const rows: T[] = [];
+  let cursor: OrderedPageCursor | undefined;
   for (let from = 0; ; from += pageSize) {
-    const { data, error } = await fetchPage(from, from + pageSize - 1);
-    if (error) {
-      throw new Error(error.message);
-    }
+    const { data, error } = await fetchPage(from, from + pageSize - 1, cursor);
+    if (error) throw new Error(error.message);
     const page = (data ?? []) as T[];
     rows.push(...page);
-    if (page.length < pageSize) {
-      return rows;
-    }
+    if (page.length < pageSize) return rows;
+    cursor = page[page.length - 1]!;
   }
 }
 
@@ -623,15 +659,29 @@ export class InMemoryPickRepository implements PickRepository {
     limit?: number | undefined,
     offset?: number | undefined,
   ): Promise<PickRecord[]> {
+    if (
+      !Number.isSafeInteger(offset ?? 0) ||
+      (offset ?? 0) < 0 ||
+      (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 0))
+    ) {
+      throw new Error(
+        'listByLifecycleStates requires nonnegative safe integer limit/offset',
+      );
+    }
     const stateSet = new Set(lifecycleStates);
     const start = offset ?? 0;
     const sorted = Array.from(this.picks.values())
       .filter((pick) =>
         stateSet.has(pick.status as CanonicalPick['lifecycleState']),
       )
-      .sort((left, right) => left.created_at.localeCompare(right.created_at))
+      .sort(
+        comparePerformanceReaderRows,
+      )
       .slice(start);
-    return limit === undefined ? sorted : sorted.slice(0, limit);
+    const result = limit === undefined ? sorted : sorted.slice(0, limit);
+    if (result.length > 100_000)
+      throw new Error('listByLifecycleStates exceeds 100000-row safety budget');
+    return result;
   }
 
   async listMemberVisibleOfficialPicks(
@@ -1114,7 +1164,15 @@ export class InMemoryOutboxRepository implements OutboxRepository {
   }
 
   async listByPickId(pickId: string): Promise<OutboxRecord[]> {
-    return this.entries.filter((e) => e.pick_id === pickId);
+    const result = this.entries
+      .filter((e) => e.pick_id === pickId)
+      .sort(
+        (left, right) =>
+          comparePerformanceReaderRows(right, left),
+      );
+    if (result.length > 100_000)
+      throw new Error('listByPickId exceeds 100000-row safety budget');
+    return result;
   }
 
   async resetForRetry(outboxId: string): Promise<OutboxRecord> {
@@ -1640,9 +1698,12 @@ export class InMemorySettlementRepository implements SettlementRepository {
   }
 
   async listByPick(pickId: string): Promise<SettlementRecord[]> {
-    return this.settlements
+    const result = this.settlements
       .filter((record) => record.pick_id === pickId)
-      .sort(compareSettlementRecordsDescending);
+      .sort((left, right) => comparePerformanceReaderRows(right, left));
+    if (result.length > 100_000)
+      throw new Error('listByPick exceeds 100000-row safety budget');
+    return result;
   }
 
   async listRecent(limit = 12, since?: string): Promise<SettlementRecord[]> {
@@ -3458,32 +3519,164 @@ export class DatabasePickRepository implements PickRepository {
     return data ?? [];
   }
 
+  async listTrackOnlyByLifecycleState(
+    lifecycleState: CanonicalPick['lifecycleState'],
+  ): Promise<PickRecord[]> {
+    return readAllOrderedPages<PickRecord>(async (from, to, cursor) => {
+      let query = this.client
+        .from('picks')
+        .select('*')
+        .eq('status', lifecycleState)
+        .eq('metadata->>distributionMode', 'track-only')
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(0, to - from);
+      if (cursor) query = applyOrderedPageCursor(query, cursor);
+      return query;
+    });
+  }
+
   async listByLifecycleStates(
     lifecycleStates: CanonicalPick['lifecycleState'][],
     limit?: number | undefined,
     offset?: number | undefined,
   ): Promise<PickRecord[]> {
-    let query = this.client
-      .from('picks')
-      .select('*')
-      .in('status', lifecycleStates)
-      .order('created_at', { ascending: true });
-
-    if (offset !== undefined && limit !== undefined) {
-      query = query.range(offset, offset + limit - 1);
-    } else if (limit !== undefined) {
-      query = query.limit(limit);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
+    const start = offset ?? 0;
+    if (
+      !Number.isSafeInteger(start) ||
+      start < 0 ||
+      (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 0))
+    ) {
       throw new Error(
-        `Failed to list picks by lifecycle states: ${error.message}`,
+        'listByLifecycleStates requires nonnegative safe integer limit/offset',
       );
     }
-
-    return data ?? [];
+    if (limit === 0 || lifecycleStates.length === 0) return [];
+    // Explicit bounds prevent an unbounded read from quietly becoming a capped
+    // PostgREST response. A bounded caller keeps its limit/offset contract.
+    const maxRows = 100_000;
+    // Attempt -1 is a single-snapshot probe. Its rows are discarded if
+    // another page is needed; retries start with their own watermark.
+    for (let attempt = -1; attempt < 3; attempt++) {
+      let watermark: string | undefined;
+      if (attempt >= 0) {
+        const newest = await this.client.from('picks').select('updated_at')
+          .order('updated_at', { ascending: false }).limit(1);
+        if (newest.error) throw new Error('Failed to listByLifecycleStates: ' + newest.error.message);
+        watermark = newest.data?.[0]?.updated_at;
+      }
+      let probeNeedsRestart = false;
+      let total: number | undefined;
+      let usedCursorPage = false;
+      let previous: { created_at: string; id: string } | undefined;
+      const seen = new Set<string>();
+      const fail = (reason: string): never => {
+        throw new Error('Failed to listByLifecycleStates: ' + reason);
+      };
+      try {
+        const rows = await readAllOrderedPages<PickRecord>(async (from, to, cursor) => {
+          if (probeNeedsRestart) return { data: [], error: null };
+          const width = Math.min(
+            to - from + 1,
+            limit === undefined ? POSTGREST_MAX_ROWS : limit - from,
+          );
+          if (width <= 0 || (total !== undefined && start + from >= total)) {
+            return { data: [], error: null };
+          }
+          if (!Number.isSafeInteger(start + from + width - 1))
+            fail('unsafe page range');
+          let query = this.client
+            .from('picks')
+            .select('*', cursor ? undefined : { count: 'exact' })
+            .in('status', lifecycleStates)
+            .order('created_at', { ascending: true })
+            .order('id', { ascending: true })
+            .range(cursor ? 0 : start, (cursor ? 0 : start) + width - 1);
+          if (cursor) query = applyOrderedPageCursor(query, cursor, true);
+          if (cursor) usedCursorPage = true;
+          const { data, error, count } = await query;
+          if (error) fail(error.message);
+          if (!cursor) {
+            if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0)
+              fail('missing or invalid exact population count');
+            total = count as number;
+          }
+          const wanted = Math.min(
+            Math.max(0, total! - start),
+            limit ?? Number.POSITIVE_INFINITY,
+          );
+          if (wanted > maxRows) fail('read exceeds 100000-row safety budget');
+          if (!Array.isArray(data)) fail('missing page data');
+          const page = data ?? [];
+          if (page.length > width) fail('inconsistent or truncated page');
+          for (const row of page) {
+            if (
+              typeof row.id !== 'string' ||
+              row.id.length === 0 ||
+              typeof row.created_at !== 'string' ||
+              !Number.isFinite(Date.parse(row.created_at))
+            ) {
+              fail('invalid row ordering identity');
+            }
+            if (
+              !lifecycleStates.includes(
+                row.status as CanonicalPick['lifecycleState'],
+              )
+            )
+              fail('row does not match requested filter');
+            if (seen.has(row.id)) fail('duplicate or overlapping page identity');
+            if (previous) {
+              const order =
+                comparePerformanceReaderRows(previous, row);
+              if (!(order < 0)) fail('non-progressing or inconsistent page order');
+            }
+            seen.add(row.id);
+            if (seen.size > maxRows) fail('read exceeds 100000-row safety budget');
+            previous = row;
+          }
+          if (attempt === -1 && page.length === POSTGREST_MAX_ROWS && wanted > page.length)
+            probeNeedsRestart = true;
+          return { data: page, error: null };
+        });
+        if (probeNeedsRestart) continue;
+        // A single data statement already supplies rows and count from one
+        // snapshot. Multi-statement reads need an end count to detect net drift.
+        if (usedCursorPage) {
+          // No status filter: departed members must still be visible here.
+          let changes = this.client.from('picks')
+            .select('id', { count: 'exact', head: true });
+          if (watermark !== undefined) changes = changes.gt('updated_at', watermark);
+          if (previous) changes = changes.lte('created_at', previous.created_at);
+          const changed = await changes;
+          if (changed.error) fail(changed.error.message);
+          if (typeof changed.count !== 'number' || !Number.isSafeInteger(changed.count) || changed.count < 0)
+            fail('missing or invalid exact population count');
+          if (typeof changed.count === 'number' && changed.count > 0) fail('population membership changed while paging');
+          if (limit === undefined && previous) {
+            const beyond = await applyOrderedPageCursor(this.client.from('picks')
+              .select('id', { count: 'exact', head: true }).in('status', lifecycleStates), previous, true);
+            if (beyond.error) fail(beyond.error.message);
+            if (typeof beyond.count !== 'number' || !Number.isSafeInteger(beyond.count) || beyond.count < 0)
+              fail('missing or invalid exact population count');
+            if (typeof beyond.count === 'number' && beyond.count > 0) fail('population membership changed while paging');
+          }
+          const population = await this.client.from('picks')
+            .select('id', { count: 'exact', head: true }).in('status', lifecycleStates);
+          if (population.error) fail(population.error.message);
+          if (typeof population.count !== 'number' || !Number.isSafeInteger(population.count) || population.count < 0)
+            fail('missing or invalid exact population count');
+          if (total !== population.count)
+            fail('population count changed while paging');
+        }
+        const wanted = Math.min(Math.max(0, total! - start), limit ?? Number.POSITIVE_INFINITY);
+        if (rows.length !== wanted)
+          fail('population count changed while paging: inconsistent or truncated page');
+        return rows;
+      } catch (error) {
+        if (!(error instanceof Error) || !(/population (count|membership) changed while paging/.test(error.message)) || attempt === 2) throw error;
+      }
+    }
+    throw new Error('Failed to listByLifecycleStates: population count changed while paging');
   }
 
   async listMemberVisibleOfficialPicks(
@@ -3516,8 +3709,8 @@ export class DatabasePickRepository implements PickRepository {
     promotionStatuses: readonly string[],
   ): Promise<PromotedPickCandidate[]> {
     const select = 'id,status,promotion_status,promotion_target,metadata,selection,created_at';
-    const readPromoted = readAllOrderedPages<PromotedPickCandidate>(async (from, to) =>
-      this.client
+    const readPromoted = readAllOrderedPages<PromotedPickCandidate>(async (from, to, cursor) => {
+      let query = this.client
         .from('picks')
         .select(select)
         .in('status', [...lifecycleStates])
@@ -3525,10 +3718,12 @@ export class DatabasePickRepository implements PickRepository {
         .not('promotion_target', 'is', null)
         .order('created_at', { ascending: true })
         .order('id', { ascending: true })
-        .range(from, to),
-    );
-    const readAuthorizedHuman = readAllOrderedPages<PromotedPickCandidate>(async (from, to) =>
-      this.client
+        .range(0, to - from);
+      if (cursor) query = applyOrderedPageCursor(query, cursor);
+      return query;
+    });
+    const readAuthorizedHuman = readAllOrderedPages<PromotedPickCandidate>(async (from, to, cursor) => {
+      let query = this.client
         .from('picks')
         .select(select)
         .in('status', [...lifecycleStates])
@@ -3536,8 +3731,10 @@ export class DatabasePickRepository implements PickRepository {
         .eq('metadata->deliveryAuthorization->>decision', 'authorized')
         .order('created_at', { ascending: true })
         .order('id', { ascending: true })
-        .range(from, to),
-    );
+        .range(0, to - from);
+      if (cursor) query = applyOrderedPageCursor(query, cursor);
+      return query;
+    });
 
     // Each branch is filtered before PostgREST pagination, so health never
     // reads the full draft/validated population. Merge by id because a human
@@ -4312,14 +4509,80 @@ export class DatabaseOutboxRepository implements OutboxRepository {
   }
 
   async listByPickId(pickId: string): Promise<OutboxRecord[]> {
-    const { data, error } = await this.client
-      .from('distribution_outbox')
-      .select('*')
-      .eq('pick_id', pickId)
-      .order('created_at', { ascending: false });
-    if (error)
-      throw new Error(`Failed to list outbox by pick: ${error.message}`);
-    return (data ?? []) as OutboxRecord[];
+    const start = 0;
+    const limit: number | undefined = undefined;
+    // Explicit bounds prevent an unbounded read from quietly becoming a capped
+    // PostgREST response. A bounded caller keeps its limit/offset contract.
+    const maxRows = 100_000;
+    let total: number | undefined;
+    let previous: { created_at: string; id: string } | undefined;
+    const seen = new Set<string>();
+    const fail = (reason: string): never => {
+      throw new Error('Failed to listByPickId: ' + reason);
+    };
+    return readAllOrderedPages<OutboxRecord>(async (from, to, cursor) => {
+      const width = Math.min(
+        to - from + 1,
+        limit === undefined ? POSTGREST_MAX_ROWS : limit - from,
+      );
+      if (width <= 0 || (total !== undefined && start + from >= total)) {
+        return { data: [], error: null };
+      }
+      if (!Number.isSafeInteger(start + from + width - 1))
+        fail('unsafe page range');
+      let query = this.client
+        .from('distribution_outbox')
+        .select('*', { count: 'exact' })
+        .eq('pick_id', pickId)
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(cursor ? 0 : start, (cursor ? 0 : start) + width - 1);
+      if (cursor) query = applyOrderedPageCursor(query, cursor, false);
+      const { data, error, count } = await query;
+      if (error) fail(error.message);
+      if (
+        typeof count !== 'number' ||
+        !Number.isSafeInteger(count) ||
+        count < 0
+      ) {
+        fail('missing or invalid exact population count');
+      }
+      const currentCount = (count as number) + (cursor ? start + from : 0);
+      if (total !== undefined && total !== currentCount)
+        fail('population count changed while paging');
+      total = currentCount;
+      const wanted = Math.min(
+        Math.max(0, total - start),
+        limit ?? Number.POSITIVE_INFINITY,
+      );
+      if (wanted > maxRows) fail('read exceeds 100000-row safety budget');
+      if (!Array.isArray(data)) fail('missing page data');
+      const page = data ?? [];
+      const expected = Math.min(width, Math.max(0, total - start - from));
+      if (page.length !== expected) fail('inconsistent or truncated page');
+      for (const row of page) {
+        if (
+          typeof row.id !== 'string' ||
+          row.id.length === 0 ||
+          typeof row.created_at !== 'string' ||
+          !Number.isFinite(Date.parse(row.created_at))
+        ) {
+          fail('invalid row ordering identity');
+        }
+        if (!(row.pick_id === pickId))
+          fail('row does not match requested filter');
+        if (seen.has(row.id)) fail('duplicate or overlapping page identity');
+        if (previous) {
+          const order =
+            comparePerformanceReaderRows(previous, row);
+          if (!(order > 0)) fail('non-progressing or inconsistent page order');
+        }
+        seen.add(row.id);
+        if (seen.size > maxRows) fail('read exceeds 100000-row safety budget');
+        previous = row;
+      }
+      return { data: page, error: null };
+    });
   }
 
   async resetForRetry(outboxId: string): Promise<OutboxRecord> {
@@ -4972,17 +5235,80 @@ export class DatabaseSettlementRepository implements SettlementRepository {
   }
 
   async listByPick(pickId: string): Promise<SettlementRecord[]> {
-    const { data, error } = await this.client
-      .from('settlement_records')
-      .select()
-      .eq('pick_id', pickId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      throw new Error(`Failed to list settlements for pick: ${error.message}`);
-    }
-
-    return (data ?? []).sort(compareSettlementRecordsDescending);
+    const start = 0;
+    const limit: number | undefined = undefined;
+    // Explicit bounds prevent an unbounded read from quietly becoming a capped
+    // PostgREST response. A bounded caller keeps its limit/offset contract.
+    const maxRows = 100_000;
+    let total: number | undefined;
+    let previous: { created_at: string; id: string } | undefined;
+    const seen = new Set<string>();
+    const fail = (reason: string): never => {
+      throw new Error('Failed to listByPick: ' + reason);
+    };
+    return readAllOrderedPages<SettlementRecord>(async (from, to, cursor) => {
+      const width = Math.min(
+        to - from + 1,
+        limit === undefined ? POSTGREST_MAX_ROWS : limit - from,
+      );
+      if (width <= 0 || (total !== undefined && start + from >= total)) {
+        return { data: [], error: null };
+      }
+      if (!Number.isSafeInteger(start + from + width - 1))
+        fail('unsafe page range');
+      let query = this.client
+        .from('settlement_records')
+        .select('*', { count: 'exact' })
+        .eq('pick_id', pickId)
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(cursor ? 0 : start, (cursor ? 0 : start) + width - 1);
+      if (cursor) query = applyOrderedPageCursor(query, cursor, false);
+      const { data, error, count } = await query;
+      if (error) fail(error.message);
+      if (
+        typeof count !== 'number' ||
+        !Number.isSafeInteger(count) ||
+        count < 0
+      ) {
+        fail('missing or invalid exact population count');
+      }
+      const currentCount = (count as number) + (cursor ? start + from : 0);
+      if (total !== undefined && total !== currentCount)
+        fail('population count changed while paging');
+      total = currentCount;
+      const wanted = Math.min(
+        Math.max(0, total - start),
+        limit ?? Number.POSITIVE_INFINITY,
+      );
+      if (wanted > maxRows) fail('read exceeds 100000-row safety budget');
+      if (!Array.isArray(data)) fail('missing page data');
+      const page = data ?? [];
+      const expected = Math.min(width, Math.max(0, total - start - from));
+      if (page.length !== expected) fail('inconsistent or truncated page');
+      for (const row of page) {
+        if (
+          typeof row.id !== 'string' ||
+          row.id.length === 0 ||
+          typeof row.created_at !== 'string' ||
+          !Number.isFinite(Date.parse(row.created_at))
+        ) {
+          fail('invalid row ordering identity');
+        }
+        if (!(row.pick_id === pickId))
+          fail('row does not match requested filter');
+        if (seen.has(row.id)) fail('duplicate or overlapping page identity');
+        if (previous) {
+          const order =
+            comparePerformanceReaderRows(previous, row);
+          if (!(order > 0)) fail('non-progressing or inconsistent page order');
+        }
+        seen.add(row.id);
+        if (seen.size > maxRows) fail('read exceeds 100000-row safety budget');
+        previous = row;
+      }
+      return { data: page, error: null };
+    });
   }
 
   async listRecent(limit = 12, since?: string): Promise<SettlementRecord[]> {
@@ -5577,25 +5903,44 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     since: string,
     limit = 10_000,
   ): Promise<ProviderOfferRecord[]> {
-    const { data, error } = await (fromUntyped(
-      this.client,
-      'provider_offer_history',
-    )
-      .select('*')
-      .gte('snapshot_at', since)
-      .order('snapshot_at', { ascending: false })
-      .limit(limit) as unknown as Promise<{
-      data: ProviderOfferRecord[] | null;
-      error: { message: string } | null;
-    }>);
+    // PostgREST clamps every response to `max_rows` (1000 in supabase/config.toml),
+    // silently, regardless of `.limit()`. Page with `.range()` so the documented
+    // `limit` is honoured and callers can rely on `rows.length >= limit` meaning
+    // "truncated at the caller's cap" rather than "clipped by the server".
+    // `id` is the tiebreaker so rows sharing a snapshot_at never skip or repeat
+    // across pages.
+    const PAGE = 1000;
+    const all: ProviderOfferRecord[] = [];
+    while (all.length < limit) {
+      const from = all.length;
+      const to = Math.min(from + PAGE, limit) - 1;
+      const { data, error } = await (fromUntyped(
+        this.client,
+        'provider_offer_history',
+      )
+        .select('*')
+        .gte('snapshot_at', since)
+        .order('snapshot_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, to) as unknown as Promise<{
+        data: ProviderOfferRecord[] | null;
+        error: { message: string } | null;
+      }>);
 
-    if (error) {
-      throw new Error(
-        `Failed to list recent provider offers: ${error.message}`,
-      );
+      if (error) {
+        throw new Error(
+          `Failed to list recent provider offers: ${error.message}`,
+        );
+      }
+
+      const page = data ?? [];
+      all.push(...page);
+      if (page.length < to - from + 1) {
+        break;
+      }
     }
 
-    return data ?? [];
+    return all;
   }
 
   async listClosingOffers(since: string): Promise<ProviderOfferRecord[]> {
@@ -7104,7 +7449,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     }
 
     const startTime = extractStartsAt(event.metadata);
-    const offers = await this.loadEventOffers(
+    const { offers, state: offersState } = await this.loadEventOffers(
       (event.external_id as string | null) ?? null,
       participants,
       event.sport_id as string,
@@ -7121,7 +7466,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
         )
         .find((value) => value !== null) ?? null;
 
-    return {
+    const browseResult: EventBrowseResult = {
       eventId: event.id as string,
       externalId: (event.external_id as string | null) ?? null,
       eventName: event.event_name as string,
@@ -7132,7 +7477,9 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       leagueId,
       participants,
       offers,
+      offersState,
     };
+    return browseResult;
   }
 
   async searchTeams(
@@ -7655,55 +8002,28 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     participants: EventParticipantBrowseResult[],
     sportId: string,
     recentSince: string = buildEventOfferRecentSince(null, 'scheduled'),
-  ): Promise<EventOfferBrowseResult[]> {
+  ): Promise<{ offers: EventOfferBrowseResult[]; state: EventOffersState }> {
     if (!providerEventId) {
-      return [];
+      return {
+        offers: [],
+        state: { status: 'empty', newestObservedAt: null, freshSince: recentSince, truncated: false },
+      };
     }
 
-    // Split into two queries to bypass Supabase PostgREST's 1000-row page cap.
-    // A single query ordered by snapshot_at fills the 1000 slots with player-prop
-    // rows, silently dropping all game-level markets (ML, spread, total, 1H, F5,
-    // innings, team total). Separating by provider_participant_id guarantees both
-    // categories are always represented regardless of row counts.
-    const [gameLevelResult, playerPropResult] = await Promise.all([
-      // Game-level: ML, spread, totals, halves, innings, team totals (~200 rows max)
-      this.client
-        .from('provider_offers')
-        .select('*')
-        .eq('provider_event_id', providerEventId)
-        .gte('snapshot_at', recentSince)
-        .is('provider_participant_id', null)
-        .order('snapshot_at', { ascending: false })
-        .limit(1000),
-      // Player props: batting, pitching, etc. (~1000 rows, one snapshot cycle)
-      this.client
-        .from('provider_offers')
-        .select('*')
-        .eq('provider_event_id', providerEventId)
-        .gte('snapshot_at', recentSince)
-        .not('provider_participant_id', 'is', null)
-        .order('snapshot_at', { ascending: false })
-        .limit(1000),
-    ]);
-
-    if (gameLevelResult.error) {
-      throw new Error(
-        `Failed to load game-level offers: ${gameLevelResult.error.message}`,
-      );
-    }
-    if (playerPropResult.error) {
-      throw new Error(
-        `Failed to load player-prop offers: ${playerPropResult.error.message}`,
-      );
-    }
-
-    const offers = [
-      ...(gameLevelResult.data ?? []),
-      ...(playerPropResult.data ?? []),
-    ];
+    // CURRENT-offer semantics: read the canonical current projection
+    // (provider_offer_current), never the frozen quarantine view. A missing or
+    // stale projection is reported through `state`, not presented as current
+    // offers and not silently replaced by quarantine data (WORK-2026110705).
+    const current = await fetchCurrentEventOffers(
+      this.client,
+      providerEventId,
+      recentSince,
+    );
+    const state = current.state;
+    const offers = current.rows;
 
     if (offers.length === 0) {
-      return [];
+      return { offers: [], state };
     }
 
     const providerMarketKeys = Array.from(
@@ -7773,7 +8093,10 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
 
             return splitProviderBookKey(row.provider_key as string).bookKey;
           })
-          .filter((value): value is string => value.length > 0),
+          .filter(
+            (value): value is string =>
+              typeof value === 'string' && value.length > 0,
+          ),
       ),
     );
     const { data: bookAliases, error: bookAliasesError } =
@@ -7915,7 +8238,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       });
     }
 
-    return Array.from(grouped.values()).sort((left, right) => {
+    const sortedOffers = Array.from(grouped.values()).sort((left, right) => {
       const sportsbookCompare = (left.sportsbookName ?? '').localeCompare(
         right.sportsbookName ?? '',
       );
@@ -7930,7 +8253,82 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       if (participantCompare !== 0) return participantCompare;
       return (left.line ?? 0) - (right.line ?? 0);
     });
+    return { offers: sortedOffers, state };
   }
+}
+
+export type CurrentOfferRow = Database['public']['Tables']['provider_offer_current']['Row'];
+
+/**
+ * Reads CURRENT offers for one provider event from `provider_offer_current`
+ * (the canonical current projection). Two queries (game-level, player-prop)
+ * preserve the PostgREST 1000-row page-cap workaround. Rows older than
+ * `recentSince` are never returned as current; when only older rows exist the
+ * state is `stale`. A read error throws (never a silent empty list).
+ */
+/** PostgREST `max_rows` ceiling (supabase/config.toml); a full page may be clipped. */
+const CURRENT_OFFER_PAGE_LIMIT = 1000;
+
+export async function fetchCurrentEventOffers(
+  client: UnitTalkSupabaseClient,
+  providerEventId: string,
+  recentSince: string,
+): Promise<{ rows: CurrentOfferRow[]; state: EventOffersState }> {
+  const [gameLevelResult, playerPropResult] = await Promise.all([
+    client
+      .from('provider_offer_current')
+      .select('*')
+      .eq('provider_event_id', providerEventId)
+      .is('provider_participant_id', null)
+      .order('snapshot_at', { ascending: false })
+      .limit(CURRENT_OFFER_PAGE_LIMIT),
+    client
+      .from('provider_offer_current')
+      .select('*')
+      .eq('provider_event_id', providerEventId)
+      .not('provider_participant_id', 'is', null)
+      .order('snapshot_at', { ascending: false })
+      .limit(CURRENT_OFFER_PAGE_LIMIT),
+  ]);
+
+  if (gameLevelResult.error) {
+    throw new Error(
+      `Failed to load game-level offers: ${gameLevelResult.error.message}`,
+    );
+  }
+  if (playerPropResult.error) {
+    throw new Error(
+      `Failed to load player-prop offers: ${playerPropResult.error.message}`,
+    );
+  }
+
+  const all = [...(gameLevelResult.data ?? []), ...(playerPropResult.data ?? [])];
+  const newestObservedAt =
+    all
+      .map((row) => (typeof row.snapshot_at === 'string' ? row.snapshot_at : null))
+      .filter((value): value is string => value !== null)
+      .sort()
+      .at(-1) ?? null;
+  const fresh = all.filter(
+    (row) =>
+      typeof row.snapshot_at === 'string' &&
+      Date.parse(row.snapshot_at) >= Date.parse(recentSince),
+  );
+  const status: EventOffersState['status'] =
+    all.length === 0 ? 'empty' : fresh.length === 0 ? 'stale' : 'fresh';
+  return {
+    rows: fresh,
+    state: {
+      status,
+      newestObservedAt,
+      freshSince: recentSince,
+      // Either query returning a full page means the PostgREST row cap may have
+      // clipped the set: the offers are a sample, not the full event.
+      truncated:
+        (gameLevelResult.data?.length ?? 0) >= CURRENT_OFFER_PAGE_LIMIT ||
+        (playerPropResult.data?.length ?? 0) >= CURRENT_OFFER_PAGE_LIMIT,
+    },
+  };
 }
 
 function extractStartsAt(metadata: unknown): string | null {
@@ -8524,7 +8922,7 @@ export class DatabaseExecutionQualityRepository implements ExecutionQualityRepos
 
   async summarizeByProvider(sport?: string): Promise<ExecutionQualityReport[]> {
     let query = this.client
-      .from('provider_offers')
+      .from('provider_offer_history_compact')
       .select(
         'provider_key, sport_key, provider_market_key, line, is_opening, is_closing',
       );
@@ -8547,7 +8945,7 @@ export class DatabaseExecutionQualityRepository implements ExecutionQualityRepos
     providerKey: string,
   ): Promise<ExecutionQualityReport[]> {
     const { data, error } = await this.client
-      .from('provider_offers')
+      .from('provider_offer_history_compact')
       .select(
         'provider_key, sport_key, provider_market_key, line, is_opening, is_closing',
       )

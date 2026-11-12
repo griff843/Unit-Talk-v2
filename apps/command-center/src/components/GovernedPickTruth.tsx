@@ -1,5 +1,6 @@
 import React from 'react';
 import { parseGovernedTargetFromDeliveryTarget, readHumanCapperDeliveryAuthorization } from '@unit-talk/contracts';
+import { deliveryAudienceLabel } from '@/lib/delivery-audience-label';
 import { Card } from '@/components/ui/Card';
 
 function KV({ label, value }: { label: string; value: React.ReactNode }) {
@@ -101,13 +102,15 @@ export function resolvePickDeliveryStage(input: {
     : { stage: 'awaiting-delivery' };
 }
 
-export function GovernedPickTruth({ metadata, hasEventLink, voided, deliveryStage, deliveryKillSwitch }: {
+export function GovernedPickTruth({ metadata, hasEventLink, voided, deliveryStage, deliveryKillSwitch, outboxPayloads = [] }: {
   metadata: Record<string, unknown>;
+  outboxPayloads?: readonly unknown[];
   hasEventLink: boolean;
   voided: boolean;
   deliveryStage?: PickDeliveryStage;
   deliveryKillSwitch?: DeliveryKillSwitchTruth;
 }) {
+  const audienceLabel = deliveryAudienceLabel(metadata, outboxPayloads);
   const authorization = readHumanCapperDeliveryAuthorization(metadata);
   const persistedMode = distributionModeLabel(metadata['distributionMode']);
   const requestedMode = readRequestedDistributionMode(metadata);
@@ -124,6 +127,9 @@ export function GovernedPickTruth({ metadata, hasEventLink, voided, deliveryStag
         <div role="alert" className="rounded-lg border border-rose-500/50 bg-rose-950/40 px-4 py-3 text-sm text-rose-100">
           <strong>Voided pick.</strong> This pick has been voided and is not active.
         </div>
+      ) : null}
+      {audienceLabel ? (
+        <p className="rounded border border-amber-500/40 bg-amber-950/20 p-3 text-sm text-amber-100">{audienceLabel}</p>
       ) : null}
       <Card title="Governed submission truth">
         <div className="flex flex-col gap-1">
