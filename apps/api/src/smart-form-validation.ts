@@ -16,7 +16,9 @@ import type {
   SubmissionPayload,
 } from '@unit-talk/contracts';
 import type { EventBrowseResult, ReferenceDataRepository } from '@unit-talk/db';
+import { normalizeMarketKey } from '@unit-talk/domain';
 import { ApiError } from './errors.js';
+import { isPlayerPropMarket } from './grading-service.js';
 
 const TEAM_SPORTS = new Set(['NFL', 'NCAAF', 'NBA', 'WNBA', 'NCAAB', 'MLB', 'NHL', 'SOCCER']);
 
@@ -1303,14 +1305,22 @@ function assertCanonicalPlayerBoundToPick(
 /**
  * True when the submission is a player prop: the Smart Form's declared `marketType`, or a
  * market key that is one of the sport's Smart Form player-prop keys or carries the `player.` /
- * `player_` prefix every player-prop key uses (packages/contracts smart-form.ts). Team markets
+ * `player_` prefix every player-prop key uses (packages/contracts smart-form.ts), or any key
+ * grading itself classifies as a player prop (`isPlayerPropMarket` after the same
+ * `normalizeMarketKey`). The declared `marketType` can only widen this, never narrow it: Codex
+ * High review r4 showed `points-all-game-ou` declared as `moneyline` admitted as a team market
+ * with a free-text `playerName`, which grading then resolved by name and settled. Team markets
  * (moneyline, spread, total, team total) match none of these.
  */
 function isPlayerPropSubmission(payload: SubmissionPayload, sportId: string): boolean {
   if (payload.metadata?.['marketType'] === 'player-prop') return true;
   const market = typeof payload.market === 'string' ? payload.market.trim() : '';
   if (!market) return false;
-  return smartFormPlayerPropMarketKeysForSport(sportId).includes(market) || /^player[._]/iu.test(market);
+  return (
+    smartFormPlayerPropMarketKeysForSport(sportId).includes(market) ||
+    /^player[._]/iu.test(market) ||
+    isPlayerPropMarket(normalizeMarketKey(market))
+  );
 }
 
 /**

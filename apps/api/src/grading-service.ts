@@ -982,7 +982,13 @@ export function classifyMarketFamilyForGrading(
   };
 }
 
-function isPlayerPropMarket(marketKey: string): boolean {
+/**
+ * The player-prop market keys grading classifies as `player_prop` (and so resolves a player
+ * for). Exported so Smart Form validation classifies a market exactly as grading will: a key
+ * grading treats as a player prop must never be admitted as a team market (WORK-2026110802
+ * Codex High review r4).
+ */
+export function isPlayerPropMarket(marketKey: string): boolean {
   return (
     marketKey.endsWith('-all-game-ou') ||
     /^player_[a-z0-9_]+_ou$/.test(marketKey) ||

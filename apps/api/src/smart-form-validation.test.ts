@@ -3785,6 +3785,44 @@ test('Codex review F1: team markets carrying an incidental playerName stay accep
   }
 });
 
+// WORK-2026110802 Codex High review r4 (HIGH): `points-all-game-ou` declared as a `moneyline`
+// was admitted on the structured fallback as a team market with a free-text `playerName`; grading
+// classifies that key as a player prop, resolved the name and wrote a win settlement. Validation
+// now classifies the market exactly as grading does, whatever `marketType` declares.
+test('Codex review r4: a key grading treats as a player prop is a player prop whatever marketType declares', async () => {
+  for (const market of ['points-all-game-ou', 'player_points_ou', 'batting_hits_ou', 'pitching_strikeouts_ou']) {
+    for (const marketType of ['moneyline', 'spread', 'total', undefined]) {
+      const label = `${market} declared ${String(marketType)}`;
+      const submission = {
+        ...unresolvedPlayerPropPayload({ marketType, statType: undefined, distributionMode: 'track-only' }),
+        market,
+      };
+      const { repository, playerQueries } = manualPlayerRepository();
+      await assert.rejects(
+        () => validateSmartFormRelationships(submission, repository),
+        /player-prop pick on the structured team fallback requires participantResolution\.player/,
+        label,
+      );
+      assert.equal(playerQueries.length, 0, `${label}: refused before any player search`);
+    }
+  }
+  // The same disguise on a canonical event is refused too.
+  const onEvent = payload({ marketType: 'moneyline', playerName: 'Somebody Else' });
+  onEvent.market = 'points-all-game-ou';
+  await assert.rejects(
+    () => validateSmartFormRelationships(onEvent, referenceData()),
+    /player-prop pick on a canonical event requires participantResolution\.player/,
+  );
+});
+
+test('Codex review r4: every team-market key the Smart Form builds stays a team market (incidental playerName)', async () => {
+  for (const market of ['moneyline', 'spread', '1h_spread', 'total', 'team-total', 'game_total_ou', 'team_total_ou']) {
+    const { soccer, repository } = structuredFallback({ playerName: 'Somebody Else', participantName: 'Somebody Else' });
+    soccer.market = market;
+    assert.equal((await validateSmartFormRelationships(soccer, repository)).kind, 'structured-team-fallback', market);
+  }
+});
+
 async function withHumanDeliveryEnv<T>(run: () => Promise<T>): Promise<T> {
   const env: Record<string, string> = {
     UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED: 'true',
