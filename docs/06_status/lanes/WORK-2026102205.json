@@ -13,7 +13,6 @@
   "file_scope_lock": [
     ".github/workflows/migration-reversibility-gate.yml",
     ".ops/work/WORK-2026102205.md",
-    "package.json",
     "scripts/ci/migration-precondition-drill.test.ts",
     "scripts/ci/migration-precondition-drill.ts",
     "scripts/ci/privilege-only-view-drill.test.ts",
@@ -48,5 +47,62 @@
     "package_install": "verified",
     "setup_command": "pnpm install --frozen-lockfile",
     "main_checkout_control_only": true
-  }
+  },
+  "scope_release_history": [
+    {
+      "released_at": "2026-11-13T02:32:16.401Z",
+      "actor": "claude (PM-approved 2026-11-13)",
+      "reason": "PM-approved narrowing: package.json alias removed in 9cb831c15; CI runs the drill via tsx directly; frees package.json for WORK-2026111102",
+      "pr_number": 1776,
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1776",
+      "head_sha": "3d15c40c7ebcef07de8727cbd89941772fc8a9e6",
+      "previous_lock_hash": "73eeb8e211f3131555d4330b19fd8f53c09e6f54f41fd8441641d5f7d7853cbf",
+      "resulting_lock_hash": "363de2fa24292c90c35366562dcfaad6a1c1f336e98cd240f523931d8898d326",
+      "released_paths": [
+        "package.json"
+      ],
+      "verifications": [
+        {
+          "check": "lane_worktree",
+          "status": "pass",
+          "detail": "ran in /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026102205-privilege-only-view-drill on branch codex/work-2026102205-privilege-only-view-drill"
+        },
+        {
+          "check": "manifest_identity",
+          "status": "pass",
+          "detail": "issue WORK-2026102205, pr_url https://github.com/griff843/Unit-Talk-v2/pull/1776"
+        },
+        {
+          "check": "pr_head",
+          "status": "pass",
+          "detail": "PR #1776 OPEN at 3d15c40c7ebcef07de8727cbd89941772fc8a9e6"
+        },
+        {
+          "check": "previous_lock_hash",
+          "status": "pass",
+          "detail": "73eeb8e211f3131555d4330b19fd8f53c09e6f54f41fd8441641d5f7d7853cbf"
+        },
+        {
+          "check": "paths_absent_from_pr_diff",
+          "status": "pass",
+          "detail": "10 changed file(s) scanned"
+        },
+        {
+          "check": "paths_absent_from_local_work",
+          "status": "pass",
+          "detail": "staged=0 unstaged=0 untracked=0 unpushed=0"
+        },
+        {
+          "check": "no_concurrent_lane_dependency",
+          "status": "pass",
+          "detail": "963 other manifest(s) scanned"
+        },
+        {
+          "check": "resulting_lock_valid",
+          "status": "pass",
+          "detail": "6 entries remain"
+        }
+      ]
+    }
+  ]
 }
