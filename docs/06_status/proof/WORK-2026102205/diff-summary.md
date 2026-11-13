@@ -11,7 +11,6 @@ any migration, merge authority, production state, kill switch, or Discord recap.
 | `.github/workflows/migration-reversibility-gate.yml` | Runs the scratch-Postgres adversarial suite, routes a valid privilege-only marker before the unchanged legacy marker greps, and retains fail-closed proof binding for canonical UTV2/UNI/WORK lane IDs.                                                   |
 | `scripts/ci/privilege-only-view-drill.ts`            | Adds the anchored marker parser, comment/string-aware statement splitter, strict single-view classifier, exact-template role-guard `DO` match (after seven review rounds showed token allowlists were bypassable), and positive up/down/up scratch drill. |
 | `scripts/ci/privilege-only-view-drill.test.ts`       | Copies the PR #1775 migration text inline and covers valid classification, forbidden SQL, state tampering, rollback failure, and unresolved/non-view targets.                                                                                             |
-| `package.json`                                       | Adds a directly runnable focused test command.                                                                                                                                                                                                            |
 | `docs/06_status/proof/WORK-2026102205/*`             | Records measured T1 evidence and model-routing provenance.                                                                                                                                                                                                |
 
 The primary implementation commit contains four files and 1,193 insertions; the
@@ -26,3 +25,5 @@ Verified source SHA: `a3aef1fced00c349ffd78f2d5a0bb8f55c2c557d`
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1776
+
+Scope note (2026-11-13, PM-approved): the `test:privilege-only-view-drill` alias was removed from `package.json` and `package.json` was released from this lane's lock via `ops:lane-manifest scope-release`. CI runs the drill with `pnpm exec tsx` directly in `migration-reversibility-gate.yml`, nothing referenced the alias, and `ops:automation-coverage-check` output is identical with and without it.
