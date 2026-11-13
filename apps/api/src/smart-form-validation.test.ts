@@ -492,6 +492,17 @@ function manualPayload(participants: Array<Record<string, unknown>>, sport = 'NB
   return manual;
 }
 
+/**
+ * WORK-2026110802 r5: the selection and line the Smart Form builds for a team market
+ * (apps/smart-form lib/form-utils.ts `buildSelectionString`).
+ */
+function formTeamMarketPick(market: string, team: string): { selection: string; line?: number } {
+  if (market === 'moneyline') return { selection: team };
+  if (market.endsWith('spread')) return { selection: `${team} -0.5`, line: -0.5 };
+  if (market === 'team-total' || market === 'team_total_ou') return { selection: `${team} Over 1.5`, line: 1.5 };
+  return { selection: 'O 2.5', line: 2.5 };
+}
+
 /** Reference data in which "Lakers" is a real canonical NBA team. */
 function referenceDataWithCanonicalTeams(): ReferenceDataRepository {
   const repositories = createInMemoryRepositoryBundle();
@@ -3534,6 +3545,8 @@ test('WORK-2026110802 review F1: team markets on the structured fallback need no
     const { soccer, repository } = structuredFallback({ distributionMode: 'delivery-eligible' });
     soccer.market = market;
     soccer.selection = selection;
+    const line = formTeamMarketPick(market, 'Arsenal').line;
+    if (line !== undefined) soccer.line = line;
     const outcome = await validateSmartFormRelationships(soccer, repository);
     assert.equal(outcome.kind, 'structured-team-fallback', market);
   }
@@ -3777,10 +3790,12 @@ test('Codex review F1: team markets carrying an incidental playerName stay accep
   for (const market of ['moneyline', 'spread', 'game_total_ou']) {
     const onEvent = payload({ playerName: 'Somebody Else', participantName: 'Somebody Else' });
     onEvent.market = market;
+    Object.assign(onEvent, formTeamMarketPick(market, 'TCU'));
     assert.equal((await validateSmartFormRelationships(onEvent, referenceData())).kind, 'canonical-event', market);
 
     const { soccer, repository } = structuredFallback({ playerName: 'Somebody Else', participantName: 'Somebody Else' });
     soccer.market = market;
+    Object.assign(soccer, formTeamMarketPick(market, 'Arsenal'));
     assert.equal((await validateSmartFormRelationships(soccer, repository)).kind, 'structured-team-fallback', market);
   }
 });
@@ -3819,8 +3834,157 @@ test('Codex review r4: every team-market key the Smart Form builds stays a team 
   for (const market of ['moneyline', 'spread', '1h_spread', 'total', 'team-total', 'game_total_ou', 'team_total_ou']) {
     const { soccer, repository } = structuredFallback({ playerName: 'Somebody Else', participantName: 'Somebody Else' });
     soccer.market = market;
+    Object.assign(soccer, formTeamMarketPick(market, 'Arsenal'));
     assert.equal((await validateSmartFormRelationships(soccer, repository)).kind, 'structured-team-fallback', market);
   }
+});
+
+// ---------------------------------------------------------------------------
+// WORK-2026110802 Codex High review r5 (PM ruling: a genuine data-truth defect). A gradeable
+// team market whose selection describes a different wager was admitted and then settled on the
+// team market: Codex's `game_total` pick reading "Unchecked Player Points O 25.5" was graded a
+// win from a game total of 210. The selection must be the shape the form builds for the market.
+
+/** Codex r5's exact reproduction, on the canonical event (or, with `eventId: null`, the fallback). */
+function r5Reproducer(path: 'event' | 'fallback'): SubmissionPayload {
+  const submission = payload({
+    marketType: 'moneyline',
+    statType: 'Points',
+    playerName: 'Unchecked Player',
+    participantName: 'Unchecked Player',
+  });
+  submission.market = 'game_total';
+  submission.selection = 'Unchecked Player Points O 25.5';
+  submission.line = 25.5;
+  if (path === 'fallback') {
+    const metadata = submission.metadata as Record<string, unknown>;
+    (metadata['participantResolution'] as Record<string, unknown>)['eventId'] = null;
+  }
+  return submission;
+}
+
+/** The same matchup on the structured fallback, with reference data that confirms both teams. */
+function r5FallbackRepository(): ReferenceDataRepository {
+  const repository = referenceData();
+  repository.searchTeams = async (_sportId, query) =>
+    [
+      { participantId: 'team-tcu', displayName: 'TCU', participantType: 'team' },
+      { participantId: 'team-unc', displayName: 'UNC', participantType: 'team' },
+    ].filter((team) => team.displayName.toLowerCase() === query.toLowerCase()) as never;
+  return repository;
+}
+
+test('Codex review r5: the exact reproduction is refused on both paths', async () => {
+  for (const path of ['event', 'fallback'] as const) {
+    const repository = path === 'event' ? referenceData() : r5FallbackRepository();
+    await assert.rejects(
+      () => validateSmartFormRelationships(r5Reproducer(path), repository),
+      (error: unknown) => {
+        assert.ok(error instanceof ApiError, `${path}: expected ApiError, got ${String(error)}`);
+        assert.equal(error.status, 422, path);
+        assert.match(error.message, /a game-total selection must be Over\/Under \(O\/U\) and the line/, path);
+        return true;
+      },
+      path,
+    );
+  }
+});
+
+test('Codex review r5: end to end, the reproduction writes no pick, no outbox row and no settlement', async () => {
+  for (const path of ['event', 'fallback'] as const) {
+    const repositories = createInMemoryRepositoryBundle();
+    (repositories as { referenceData: ReferenceDataRepository }).referenceData =
+      path === 'event' ? referenceData() : r5FallbackRepository();
+    const outboxWrites: string[] = [];
+    const outbox = repositories.outbox as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>;
+    for (const method of ['enqueue', 'enqueueDistributionAtomic'] as const) {
+      const original = outbox[method]!.bind(outbox);
+      outbox[method] = async (...args: unknown[]) => {
+        outboxWrites.push(method);
+        return original(...args);
+      };
+    }
+
+    const refused = await handleSubmitPick({ body: r5Reproducer(path) }, repositories);
+    assert.equal(refused.status, 422, path);
+    assert.ok(!refused.body.ok);
+    if (!refused.body.ok) {
+      assert.equal(refused.body.error.code, 'SMART_FORM_RELATIONSHIP_INVALID', path);
+      assert.match(refused.body.error.message, /game-total selection must be/, path);
+    }
+    assert.deepEqual(outboxWrites, [], `${path}: no outbox write`);
+    assert.deepEqual(await repositories.picks.listBySource('smart-form'), [], `${path}: no pick is written`);
+    const grading = await runGradingPass(repositories);
+    assert.equal(grading.graded, 0, `${path}: nothing to settle`);
+
+    // Non-vacuity: the same repositories admit the form's own game-total pick on that path.
+    const legitimate = r5Reproducer(path);
+    legitimate.selection = 'O 25.5';
+    const admitted = await handleSubmitPick({ body: legitimate }, repositories);
+    assert.equal(admitted.status, 201, `${path}: ${JSON.stringify(admitted.body)}`);
+  }
+});
+
+test('Codex review r5: each totals market refuses a selection describing another wager or line', async () => {
+  const cases: Array<[string, string, number | undefined]> = [
+    ['game_total', 'Unchecked Player Points O 25.5', 25.5],
+    ['game_total_ou', 'TCU O 25.5', 25.5],
+    ['total', 'O 30.5', 25.5],
+    ['total', 'O 25.5', undefined],
+    ['team_total', 'Unchecked Player Points Over 25.5', 25.5],
+    ['team-total', 'UNC Over 25.5', 25.5],
+    ['team_total_ou', 'TCU Over 30.5', 25.5],
+  ];
+  for (const [market, selection, line] of cases) {
+    const label = `${market} "${selection}" line=${String(line)}`;
+    const submission = payload({ playerName: 'Unchecked Player', participantName: 'Unchecked Player' });
+    submission.market = market;
+    submission.selection = selection;
+    if (line !== undefined) submission.line = line;
+    await assert.rejects(
+      () => validateSmartFormRelationships(submission, referenceData()),
+      /selection must be/,
+      label,
+    );
+  }
+});
+
+test('Codex review r5: legitimate team-market picks stay accepted, incidental playerName included', async () => {
+  const cases: Array<[string, string, number | undefined]> = [
+    ['moneyline', 'TCU', undefined],
+    // Moneyline and spread are deliberately not shape-checked: capper/API traffic labels them.
+    ['moneyline', 'TCU ML', undefined],
+    ['spread', 'TCU +3.5', 3.5],
+    ['spread', 'TCU -3.5', -3.5],
+    ['game_total', 'O 25.5', 25.5],
+    ['total', 'U 25.5', 25.5],
+    ['game_total_ou', 'Over 41', 41],
+    ['team-total', 'TCU Over 21.5', 21.5],
+    ['team_total_ou', 'TCU U 21.5', 21.5],
+  ];
+  for (const path of ['event', 'fallback'] as const) {
+    for (const [market, selection, line] of cases) {
+      const label = `${path} ${market} "${selection}"`;
+      const submission = payload({ playerName: 'Somebody Else', participantName: 'Somebody Else' });
+      submission.market = market;
+      submission.selection = selection;
+      if (line !== undefined) submission.line = line;
+      if (path === 'fallback') {
+        const metadata = submission.metadata as Record<string, unknown>;
+        (metadata['participantResolution'] as Record<string, unknown>)['eventId'] = null;
+      }
+      const outcome = await validateSmartFormRelationships(
+        submission,
+        path === 'event' ? referenceData() : r5FallbackRepository(),
+      );
+      assert.equal(outcome.kind, path === 'event' ? 'canonical-event' : 'structured-team-fallback', label);
+    }
+  }
+  // Markets grading does not settle are untouched (no selection shape is imposed on them).
+  const period = payload();
+  period.market = '1h_spread';
+  period.selection = 'TCU first half';
+  await validateSmartFormRelationships(period, referenceData());
 });
 
 async function withHumanDeliveryEnv<T>(run: () => Promise<T>): Promise<T> {

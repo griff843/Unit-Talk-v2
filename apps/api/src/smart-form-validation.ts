@@ -222,6 +222,7 @@ export async function validateSmartFormRelationships(
 
   if (resolution.resolution === 'manual') {
     await validateManualResolution(payload, resolution, sportId, referenceData);
+    assertTeamMarketSelection(payload, resolution, sportId);
     return { kind: 'manual-coverage-gap', distributionMode, serverAuthorizedHumanDelivery };
   }
 
@@ -255,6 +256,7 @@ export async function validateSmartFormRelationships(
       perSearchTimeoutMs: options.manualPlayerSearchTimeoutMs ?? MANUAL_PLAYER_SEARCH_TIMEOUT_MS,
       totalBudgetMs: options.manualPlayerSearchBudgetMs ?? MANUAL_PLAYER_SEARCH_BUDGET_MS,
     });
+    assertTeamMarketSelection(payload, resolution, sportId);
     // WORK-2026110802: only after every check above passed does the server write the
     // provenance labels -- whatever the client sent for them is overwritten, never trusted.
     if (resolution.manualPlayer) {
@@ -270,6 +272,7 @@ export async function validateSmartFormRelationships(
   const event = await referenceData.getEventBrowse(eventId);
   if (!event) fail(`canonical event was not found: ${eventId}`);
   validateCanonicalEvent(payload, resolution, sportId, event);
+  assertTeamMarketSelection(payload, resolution, sportId);
   return { kind: 'canonical-event', eventId, distributionMode, serverAuthorizedHumanDelivery };
 }
 
@@ -1321,6 +1324,88 @@ function isPlayerPropSubmission(payload: SubmissionPayload, sportId: string): bo
     /^player[._]/iu.test(market) ||
     isPlayerPropMarket(normalizeMarketKey(market))
   );
+}
+
+/**
+ * WORK-2026110802 Codex High review r5 (PM ruling: a genuine data-truth defect). A Smart Form
+ * pick on a totals market grading settles carried a free-text selection describing a different
+ * wager ("Unchecked Player Points O 25.5" on `game_total`), and grading settled it on the game
+ * total. For the two totals markets -- game total and team total -- the selection must be
+ * exactly the shape the form builds (apps/smart-form lib/form-utils.ts `buildSelectionString`):
+ * Over/Under (O/U) and the line, preceded for a team total by the pick's team, with the number
+ * equal to the pick's `line`. A structural check of market, selection and line, not language
+ * parsing. Moneyline and spread are deliberately not shape-checked here: established
+ * Smart Form-shaped API and staging-proof traffic labels them freely ("Chiefs ML", run-id
+ * labels), and that is a separate PM decision. A team market's incidental `playerName`
+ * metadata is untouched.
+ */
+function assertTeamMarketSelection(
+  payload: SubmissionPayload,
+  resolution: SmartFormParticipantResolution,
+  sportId: string,
+) {
+  if (isPlayerPropSubmission(payload, sportId)) return;
+  assertTeamMarketSelectionMatchesMarket(payload, pickTeamDisplay(payload, resolution), matchupSides(resolution));
+}
+
+function assertTeamMarketSelectionMatchesMarket(
+  payload: SubmissionPayload,
+  pickTeam: string | undefined,
+  sides: readonly string[],
+) {
+  const market = normalizeMarketKey(typeof payload.market === 'string' ? payload.market : '');
+  const family = market === 'game_total_ou' ? 'game-total' : market === 'team_total_ou' ? 'team-total' : null;
+  if (!family) return;
+
+  const selection = (typeof payload.selection === 'string' ? payload.selection : '').trim().replace(/\s+/gu, ' ');
+  const number = String.raw`([+-]?\d+(?:\.\d+)?)`;
+  const tail =
+    family === 'team-total'
+      ? new RegExp(String.raw`^(.+) (?:over|under|o|u) ${number}$`, 'iu')
+      : new RegExp(String.raw`^(?:over|under|o|u) ${number}$`, 'iu');
+  const match = tail.exec(selection);
+  const refuse = (expected: string): never =>
+    fail(`a ${family} selection must be ${expected}; "${selection}" describes a different wager`);
+  const expectedShape =
+    family === 'team-total' ? 'the pick team, Over/Under and the line' : 'Over/Under (O/U) and the line';
+  if (!match) refuse(expectedShape);
+
+  const numeric = match![family === 'game-total' ? 1 : 2];
+  if (typeof payload.line !== 'number' || !Number.isFinite(payload.line) || Number(numeric) !== payload.line) {
+    refuse(`${expectedShape}, with the number equal to the pick line (${String(payload.line)})`);
+  }
+  if (family === 'team-total') {
+    // The pick's declared team when there is one; otherwise one of the matchup's sides.
+    const head = aliasTokens(match![1]!);
+    const allowed = pickTeam ? [pickTeam] : sides;
+    if (!allowed.some((name) => isSameEntityName(head, aliasTokens(name)))) {
+      refuse(allowed.length > 0 ? `${expectedShape} (${allowed.join(' or ')})` : `${expectedShape}, and the pick must name its team`);
+    }
+  }
+}
+
+/** The pick's declared team: the resolved team, else the flat `team`, else a manual `team` entry. */
+function pickTeamDisplay(payload: SubmissionPayload, resolution: SmartFormParticipantResolution): string | undefined {
+  if (resolution.resolution === 'canonical' && resolution.team?.displayName) {
+    return resolution.team.displayName;
+  }
+  const flat = readOptionalString(payload.metadata?.['team']);
+  if (flat) return flat;
+  if (resolution.resolution === 'manual') {
+    return resolution.enteredParticipants?.find((participant) => participant?.role === 'team')?.displayName;
+  }
+  return undefined;
+}
+
+/** The matchup's named sides, canonical or entered. */
+function matchupSides(resolution: SmartFormParticipantResolution): string[] {
+  const names =
+    resolution.resolution === 'canonical'
+      ? [resolution.away?.displayName, resolution.home?.displayName]
+      : (resolution.enteredParticipants ?? [])
+          .filter((participant) => participant?.role !== 'player')
+          .map((participant) => participant?.displayName);
+  return names.filter((name): name is string => typeof name === 'string' && name.trim().length > 0);
 }
 
 /**
