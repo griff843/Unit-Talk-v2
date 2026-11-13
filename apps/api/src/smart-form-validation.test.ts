@@ -3313,3 +3313,268 @@ test('WORK-2026110802 confirm: an error response without details is byte-identic
     '{"status":409,"body":{"ok":false,"error":{"code":"C","message":"m","details":{"candidates":[]}}}}',
   );
 });
+
+// ---------------------------------------------------------------------------
+// WORK-2026110802 adversarial review, finding 1 (BLOCKER): the player on the structured team
+// fallback was opt-in. A player-prop pick with neither `participantResolution.player` nor
+// `participantResolution.manualPlayer` was accepted -- delivery-eligible, no provenance stamp --
+// while its selection and `playerName` named a player no check ever looked at.
+// ---------------------------------------------------------------------------
+
+/** A structured-fallback player prop with NO resolved player at all (the review's repro). */
+function unresolvedPlayerPropPayload(overrides: Record<string, unknown> = {}): SubmissionPayload {
+  const built = manualPlayerPayload(
+    { ...herroShape, team: celticsAtBucks.away, playerName: 'Jayson Tatem' },
+    { metadata: { distributionMode: 'delivery-eligible', player: undefined, playerName: 'Jayson Tatem', ...overrides } },
+  );
+  const metadata = built.metadata as Record<string, unknown>;
+  const resolution = metadata['participantResolution'] as Record<string, unknown>;
+  delete resolution['manualPlayer'];
+  delete resolution['player'];
+  delete metadata['playerProvenance'];
+  return built;
+}
+
+/** The same pick with Jayson Tatum resolved canonically (search-backed, on the away side). */
+function canonicalPlayerPropPayload(
+  overrides: Record<string, unknown> = {},
+  selection = 'Jayson Tatum Threes O 2.5',
+): SubmissionPayload {
+  const built = manualPlayerPayload(
+    { ...herroShape, team: celticsAtBucks.away, playerName: 'Jayson Tatum' },
+    { metadata: { distributionMode: 'delivery-eligible', playerId: 'player-tatum', participantId: 'player-tatum', ...overrides } },
+  );
+  const metadata = built.metadata as Record<string, unknown>;
+  const resolution = metadata['participantResolution'] as Record<string, unknown>;
+  delete resolution['manualPlayer'];
+  delete metadata['playerProvenance'];
+  resolution['player'] = {
+    participantId: 'player-tatum',
+    displayName: 'Jayson Tatum',
+    participantType: 'player',
+    teamId: 'team-bos',
+  };
+  built.selection = selection;
+  return built;
+}
+
+test('WORK-2026110802 review F1: a structured-fallback player prop with no resolved player is refused', async () => {
+  const cases: Array<[string, SubmissionPayload]> = [
+    ['the review repro (player.threes, playerName, delivery-eligible)', unresolvedPlayerPropPayload()],
+    ['track-only', unresolvedPlayerPropPayload({ distributionMode: 'track-only' })],
+    ['participantName only', unresolvedPlayerPropPayload({ playerName: undefined, participantName: 'Jayson Tatem' })],
+    ['no flat name field at all', unresolvedPlayerPropPayload({ playerName: undefined })],
+    ['no declared marketType (market key alone)', unresolvedPlayerPropPayload({ marketType: undefined })],
+    ['no statType', unresolvedPlayerPropPayload({ statType: undefined })],
+    [
+      'an underscore player-prop key',
+      { ...unresolvedPlayerPropPayload({ marketType: undefined, statType: 'Field Goals Made' }), market: 'player_fgm_ou' },
+    ],
+    [
+      'a player.* key outside the sport table',
+      { ...unresolvedPlayerPropPayload({ marketType: undefined, statType: undefined }), market: 'player.made_up' },
+    ],
+    [
+      'declared player-prop on a team-market key',
+      { ...unresolvedPlayerPropPayload(), market: 'moneyline' },
+    ],
+  ];
+  for (const [label, submission] of cases) {
+    const { repository, playerQueries } = manualPlayerRepository();
+    await assert.rejects(
+      () => validateSmartFormRelationships(submission, repository),
+      (error: unknown) => {
+        assert.ok(error instanceof ApiError, `expected ApiError, got ${String(error)}`);
+        assert.equal(error.status, 422, label);
+        assert.match(error.message, /player-prop pick on the structured team fallback requires participantResolution\.player/, label);
+        return true;
+      },
+      label,
+    );
+    assert.equal(playerQueries.length, 0, `${label}: refused before any player search`);
+    assert.equal(submission.metadata?.['playerProvenance'], undefined, `${label}: never stamped`);
+  }
+});
+
+test('WORK-2026110802 review F1: a canonical player on the fallback is still accepted, unstamped, in either mode', async () => {
+  for (const distributionMode of ['delivery-eligible', 'track-only'] as const) {
+    const { repository, playerQueries } = manualPlayerRepository();
+    const submission = canonicalPlayerPropPayload({ distributionMode });
+    const outcome = await validateSmartFormRelationships(submission, repository);
+    assert.deepEqual(outcome, {
+      kind: 'structured-team-fallback',
+      distributionMode,
+      serverAuthorizedHumanDelivery: false,
+    });
+    assert.ok(playerQueries.length > 0, 'the canonical player was search-verified');
+    assert.equal(submission.metadata?.['playerProvenance'], undefined, 'a canonical player is never stamped manual');
+    assert.equal(submission.metadata?.['manualPlayerReview'], undefined);
+  }
+  // The form-built variants pass too: any case/spacing, every flat name field, no statType.
+  for (const [selection, overrides] of [
+    ['jayson  TATUM threes o 2.5', {}],
+    ['Jayson Tatum Threes O 2.5', { playerName: 'Jayson Tatum', participantName: 'jayson tatum' }],
+    ['Jayson Tatum O 2.5', { statType: undefined }],
+    ['Jayson Tatum Threes O 2.5', { marketType: undefined, player: undefined }],
+  ] as const) {
+    const { repository } = manualPlayerRepository();
+    const outcome = await validateSmartFormRelationships(canonicalPlayerPropPayload(overrides, selection), repository);
+    assert.equal(outcome.kind, 'structured-team-fallback', selection);
+  }
+});
+
+test('WORK-2026110802 review F1: a canonical player prop binds its selection and name fields to the resolved player', async () => {
+  const cases: Array<[string, SubmissionPayload, RegExp]> = [
+    [
+      'selection naming another player',
+      canonicalPlayerPropPayload({}, 'Tyler Herro Threes O 2.5'),
+      /selection must be the canonical player's prop/,
+    ],
+    [
+      'selection naming a near miss',
+      canonicalPlayerPropPayload({}, 'Jayson Tatem Threes O 2.5'),
+      /selection must be the canonical player's prop/,
+    ],
+    [
+      'selection with a second player appended',
+      canonicalPlayerPropPayload({}, 'Jayson Tatum Threes O 2.5 Tyler Herro'),
+      /selection must be the canonical player's prop/,
+    ],
+    ['playerName naming another player', canonicalPlayerPropPayload({ playerName: 'Jayson Tatem' }), /metadata\.playerName must be the canonical player/],
+    [
+      'participantName naming another player',
+      canonicalPlayerPropPayload({ participantName: 'Tyler Herro' }),
+      /metadata\.participantName must be the canonical player/,
+    ],
+    [
+      'flat player naming another player',
+      canonicalPlayerPropPayload({ player: 'Tyler Herro' }),
+      /player display does not match participantResolution|metadata\.player must be the canonical player/,
+    ],
+    ['non-string flat player', canonicalPlayerPropPayload({ player: ['Tyler Herro'] }), /metadata\.player must be the canonical player/],
+    [
+      'statType that is not a catalog stat type',
+      canonicalPlayerPropPayload({ statType: 'Dunks' }, 'Jayson Tatum Dunks O 2.5'),
+      /is not a NBA stat type/,
+    ],
+    [
+      'market that does not match the statType',
+      { ...canonicalPlayerPropPayload(), market: 'player.points' },
+      /accepted only on a player-prop market; the NBA Threes market is "player\.threes"/,
+    ],
+    [
+      'declared player-prop on a team market',
+      { ...canonicalPlayerPropPayload(), market: 'moneyline' },
+      /accepted only on a player-prop market/,
+    ],
+    [
+      'playerId naming another participant',
+      canonicalPlayerPropPayload({ playerId: 'player-herro' }),
+      /playerId does not match participantResolution/,
+    ],
+  ];
+  for (const [label, submission, pattern] of cases) {
+    const { repository } = manualPlayerRepository();
+    await assert.rejects(
+      () => validateSmartFormRelationships(submission, repository),
+      (error: unknown) => {
+        assert.ok(error instanceof ApiError, `expected ApiError, got ${String(error)}`);
+        assert.equal(error.status, 422, label);
+        assert.match(error.message, pattern, label);
+        return true;
+      },
+      label,
+    );
+  }
+});
+
+test('WORK-2026110802 review F1: a manual player that is genuinely absent is still accepted as Track Only', async () => {
+  const { repository } = manualPlayerRepository();
+  const submission = manualPlayerPayload(herroShape);
+  const outcome = await validateSmartFormRelationships(submission, repository);
+  assert.equal(outcome.kind, 'structured-team-fallback');
+  assert.equal(submission.metadata?.['playerProvenance'], manualPlayerProvenance);
+});
+
+test('WORK-2026110802 review F1: team markets on the structured fallback need no player', async () => {
+  for (const [market, selection] of [
+    ['moneyline', 'Arsenal'],
+    ['spread', 'Arsenal -0.5'],
+    ['total', 'O 2.5'],
+    ['team-total', 'Arsenal Over 1.5'],
+  ] as const) {
+    const { soccer, repository } = structuredFallback({ distributionMode: 'delivery-eligible' });
+    soccer.market = market;
+    soccer.selection = selection;
+    const outcome = await validateSmartFormRelationships(soccer, repository);
+    assert.equal(outcome.kind, 'structured-team-fallback', market);
+  }
+  // A moneyline that also carries a canonical player (UTV2-1856) is unchanged.
+  await validateSmartFormRelationships(structuredNoEventPayload({ ...structuredPlayer }), structuredNoEventRepository());
+});
+
+test('WORK-2026110802 review F1: the canonical-event path is unaffected by the fallback player gate', async () => {
+  const submission = payload({ marketType: 'player-prop', playerName: 'Somebody Else' });
+  submission.market = 'player.passing_yards';
+  submission.selection = 'Somebody Else Passing Yards O 250.5';
+  const outcome = await validateSmartFormRelationships(submission, referenceData());
+  assert.equal(outcome.kind, 'canonical-event');
+});
+
+// ---------------------------------------------------------------------------
+// WORK-2026110802 adversarial review, finding 2 (MAJOR): near-miss refusal covered only single
+// edits. Against the catalog's "Jayson Tatum" each of these got a 409 and was then accepted
+// once the caller resent `confirmedNotCandidates` copied from the 409 body. Each is now a hard
+// 422 "may be canonical player", confirmed or not -- like "Jayson Tatem".
+// ---------------------------------------------------------------------------
+
+const reviewNearMisses = [
+  'Jayson Tautm', // adjacent transposition in the surname
+  'Jaysen Tatem', // given within one edit + surname within one edit
+  'Jason Tatem',
+  'Jay Tatem', // given prefix + surname within one edit
+  'J Tatem', // given initial + surname within one edit
+  'Tatem', // bare near-miss surname
+  'JaysonTatem', // near-miss concatenation
+  'JT Tatum', // whole-name initials + surname
+  'Jaysno Tatum', // adjacent transposition in the given name
+  'Jayson Tatem', // the original single-edit case, unchanged
+];
+
+test('WORK-2026110802 review F2: near-miss spellings of a covered player are a hard refusal, confirmed or not', async () => {
+  for (const playerName of reviewNearMisses) {
+    for (const confirmedNotCandidates of [undefined, ['player-tatum']]) {
+      const { repository, playerQueries } = manualPlayerRepository({ extraPlayers: nameVariantCatalog });
+      const base = manualPlayerPayload({ ...herroShape, team: celticsAtBucks.away, playerName });
+      const submission = confirmedNotCandidates ? withConfirmation(base, confirmedNotCandidates) : base;
+      await assert.rejects(
+        () => validateSmartFormRelationships(submission, repository),
+        (error: unknown) => {
+          assert.ok(error instanceof ApiError, `expected ApiError, got ${String(error)}`);
+          assert.equal(error.status, 422, `"${playerName}" ${error.message}`);
+          assert.match(error.message, /claims a coverage gap, but may be canonical player player-tatum /);
+          return true;
+        },
+        `"${playerName}" (confirmed=${JSON.stringify(confirmedNotCandidates)}) must be refused (queries: ${JSON.stringify(playerQueries)})`,
+      );
+      assert.equal(submission.metadata?.['manualPlayerReview'], undefined, 'a refused manual player is never stamped');
+    }
+  }
+});
+
+test('WORK-2026110802 review F2: a different surname is still a gap, not a near-miss refusal', async () => {
+  for (const playerName of [
+    'Jaylen Tatum',
+    'Jayson Williams',
+    'Jayson Tate', // two edits from Tatum
+    'Jason Taylor',
+    'Jay Tanner',
+    'J Thomas',
+    'Marcus Tatem', // near-miss surname, but nothing that could stand for "Jayson"
+    'Jaylen Brown',
+  ]) {
+    const { repository } = manualPlayerRepository({ extraPlayers: nameVariantCatalog });
+    const ids = await acceptedAsGap(manualPlayerPayload({ ...herroShape, playerName }), repository);
+    assert.ok(Array.isArray(ids), playerName);
+  }
+});

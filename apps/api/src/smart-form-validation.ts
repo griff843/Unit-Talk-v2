@@ -227,6 +227,26 @@ export async function validateSmartFormRelationships(
     if (!TEAM_SPORTS.has(sportId.toUpperCase())) {
       fail('canonical participant resolution without an event is not verifiable; use explicit manual override');
     }
+    // WORK-2026110802 review (BLOCKER): on this path the player is opt-in no longer. A
+    // player-prop pick names a player, and the server must have resolved that player itself:
+    // exactly one of a canonical, search-backed `player` or a proved `manualPlayer` (both at
+    // once is refused by `assertManualPlayerAdmissible`). Without either, the pick's selection
+    // and `playerName` named a player no check ever looked at, with no provenance stamp.
+    if (isPlayerPropSubmission(payload, sportId)) {
+      if (!resolution.player && !resolution.manualPlayer) {
+        fail(
+          'a player-prop pick on the structured team fallback requires participantResolution.player (a canonical player) or participantResolution.manualPlayer (a proved coverage gap)',
+        );
+      }
+      if (resolution.player) {
+        assertCanonicalPlayerBoundToPick(
+          payload,
+          readRequiredString(resolution.player.displayName, 'participantResolution.player.displayName'),
+          sportId,
+          canonicalSport.statTypes,
+        );
+      }
+    }
     const rejectedCandidates = await validateStructuredTeamFallback(payload, resolution, sportId, referenceData, {
       perSearchTimeoutMs: options.manualPlayerSearchTimeoutMs ?? MANUAL_PLAYER_SEARCH_TIMEOUT_MS,
       totalBudgetMs: options.manualPlayerSearchBudgetMs ?? MANUAL_PLAYER_SEARCH_BUDGET_MS,
@@ -1218,23 +1238,69 @@ function assertManualPlayerBoundToPick(
   sportId: string,
   catalogStatTypes: readonly string[],
 ) {
+  assertPlayerBoundToPick(payload, displayName, sportId, catalogStatTypes, 'manual');
+}
+
+/**
+ * WORK-2026110802 review (BLOCKER): the same binding for a canonical, search-backed player on
+ * the structured fallback. Before this, a player-prop pick on that path could name any player
+ * in its selection, `playerName` or `participantName` while `participantResolution.player`
+ * (and so every server check) was absent or named somebody else. The canonical player's id
+ * fields are bound to the resolution by `assertFlatMetadataIdentity`; everything else -- the
+ * market, the stat type, the selection and every flat name field -- is bound here exactly as
+ * for a manual player.
+ */
+function assertCanonicalPlayerBoundToPick(
+  payload: SubmissionPayload,
+  displayName: string,
+  sportId: string,
+  catalogStatTypes: readonly string[],
+) {
+  assertPlayerBoundToPick(payload, displayName, sportId, catalogStatTypes, 'canonical');
+}
+
+/**
+ * True when the submission is a player prop: the Smart Form's declared `marketType`, or a
+ * market key that is one of the sport's Smart Form player-prop keys or carries the `player.` /
+ * `player_` prefix every player-prop key uses (packages/contracts smart-form.ts). Team markets
+ * (moneyline, spread, total, team total) match none of these.
+ */
+function isPlayerPropSubmission(payload: SubmissionPayload, sportId: string): boolean {
+  if (payload.metadata?.['marketType'] === 'player-prop') return true;
+  const market = typeof payload.market === 'string' ? payload.market.trim() : '';
+  if (!market) return false;
+  return smartFormPlayerPropMarketKeysForSport(sportId).includes(market) || /^player[._]/iu.test(market);
+}
+
+function assertPlayerBoundToPick(
+  payload: SubmissionPayload,
+  displayName: string,
+  sportId: string,
+  catalogStatTypes: readonly string[],
+  source: 'manual' | 'canonical',
+) {
+  const manual = source === 'manual';
+  const subject = manual ? 'manualPlayer' : 'a canonical player on the structured team fallback';
+  const theirs = manual ? 'the manual player' : 'the canonical player';
   const metadata = payload.metadata ?? {};
   const declaredMarketType = metadata['marketType'];
   if (declaredMarketType !== undefined && declaredMarketType !== null && declaredMarketType !== 'player-prop') {
-    fail('manualPlayer is accepted only on a player-prop market');
+    fail(`${subject} is accepted only on a player-prop market`);
   }
 
   const nameTokens = aliasTokens(displayName);
   for (const field of PLAYER_NAME_FIELDS) {
     const value = metadata[field];
     if (value !== undefined && value !== null && !sameTokens(foldedTokens(value), nameTokens)) {
-      fail(`metadata.${field} must be the manual player`);
+      fail(`metadata.${field} must be ${theirs}`);
     }
   }
-  for (const field of PLAYER_ID_FIELDS) {
-    const value = metadata[field];
-    if (value !== undefined && value !== null) {
-      fail(`metadata.${field} must be absent beside a manual player; a manual player has no canonical or provider id`);
+  if (manual) {
+    for (const field of PLAYER_ID_FIELDS) {
+      const value = metadata[field];
+      if (value !== undefined && value !== null) {
+        fail(`metadata.${field} must be absent beside a manual player; a manual player has no canonical or provider id`);
+      }
     }
   }
 
@@ -1242,7 +1308,7 @@ function assertManualPlayerBoundToPick(
   let statType: string | null = null;
   if (rawStatType !== undefined && rawStatType !== null) {
     if (typeof rawStatType !== 'string' || rawStatType.length > MANUAL_PLAYER_STAT_TYPE_MAX_LENGTH) {
-      fail('metadata.statType beside a manual player must be a catalog stat type');
+      fail(`metadata.statType beside ${manual ? 'a manual player' : 'a canonical player'} must be a catalog stat type`);
     }
     statType = rawStatType.trim();
   }
@@ -1258,8 +1324,8 @@ function assertManualPlayerBoundToPick(
   if (statType ? market !== expectedMarket : !smartFormPlayerPropMarketKeysForSport(sportId).includes(market)) {
     fail(
       statType && expectedMarket
-        ? `manualPlayer is accepted only on a player-prop market; the ${sportId} ${statType} market is "${expectedMarket}"`
-        : 'manualPlayer is accepted only on a player-prop market',
+        ? `${subject} is accepted only on a player-prop market; the ${sportId} ${statType} market is "${expectedMarket}"`
+        : `${subject} is accepted only on a player-prop market`,
     );
   }
 
@@ -1275,7 +1341,7 @@ function assertManualPlayerBoundToPick(
     .join(' ');
   if (!sameTokens(foldedTokens(payload.selection), aliasTokens(expected))) {
     fail(
-      `selection must be the manual player's prop ("${expected}"); a selection naming anyone else is refused`,
+      `selection must be ${theirs}'s prop ("${expected}"); a selection naming anyone else is refused`,
     );
   }
 }
@@ -1307,6 +1373,38 @@ function withinOneEdit(left: string, right: string): boolean {
   return shorter.length === longer.length
     ? shorter.slice(index + 1) === longer.slice(index + 1)
     : shorter.slice(index) === longer.slice(index + 1);
+}
+
+/**
+ * True when `left` and `right` are one typo apart: within one insertion, deletion or
+ * substitution, or one swap of two adjacent letters ("tautm" / "tatum") -- a transposition is
+ * two Levenshtein edits but one keystroke slip, and was the review's 409-then-accepted bypass.
+ */
+function isNearMissSpelling(left: string, right: string): boolean {
+  if (withinOneEdit(left, right)) return true;
+  if (left.length !== right.length) return false;
+  let index = 0;
+  while (index < left.length && left[index] === right[index]) index += 1;
+  return (
+    index + 1 < left.length &&
+    left[index] === right[index + 1] &&
+    left[index + 1] === right[index] &&
+    left.slice(index + 2) === right.slice(index + 2)
+  );
+}
+
+/**
+ * An entered token that may stand for the catalog given name `name`: the name itself, its
+ * initial, a 3+ letter prefix pair ("Jay"), a near-miss spelling ("Jason", "Jaysen") or a near
+ * miss of a 3+ letter prefix ("Nick" for "Nicolas").
+ */
+function isGivenNameNearMiss(token: string, name: string): boolean {
+  if (token === name) return true;
+  if (token.length === 1) return token === name[0];
+  return (
+    token.length >= 3 &&
+    (isPrefixPair(token, name, 3) || isNearMissSpelling(token, name) || withinOneEditOfPrefix(token, name))
+  );
 }
 
 /** `token` is within one edit of a 3+ letter prefix of `name` ("nick" / "nic" of "nicolas"). */
@@ -1354,8 +1452,20 @@ function isPrefixPair(left: string, right: string, minimum: number): boolean {
  *      for "Ha-Seong Kim"). Several initials that only share the first one ("A.J. Johnson"
  *      against "Andre Johnson") are a different player and are NOT refused;
  *   7. every given name is one of E's tokens and another E token is a near miss of the
- *      surname: within one edit ("Tatem", "Tatumm", "Tatums", "Antetokoumpo"), a 4+ letter
- *      prefix of it ("Tatu"), or its initial ("Jayson T.", "Giannis A").
+ *      surname: within one edit ("Tatem", "Tatumm", "Tatums", "Antetokoumpo") or one adjacent
+ *      swap ("Tautm"), a 4+ letter prefix of it ("Tatu"), or its initial ("Jayson T.", "Giannis A");
+ *   8. (WORK-2026110802 review) an E token is a near-miss spelling of the surname (one edit or
+ *      one adjacent swap) and either it is E's only token and the surname has 4+ letters
+ *      ("Tatem"), or another E token may stand for a given name (`isGivenNameNearMiss`: the
+ *      initial, a 3+ letter prefix pair, a near-miss spelling -- "J Tatem", "Jay Tatem",
+ *      "Jason Tatem", "Jaysen Tatem");
+ *   9. the surname is one of E's tokens and another E token is the initials of the whole
+ *      catalog name ("JT Tatum");
+ *  10. E joined, or one E token, of 6+ letters is a near-miss spelling of C joined in either
+ *      order ("JaysonTatem").
+ * Rules 5 and 7 also accept one adjacent swap as a near miss ("Jaysno Tatum").
+ * A different surname (more than one typo away) never triggers 8-10, so "Jayson Williams" and
+ * "Jaylen Tatum" stay gaps that only need the operator's confirmation.
  * Each rule is also tried with German transliterations undone ("oe"/"ue"/"ae" -> o/u/a), so
  * "Schroeder" matches "Schröder" (folded "schroder").
  * Not handled (left to the PM): nicknames and initialisms that share no prefix with the
@@ -1401,7 +1511,7 @@ function matchPlayerTokens(enteredTokens: string[], catalogTokens: string[]): 'r
           given.some(
             (name) =>
               isPrefixPair(token, name, 3) ||
-              withinOneEdit(token, name) ||
+              isNearMissSpelling(token, name) ||
               withinOneEditOfPrefix(token, name),
           ),
       )
@@ -1416,6 +1526,8 @@ function matchPlayerTokens(enteredTokens: string[], catalogTokens: string[]): 'r
     if (givenInitials.length > 1 && others.some((token) => token.length === 2 && token === givenInitials)) {
       return 'plausible';
     }
+    const catalogInitials = catalog.map((name) => name[0]).join('');
+    if (others.some((token) => token === catalogInitials)) return 'plausible';
     return null;
   }
 
@@ -1424,13 +1536,32 @@ function matchPlayerTokens(enteredTokens: string[], catalogTokens: string[]): 'r
     if (
       rest.some(
         (token) =>
-          withinOneEdit(token, surname) ||
+          isNearMissSpelling(token, surname) ||
           (token.length >= 4 && surname.startsWith(token)) ||
           (token.length === 1 && token === surname[0]),
       )
     ) {
       return 'plausible';
     }
+  }
+
+  // Rule 8: a near-miss surname, alone or beside something that may stand for a given name.
+  for (let index = 0; index < entered.length; index += 1) {
+    const token = entered[index] as string;
+    if (token.length < 3 || !isNearMissSpelling(token, surname)) continue;
+    const others = entered.filter((_, otherIndex) => otherIndex !== index);
+    if (others.length === 0) {
+      if (surname.length >= 4) return 'plausible';
+      continue;
+    }
+    if (others.some((other) => given.some((name) => isGivenNameNearMiss(other, name)))) return 'plausible';
+  }
+
+  // Rule 10: a near-miss concatenation of the whole catalog name.
+  if (catalog.length > 1) {
+    const nearJoined = (value: string) =>
+      value.length >= 6 && (isNearMissSpelling(value, catalogJoined) || isNearMissSpelling(value, catalogReversed));
+    if (nearJoined(enteredJoined) || entered.some(nearJoined)) return 'plausible';
   }
   return null;
 }
