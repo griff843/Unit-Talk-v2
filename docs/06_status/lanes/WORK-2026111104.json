@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026111104/.out/worktrees/claude__work-2026111104-work-lane-discovery",
   "branch": "claude/work-2026111104-work-lane-discovery",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "e72318d5fd3bad21934167c3a4584014ea58ba82",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1845",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,14 +20,22 @@
     "docs/06_status/proof/WORK-2026111104/evidence.json",
     "docs/06_status/proof/WORK-2026111104/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-11-12T17:39:49.053Z",
-  "heartbeat_at": "2026-11-12T17:44:21.864Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-11-13T01:22:34.850Z",
+  "closed_at": "2026-11-13T01:22:34.850Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026111104-work-lane-discovery.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-11-13T01:22:32.179Z",
+      "verdict": "pass",
+      "merge_sha": "e72318d5fd3bad21934167c3a4584014ea58ba82",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

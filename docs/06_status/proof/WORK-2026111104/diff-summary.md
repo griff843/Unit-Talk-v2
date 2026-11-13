@@ -21,5 +21,5 @@ Rollout note: on merge, the locks of currently open WORK lane PRs become enforce
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: e72318d5fd3bad21934167c3a4584014ea58ba82
 PR: pending

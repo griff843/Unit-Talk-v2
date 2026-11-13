@@ -1,6 +1,6 @@
 # PROOF: WORK-2026111104
 
-MERGE_SHA: pending merge
+MERGE_SHA: e72318d5fd3bad21934167c3a4584014ea58ba82
 
 > Pre-merge the merge row is intentionally the placeholder; the code commit below carries
 > the verified implementation identity. `post-merge-lane-close.yml` binds the merge SHA.
@@ -78,5 +78,5 @@ Not run locally: `pnpm test:db` / writable-DB proof (no runtime or DB path touch
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
-PR: pending
+Merge SHA: `e72318d5fd3bad21934167c3a4584014ea58ba82`
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1845
