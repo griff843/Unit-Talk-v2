@@ -3789,8 +3789,19 @@ test('Codex review F1: end to end, an allow-listed capper submitting the reprodu
   const auth = { role: 'capper' as const, capperId: 'codex-capper', identity: 'codex-capper' };
   const repositories = createInMemoryRepositoryBundle();
   (repositories as { referenceData: ReferenceDataRepository }).referenceData = referenceData();
+  // Count every outbox write path, so a delivery side effect before the 422 cannot stay hidden.
+  const outboxWrites: string[] = [];
+  const outbox = repositories.outbox as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>;
+  for (const method of ['enqueue', 'enqueueDistributionAtomic'] as const) {
+    const original = outbox[method]!.bind(outbox);
+    outbox[method] = async (...args: unknown[]) => {
+      outboxWrites.push(method);
+      return original(...args);
+    };
+  }
 
   const refused = await withHumanDeliveryEnv(() => handleSubmitPick({ body: codexEventReproducer(), auth }, repositories));
+  assert.deepEqual(outboxWrites, [], 'the refused request attempts no outbox write');
   assert.equal(refused.status, 422);
   assert.ok(!refused.body.ok);
   if (!refused.body.ok) {
