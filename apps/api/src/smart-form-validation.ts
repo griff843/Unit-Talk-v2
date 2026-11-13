@@ -606,6 +606,17 @@ function validateCanonicalEvent(
   const home = resolution.home ? validateEventParticipant(resolution.home, event) : null;
   const team = resolution.team ? validateEventParticipant(resolution.team, event) : null;
   const player = resolution.player ? validateEventParticipant(resolution.player, event) : null;
+  // Codex review (CRITICAL): a player prop on the event path must name an event player, and the
+  // pick's player-name fields must be that player. Team markets are untouched, including one
+  // carrying an incidental `playerName` (PM decision): `isPlayerPropSubmission` reads the market.
+  if (isPlayerPropSubmission(payload, sportId)) {
+    if (!player) {
+      fail('a player-prop pick on a canonical event requires participantResolution.player, a player of that event');
+    }
+    if (player.participantType === 'player') {
+      assertEventPlayerBoundToPick(payload, player.displayName, sportId);
+    }
+  }
 
   if (away && home && canonicalParticipantKey(away) === canonicalParticipantKey(home)) {
     fail('away and home participants must be different');
@@ -1025,11 +1036,15 @@ export const MANUAL_PLAYER_MAX_NAME_TOKENS = 6;
  * Most coverage searches one manual player may cost. `manualPlayerCoverageQueries` yields at
  * most 2 (whole name, both orders) + 6 * MANUAL_PLAYER_MAX_NAME_TOKENS (plain, three
  * accent-tolerant and two transliteration forms per token) + 4 * MANUAL_PLAYER_MAX_NAME_TOKENS
- * (concatenation probes) = 62 queries for an admitted name;
- * the cap is an explicit fail-closed ceiling, never a truncation -- skipping a query would
+ * (concatenation probes) + 4 * MANUAL_PLAYER_MAX_NAME_TOKENS (near-miss probes, at most four
+ * per word: `nearMissProbes`) = 86 queries for an admitted name. Raised from 64 by the Codex
+ * review fix: the near-miss probes are what make a one-typo spelling of a covered player
+ * retrievable at all. The time bounds (`MANUAL_PLAYER_SEARCH_TIMEOUT_MS`,
+ * `MANUAL_PLAYER_SEARCH_BUDGET_MS`) are unchanged and still end any slow proof as a retryable 503.
+ * The cap is an explicit fail-closed ceiling, never a truncation -- skipping a query would
  * accept a gap the server never checked.
  */
-export const MANUAL_PLAYER_MAX_SEARCHES = 64;
+export const MANUAL_PLAYER_MAX_SEARCHES = 86;
 
 /**
  * Rows read per coverage search. Far larger than the form's 25 because a search that comes back
@@ -1242,6 +1257,24 @@ function assertManualPlayerBoundToPick(
 }
 
 /**
+ * Codex review (CRITICAL): the canonical-event path accepted a player prop with no
+ * `participantResolution.player` at all -- an allow-listed capper's pick reached the official
+ * outbox naming a player no check had resolved. A player prop on that path now names a player
+ * of the event (`validateEventParticipant`), and its selection and flat name fields are bound to
+ * that player's event display name.
+ *
+ * Deliberately NOT bound here: the exact Smart Form market key and the catalog stat type. A
+ * live-offer pick sends the offer's `canonicalMarketTypeId` as its market and a stat type
+ * inferred from it (apps/smart-form lib/form-utils.ts `resolveSubmissionMarketKey`,
+ * `inferStatTypeFromMarketTypeId`), neither of which need match the form's own key table, and
+ * refusing them would refuse a legitimate form flow. The selection is still checked against the
+ * submitted stat type, direction and line, exactly as the form builds it.
+ */
+function assertEventPlayerBoundToPick(payload: SubmissionPayload, displayName: string, sportId: string) {
+  assertPlayerBoundToPick(payload, displayName, sportId, [], 'event-canonical');
+}
+
+/**
  * WORK-2026110802 review (BLOCKER): the same binding for a canonical, search-backed player on
  * the structured fallback. Before this, a player-prop pick on that path could name any player
  * in its selection, `playerName` or `participantName` while `participantResolution.player`
@@ -1256,7 +1289,7 @@ function assertCanonicalPlayerBoundToPick(
   sportId: string,
   catalogStatTypes: readonly string[],
 ) {
-  assertPlayerBoundToPick(payload, displayName, sportId, catalogStatTypes, 'canonical');
+  assertPlayerBoundToPick(payload, displayName, sportId, catalogStatTypes, 'fallback-canonical');
 }
 
 /**
@@ -1272,15 +1305,38 @@ function isPlayerPropSubmission(payload: SubmissionPayload, sportId: string): bo
   return smartFormPlayerPropMarketKeysForSport(sportId).includes(market) || /^player[._]/iu.test(market);
 }
 
+/**
+ * A game-line or team market key, as the Smart Form builds them (apps/smart-form
+ * lib/market-types.ts `getMarketTypeFamily`, lib/form-utils.ts `resolveSubmissionMarketKey`):
+ * moneyline and spread (and their period forms, `1h_spread`), game and team totals. The event
+ * path cannot require the form's own player-prop key -- a live offer sends its provider market id
+ * -- but it can refuse a player prop whose market is plainly a team market.
+ */
+function isTeamMarketKey(market: string): boolean {
+  const key = market.trim().toLowerCase();
+  return (
+    key === '' ||
+    /(^|_)(moneyline|spread)$/u.test(key) ||
+    /(^|_)total_ou$/u.test(key) ||
+    key === 'total' ||
+    key === 'team-total'
+  );
+}
+
 function assertPlayerBoundToPick(
   payload: SubmissionPayload,
   displayName: string,
   sportId: string,
   catalogStatTypes: readonly string[],
-  source: 'manual' | 'canonical',
+  source: 'manual' | 'fallback-canonical' | 'event-canonical',
 ) {
   const manual = source === 'manual';
-  const subject = manual ? 'manualPlayer' : 'a canonical player on the structured team fallback';
+  const exactMarket = source !== 'event-canonical';
+  const subject = manual
+    ? 'manualPlayer'
+    : source === 'fallback-canonical'
+      ? 'a canonical player on the structured team fallback'
+      : 'a canonical event player';
   const theirs = manual ? 'the manual player' : 'the canonical player';
   const metadata = payload.metadata ?? {};
   const declaredMarketType = metadata['marketType'];
@@ -1312,7 +1368,7 @@ function assertPlayerBoundToPick(
     }
     statType = rawStatType.trim();
   }
-  if (statType) {
+  if (statType && exactMarket) {
     const wanted = aliasTokens(statType);
     if (!catalogStatTypes.some((candidate) => sameTokens(aliasTokens(candidate), wanted))) {
       fail(`metadata.statType "${statType}" is not a ${sportId} stat type`);
@@ -1321,7 +1377,13 @@ function assertPlayerBoundToPick(
 
   const market = typeof payload.market === 'string' ? payload.market : '';
   const expectedMarket = statType ? resolveSmartFormPlayerPropMarketKey(sportId, statType) : null;
-  if (statType ? market !== expectedMarket : !smartFormPlayerPropMarketKeysForSport(sportId).includes(market)) {
+  if (
+    exactMarket
+      ? statType
+        ? market !== expectedMarket
+        : !smartFormPlayerPropMarketKeysForSport(sportId).includes(market)
+      : isTeamMarketKey(market)
+  ) {
     fail(
       statType && expectedMarket
         ? `${subject} is accepted only on a player-prop market; the ${sportId} ${statType} market is "${expectedMarket}"`
@@ -1504,15 +1566,19 @@ function matchPlayerTokens(enteredTokens: string[], catalogTokens: string[]): 'r
     if (given.every((name) => entered.includes(name))) return 'resolves';
     if (others.includes(given.join(''))) return 'resolves';
     if (others.every((token) => catalog.includes(token))) return 'resolves';
+    // A 3+ letter surname is searched on its own, so the row is always retrieved. A shorter
+    // one is not: then only a given-name token the searches themselves reach counts -- a prefix
+    // of it (searched plain) or a 5+ letter near miss (`nearMissProbes`).
+    const surnameSearched = surname.length >= 3;
     if (
       others.some(
         (token) =>
           token.length >= 3 &&
-          given.some(
-            (name) =>
-              isPrefixPair(token, name, 3) ||
-              isNearMissSpelling(token, name) ||
-              withinOneEditOfPrefix(token, name),
+          given.some((name) =>
+            surnameSearched
+              ? isPrefixPair(token, name, 3) || isNearMissSpelling(token, name) || withinOneEditOfPrefix(token, name)
+              : (token.length <= name.length && isPrefixPair(token, name, 3)) ||
+                (token.length >= 5 && isNearMissSpelling(token, name)),
           ),
       )
     ) {
@@ -1527,17 +1593,21 @@ function matchPlayerTokens(enteredTokens: string[], catalogTokens: string[]): 'r
       return 'plausible';
     }
     const catalogInitials = catalog.map((name) => name[0]).join('');
-    if (others.some((token) => token === catalogInitials)) return 'plausible';
+    if (surnameSearched && others.some((token) => token === catalogInitials)) return 'plausible';
     return null;
   }
 
   if (given.length > 0 && given.every((name) => entered.includes(name))) {
+    // The row is retrieved by a given name's own search when one has 3+ letters; otherwise only
+    // by the surname-side token: a 4+ letter prefix (searched plain) or a 5+ letter near miss.
+    const givenSearched = given.some((name) => name.length >= 3);
     const rest = entered.filter((token) => !given.includes(token));
     if (
       rest.some(
         (token) =>
-          isNearMissSpelling(token, surname) ||
+          ((givenSearched || token.length >= 5) && isNearMissSpelling(token, surname)) ||
           (token.length >= 4 && surname.startsWith(token)) ||
+          // An initial is reached by the whole-name search, in either order ("Bo B": "bo%b").
           (token.length === 1 && token === surname[0]),
       )
     ) {
@@ -1546,22 +1616,29 @@ function matchPlayerTokens(enteredTokens: string[], catalogTokens: string[]): 'r
   }
 
   // Rule 8: a near-miss surname, alone or beside something that may stand for a given name.
+  // 5+ letters only: that is what `nearMissProbes` can retrieve without a two-letter query.
   for (let index = 0; index < entered.length; index += 1) {
     const token = entered[index] as string;
-    if (token.length < 3 || !isNearMissSpelling(token, surname)) continue;
+    if (token.length < 5 || !isNearMissSpelling(token, surname)) continue;
     const others = entered.filter((_, otherIndex) => otherIndex !== index);
-    if (others.length === 0) {
-      if (surname.length >= 4) return 'plausible';
-      continue;
-    }
+    if (others.length === 0) return 'plausible';
     if (others.some((other) => given.some((name) => isGivenNameNearMiss(other, name)))) return 'plausible';
   }
 
-  // Rule 10: a near-miss concatenation of the whole catalog name.
+  // Rule 10: one entered token is a near-miss concatenation of the whole catalog name, in either
+  // order. Only when the concatenation probes reach the row: its first (or last) four letters
+  // are intact and lie inside the catalog's first (or last) word, which has 4+ letters -- the
+  // catalog display separates the words, so a probe spanning them would match nothing.
   if (catalog.length > 1) {
+    const first = catalog[0] as string;
+    const reachable = (value: string, joined: string, head: string, tail: string) =>
+      (head.length >= 4 && value.slice(0, 4) === joined.slice(0, 4)) ||
+      (tail.length >= 4 && value.slice(-4) === joined.slice(-4));
     const nearJoined = (value: string) =>
-      value.length >= 6 && (isNearMissSpelling(value, catalogJoined) || isNearMissSpelling(value, catalogReversed));
-    if (nearJoined(enteredJoined) || entered.some(nearJoined)) return 'plausible';
+      value.length >= 6 &&
+      ((isNearMissSpelling(value, catalogJoined) && reachable(value, catalogJoined, first, surname)) ||
+        (isNearMissSpelling(value, catalogReversed) && reachable(value, catalogReversed, surname, first)));
+    if (entered.some(nearJoined)) return 'plausible';
   }
   return null;
 }
@@ -1649,7 +1726,38 @@ function manualPlayerCoverageQueries(displayName: string): string[] {
       accentTolerantPattern(token.slice(-5)),
     );
   }
+  for (const token of searchable) queries.push(...nearMissProbes(token));
   return dedupeQueries(queries);
+}
+
+/**
+ * Codex review (MAJOR): searches that retrieve every catalog word one typo away from `token`
+ * (`isNearMissSpelling`: one insertion, deletion, substitution or adjacent swap), so the
+ * near-miss rules of `catalogPlayerMatch` always get to see the row. "J Tautm" used to search
+ * only `j%tautm`, `tautm` and its accent and concatenation forms, none of which contain "Tatum",
+ * so the near miss was never examined and the gap was accepted.
+ *
+ * One typo changes letters only inside one window of two adjacent positions (i, i+1), so
+ * `token[:i] % token[i+2:]` -- the rest of the word, in order, anything between -- is in the
+ * catalog word. The existing probes already cover two ranges: `token[:4]` survives a window
+ * with i >= 4, and `token[-4:]` one with i + 1 <= n - 5. Only the windows between them get a
+ * probe of their own: four for a 5-letter word, three for 6, two for 7, one for 8 and none from
+ * 9 on. Each keeps n - 2 >= 3 literal letters, the floor every plain token search already uses.
+ * Words under 5 letters get none (their windows would leave two-letter probes, which saturate),
+ * and the matcher's near-miss rules do not rely on retrieving them.
+ */
+function nearMissProbes(token: string): string[] {
+  const probes: string[] = [];
+  if (token.length < 5) return probes;
+  for (let index = 0; index + 1 < token.length; index += 1) {
+    const coveredByPrefixProbe = index >= 4;
+    const coveredBySuffixProbe = index + 1 <= token.length - 5;
+    if (coveredByPrefixProbe || coveredBySuffixProbe) continue;
+    const before = token.slice(0, index);
+    const after = token.slice(index + 2);
+    probes.push(before && after ? `${before}%${after}` : before || after);
+  }
+  return probes;
 }
 
 /**

@@ -2237,10 +2237,13 @@ async function acceptedAfterConfirmation(
  * A catalog that behaves like the real repository: `ILIKE '%q%' ORDER BY display_name LIMIT n`.
  * More "Smithers" players than the row limit sort before the one true "Smith".
  */
-function truncatingRepository(tylerCount = 40): { repository: ReferenceDataRepository; limits: number[] } {
+function truncatingRepository(
+  tylerCount = 40,
+  smithersCount = MANUAL_PLAYER_SEARCH_ROW_LIMIT + 20,
+): { repository: ReferenceDataRepository; limits: number[] } {
   const { repository } = manualPlayerRepository();
   const players = [
-    ...Array.from({ length: MANUAL_PLAYER_SEARCH_ROW_LIMIT + 20 }, (_, index) => ({
+    ...Array.from({ length: smithersCount }, (_, index) => ({
       participantId: `player-smithers-${index}`,
       displayName: `Aa${String(index).padStart(3, '0')} Smithers`,
     })),
@@ -2294,7 +2297,10 @@ test('WORK-2026110802 F2: a first-name page past the form limit but under the ro
   // 40 Tylers exceed the form's 25-row page but not the gap proof's row limit, and none of
   // them is plausibly Tyler Herro. Nothing saturates here (see the next test for that). The
   // Tylers are similar, so the operator confirms Herro is none of the top five, then it is a gap.
-  const { repository } = truncatingRepository();
+  // Codex review fix: without the Smithers page. Its 520 rows all contain "her", which the
+  // near-miss probes for "Herro" now search (`nearMissProbes`), so that page saturates and the
+  // gap is unverifiable -- fail-closed, and pinned below. This test is about the Tyler page.
+  const { repository } = truncatingRepository(40, 0);
   const candidates = await acceptedAfterConfirmation(manualPlayerPayload(herroShape), repository);
   assert.equal(candidates.length, 5);
   assert.ok(candidates.every((candidate) => candidate.displayName.startsWith('Tyler ')));
@@ -2614,9 +2620,11 @@ test('WORK-2026110802 P1-B: a different player who only shares a surname or give
   // Non-vacuity for the matcher: it is broad, not "refuse anything that shares a word".
   // Each is a gap; the ones sharing a name with a catalog player need the operator's confirmation.
   for (const [playerName, candidateIds] of [
-    ['Jaylen Tatum', ['player-tatum']],
-    ['Marcus Jackson', ['player-jjj']],
-    ['Jayson Williams', ['player-tatum']],
+    // Codex review fix: the near-miss probe "ja%en" now also retrieves Jaren Jackson Jr., a
+    // genuinely similar name, so the operator is asked to rule it out too.
+    ['Jaylen Tatum', ['player-tatum', 'player-jjj']],
+    ['Marcus Jackson', ['player-jjj', 'player-tatum']], // "ja%son" now retrieves Jayson Tatum
+    ['Jayson Williams', ['player-tatum', 'player-jjj']], // "j%son" now retrieves Jaren Jackson Jr.
     ['Gary Payton', ['player-trent']],
     ['Tyler Herro', []],
   ] as const) {
@@ -3513,12 +3521,16 @@ test('WORK-2026110802 review F1: team markets on the structured fallback need no
   await validateSmartFormRelationships(structuredNoEventPayload({ ...structuredPlayer }), structuredNoEventRepository());
 });
 
-test('WORK-2026110802 review F1: the canonical-event path is unaffected by the fallback player gate', async () => {
+test('Codex review F1: a canonical-event player prop with no resolved player is refused (was accepted)', async () => {
+  // This test used to pin the unsafe acceptance. Codex reproduced the same shape reaching a
+  // pending discord:official-picks outbox row with no participant_id and no provenance.
   const submission = payload({ marketType: 'player-prop', playerName: 'Somebody Else' });
   submission.market = 'player.passing_yards';
   submission.selection = 'Somebody Else Passing Yards O 250.5';
-  const outcome = await validateSmartFormRelationships(submission, referenceData());
-  assert.equal(outcome.kind, 'canonical-event');
+  await assert.rejects(
+    () => validateSmartFormRelationships(submission, referenceData()),
+    /player-prop pick on a canonical event requires participantResolution\.player/,
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -3576,5 +3588,392 @@ test('WORK-2026110802 review F2: a different surname is still a gap, not a near-
     const { repository } = manualPlayerRepository({ extraPlayers: nameVariantCatalog });
     const ids = await acceptedAsGap(manualPlayerPayload({ ...herroShape, playerName }), repository);
     assert.ok(Array.isArray(ids), playerName);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Codex High review, finding 1 (CRITICAL): a player prop on the CANONICAL-EVENT path could omit
+// both `participantResolution.player` and `manualPlayer` and was accepted; with an allow-listed
+// capper it reached a pending discord:official-picks outbox row with no participant_id and no
+// provenance. It now needs a player of the event, and its name fields are bound to that player.
+// ---------------------------------------------------------------------------
+
+const eventQuarterback = {
+  participantId: 'player-tcu-1',
+  displayName: 'TCU Quarterback',
+  participantType: 'player',
+  teamId: 'team-tcu',
+};
+
+/** A canonical-event player prop (passing yards, over 250.5), with or without the event player. */
+function eventPlayerProp(
+  options: { player?: Record<string, unknown> | null; selection?: string; metadata?: Record<string, unknown> } = {},
+): SubmissionPayload {
+  const built = payload({
+    marketType: 'player-prop',
+    statType: 'Passing Yards',
+    overUnder: 'over',
+    player: 'TCU Quarterback',
+    playerName: 'TCU Quarterback',
+    ...options.metadata,
+  });
+  built.market = 'player.passing_yards';
+  built.line = 250.5;
+  built.odds = -110;
+  built.selection = options.selection ?? 'TCU Quarterback Passing Yards O 250.5';
+  const resolution = built.metadata?.['participantResolution'] as Record<string, unknown>;
+  if (options.player !== null) resolution['player'] = options.player ?? { ...eventQuarterback };
+  return built;
+}
+
+/** The Codex reproducer: no resolved player, a name no check ever looked at. */
+function codexEventReproducer(): SubmissionPayload {
+  return eventPlayerProp({
+    player: null,
+    selection: 'Somebody Else Passing Yards O 250.5',
+    metadata: { player: undefined, playerName: 'Somebody Else', distributionMode: 'delivery-eligible' },
+  });
+}
+
+test('Codex review F1: a canonical-event player prop without a resolved player is refused, in every shape', async () => {
+  const cases: Array<[string, SubmissionPayload]> = [
+    ['the Codex reproducer', codexEventReproducer()],
+    ['track-only', eventPlayerProp({ player: null, metadata: { distributionMode: 'track-only', player: undefined } })],
+    ['no flat name at all', eventPlayerProp({ player: null, metadata: { player: undefined, playerName: undefined } })],
+    [
+      'market key alone (no declared marketType)',
+      eventPlayerProp({ player: null, metadata: { marketType: undefined, player: undefined } }),
+    ],
+    [
+      'a live-offer market id',
+      { ...eventPlayerProp({ player: null, metadata: { player: undefined } }), market: 'player_passing_yards_ou' },
+    ],
+  ];
+  for (const [label, submission] of cases) {
+    await assert.rejects(
+      () => validateSmartFormRelationships(submission, referenceData()),
+      (error: unknown) => {
+        assert.ok(error instanceof ApiError, `${label}: expected ApiError, got ${String(error)}`);
+        assert.equal(error.status, 422, label);
+        assert.match(error.message, /player-prop pick on a canonical event requires participantResolution\.player/, label);
+        return true;
+      },
+      label,
+    );
+  }
+});
+
+test('Codex review F1: a manual player is still refused on the canonical-event path', async () => {
+  const submission = eventPlayerProp({ player: null, metadata: { player: undefined } });
+  const resolution = submission.metadata?.['participantResolution'] as Record<string, unknown>;
+  resolution['manualPlayer'] = { displayName: 'Somebody Else', canonicalParticipantId: null, reason: 'canonical-coverage-gap' };
+  await assert.rejects(
+    () => validateSmartFormRelationships(submission, referenceData()),
+    /manualPlayer cannot be combined with a canonical event/,
+  );
+});
+
+test('Codex review F1: a canonical-event player prop naming the event player is accepted, including a live offer', async () => {
+  for (const [label, submission] of [
+    ['form-built', eventPlayerProp()],
+    ['any case or spacing', eventPlayerProp({ selection: 'tcu  QUARTERBACK passing yards o 250.5' })],
+    ['participantName too', eventPlayerProp({ metadata: { participantName: 'TCU Quarterback' } })],
+    [
+      // The live-offer flow sends the offer's market id and an inferred stat type, neither of
+      // which is the form's own key table: the event path must not refuse it.
+      'live offer: provider market id and a non-catalog stat type',
+      {
+        ...eventPlayerProp({
+          selection: 'TCU Quarterback Pass Yds O 250.5',
+          metadata: { statType: 'Pass Yds' },
+        }),
+        market: 'player_passing_yards_ou',
+      },
+    ],
+  ] as const) {
+    const outcome = await validateSmartFormRelationships(submission, referenceData());
+    assert.equal(outcome.kind, 'canonical-event', label);
+  }
+});
+
+test('Codex review F1: a canonical-event player prop binds its selection and name fields to the event player', async () => {
+  const cases: Array<[string, SubmissionPayload, RegExp]> = [
+    [
+      'selection naming someone else',
+      eventPlayerProp({ selection: 'Somebody Else Passing Yards O 250.5' }),
+      /selection must be the canonical player's prop/,
+    ],
+    [
+      'selection naming a second player',
+      eventPlayerProp({ selection: 'TCU Quarterback Passing Yards O 250.5 UNC Quarterback' }),
+      /selection must be the canonical player's prop/,
+    ],
+    [
+      'selection with another line',
+      eventPlayerProp({ selection: 'TCU Quarterback Passing Yards O 199.5' }),
+      /selection must be the canonical player's prop/,
+    ],
+    ['playerName naming someone else', eventPlayerProp({ metadata: { playerName: 'Somebody Else' } }), /metadata\.playerName must be the canonical player/],
+    [
+      'participantName naming someone else',
+      eventPlayerProp({ metadata: { participantName: 'UNC Quarterback' } }),
+      /metadata\.participantName must be the canonical player/,
+    ],
+    [
+      'flat player naming someone else',
+      eventPlayerProp({ metadata: { player: 'UNC Quarterback' } }),
+      /player display does not match participantResolution/,
+    ],
+    [
+      'declared player-prop on a team market',
+      { ...eventPlayerProp(), market: 'moneyline' },
+      /accepted only on a player-prop market/,
+    ],
+    [
+      'a player who is not in the event',
+      eventPlayerProp({
+        player: { participantId: 'player-elsewhere', displayName: 'Somebody Else', participantType: 'player' },
+        selection: 'Somebody Else Passing Yards O 250.5',
+        metadata: { player: 'Somebody Else', playerName: 'Somebody Else' },
+      }),
+      /does not belong to event/,
+    ],
+  ];
+  for (const [label, submission, pattern] of cases) {
+    await assert.rejects(
+      () => validateSmartFormRelationships(submission, referenceData()),
+      (error: unknown) => {
+        assert.ok(error instanceof ApiError, `${label}: expected ApiError, got ${String(error)}`);
+        assert.equal(error.status, 422, label);
+        assert.match(error.message, pattern, label);
+        return true;
+      },
+      label,
+    );
+  }
+});
+
+test('Codex review F1: team markets carrying an incidental playerName stay accepted on both paths (PM decision)', async () => {
+  for (const market of ['moneyline', 'spread', 'game_total_ou']) {
+    const onEvent = payload({ playerName: 'Somebody Else', participantName: 'Somebody Else' });
+    onEvent.market = market;
+    assert.equal((await validateSmartFormRelationships(onEvent, referenceData())).kind, 'canonical-event', market);
+
+    const { soccer, repository } = structuredFallback({ playerName: 'Somebody Else', participantName: 'Somebody Else' });
+    soccer.market = market;
+    assert.equal((await validateSmartFormRelationships(soccer, repository)).kind, 'structured-team-fallback', market);
+  }
+});
+
+async function withHumanDeliveryEnv<T>(run: () => Promise<T>): Promise<T> {
+  const env: Record<string, string> = {
+    UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED: 'true',
+    UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST: 'codex-capper',
+  };
+  const previous = new Map<string, string | undefined>();
+  for (const [key, value] of Object.entries(env)) {
+    previous.set(key, process.env[key]);
+    process.env[key] = value;
+  }
+  try {
+    return await run();
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+test('Codex review F1: end to end, an allow-listed capper submitting the reproducer writes no pick and no outbox row', async () => {
+  const auth = { role: 'capper' as const, capperId: 'codex-capper', identity: 'codex-capper' };
+  const repositories = createInMemoryRepositoryBundle();
+  (repositories as { referenceData: ReferenceDataRepository }).referenceData = referenceData();
+
+  const refused = await withHumanDeliveryEnv(() => handleSubmitPick({ body: codexEventReproducer(), auth }, repositories));
+  assert.equal(refused.status, 422);
+  assert.ok(!refused.body.ok);
+  if (!refused.body.ok) {
+    assert.equal(refused.body.error.code, 'SMART_FORM_RELATIONSHIP_INVALID');
+    assert.match(refused.body.error.message, /requires participantResolution\.player/);
+  }
+  assert.deepEqual(await repositories.picks.listBySource('smart-form'), [], 'no pick is written');
+
+  // Non-vacuity: the same capper, environment and repositories admit the pick once it names
+  // the event player -- so the refusal above is the player gate, not the setup.
+  const admitted = await withHumanDeliveryEnv(() =>
+    handleSubmitPick(
+      { body: eventPlayerProp({ metadata: { distributionMode: 'delivery-eligible' } }), auth },
+      repositories,
+    ),
+  );
+  assert.equal(admitted.status, 201, JSON.stringify(admitted.body));
+  const picks = await repositories.picks.listBySource('smart-form');
+  assert.equal(picks.length, 1, 'only the admitted pick exists');
+  // The refused request left no outbox row behind: the only rows are the admitted pick's.
+  assert.ok(admitted.body.ok);
+  if (admitted.body.ok) assert.equal(picks[0]?.id, admitted.body.data.pickId);
+});
+
+// ---------------------------------------------------------------------------
+// Codex High review, finding 2 (MAJOR): a near miss the matcher would refuse was never examined
+// when no search retrieved the row. "J Tautm" searched j%tautm, tautm%j, tautm, t__tm, _au_m,
+// taut, autm -- none contain "Tatum" -- and was accepted and stamped. The near-miss probes now
+// retrieve every word one typo away from an entered word of 5+ letters.
+// ---------------------------------------------------------------------------
+
+test('Codex review F2: near misses that no given-name search can reach are refused, confirmed or not', async () => {
+  for (const playerName of [
+    'J Tautm', // initial + interior transposition
+    'Tautm', // bare transposed surname
+    'J. Tatmu', // transposition of the last two letters
+    'J Attum', // transposition of the first two letters
+    'J Tatumx', // insertion at the end
+    'J Xatum', // substitution of the first letter
+    'Jasyon Tautm', // given-name transposition beside a surname transposition
+    'Jyason Tatmu',
+  ]) {
+    // Precondition that makes this a retrieval test: no entered word is in "Jayson Tatum".
+    for (const token of playerName.toLowerCase().split(/[^a-z]+/u).filter((part) => part.length >= 3)) {
+      assert.equal(ilikeContains('Jayson Tatum', token), false, `"${token}" alone must not retrieve the row`);
+    }
+    for (const confirmedNotCandidates of [undefined, ['player-tatum']]) {
+      const { repository, playerQueries } = manualPlayerRepository({ extraPlayers: nameVariantCatalog });
+      const base = manualPlayerPayload({ ...herroShape, team: celticsAtBucks.away, playerName });
+      const submission = confirmedNotCandidates ? withConfirmation(base, confirmedNotCandidates) : base;
+      await assert.rejects(
+        () => validateSmartFormRelationships(submission, repository),
+        (error: unknown) => {
+          assert.ok(error instanceof ApiError, `expected ApiError, got ${String(error)}`);
+          assert.equal(error.status, 422, `"${playerName}": ${error.message}`);
+          assert.match(error.message, /claims a coverage gap, but may be canonical player player-tatum /);
+          return true;
+        },
+        `"${playerName}" must be refused (queries: ${JSON.stringify(playerQueries)})`,
+      );
+      assert.equal(submission.metadata?.['manualPlayerReview'], undefined, 'never stamped');
+    }
+  }
+  // A given-name transposition beside the exact surname is refused too (retrieved by "tatum").
+  const { repository } = manualPlayerRepository();
+  await assert.rejects(
+    () => validateSmartFormRelationships(manualPlayerPayload({ ...herroShape, playerName: 'Jasyon Tatum' }), repository),
+    (error: unknown) => assertCoveredRefusal(error),
+  );
+});
+
+test('Codex review F2: two typos, or a different surname, are still a confirmable gap', async () => {
+  for (const playerName of [
+    'J. Taumt', // two edits from Tatum (a moved letter), not one typo
+    'Jay Atutm', // two edits from Tatum
+    'Jayson Tate',
+    'Jason Taylor',
+    'J Thomas',
+    'Marcus Tatem',
+    'Jaylen Brown',
+    'Mason Plumlee',
+  ]) {
+    const { repository } = manualPlayerRepository({ extraPlayers: nameVariantCatalog });
+    const ids = await acceptedAsGap(manualPlayerPayload({ ...herroShape, playerName }), repository);
+    assert.ok(Array.isArray(ids), playerName);
+  }
+});
+
+/**
+ * Codex review F2, the general property: whatever the matcher refuses as covered, the ILIKE
+ * searches must reach. Each entry is validated twice: against the ILIKE repository, and against
+ * an oracle repository that returns the WHOLE catalog for every search -- so the matcher sees
+ * every row. If the searches miss a row the matcher would refuse, the two disagree.
+ */
+test('Codex review F2: every one-typo spelling refused with a full catalog scan is refused through the searches', async () => {
+  const catalog = [
+    { participantId: 'player-tatum', displayName: 'Jayson Tatum' },
+    { participantId: 'player-trent', displayName: 'Gary Trent' },
+    { participantId: 'player-horford', displayName: 'Al Horford' },
+    { participantId: 'player-bichette', displayName: 'Bo Bichette' },
+    { participantId: 'player-wu', displayName: 'Andrew Wu' },
+    { participantId: 'player-vucevic', displayName: 'Nikola Vucevic' },
+    { participantId: 'player-herrera', displayName: 'Mateo Herrera' },
+  ];
+  const typos = (word: string): string[] => {
+    const variants = new Set<string>();
+    for (let index = 0; index < word.length; index += 1) {
+      variants.add(word.slice(0, index) + word.slice(index + 1)); // deletion
+      variants.add(word.slice(0, index) + 'x' + word.slice(index + 1)); // substitution
+      if (index + 1 < word.length) {
+        variants.add(word.slice(0, index) + word[index + 1] + word[index] + word.slice(index + 2)); // swap
+      }
+    }
+    for (let index = 0; index <= word.length; index += 1) variants.add(word.slice(0, index) + 'x' + word.slice(index));
+    variants.delete(word);
+    return [...variants].filter((variant) => variant.length > 0);
+  };
+  const refusedAsCovered = async (playerName: string, fullScan: boolean): Promise<boolean> => {
+    const { repository } = manualPlayerRepository({
+      extraPlayers: catalog.filter((player) => player.participantId !== 'player-tatum'),
+      ...(fullScan
+        ? {
+            searchPlayers: async () =>
+              catalog.map((player) => ({
+                ...player,
+                sport: 'NBA',
+                teamId: player.participantId === 'player-tatum' ? 'team-bos' : null,
+                participantType: 'player',
+              }) as never),
+          }
+        : {}),
+    });
+    try {
+      await validateSmartFormRelationships(
+        manualPlayerPayload({ ...herroShape, team: celticsAtBucks.away, playerName }),
+        repository,
+      );
+      return false;
+    } catch (error) {
+      return error instanceof ApiError && error.status === 422 && /claims a coverage gap/.test(error.message);
+    }
+  };
+
+  const entries = new Set<string>();
+  for (const { displayName } of catalog) {
+    const [given = '', surname = ''] = displayName.toLowerCase().split(' ');
+    const givenForms = [given, given[0] ?? '', given.slice(0, 3), ...typos(given).slice(0, 4), ''];
+    for (const surnameTypo of typos(surname)) {
+      for (const givenForm of givenForms) entries.add(`${givenForm} ${surnameTypo}`.trim());
+      entries.add(`${given}${surnameTypo}`);
+    }
+    for (const givenTypo of typos(given)) {
+      entries.add(`${givenTypo} ${surname}`);
+      entries.add(`${givenTypo}${surname}`);
+    }
+  }
+
+  const disagreements: string[] = [];
+  let refusedCount = 0;
+  for (const entry of entries) {
+    const viaSearch = await refusedAsCovered(entry, false);
+    const viaScan = await refusedAsCovered(entry, true);
+    if (viaScan) refusedCount += 1;
+    if (viaSearch !== viaScan) disagreements.push(`${entry} (search=${viaSearch}, scan=${viaScan})`);
+  }
+  assert.ok(refusedCount > 100, `non-vacuity: ${refusedCount} of ${entries.size} entries are refused`);
+  assert.deepEqual(disagreements, [], `${disagreements.length} of ${entries.size} entries disagree`);
+});
+
+test('Codex review F2: the near-miss probes keep a worst-case admitted name within the search cap', async () => {
+  // Six 5-letter words (the most near-miss probes per word), each with a transliteration digraph
+  // (the most accent forms per word): the largest query set an admitted name can produce.
+  for (const playerName of ['Boeta Muelr Haefn Koesn Ruelb Taefo', 'Abcde Fghij Klmno Pqrst Uvwxy Zabcd']) {
+    const { repository, playerQueries } = manualPlayerRepository();
+    await acceptedAsGap(manualPlayerPayload({ ...herroShape, playerName }), repository);
+    if (process.env.SHOW_QUERY_COUNT) console.log('QUERY_COUNT', playerName, playerQueries.length);
+    assert.ok(
+      playerQueries.length <= MANUAL_PLAYER_MAX_SEARCHES,
+      `${playerQueries.length} searches exceed the ${MANUAL_PLAYER_MAX_SEARCHES} cap: ${JSON.stringify(playerQueries)}`,
+    );
+    // No query falls below the two-literal floor the accent-tolerant patterns already hold to.
+    for (const query of playerQueries) {
+      assert.ok(query.replace(/[%_]/gu, '').length >= 2, `query "${query}" is too generic`);
+    }
   }
 });
