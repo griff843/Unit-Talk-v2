@@ -2,7 +2,9 @@ import {
   isHumanCapperDeliveryAuthorized,
   manualPlayerConfirmationRequiredCode,
   manualPlayerMaxCandidates,
+  legacyManualPlayerReason,
   manualPlayerProvenance,
+  manualPlayerReason,
   resolveSmartFormPlayerPropMarketKey,
   smartFormPlayerPropMarketKeysForSport,
 } from '@unit-talk/contracts';
@@ -235,7 +237,7 @@ export async function validateSmartFormRelationships(
     if (isPlayerPropSubmission(payload, sportId)) {
       if (!resolution.player && !resolution.manualPlayer) {
         fail(
-          'a player-prop pick on the structured team fallback requires participantResolution.player (a canonical player) or participantResolution.manualPlayer (a proved coverage gap)',
+          'a player-prop pick on the structured team fallback requires participantResolution.player (a canonical player) or participantResolution.manualPlayer (a manually entered, unverified player)',
         );
       }
       if (resolution.player) {
@@ -1001,25 +1003,29 @@ function dedupeQueries(candidates: string[]): string[] {
 // WORK-2026110802 MANUAL_PLAYER_COVERAGE_GAP_START
 // The rung of the participant-resolution ladder between the structured team fallback and the
 // all-manual tier: canonical teams (`eventId: null`, team sports only) plus ONE manually
-// entered player the reference catalog does not carry. Before it existed no contract admitted
+// entered player the operator could not find in the reference catalog. Before it existed no contract admitted
 // that shape -- the manual tier is all-or-nothing and refuses canonical team names, and the
 // structured tier requires a canonical player -- so a pick on Herro, Burries or Dulcich in a
 // covered matchup had no truthful path at all.
 //
-// Every fact this rung records is one the server proved: the sides and the selected team pass
-// the unchanged structured checks, and the player gap is verified against `searchPlayers` with
-// the alias and confusable folding the manual tier uses. A failed search is a retryable error,
-// never a gap (apps/smart-form/CLAUDE.md).
+// The sides and the selected team pass the unchanged structured checks. The player is checked
+// against `searchPlayers` with the alias and confusable folding the manual tier uses, and a name
+// that resolves to, or may be, a retrievable canonical player is refused. What that bounded
+// search establishes is only "no canonical match found", NOT that the catalog lacks the player
+// (the database ILIKE does not fold accents: "L Doncix" never retrieves "Luka Dončić"). So the
+// pick is stamped `manual-unverified-identity`, never a proved coverage gap. A failed search is
+// a retryable error, never an unverified player (apps/smart-form/CLAUDE.md).
 //
 // It is Track Only only. A pick whose player no reference data backs carries no provider
-// verification and no CLV, so it must not reach members on the strength of an allow-list.
+// verification, no CLV and no automatic grading, so it must not reach members on the strength
+// of an allow-list. The legacy `manual-coverage-gap` stamp is treated identically everywhere.
 
 /** Bound on ONE coverage search, so a hung reference read surfaces as a retryable error. */
 export const MANUAL_PLAYER_SEARCH_TIMEOUT_MS = 4_000;
 
 /**
  * Bound on ALL coverage searches for one manual player together. Exhausting it is a
- * retryable 503, never an accepted gap: an unfinished proof proves nothing.
+ * retryable 503, never an accepted manual player: an unfinished search checks nothing.
  */
 export const MANUAL_PLAYER_SEARCH_BUDGET_MS = 8_000;
 
@@ -1119,8 +1125,10 @@ function assertManualPlayerAdmissible(
   if (rawManualPlayer['canonicalParticipantId'] !== null) {
     fail('manualPlayer must have canonicalParticipantId=null');
   }
-  if (rawManualPlayer['reason'] !== 'canonical-coverage-gap') {
-    fail('manualPlayer must state canonical-coverage-gap provenance');
+  // The current reason, or the legacy spelling a form built before the rewording still sends.
+  // Either way the server persists `manualPlayerReason` (see `stampManualPlayerProvenance`).
+  if (rawManualPlayer['reason'] !== manualPlayerReason && rawManualPlayer['reason'] !== legacyManualPlayerReason) {
+    fail(`manualPlayer must state ${manualPlayerReason} provenance`);
   }
   readConfirmedNotCandidates(rawManualPlayer);
   // Length first, on the raw value: nothing below folds or searches an unbounded string.
@@ -1133,7 +1141,7 @@ function assertManualPlayerAdmissible(
   // The typographic apostrophe (iOS smart punctuation) is an allowed separator, like "'".
   if (hasNonAscii(foldConfusables(displayName.replace(/\u2019/gu, "'")))) {
     fail(
-      `manual player "${displayName}" must use Latin characters so the canonical-coverage claim can be verified`,
+      `manual player "${displayName}" must use Latin characters so the catalog search can check it`,
     );
   }
   const tokenCount = aliasTokens(displayName).length;
@@ -1183,7 +1191,7 @@ function assertManualPlayerNameCharacters(displayName: string) {
 }
 
 /**
- * Manual-player provenance is a Smart Form claim the server proves and stamps. Any other
+ * Manual-player provenance is a Smart Form label the server checks and stamps. Any other
  * traffic that carries it -- another source, or the legacy `smart-form` label without Smart
  * Form fields -- is refused, so no pick can opt itself out of CLV by declaring a manual player.
  * Refused rather than stripped: no existing caller sends either marker, so refusing breaks no
@@ -1763,7 +1771,8 @@ function nearMissProbes(token: string): string[] {
 /**
  * Writes the manual-player labels onto the pick metadata. Server-authoritative: the client's
  * `playerProvenance`, `manualEntry` and `manualOverrideFields` are overwritten, so the
- * persisted pick says "manual player" exactly when this validator proved the gap -- the
+ * persisted pick says "manual player, unverified identity" exactly when this validator's
+ * bounded search found no canonical match (never proof of catalog absence) -- the
  * provenance CLV exclusion (clv-service.ts) and the receipt read -- and never because a
  * client said so. Other manual fields the client declared (e.g. `sportsbook`) are kept.
  */
@@ -1780,12 +1789,17 @@ function stampManualPlayerProvenance(
     : {};
   // The audit trail: which catalog candidates the operator ruled out. Server-written from the
   // candidate set it recomputed and matched; any client `manualPlayerReview` is overwritten.
+  // `searchedName` and `identity` say what the evidence is: a bounded name search that found
+  // no canonical match. That is not proof the catalog lacks the player (ILIKE does not fold
+  // accents, so "L Doncix" never retrieves "Luka Dončić"), so the pick is labeled unverified.
   const manualPlayerReview: ManualPlayerReview = {
     operatorConfirmed: rejectedCandidates.length > 0,
     rejectedCandidates: rejectedCandidates.map((candidate) => ({
       participantId: candidate.participantId,
       displayName: candidate.displayName,
     })),
+    searchedName: displayName,
+    identity: 'unverified-no-canonical-match',
   };
   const confirmation =
     rejectedCandidates.length > 0
@@ -1803,7 +1817,10 @@ function stampManualPlayerProvenance(
   payload.metadata = {
     ...metadata,
     ...nameFields,
-    participantResolution: { ...resolution, manualPlayer: { ...manualPlayer, displayName, ...confirmation } },
+    participantResolution: {
+      ...resolution,
+      manualPlayer: { ...manualPlayer, displayName, reason: manualPlayerReason, ...confirmation },
+    },
     manualPlayerReview,
     playerProvenance: manualPlayerProvenance,
     manualEntry: true,
@@ -1856,12 +1873,12 @@ async function verifyManualPlayerCoverageGap(
       const match = catalogPlayerMatch(enteredTokens, aliasTokens(row['displayName']));
       if (match === 'resolves') {
         fail(
-          `manual player "${displayName}" claims a coverage gap, but resolves to canonical player ${row['participantId']} (${row['displayName']}); use the canonical selection`,
+          `manual player "${displayName}" resolves to canonical player ${row['participantId']} (${row['displayName']}); use the canonical selection`,
         );
       }
       if (match === 'plausible') {
         fail(
-          `manual player "${displayName}" claims a coverage gap, but may be canonical player ${row['participantId']} (${row['displayName']}); a name this close to a covered player is refused -- select the canonical player`,
+          `manual player "${displayName}" may be canonical player ${row['participantId']} (${row['displayName']}); a name this close to a covered player is refused -- select the canonical player`,
         );
       }
       const score = candidateSimilarity(enteredTokens, aliasTokens(row['displayName']));
@@ -1885,7 +1902,7 @@ async function verifyManualPlayerCoverageGap(
     throw new ApiError(
       422,
       'SMART_FORM_MANUAL_PLAYER_UNVERIFIABLE',
-      `manual player "${displayName}" cannot be verified as a coverage gap: at least ${MANUAL_PLAYER_SEARCH_ROW_LIMIT} catalog players match "${saturatedQuery}"; enter the full name or select the canonical player`,
+      `manual player "${displayName}" cannot be checked against the catalog: at least ${MANUAL_PLAYER_SEARCH_ROW_LIMIT} catalog players match "${saturatedQuery}"; enter the full name or select the canonical player`,
     );
   }
   return rankManualPlayerCandidates([...similarRows.values()], matchupSides);
@@ -2017,7 +2034,7 @@ function searchUnavailable(displayName: string, reason: string): ApiError {
   return new ApiError(
     503,
     'SMART_FORM_REFERENCE_SEARCH_UNAVAILABLE',
-    `player search failed while verifying the manual player "${displayName}"; retry the submission -- a failed search is never recorded as a coverage gap (${reason})`,
+    `player search failed while verifying the manual player "${displayName}"; retry the submission -- a failed search is never recorded as an unverified manual player (${reason})`,
   );
 }
 

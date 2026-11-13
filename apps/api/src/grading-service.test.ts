@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   humanCapperDeliveryAuthorizationVersion,
+  legacyManualPlayerProvenance,
   manualPlayerProvenance,
   type CanonicalPick,
 } from '@unit-talk/contracts';
@@ -17,7 +18,7 @@ import {
   classifyGradingOutcome,
   GRADING_INPUT_FRESHNESS_THRESHOLD_MS,
   GRADING_SKIP_EVIDENCE_LIMIT,
-  MANUAL_PLAYER_COVERAGE_GAP_SKIP_REASON,
+  MANUAL_PLAYER_UNVERIFIED_IDENTITY_SKIP_REASON,
   type GradingRetryState,
 } from './grading-service.js';
 import {
@@ -4768,8 +4769,9 @@ test('runGradingPass with restrictToPickIds cannot admit a pick the population n
 });
 
 // ---------------------------------------------------------------------------
-// WORK-2026110802 (Codex review F3): a Smart Form manual-coverage-gap pick names a
-// player the catalog does not hold. Before this fix the grader's metadata name
+// WORK-2026110802 (Codex review F3): a Smart Form manual-player pick names a player
+// whose identity is unverified (current stamp `manual-unverified-identity`, legacy stamp
+// `manual-coverage-gap`; both must behave identically). Before this fix the grader's metadata name
 // fallback resolved that free-text name to any catalog player with the same
 // normalized name and settled the pick from that player's provider result.
 // ---------------------------------------------------------------------------
@@ -4778,6 +4780,7 @@ type ManualGapShape = 'provenance-and-resolution' | 'provenance-only' | 'resolut
 
 async function createManualCoverageGapReproducer(
   shape: ManualGapShape = 'provenance-and-resolution',
+  stamp: 'current' | 'legacy' = 'current',
 ) {
   const { repositories, pickId, eventName } = await createPostedPickFixture({
     selection: 'Jalen Brunson Over 24.5',
@@ -4804,7 +4807,12 @@ async function createManualCoverageGapReproducer(
       eventName,
       ...(shape === 'resolution-only'
         ? {}
-        : { playerProvenance: manualPlayerProvenance }),
+        : {
+            playerProvenance:
+              stamp === 'current'
+                ? manualPlayerProvenance
+                : legacyManualPlayerProvenance,
+          }),
       ...(shape === 'provenance-only'
         ? {}
         : {
@@ -4812,7 +4820,10 @@ async function createManualCoverageGapReproducer(
               manualPlayer: {
                 displayName: 'Jalen Brunson',
                 canonicalParticipantId: null,
-                reason: 'canonical-coverage-gap',
+                reason:
+                  stamp === 'current'
+                    ? 'unverified-identity'
+                    : 'canonical-coverage-gap',
               },
             },
           }),
@@ -4827,14 +4838,14 @@ async function createManualCoverageGapReproducer(
   return { repositories, pickId, participant, event };
 }
 
-for (const shape of [
-  'provenance-and-resolution',
-  'provenance-only',
-  'resolution-only',
-] as const) {
-  test(`Codex review F3: a manual-coverage-gap pick (${shape}) is never resolved by name or auto-graded`, async () => {
+for (const [stamp, shape] of (['current', 'legacy'] as const).flatMap((value) =>
+  (
+    ['provenance-and-resolution', 'provenance-only', 'resolution-only'] as const
+  ).map((form) => [value, form] as const),
+)) {
+  test(`Codex review F3: a manual-player pick (${stamp} stamp, ${shape}) is never resolved by name or auto-graded`, async () => {
     const { repositories, pickId } =
-      await createManualCoverageGapReproducer(shape);
+      await createManualCoverageGapReproducer(shape, stamp);
 
     const result = await runGradingPass(repositories, {
       now: () => new Date('2026-03-27T01:00:00.000Z'),
@@ -4847,10 +4858,13 @@ for (const shape of [
       {
         pickId,
         outcome: 'skipped',
-        reason: MANUAL_PLAYER_COVERAGE_GAP_SKIP_REASON,
+        reason: MANUAL_PLAYER_UNVERIFIED_IDENTITY_SKIP_REASON,
       },
     ]);
-    assert.equal(MANUAL_PLAYER_COVERAGE_GAP_SKIP_REASON, 'manual_player_coverage_gap');
+    assert.equal(
+      MANUAL_PLAYER_UNVERIFIED_IDENTITY_SKIP_REASON,
+      'manual_player_unverified_identity',
+    );
     assert.equal((await repositories.settlements.listByPick(pickId)).length, 0);
     const pick = await repositories.picks.findPickById(pickId);
     assert.equal(pick?.status, 'posted');
@@ -4862,28 +4876,28 @@ for (const shape of [
     const [run] = await repositories.runs.listByType('grading.run');
     const details = run?.details as Record<string, unknown>;
     assert.deepEqual(details['skipped_reasons'], {
-      manual_player_coverage_gap: 1,
+      manual_player_unverified_identity: 1,
     });
     assert.deepEqual(details['skipped_picks'], [
-      { pick_id: pickId, reason: 'manual_player_coverage_gap' },
+      { pick_id: pickId, reason: 'manual_player_unverified_identity' },
     ]);
     assert.equal(details['identity_skipped_count'], 0);
     assert.equal(details['data_dependent_skipped_count'], 0);
   });
 }
 
-test('Codex review F3: a manual-coverage-gap pick stays skipped on every later pass', async () => {
+test('Codex review F3: a manual-player pick stays skipped on every later pass', async () => {
   const { repositories, pickId } = await createManualCoverageGapReproducer();
 
   await runGradingPass(repositories);
   const second = await runGradingPass(repositories);
 
   assert.equal(second.graded, 0);
-  assert.equal(second.details[0]?.reason, MANUAL_PLAYER_COVERAGE_GAP_SKIP_REASON);
+  assert.equal(second.details[0]?.reason, MANUAL_PLAYER_UNVERIFIED_IDENTITY_SKIP_REASON);
   assert.equal((await repositories.settlements.listByPick(pickId)).length, 0);
 });
 
-test('Codex review F3: a manual-coverage-gap pick can still be settled by an operator', async () => {
+test('Codex review F3: a manual-player pick can still be settled by an operator', async () => {
   const { repositories, pickId } = await createManualCoverageGapReproducer();
   await runGradingPass(repositories);
 

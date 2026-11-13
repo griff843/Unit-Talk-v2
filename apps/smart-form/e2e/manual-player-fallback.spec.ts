@@ -177,7 +177,7 @@ for (const shape of shapes) {
     const metadata = pick['metadata'] as Record<string, unknown>;
     expect(metadata).toMatchObject({
       distributionMode: 'track-only',
-      playerProvenance: 'manual-coverage-gap',
+      playerProvenance: 'manual-unverified-identity',
       // PM F3: server-stamped labels agree with the provenance.
       manualEntry: true,
       manualPlayerReview: {
@@ -186,6 +186,9 @@ for (const shape of shapes) {
           const { participantId, displayName } = candidate as { participantId: string; displayName: string };
           return { participantId, displayName };
         }),
+        // The evidence: a bounded name search that found no canonical match, nothing more.
+        searchedName: shape.player,
+        identity: 'unverified-no-canonical-match',
       },
       manualOverrideFields: expect.arrayContaining(['player']),
       eventId: null,
@@ -202,7 +205,7 @@ for (const shape of shapes) {
         home: { participantId: home!.participantId },
         team: { participantId: team!.participantId },
         player: null,
-        manualPlayer: { displayName: shape.player, canonicalParticipantId: null, reason: 'canonical-coverage-gap' },
+        manualPlayer: { displayName: shape.player, canonicalParticipantId: null, reason: 'unverified-identity' },
       },
     });
     await assertTrackOnlyHasNoOutbox(request, submission.data.pickId);
@@ -302,7 +305,7 @@ test('WORK-2026110802: a similar catalog player is offered, and "none of these" 
   const metadata = (await readPersistedPick(request, submission.data.pickId))['metadata'] as Record<string, unknown>;
   expect(metadata).toMatchObject({
     distributionMode: 'track-only',
-    playerProvenance: 'manual-coverage-gap',
+    playerProvenance: 'manual-unverified-identity',
     playerId: null,
     manualPlayerReview: {
       operatorConfirmed: true,

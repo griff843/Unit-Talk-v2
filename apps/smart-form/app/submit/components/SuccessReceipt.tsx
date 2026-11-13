@@ -73,7 +73,7 @@ export function SuccessReceipt({
           <div data-testid="receipt-manual-player" data-player-provenance={playerProvenance} className="space-y-1">
             <Row label="Player" value={`${v.playerName} (manually entered, unverified)`} />
             <p className="text-xs text-muted-foreground text-right">
-              Unverified player: not in reference player data, no provider verification, no CLV.
+              Unverified identity: no reference player matched the name search (not proof of absence); no provider verification, no CLV.
             </p>
             {rejectedCandidateCount > 0 && (
               <p className="text-xs text-muted-foreground text-right" data-testid="receipt-manual-player-confirmed">

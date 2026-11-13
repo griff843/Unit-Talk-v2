@@ -849,7 +849,7 @@ test('WORK-2026110802: the client guard accepts a typed player only after a defi
   }
   assert.match(
     evaluateSubmissionGuards({ ...manualPlayerGuardBase, playerSearchResolution: 'error' })?.description ?? '',
-    /failed search is never saved as a missing player/,
+    /failed search is never saved as an unverified manual player/,
   );
 });
 
@@ -939,7 +939,7 @@ for (const shape of [
         playerId: null,
         distributionMode: 'track-only',
         participantResolution: resolution,
-        playerProvenance: 'manual-coverage-gap',
+        playerProvenance: 'manual-unverified-identity',
       },
     );
 
@@ -953,10 +953,10 @@ for (const shape of [
       home: { participantId: shape.home[0], displayName: shape.home[1], participantType: 'team', teamId: null },
       team: { participantId: shape.team[0], displayName: shape.team[1], participantType: 'team', teamId: null },
       player: null,
-      manualPlayer: { displayName: shape.player, canonicalParticipantId: null, reason: 'canonical-coverage-gap' },
+      manualPlayer: { displayName: shape.player, canonicalParticipantId: null, reason: 'unverified-identity' },
     });
     assert.equal(payload.metadata?.distributionMode, 'track-only');
-    assert.equal(payload.metadata?.playerProvenance, 'manual-coverage-gap');
+    assert.equal(payload.metadata?.playerProvenance, 'manual-unverified-identity');
     // PM F3: the manual labels agree with the provenance -- never manualEntry:false beside it.
     assert.equal(payload.metadata?.manualEntry, true);
     assert.deepEqual(payload.metadata?.manualOverrideFields, ['player']);
@@ -980,7 +980,7 @@ test('WORK-2026110802: withManualPlayer drops any canonical player and event id'
   );
   assert.equal(resolution.player, null);
   assert.equal(resolution.eventId, null);
-  assert.deepEqual(resolution.manualPlayer, { displayName: 'Burries', canonicalParticipantId: null, reason: 'canonical-coverage-gap' });
+  assert.deepEqual(resolution.manualPlayer, { displayName: 'Burries', canonicalParticipantId: null, reason: 'unverified-identity' });
 });
 
 test('WORK-2026110802: a payload without a manual player carries no player provenance claim', () => {
@@ -994,10 +994,24 @@ test('WORK-2026110802 F3: the client provenance constant is the contract constan
   assert.equal(MANUAL_PLAYER_PROVENANCE, contracts.manualPlayerProvenance);
 });
 
+test('WORK-2026110802: the form sends the unverified-identity stamp and reason, never the legacy ones', async () => {
+  const contracts = await import('@unit-talk/contracts');
+  const { MANUAL_PLAYER_PROVENANCE, MANUAL_PLAYER_REASON } = await import('../lib/form-utils');
+  assert.equal(MANUAL_PLAYER_PROVENANCE, 'manual-unverified-identity');
+  assert.equal(MANUAL_PLAYER_REASON, contracts.manualPlayerReason);
+  assert.equal(MANUAL_PLAYER_REASON, 'unverified-identity');
+  assert.notEqual(MANUAL_PLAYER_PROVENANCE, contracts.legacyManualPlayerProvenance);
+  assert.notEqual(MANUAL_PLAYER_REASON, contracts.legacyManualPlayerReason);
+  // The legacy stamp is still recognized as a manual, unverified player.
+  assert.equal(contracts.isManualPlayerProvenance('manual-coverage-gap'), true);
+  assert.equal(contracts.isManualPlayerProvenance('manual-unverified-identity'), true);
+  assert.equal(contracts.isManualPlayerProvenance('canonical'), false);
+});
+
 test('WORK-2026110802 F3: a manual player keeps other manual fields and adds player once', () => {
   const payload = buildSubmissionPayload(buildBaseValues({ sportsbook: 'PrizePicks' }), {
     manualOverrideFields: ['sportsbook', 'player'],
-    playerProvenance: 'manual-coverage-gap',
+    playerProvenance: 'manual-unverified-identity',
   });
   assert.equal(payload.metadata?.manualEntry, true);
   assert.deepEqual(payload.metadata?.manualOverrideFields, ['sportsbook', 'player']);
@@ -1082,12 +1096,12 @@ test('WORK-2026110802 confirm: the confirmation rides on manualPlayer only when 
   assert.deepEqual(withManualPlayer(resolution, ' Tyler Herro ').manualPlayer, {
     displayName: 'Tyler Herro',
     canonicalParticipantId: null,
-    reason: 'canonical-coverage-gap',
+    reason: 'unverified-identity',
   });
   assert.deepEqual(withManualPlayer(resolution, 'Tyler Herro', ['p-1', 'p-2']).manualPlayer, {
     displayName: 'Tyler Herro',
     canonicalParticipantId: null,
-    reason: 'canonical-coverage-gap',
+    reason: 'unverified-identity',
     confirmedNotCandidates: ['p-1', 'p-2'],
   });
   // An empty confirmation (the "suggestions changed" case) is still sent, as [].

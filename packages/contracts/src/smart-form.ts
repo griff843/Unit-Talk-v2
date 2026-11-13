@@ -21,17 +21,49 @@ export interface CanonicalParticipantResolution {
   team?: CanonicalParticipantIdentity | null;
   player?: CanonicalParticipantIdentity | null;
   /**
-   * WORK-2026110802: a player the reference catalog does not carry, entered by
-   * hand alongside canonical teams. Structured team fallback only (`eventId`
-   * null, team sports), mutually exclusive with `player`, and Track Only only.
-   * The server verifies the claimed gap against reference data and refuses a
-   * name that resolves to a canonical player.
+   * WORK-2026110802: a player entered by hand alongside canonical teams, whose identity is
+   * UNVERIFIED: a bounded name search of the reference catalog found no canonical match, which
+   * is not proof that the catalog lacks the player (the search does not fold accents, for one).
+   * Structured team fallback only (`eventId` null, team sports), mutually exclusive with
+   * `player`, and Track Only only. The server refuses a name that resolves, or may resolve, to
+   * a canonical player it can retrieve.
    */
   manualPlayer?: ManualPlayerCoverageGap | null;
 }
 
-/** Player provenance recorded on pick metadata when `manualPlayer` is used. */
-export const manualPlayerProvenance = 'manual-coverage-gap' as const;
+/**
+ * Player provenance the server stamps on pick metadata when `manualPlayer` is used: the
+ * player's identity is unverified (no canonical match from a bounded name search), not proved
+ * absent from the catalog.
+ */
+export const manualPlayerProvenance = 'manual-unverified-identity' as const;
+
+/**
+ * LEGACY. The provenance stamped on manual-player picks before the unverified-identity wording.
+ * It overstated the evidence (catalog absence was never proved) and is no longer written, but
+ * stored rows keep it, so every guard must still treat it exactly like `manualPlayerProvenance`.
+ */
+export const legacyManualPlayerProvenance = 'manual-coverage-gap' as const;
+
+/** Every provenance value that marks a manual, unverified player: current and legacy. */
+export const manualPlayerProvenances = [manualPlayerProvenance, legacyManualPlayerProvenance] as const;
+
+export type ManualPlayerProvenance = (typeof manualPlayerProvenances)[number];
+
+/** True for the current AND the legacy manual-player provenance. */
+export function isManualPlayerProvenance(value: unknown): value is ManualPlayerProvenance {
+  return (manualPlayerProvenances as readonly unknown[]).includes(value);
+}
+
+/** The `manualPlayer.reason` the server persists: the identity is unverified. */
+export const manualPlayerReason = 'unverified-identity' as const;
+
+/**
+ * LEGACY `manualPlayer.reason`, shared in spelling with the whole-manual resolution's
+ * `canonical-coverage-gap` (which is unchanged). Accepted on a request so a form built before
+ * the rewording keeps working, but the server always persists `manualPlayerReason`.
+ */
+export const legacyManualPlayerReason = 'canonical-coverage-gap' as const;
 
 // WORK-2026110802: the Smart Form's player-prop market key for a (sport, stat type), shared so
 // the API can require a manual player's `market` to be EXACTLY the key the form builds rather
@@ -219,10 +251,15 @@ export function smartFormPlayerPropStatTypes(): string[] {
 /** Sports with their own table, for parity tests. */
 export const smartFormPlayerPropSports: readonly string[] = Object.keys(SPORT_PLAYER_PROP_MARKET_KEYS);
 
+/**
+ * A manually entered player with an unverified identity (the name keeps its historical
+ * "coverage gap" spelling; renaming exported types is not part of the rewording). Stored rows
+ * written before the rewording carry the legacy reason.
+ */
 export interface ManualPlayerCoverageGap {
   displayName: string;
   canonicalParticipantId: null;
-  reason: 'canonical-coverage-gap';
+  reason: typeof manualPlayerReason | typeof legacyManualPlayerReason;
   /**
    * The operator's confirmation that the player is none of the catalog candidates the API
    * listed in its 409 `SMART_FORM_MANUAL_PLAYER_CONFIRMATION_REQUIRED` response. The API
@@ -255,10 +292,15 @@ export interface ManualPlayerConfirmationDetails {
  * Server-written audit record on a manual-player pick (`metadata.manualPlayerReview`); any
  * client value is overwritten. `operatorConfirmed` is true when candidates were listed and the
  * operator confirmed the player is none of them; `rejectedCandidates` are those candidates.
+ * `searchedName` is the name the bounded catalog search was run on, and `identity` records
+ * what that search established: no canonical match, so the identity is unverified. Rows
+ * written before these two fields existed lack them.
  */
 export interface ManualPlayerReview {
   operatorConfirmed: boolean;
   rejectedCandidates: Array<{ participantId: string; displayName: string }>;
+  searchedName?: string;
+  identity?: 'unverified-no-canonical-match';
 }
 
 export interface ManualParticipantResolution {

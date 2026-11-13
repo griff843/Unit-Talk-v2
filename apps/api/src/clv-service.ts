@@ -1,4 +1,4 @@
-import { manualPlayerProvenance } from '@unit-talk/contracts';
+import { isManualPlayerProvenance } from '@unit-talk/contracts';
 import { americanToImplied, applyDevig } from '@unit-talk/domain';
 import type {
   EventParticipantRepository,
@@ -117,10 +117,11 @@ export type CLVComputationStatus =
   | 'missing_closing_line'
   | 'missing_priced_side'
   | 'devig_failed'
-  // WORK-2026110802: the pick's player was entered by hand as a canonical coverage gap. No
-  // reference data backs that player, so no closing line can be attributed to it and CLV is
-  // never computed -- not even when the typed name happens to equal a catalog name.
-  | 'manual_player_coverage_gap';
+  // WORK-2026110802: the pick's player was entered by hand with an unverified identity (current
+  // or legacy provenance). No reference data backs that player, so no closing line can be
+  // attributed to it and CLV is never computed -- not even when the typed name happens to
+  // equal a catalog name.
+  | 'manual_player_unverified_identity';
   // 'opening_line_fallback' removed by INIT-4.3.2 — CLV quarantines on missing close
 
 export interface CLVComputationOutcome {
@@ -232,13 +233,13 @@ export async function computeCLVOutcome(
 ): Promise<CLVComputationOutcome> {
   // WORK-2026110802 MANUAL_PLAYER_CLV_EXCLUSION_START
   // First, before every resolution path (market-universe provenance, a caller's
-  // pre-resolved context, and the metadata.player name fallback): a manual coverage-gap
+  // pre-resolved context, and the metadata.player name fallback): a manual, unverified
   // player makes no provider-verified or CLV claim (docs/mission/intent.md, manual
   // fallback "claims neither provider verification nor CLV").
-  if (isManualPlayerCoverageGapPick(pick)) {
+  if (isManualPlayerUnverifiedIdentityPick(pick)) {
     return {
       result: null,
-      status: 'manual_player_coverage_gap',
+      status: 'manual_player_unverified_identity',
       resolvedMarketKey: null,
       availableMarkets: [],
     };
@@ -929,10 +930,10 @@ export async function resolveParticipantId(
     return pick.participant_id;
   }
 
-  // WORK-2026110802: never launder a manual coverage-gap player into a canonical
+  // WORK-2026110802: never launder a manual, unverified player into a canonical
   // participant by name. computeCLVOutcome already refuses these picks; this keeps the
   // fallback itself closed for any future caller.
-  if (isManualPlayerCoverageGapPick(pick)) {
+  if (isManualPlayerUnverifiedIdentityPick(pick)) {
     return null;
   }
 
@@ -953,13 +954,15 @@ export async function resolveParticipantId(
 }
 
 /**
- * True when the pick's player was recorded as a manual canonical coverage gap: the
- * server-stamped `metadata.playerProvenance`, or a `participantResolution.manualPlayer`.
- * Either marker is sufficient, so a pick carrying only one of them still gets no CLV.
+ * True when the pick's player was entered by hand with an unverified identity: the
+ * server-stamped `metadata.playerProvenance` (the current `manual-unverified-identity` OR the
+ * legacy `manual-coverage-gap`, which stored rows keep), or a
+ * `participantResolution.manualPlayer` of any reason. Any one marker is sufficient, so a pick
+ * carrying only one of them still gets no CLV, no automatic grading and no name resolution.
  */
-export function isManualPlayerCoverageGapPick(pick: Pick<PickRecord, 'metadata'>): boolean {
+export function isManualPlayerUnverifiedIdentityPick(pick: Pick<PickRecord, 'metadata'>): boolean {
   const metadata = asRecord(pick.metadata);
-  if (metadata['playerProvenance'] === manualPlayerProvenance) {
+  if (isManualPlayerProvenance(metadata['playerProvenance'])) {
     return true;
   }
   const resolution = asRecord(metadata['participantResolution']);

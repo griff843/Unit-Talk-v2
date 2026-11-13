@@ -920,7 +920,7 @@ export function BetForm({
   const [awaySearchResolution, setAwaySearchResolution] = useState<ParticipantSearchResolution>('idle');
   const [homeSearchResolution, setHomeSearchResolution] = useState<ParticipantSearchResolution>('idle');
   // WORK-2026110802: the player field's own search state, and whether the operator chose to
-  // enter a player the reference data does not carry.
+  // enter a player the reference search did not match (identity unverified, not proved absent).
   const [playerSearchResolution, setPlayerSearchResolution] = useState<ParticipantSearchResolution>('idle');
   const [manualPlayerRequested, setManualPlayerRequested] = useState(false);
   // WORK-2026110802: catalog players the API says this manual name is similar to (its 409),
@@ -2184,7 +2184,7 @@ export function BetForm({
         selectedPlayerParticipant?.teamId ?? selectedTeamId,
       ),
     };
-    // WORK-2026110802: canonical teams stay; the player is the manual coverage-gap claim.
+    // WORK-2026110802: canonical teams stay; the player is a manual entry with unverified identity.
     return manualPlayerActive
       ? withManualPlayer(
           canonicalResolution,
@@ -3437,7 +3437,7 @@ export function BetForm({
                     </>
                   ) : manualPlayerOffered ? (
                     <>
-                      <p>No player in the reference data matches this name.</p>
+                      <p>The reference player search found no match for this name. That does not prove the player is missing from the reference data.</p>
                       <Button
                         type="button"
                         variant="outline"
@@ -3450,7 +3450,7 @@ export function BetForm({
                       >
                         Player not found: enter manually
                       </Button>
-                      <p>Saved as a manual entry without provider verification. Track Only.</p>
+                      <p>Saved as a manual entry with an unverified identity, without provider verification. Track Only.</p>
                     </>
                   ) : (
                     <p>Waiting for the player search to finish before manual entry is available.</p>

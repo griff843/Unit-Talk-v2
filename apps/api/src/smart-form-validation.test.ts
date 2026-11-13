@@ -11,10 +11,17 @@ import {
   MANUAL_PLAYER_SEARCH_ROW_LIMIT,
   validateSmartFormRelationships,
 } from './smart-form-validation.js';
-import { manualPlayerProvenance } from '@unit-talk/contracts';
+import {
+  legacyManualPlayerProvenance,
+  legacyManualPlayerReason,
+  manualPlayerProvenance,
+  manualPlayerReason,
+} from '@unit-talk/contracts';
 import { ApiError } from './errors.js';
 import { errorResponse } from './http.js';
 import { handleSubmitPick } from './handlers/submit-pick.js';
+import { computeCLVOutcome } from './clv-service.js';
+import { MANUAL_PLAYER_UNVERIFIED_IDENTITY_SKIP_REASON, runGradingPass } from './grading-service.js';
 
 const event: EventBrowseResult = {
   eventId: 'event-ncaaf-1',
@@ -1842,7 +1849,7 @@ function manualPlayerPayload(
       eventName,
       eventId: null,
       selectedOffer: null,
-      playerProvenance: 'manual-coverage-gap',
+      playerProvenance: 'manual-unverified-identity',
       participantResolution: {
         resolution: 'canonical',
         sportId: shape.sport,
@@ -1855,7 +1862,7 @@ function manualPlayerPayload(
         manualPlayer: {
           displayName: shape.playerName,
           canonicalParticipantId: null,
-          reason: 'canonical-coverage-gap',
+          reason: 'unverified-identity',
           ...overrides.manualPlayer,
         },
         ...overrides.resolution,
@@ -1939,7 +1946,7 @@ test('WORK-2026110802: refuses a manual player whose name resolves to a canonica
       (error: unknown) => {
         assert.ok(error instanceof ApiError);
         assert.equal(error.code, 'SMART_FORM_RELATIONSHIP_INVALID');
-        assert.match(error.message, /claims a coverage gap, but resolves to canonical player player-tatum \(Jayson Tatum\)/);
+        assert.match(error.message, /resolves to canonical player player-tatum \(Jayson Tatum\)/);
         return true;
       },
       `"${playerName}" must be refused as covered`,
@@ -1959,7 +1966,7 @@ test('WORK-2026110802: a player search error is retryable and never recorded as 
       assert.ok(error instanceof ApiError);
       assert.equal(error.status, 503);
       assert.equal(error.code, 'SMART_FORM_REFERENCE_SEARCH_UNAVAILABLE');
-      assert.match(error.message, /never recorded as a coverage gap/);
+      assert.match(error.message, /never recorded as an unverified manual player/);
       return true;
     },
   );
@@ -2068,13 +2075,16 @@ test('WORK-2026110802: refuses a flat canonical playerId beside a manual player'
   }
 });
 
-test('WORK-2026110802: refuses a client playerProvenance claim without a manual player', async () => {
-  const canonicalWithClaim = structuredNoEventPayload({ ...structuredPlayer });
-  (canonicalWithClaim.metadata as Record<string, unknown>)['playerProvenance'] = 'manual-coverage-gap';
-  await assert.rejects(
-    () => validateSmartFormRelationships(canonicalWithClaim, structuredNoEventRepository()),
-    /metadata.playerProvenance is only valid beside participantResolution.manualPlayer/,
-  );
+test('WORK-2026110802: refuses a client playerProvenance claim without a manual player, current or legacy', async () => {
+  for (const claimed of ['manual-unverified-identity', 'manual-coverage-gap']) {
+    const canonicalWithClaim = structuredNoEventPayload({ ...structuredPlayer });
+    (canonicalWithClaim.metadata as Record<string, unknown>)['playerProvenance'] = claimed;
+    await assert.rejects(
+      () => validateSmartFormRelationships(canonicalWithClaim, structuredNoEventRepository()),
+      /metadata.playerProvenance is only valid beside participantResolution.manualPlayer/,
+      claimed,
+    );
+  }
 });
 
 test('WORK-2026110802: refuses a manual player carrying a provider offer', async () => {
@@ -2131,7 +2141,7 @@ function assertCoveredRefusal(error: unknown, participantId = 'player-tatum') {
   assert.ok(error instanceof ApiError, `expected ApiError, got ${String(error)}`);
   assert.equal(error.code, 'SMART_FORM_RELATIONSHIP_INVALID');
   // "resolves to" for the same name; "may be" for a near miss (review round 3, P2-4).
-  assert.match(error.message, new RegExp(`claims a coverage gap, but (resolves to|may be) canonical player ${participantId} `));
+  assert.match(error.message, new RegExp(`(resolves to|may be) canonical player ${participantId} `));
   return true;
 }
 
@@ -2328,6 +2338,7 @@ test('WORK-2026110802 F3: the server stamps provenance and manual labels, overwr
     { playerProvenance: 'provider', manualEntry: false, manualOverrideFields: [] },
     { playerProvenance: undefined, manualEntry: undefined, manualOverrideFields: undefined },
     { playerProvenance: 'manual-coverage-gap', manualEntry: false, manualOverrideFields: ['sportsbook', 'player', 'player'] },
+    { playerProvenance: 'manual-unverified-identity', manualEntry: false, manualOverrideFields: [] },
     { playerProvenance: null, manualEntry: 'yes', manualOverrideFields: 'player' },
   ]) {
     const { repository } = manualPlayerRepository();
@@ -2717,6 +2728,7 @@ test('WORK-2026110802 P1-C: the form-built selections still pass, in any case or
 test('WORK-2026110802 P2-A: manual-player markers are refused on any non-Smart-Form submission', async () => {
   const marked: SubmissionPayload[] = [
     { source: 'api', market: 'player.points', selection: 'Jayson Tatum O 27.5', metadata: { playerProvenance: manualPlayerProvenance } },
+    { source: 'api', market: 'player.points', selection: 'Jayson Tatum O 27.5', metadata: { playerProvenance: legacyManualPlayerProvenance } },
     { source: 'discord-bot', market: 'player.points', selection: 'X', metadata: { playerProvenance: 'anything' } },
     {
       source: 'api',
@@ -2726,6 +2738,7 @@ test('WORK-2026110802 P2-A: manual-player markers are refused on any non-Smart-F
     },
     // The legacy `smart-form` label without Smart Form fields takes the not-smart-form path too.
     { source: 'smart-form', market: 'player.points', selection: 'Jayson Tatum O 27.5', metadata: { playerProvenance: manualPlayerProvenance } },
+    { source: 'smart-form', market: 'player.points', selection: 'Jayson Tatum O 27.5', metadata: { playerProvenance: legacyManualPlayerProvenance } },
   ];
   for (const submission of marked) {
     await assert.rejects(
@@ -2813,7 +2826,7 @@ async function assertNearMissRefusal(playerName: string, participantId: string) 
     (error: unknown) => {
       assert.ok(error instanceof ApiError, `expected ApiError, got ${String(error)}`);
       assert.equal(error.code, 'SMART_FORM_RELATIONSHIP_INVALID');
-      assert.match(error.message, new RegExp(`claims a coverage gap, but may be canonical player ${participantId} `));
+      assert.match(error.message, new RegExp(`may be canonical player ${participantId} `));
       return true;
     },
     `"${playerName}" must be refused as a near miss of ${participantId} (queries: ${JSON.stringify(playerQueries)})`,
@@ -2887,10 +2900,10 @@ test('WORK-2026110802 P1-1: names that are only similar to a different player ar
 
 test('WORK-2026110802 P2-4: only an exact name says "resolves to"; a near miss or an initial says "may be"', async () => {
   for (const [playerName, wording] of [
-    ['Jayson Tatum', /but resolves to canonical player player-tatum /],
-    ['J. Tatum', /but may be canonical player player-tatum /],
-    ['Jayson T', /but may be canonical player player-tatum /],
-    ['Jayson Tatem', /but may be canonical player player-tatum /],
+    ['Jayson Tatum', /" resolves to canonical player player-tatum /],
+    ['J. Tatum', /" may be canonical player player-tatum /],
+    ['Jayson T', /" may be canonical player player-tatum /],
+    ['Jayson Tatem', /" may be canonical player player-tatum /],
   ] as const) {
     const { repository } = manualPlayerRepository({ extraPlayers: nearMissCatalog });
     await assert.rejects(
@@ -3115,6 +3128,8 @@ test('WORK-2026110802 confirm: the exact candidate set, in any order, is accepte
     assert.deepEqual(payload.metadata?.['manualPlayerReview'], {
       operatorConfirmed: true,
       rejectedCandidates: candidates.map(({ participantId, displayName }) => ({ participantId, displayName })),
+      searchedName: 'Tyler Herro',
+      identity: 'unverified-no-canonical-match',
     });
     assert.equal(payload.metadata?.['playerProvenance'], manualPlayerProvenance);
     const resolution = payload.metadata?.['participantResolution'] as Record<string, unknown>;
@@ -3168,7 +3183,12 @@ test('WORK-2026110802 confirm: with no similar player there is no confirmation s
     const payload = withConfirmation(manualPlayerPayload(herroShape), confirmed);
     const outcome = await validateSmartFormRelationships(payload, repository);
     assert.equal(outcome.kind, 'structured-team-fallback');
-    assert.deepEqual(payload.metadata?.['manualPlayerReview'], { operatorConfirmed: false, rejectedCandidates: [] });
+    assert.deepEqual(payload.metadata?.['manualPlayerReview'], {
+      operatorConfirmed: false,
+      rejectedCandidates: [],
+      searchedName: 'Tyler Herro',
+      identity: 'unverified-no-canonical-match',
+    });
     const resolution = payload.metadata?.['participantResolution'] as Record<string, unknown>;
     assert.equal('confirmedNotCandidates' in (resolution['manualPlayer'] as Record<string, unknown>), false);
   }
@@ -3564,7 +3584,7 @@ test('WORK-2026110802 review F2: near-miss spellings of a covered player are a h
         (error: unknown) => {
           assert.ok(error instanceof ApiError, `expected ApiError, got ${String(error)}`);
           assert.equal(error.status, 422, `"${playerName}" ${error.message}`);
-          assert.match(error.message, /claims a coverage gap, but may be canonical player player-tatum /);
+          assert.match(error.message, /may be canonical player player-tatum /);
           return true;
         },
         `"${playerName}" (confirmed=${JSON.stringify(confirmedNotCandidates)}) must be refused (queries: ${JSON.stringify(playerQueries)})`,
@@ -3857,7 +3877,7 @@ test('Codex review F2: near misses that no given-name search can reach are refus
         (error: unknown) => {
           assert.ok(error instanceof ApiError, `expected ApiError, got ${String(error)}`);
           assert.equal(error.status, 422, `"${playerName}": ${error.message}`);
-          assert.match(error.message, /claims a coverage gap, but may be canonical player player-tatum /);
+          assert.match(error.message, /may be canonical player player-tatum /);
           return true;
         },
         `"${playerName}" must be refused (queries: ${JSON.stringify(playerQueries)})`,
@@ -3941,7 +3961,7 @@ test('Codex review F2: every one-typo spelling refused with a full catalog scan 
       );
       return false;
     } catch (error) {
-      return error instanceof ApiError && error.status === 422 && /claims a coverage gap/.test(error.message);
+      return error instanceof ApiError && error.status === 422 && /(resolves to|may be) canonical player/.test(error.message);
     }
   };
 
@@ -3986,5 +4006,180 @@ test('Codex review F2: the near-miss probes keep a worst-case admitted name with
     for (const query of playerQueries) {
       assert.ok(query.replace(/[%_]/gu, '').length >= 2, `query "${query}" is too generic`);
     }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// WORK-2026110802 PM ruling on the Codex re-review: "L Doncix" never retrieves the catalog's
+// "Luka Dončić" (ILIKE in packages/db does not fold accents), so the bounded search finds no
+// canonical match and the player is accepted. That acceptance is not proof the catalog lacks
+// the player, so the pick is stamped `manual-unverified-identity` (reason `unverified-identity`)
+// instead of the old `manual-coverage-gap`, and it gets no CLV, no automatic grading and no
+// delivery. The search and refusal rules are unchanged; only the claim is.
+// ---------------------------------------------------------------------------
+
+const doncicShape: ManualPlayerShape = {
+  sport: 'NBA',
+  ...celticsAtBucks,
+  team: celticsAtBucks.away,
+  playerName: 'L Doncix',
+  market: 'player.points',
+  statType: 'Points',
+  line: 27.5,
+};
+
+test('PM ruling: the stamp says unverified identity, and the contract keeps the legacy value recognized', () => {
+  assert.equal(manualPlayerProvenance, 'manual-unverified-identity');
+  assert.equal(manualPlayerReason, 'unverified-identity');
+  assert.equal(legacyManualPlayerProvenance, 'manual-coverage-gap');
+  assert.equal(legacyManualPlayerReason, 'canonical-coverage-gap');
+});
+
+test('PM ruling: an accented catalog player the search cannot reach is persisted as an unverified identity, Track Only, with no outbox write, no CLV and no automatic grading', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const { repository, playerQueries } = manualPlayerRepository({
+    extraPlayers: [{ participantId: 'player-doncic', displayName: 'Luka Dončić' }],
+  });
+  (repositories as { referenceData: ReferenceDataRepository }).referenceData = repository;
+  const outboxWrites: string[] = [];
+  const outbox = repositories.outbox as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>;
+  for (const method of ['enqueue', 'enqueueDistributionAtomic'] as const) {
+    const original = outbox[method]!.bind(outbox);
+    outbox[method] = async (...args: unknown[]) => {
+      outboxWrites.push(method);
+      return original(...args);
+    };
+  }
+
+  const response = await handleSubmitPick({ body: manualPlayerPayload(doncicShape) }, repositories);
+  assert.equal(response.status, 201, JSON.stringify(response.body));
+  // The defect the ruling accepts: the search ran and never reached the accented row.
+  assert.ok(playerQueries.length > 0, 'the bounded search ran');
+  for (const query of playerQueries) {
+    assert.equal(ilikeContains('Luka Dončić', query), false, `"${query}" must not retrieve the accented row`);
+  }
+
+  const [pick, ...others] = await repositories.picks.listBySource('smart-form');
+  assert.equal(others.length, 0);
+  assert.ok(pick);
+  const metadata = pick.metadata as Record<string, unknown>;
+  // Persisted claim: unverified identity, never a proved coverage gap.
+  assert.equal(metadata['playerProvenance'], 'manual-unverified-identity');
+  assert.notEqual(metadata['playerProvenance'], legacyManualPlayerProvenance);
+  const resolution = metadata['participantResolution'] as Record<string, unknown>;
+  assert.deepEqual(resolution['manualPlayer'], {
+    displayName: 'L Doncix',
+    canonicalParticipantId: null,
+    reason: 'unverified-identity',
+  });
+  assert.equal(resolution['player'], null);
+  // The evidence is honest about what was searched and what it established.
+  assert.deepEqual(metadata['manualPlayerReview'], {
+    operatorConfirmed: false,
+    rejectedCandidates: [],
+    searchedName: 'L Doncix',
+    identity: 'unverified-no-canonical-match',
+  });
+  assert.equal(pick.participant_id, null);
+  assert.equal(metadata['playerId'], null);
+  assert.equal(metadata['distributionMode'], 'track-only');
+  assert.equal(metadata['eventName'], 'Boston Celtics @ Milwaukee Bucks');
+  assert.equal(pick.status, 'validated');
+  assert.deepEqual(outboxWrites, [], 'a manual player never reaches the outbox');
+
+  // A canonical "Luka Dončić" exists, in a completed, provider-trusted event of this matchup,
+  // with provider results for the market.
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: 'LUKA_DONCIC_1_NBA',
+    displayName: 'Luka Dončić',
+    participantType: 'player',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+  const gradedEvent = await repositories.events.upsertByExternalId({
+    externalId: 'evt-doncic',
+    sportId: 'NBA',
+    eventName: 'Boston Celtics @ Milwaukee Bucks',
+    eventDate: '2026-11-08',
+    status: 'completed',
+    metadata: {
+      starts_at: '2026-11-08T23:30:00.000Z',
+      source: 'sgo',
+      providerKey: 'sgo',
+      ingestionSource: 'ingestor.cycle',
+      ingestionCycleRunId: 'run-ingestor-cycle-doncic',
+    },
+  });
+  await repositories.eventParticipants.upsert({ eventId: gradedEvent.id, participantId: participant.id, role: 'competitor' });
+  for (const marketKey of ['player.points', 'points-all-game-ou', 'player_points_ou']) {
+    await repositories.gradeResults.insert({
+      eventId: gradedEvent.id,
+      participantId: participant.id,
+      marketKey,
+      actualValue: 33,
+      source: 'sgo',
+      sourcedAt: '2026-11-09T02:00:00.000Z',
+    });
+  }
+
+  const clv = await computeCLVOutcome(pick, repositories);
+  assert.equal(clv.result, null);
+  assert.equal(clv.status, 'manual_player_unverified_identity');
+
+  const grading = await runGradingPass(repositories);
+  assert.equal(grading.graded, 0);
+  assert.deepEqual(
+    grading.details.filter((detail) => detail.pickId === pick.id),
+    [{ pickId: pick.id, outcome: 'skipped', reason: MANUAL_PLAYER_UNVERIFIED_IDENTITY_SKIP_REASON }],
+  );
+  assert.equal((await repositories.settlements.listByPick(pick.id)).length, 0);
+  assert.equal((await repositories.picks.findPickById(pick.id))?.participant_id, null);
+});
+
+test('PM ruling: a form built before the rewording still works, and the server persists only the new labels', async () => {
+  const { repository } = manualPlayerRepository();
+  const payload = manualPlayerPayload(herroShape, {
+    metadata: { playerProvenance: legacyManualPlayerProvenance },
+    manualPlayer: { reason: legacyManualPlayerReason },
+  });
+  await validateSmartFormRelationships(payload, repository);
+  assert.equal(payload.metadata?.['playerProvenance'], 'manual-unverified-identity');
+  const resolution = payload.metadata?.['participantResolution'] as Record<string, unknown>;
+  assert.equal((resolution['manualPlayer'] as Record<string, unknown>)['reason'], 'unverified-identity');
+});
+
+test('PM ruling: any other manualPlayer reason is refused', async () => {
+  for (const reason of ['verified', 'catalog-absent', '', null, undefined]) {
+    const { repository } = manualPlayerRepository();
+    await assert.rejects(
+      () => validateSmartFormRelationships(manualPlayerPayload(herroShape, { manualPlayer: { reason } }), repository),
+      /manualPlayer must state unverified-identity provenance/,
+      String(reason),
+    );
+  }
+});
+
+test('PM ruling: neither the current nor the legacy stamp lets a manual player request delivery', async () => {
+  const auth = { role: 'capper' as const, capperId: 'codex-capper', identity: 'codex-capper' };
+  for (const playerProvenance of [manualPlayerProvenance, legacyManualPlayerProvenance]) {
+    const repositories = createInMemoryRepositoryBundle();
+    const { repository } = manualPlayerRepository();
+    (repositories as { referenceData: ReferenceDataRepository }).referenceData = repository;
+    const refused = await withHumanDeliveryEnv(() =>
+      handleSubmitPick(
+        {
+          body: manualPlayerPayload(herroShape, {
+            metadata: { playerProvenance, distributionMode: 'delivery-eligible' },
+          }),
+          auth,
+        },
+        repositories,
+      ),
+    );
+    assert.equal(refused.status, 422, playerProvenance);
+    assert.ok(!refused.body.ok);
+    if (!refused.body.ok) assert.equal(refused.body.error.code, 'SMART_FORM_MANUAL_PLAYER_TRACK_ONLY_REQUIRED');
+    assert.deepEqual(await repositories.picks.listBySource('smart-form'), [], `${playerProvenance}: no pick written`);
   }
 });

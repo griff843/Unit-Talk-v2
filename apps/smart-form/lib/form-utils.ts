@@ -16,6 +16,7 @@ import type {
   ManualPlayerCandidate,
   manualPlayerConfirmationRequiredCode,
   manualPlayerProvenance,
+  manualPlayerReason,
 } from '@unit-talk/contracts';
 import {
   getMarketTypeFamily,
@@ -741,7 +742,14 @@ export type PlayerSearchResolution = 'idle' | 'searching' | 'results' | 'not-fou
  * client, the API stamp and the CLV exclusion cannot drift apart. The API overwrites whatever
  * the client sends; the client sends it so the request is self-describing.
  */
-export const MANUAL_PLAYER_PROVENANCE: typeof manualPlayerProvenance = 'manual-coverage-gap';
+export const MANUAL_PLAYER_PROVENANCE: typeof manualPlayerProvenance = 'manual-unverified-identity';
+
+/**
+ * The `manualPlayer.reason` the form sends: the player's identity is unverified (the catalog
+ * search found no match, which does not prove the catalog lacks the player). Bound to the
+ * contract constant `manualPlayerReason` like `MANUAL_PLAYER_PROVENANCE`.
+ */
+export const MANUAL_PLAYER_REASON: typeof manualPlayerReason = 'unverified-identity';
 
 /**
  * Whether the form may offer "Player not found: enter manually".
@@ -749,7 +757,7 @@ export const MANUAL_PLAYER_PROVENANCE: typeof manualPlayerProvenance = 'manual-c
  * Only after a DEFINITIVE not-found in the structured team fallback: canonical
  * teams are chosen, no event exists, the market is a player prop, and the player
  * search completed and returned nothing. A search that errored, is still
- * running, or never ran is not evidence of a coverage gap, so it offers nothing
+ * running, or never ran found nothing, so it offers nothing
  * and the ordinary "select a search result" refusal stands.
  */
 export function canOfferManualPlayer(input: {
@@ -766,7 +774,7 @@ export function canOfferManualPlayer(input: {
   );
 }
 
-/** The `manualPlayer` claim the API verifies. Never carries a canonical id. */
+/** The `manualPlayer` entry the API checks: unverified identity, never a canonical id. */
 export function buildManualPlayerCoverageGap(
   playerName: string,
   confirmedNotCandidates?: readonly string[] | null,
@@ -774,7 +782,7 @@ export function buildManualPlayerCoverageGap(
   return {
     displayName: playerName.trim(),
     canonicalParticipantId: null,
-    reason: 'canonical-coverage-gap',
+    reason: MANUAL_PLAYER_REASON,
     ...(confirmedNotCandidates ? { confirmedNotCandidates: [...confirmedNotCandidates] } : {}),
   };
 }
@@ -913,15 +921,15 @@ export function evaluateSubmissionGuards(
         description: 'A player was chosen from search; the manual entry is not needed.',
       };
     }
-    // A search that errored, is still running, or never ran is not a coverage gap.
-    // SERVER-RULE: a failed search is never recorded as a coverage gap
+    // A search that errored, is still running, or never ran has found nothing yet.
+    // SERVER-RULE: a failed search is never recorded as an unverified manual player
     if (input.playerSearchResolution !== 'not-found') {
       return {
         code: 'manual-player-requires-definitive-not-found',
         title: 'Player search did not finish',
         description:
           input.playerSearchResolution === 'error'
-            ? 'The player search failed. Retry the search; a failed search is never saved as a missing player.'
+            ? 'The player search failed. Retry the search; a failed search is never saved as an unverified manual player.'
             : 'Wait for the player search to finish. Manual entry is only available when the search finds no match.',
       };
     }
@@ -947,7 +955,7 @@ export function evaluateSubmissionGuards(
       title: 'Select a player from the results',
       description:
         input.identityMode === 'structured-fallback' && input.playerSearchResolution === 'not-found'
-          ? 'This player is not in the reference data. Choose "Player not found: enter manually" to save it as a manual entry (Track Only).'
+          ? 'The player search found no match in the reference data. Choose "Player not found: enter manually" to save it as an unverified manual entry (Track Only).'
           : 'Typing a name is not enough; select a search result.',
     };
   }

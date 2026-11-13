@@ -39,8 +39,9 @@ interface BetSlipPanelProps {
   /** Why a multi-leg slip cannot be submitted today. Null when it can. */
   multiLegRefusal?: string | null;
   /**
-   * WORK-2026110802: set when the player is a manual entry (not in reference
-   * data). The slip then says so, and never presents the player as verified.
+   * WORK-2026110802: set when the player is a manual entry the reference data
+   * search did not match (identity unverified, not proved absent). The slip then
+   * says so, and never presents the player as verified.
    */
   manualPlayerName?: string | null;
 }
@@ -287,8 +288,9 @@ export function BetSlipPanel({
               className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs leading-relaxed text-muted-foreground"
               data-testid="slip-manual-player"
             >
-              Unverified player: {manualPlayerName} is not in the reference player data. It is saved as
-              manually entered, without provider verification and with no CLV, and only as Track Only.
+              Unverified player: the reference player search found no match for {manualPlayerName}, which
+              does not prove the player is missing from the reference data. It is saved as manually entered,
+              with an unverified identity, no provider verification and no CLV, and only as Track Only.
             </p>
           )}
 
