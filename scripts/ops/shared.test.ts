@@ -1053,6 +1053,70 @@ test('UTV2-1634 issueIdFromBranchName extracts the canonical id from lane branch
   assert.strictEqual(issueIdFromBranchName('dependabot/npm_and_yarn/foo-1.2.3'), null);
 });
 
+test('WORK-2026111104 issueIdFromBranchName recognizes repo-minted WORK-### lane branches', () => {
+  assert.strictEqual(
+    issueIdFromBranchName('claude/work-2026110804-lean-mode'),
+    'WORK-2026110804',
+  );
+  assert.strictEqual(
+    issueIdFromBranchName('codex/work-2026110601-guard-statement-retry'),
+    'WORK-2026110601',
+  );
+  // Still not lane branches: no namespace-prefixed id directly after the owner.
+  assert.strictEqual(issueIdFromBranchName('claude/readiness-contract-measurement'), null);
+  assert.strictEqual(issueIdFromBranchName('codex/website-primary-logo-owner-source'), null);
+  assert.strictEqual(issueIdFromBranchName('claude/workflow-cleanup'), null);
+  assert.strictEqual(issueIdFromBranchName('claude/work-abc-slug'), null);
+});
+
+test('WORK-2026111104: a WORK lane whose manifest exists ONLY on its PR head is discovered, so its file lock refuses an overlapping lane-start', () => {
+  // The exact gap: a WORK lane started from another checkout. Nothing local --
+  // no manifest, no lease -- so the PR head is the only place its lock lives.
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [],
+    listOpenPullRequests: (): OpenPullRequestRef[] => [
+      { number: 1842, headRefName: 'claude/work-2026110804-lean-mode' },
+    ],
+    readManifestAtRef: (issueId) =>
+      issueId === 'WORK-2026110804'
+        ? laneManifest({
+            issue_id: 'WORK-2026110804',
+            status: 'in_review',
+            file_scope_lock: ['docs/05_operations/LEAN_MODE.md'],
+          })
+        : null,
+  });
+
+  assert.deepStrictEqual(discovery.skippedPullRequests, []);
+  assert.deepStrictEqual(discovery.manifests.map((m) => m.issue_id), ['WORK-2026110804']);
+  assert.strictEqual(discovery.lanes[0]!.source, 'open_pr_head');
+  assert.strictEqual(discovery.lanes[0]!.prNumber, 1842);
+  assert.deepStrictEqual(
+    activeManifestOverlap('WORK-2026111199', ['docs/05_operations/LEAN_MODE.md'], discovery.manifests),
+    { issue_id: 'WORK-2026110804', overlapping_files: ['docs/05_operations/LEAN_MODE.md'] },
+  );
+});
+
+test('WORK-2026111104 fail-closed: an unreadable WORK lane manifest throws rather than being skipped', () => {
+  assert.throws(
+    () =>
+      resolveActiveLaneManifests({
+        readLocalManifests: () => [],
+        listOpenPullRequests: (): OpenPullRequestRef[] => [
+          { number: 1842, headRefName: 'claude/work-2026110804-lean-mode' },
+        ],
+        readManifestAtRef: () => {
+          throw new Error('gh: 502 Bad Gateway');
+        },
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof ActiveLaneDiscoveryError);
+      assert.match((error as Error).message, /WORK-2026110804 on PR #1842/);
+      return true;
+    },
+  );
+});
+
 test('UTV2-1634: a lane whose manifest exists ONLY on its PR branch is counted as active', () => {
   const discovery = resolveActiveLaneManifests({
     readLocalManifests: () => [],

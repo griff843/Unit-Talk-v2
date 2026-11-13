@@ -1447,11 +1447,22 @@ export interface ActiveLaneDiscoveryDeps {
 
 /**
  * Extracts the canonical issue id from a lane branch name
- * (`claude/utv2-1634-slug` -> `UTV2-1634`). Returns null for branches that are
- * not lane branches, which are skipped rather than treated as failures.
+ * (`claude/utv2-1634-slug` -> `UTV2-1634`, `claude/work-2026110804-slug` ->
+ * `WORK-2026110804`). Returns null for branches that are not lane branches,
+ * which are skipped rather than treated as failures.
+ *
+ * WORK-2026111104: the namespaces come from ISSUE_ID_NAMESPACES. This used to
+ * hard-code `utv2|uni`, so every open `WORK-###` lane PR was skipped by
+ * open-PR lock discovery and its file locks were invisible to `ops:lane-start`
+ * from any checkout other than the one that started it.
  */
+const BRANCH_ISSUE_ID_PATTERN = new RegExp(
+  `^(?:[a-z][a-z0-9-]*)\\/(${ISSUE_NAMESPACE_ALTERNATION})-(\\d+)(?:-|$)`,
+  'i',
+);
+
 export function issueIdFromBranchName(branch: string): string | null {
-  const match = /^(?:[a-z][a-z0-9-]*)\/(utv2|uni)-(\d+)(?:-|$)/i.exec(branch);
+  const match = BRANCH_ISSUE_ID_PATTERN.exec(branch);
   return match ? `${match[1]!.toUpperCase()}-${match[2]}` : null;
 }
 
@@ -1872,7 +1883,7 @@ export function resolveActiveLaneManifests(
       skippedPullRequests.push({
         number: pullRequest.number,
         headRefName: pullRequest.headRefName ?? '',
-        reason: 'branch name carries no UTV2-/UNI- issue id',
+        reason: `branch name carries no ${ISSUE_ID_NAMESPACES.map((ns) => `${ns}-`).join('/')} issue id`,
       });
       continue;
     }
