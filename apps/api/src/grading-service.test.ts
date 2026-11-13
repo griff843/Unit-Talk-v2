@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
-import { humanCapperDeliveryAuthorizationVersion, type CanonicalPick } from '@unit-talk/contracts';
+import {
+  humanCapperDeliveryAuthorizationVersion,
+  manualPlayerProvenance,
+  type CanonicalPick,
+} from '@unit-talk/contracts';
 import test from 'node:test';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { processSubmission } from './submission-service.js';
@@ -13,11 +17,13 @@ import {
   classifyGradingOutcome,
   GRADING_INPUT_FRESHNESS_THRESHOLD_MS,
   GRADING_SKIP_EVIDENCE_LIMIT,
+  MANUAL_PLAYER_COVERAGE_GAP_SKIP_REASON,
   type GradingRetryState,
 } from './grading-service.js';
 import {
   recordEvidenceSettlement,
   recordGradedSettlement,
+  recordPickSettlement,
 } from './settlement-service.js';
 
 async function createPostedPickFixture(
@@ -4759,4 +4765,203 @@ test('runGradingPass with restrictToPickIds cannot admit a pick the population n
     (await repositories.picks.findPickById(outside.pick.id))?.status,
     'validated',
   );
+});
+
+// ---------------------------------------------------------------------------
+// WORK-2026110802 (Codex review F3): a Smart Form manual-coverage-gap pick names a
+// player the catalog does not hold. Before this fix the grader's metadata name
+// fallback resolved that free-text name to any catalog player with the same
+// normalized name and settled the pick from that player's provider result.
+// ---------------------------------------------------------------------------
+
+type ManualGapShape = 'provenance-and-resolution' | 'provenance-only' | 'resolution-only';
+
+async function createManualCoverageGapReproducer(
+  shape: ManualGapShape = 'provenance-and-resolution',
+) {
+  const { repositories, pickId, eventName } = await createPostedPickFixture({
+    selection: 'Jalen Brunson Over 24.5',
+  });
+  // A canonical participant with the SAME name as the manual player, in a completed
+  // event with a provider result that would grade the pick a win.
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      participantExternalId: 'JALEN_BRUNSON_CANONICAL_TWIN',
+      participantName: 'Jalen Brunson',
+      eventName,
+    },
+  );
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    participant_id: null,
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      sport: 'NBA',
+      player: 'Jalen Brunson',
+      playerName: 'Jalen Brunson',
+      eventName,
+      ...(shape === 'resolution-only'
+        ? {}
+        : { playerProvenance: manualPlayerProvenance }),
+      ...(shape === 'provenance-only'
+        ? {}
+        : {
+            participantResolution: {
+              manualPlayer: {
+                displayName: 'Jalen Brunson',
+                canonicalParticipantId: null,
+                reason: 'canonical-coverage-gap',
+              },
+            },
+          }),
+    },
+  }));
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+  return { repositories, pickId, participant, event };
+}
+
+for (const shape of [
+  'provenance-and-resolution',
+  'provenance-only',
+  'resolution-only',
+] as const) {
+  test(`Codex review F3: a manual-coverage-gap pick (${shape}) is never resolved by name or auto-graded`, async () => {
+    const { repositories, pickId } =
+      await createManualCoverageGapReproducer(shape);
+
+    const result = await runGradingPass(repositories, {
+      now: () => new Date('2026-03-27T01:00:00.000Z'),
+    });
+
+    assert.equal(result.graded, 0);
+    assert.equal(result.skipped, 1);
+    assert.equal(result.errors, 0);
+    assert.deepEqual(result.details, [
+      {
+        pickId,
+        outcome: 'skipped',
+        reason: MANUAL_PLAYER_COVERAGE_GAP_SKIP_REASON,
+      },
+    ]);
+    assert.equal(MANUAL_PLAYER_COVERAGE_GAP_SKIP_REASON, 'manual_player_coverage_gap');
+    assert.equal((await repositories.settlements.listByPick(pickId)).length, 0);
+    const pick = await repositories.picks.findPickById(pickId);
+    assert.equal(pick?.status, 'posted');
+    assert.equal(pick?.participant_id, null);
+
+    // Observable and classified in the run evidence: counted by reason, listed per
+    // pick, and neither an identity nor a data-dependent skip (fresher provider data
+    // cannot make it gradeable).
+    const [run] = await repositories.runs.listByType('grading.run');
+    const details = run?.details as Record<string, unknown>;
+    assert.deepEqual(details['skipped_reasons'], {
+      manual_player_coverage_gap: 1,
+    });
+    assert.deepEqual(details['skipped_picks'], [
+      { pick_id: pickId, reason: 'manual_player_coverage_gap' },
+    ]);
+    assert.equal(details['identity_skipped_count'], 0);
+    assert.equal(details['data_dependent_skipped_count'], 0);
+  });
+}
+
+test('Codex review F3: a manual-coverage-gap pick stays skipped on every later pass', async () => {
+  const { repositories, pickId } = await createManualCoverageGapReproducer();
+
+  await runGradingPass(repositories);
+  const second = await runGradingPass(repositories);
+
+  assert.equal(second.graded, 0);
+  assert.equal(second.details[0]?.reason, MANUAL_PLAYER_COVERAGE_GAP_SKIP_REASON);
+  assert.equal((await repositories.settlements.listByPick(pickId)).length, 0);
+});
+
+test('Codex review F3: a manual-coverage-gap pick can still be settled by an operator', async () => {
+  const { repositories, pickId } = await createManualCoverageGapReproducer();
+  await runGradingPass(repositories);
+
+  const settled = await recordPickSettlement(
+    pickId,
+    {
+      status: 'settled',
+      result: 'loss',
+      source: 'operator',
+      confidence: 'confirmed',
+      evidenceRef: 'boxscore://nba/manual-player',
+      settledBy: 'operator',
+    },
+    repositories,
+  );
+
+  assert.equal(settled.settlementRecord.result, 'loss');
+  assert.equal(settled.finalLifecycleState, 'settled');
+  const settlements = await repositories.settlements.listByPick(pickId);
+  assert.equal(settlements.length, 1);
+  assert.equal(settlements[0]?.source, 'operator');
+
+  // The grader then reports the operator's settlement, and never overwrites it.
+  const after = await runGradingPass(repositories);
+  assert.equal(after.graded, 0);
+  assert.equal((await repositories.settlements.listByPick(pickId)).length, 1);
+});
+
+test('Codex review F3 control: a canonical player pick with the same name still grades', async () => {
+  const { repositories, pickId } = await createPostedPickFixture({
+    selection: 'Jalen Brunson Over 24.5',
+  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      participantExternalId: 'JALEN_BRUNSON_CANONICAL_CONTROL',
+      participantName: 'Jalen Brunson',
+    },
+  );
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      sport: 'NBA',
+      player: 'Jalen Brunson',
+      participantResolution: {
+        player: { participantId: participant.id, displayName: 'Jalen Brunson' },
+      },
+    },
+  }));
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1);
+  assert.equal(result.details[0]?.result, 'win');
+  assert.equal((await repositories.settlements.listByPick(pickId)).length, 1);
+});
+
+test('Codex review F3 control: a game-line pick is unaffected', async () => {
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture({
+      selection: 'Over 224.5',
+      line: 224.5,
+    });
+  const event = await attachGameLineEventContext(repositories, eventName);
+  await seedGameLineResult(repositories, event.id);
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1);
+  assert.equal(result.details[0]?.pickId, pickId);
+  assert.equal(result.details[0]?.result, 'win');
+  assert.equal((await repositories.settlements.listByPick(pickId)).length, 1);
 });

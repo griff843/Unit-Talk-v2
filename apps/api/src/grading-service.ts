@@ -26,6 +26,7 @@ import {
   recordGradedSettlement,
   recordEvidenceSettlement,
 } from './settlement-service.js';
+import { isManualPlayerCoverageGapPick } from './clv-service.js';
 
 export interface GradingPickResult {
   pickId: string;
@@ -133,6 +134,18 @@ const MONEYLINE_OUTCOME_BY_ACTUAL_VALUE = new Map<
 export const GRADING_SKIP_EVIDENCE_LIMIT = 100;
 const GRADING_FETCH_PAGE_SIZE = 500;
 export const GRADING_INPUT_FRESHNESS_THRESHOLD_MS = 6 * 60 * 60 * 1000;
+
+// WORK-2026110802: a Smart Form manual-coverage-gap pick names a player the catalog
+// does not hold. Its player name is free text the capper typed, so it is never
+// resolved to a participant and never graded from provider results: a name that
+// happens to equal a catalog player's would otherwise settle the pick against a
+// player nobody verified. The skip is permanent policy, like
+// `unsupported_market_family`, so it is deliberately in neither the identity nor the
+// data-dependent set below: fresher provider data cannot make it gradeable. It is
+// reported in `skipped_reasons`, and the pick stays open for manual operator
+// settlement, which does not pass through this loop.
+export const MANUAL_PLAYER_COVERAGE_GAP_SKIP_REASON =
+  'manual_player_coverage_gap';
 
 const IDENTITY_SKIP_REASONS = new Set([
   'event_id_mismatch',
@@ -421,6 +434,17 @@ async function executeGradingPass(
           pickId: pick.id,
           outcome: 'skipped',
           reason: 'settlement_already_exists',
+        });
+        continue;
+      }
+
+      // Before any participant resolution: the name fallback in
+      // `resolvePickParticipantId` must never see a manual player's name.
+      if (isManualPlayerCoverageGapPick(pick)) {
+        details.push({
+          pickId: pick.id,
+          outcome: 'skipped',
+          reason: MANUAL_PLAYER_COVERAGE_GAP_SKIP_REASON,
         });
         continue;
       }
