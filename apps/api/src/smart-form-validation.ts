@@ -222,7 +222,7 @@ export async function validateSmartFormRelationships(
 
   if (resolution.resolution === 'manual') {
     await validateManualResolution(payload, resolution, sportId, referenceData);
-    assertTeamMarketSelection(payload, resolution, sportId);
+    assertTeamMarketSelection(payload, resolution);
     return { kind: 'manual-coverage-gap', distributionMode, serverAuthorizedHumanDelivery };
   }
 
@@ -256,7 +256,7 @@ export async function validateSmartFormRelationships(
       perSearchTimeoutMs: options.manualPlayerSearchTimeoutMs ?? MANUAL_PLAYER_SEARCH_TIMEOUT_MS,
       totalBudgetMs: options.manualPlayerSearchBudgetMs ?? MANUAL_PLAYER_SEARCH_BUDGET_MS,
     });
-    assertTeamMarketSelection(payload, resolution, sportId);
+    assertTeamMarketSelection(payload, resolution);
     // WORK-2026110802: only after every check above passed does the server write the
     // provenance labels -- whatever the client sent for them is overwritten, never trusted.
     if (resolution.manualPlayer) {
@@ -272,7 +272,7 @@ export async function validateSmartFormRelationships(
   const event = await referenceData.getEventBrowse(eventId);
   if (!event) fail(`canonical event was not found: ${eventId}`);
   validateCanonicalEvent(payload, resolution, sportId, event);
-  assertTeamMarketSelection(payload, resolution, sportId);
+  assertTeamMarketSelection(payload, resolution);
   return { kind: 'canonical-event', eventId, distributionMode, serverAuthorizedHumanDelivery };
 }
 
@@ -1338,13 +1338,16 @@ function isPlayerPropSubmission(payload: SubmissionPayload, sportId: string): bo
  * Smart Form-shaped API and staging-proof traffic labels them freely ("Chiefs ML", run-id
  * labels), and that is a separate PM decision. A team market's incidental `playerName`
  * metadata is untouched.
+ *
+ * The check keys on the market key alone, because grading does: a declared `marketType` never
+ * exempts a totals key (Codex High review r6: `marketType: "player-prop"` on `game_total`
+ * skipped it on the manual path and grading settled the player-points selection on the game
+ * total). No Smart Form player-prop key normalizes to a totals key, so real props never reach it.
  */
 function assertTeamMarketSelection(
   payload: SubmissionPayload,
   resolution: SmartFormParticipantResolution,
-  sportId: string,
 ) {
-  if (isPlayerPropSubmission(payload, sportId)) return;
   assertTeamMarketSelectionMatchesMarket(payload, pickTeamDisplay(payload, resolution), matchupSides(resolution));
 }
 

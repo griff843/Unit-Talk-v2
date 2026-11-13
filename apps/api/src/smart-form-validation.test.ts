@@ -3987,6 +3987,87 @@ test('Codex review r5: legitimate team-market picks stay accepted, incidental pl
   await validateSmartFormRelationships(period, referenceData());
 });
 
+// WORK-2026110802 Codex High review r6: the r5 check returned early for a declared
+// `marketType: "player-prop"`, so the fully manual path admitted the same player-points selection
+// on `game_total` and grading settled it on the game total. Grading keys on the market, so the
+// check does too; the declared type exempts nothing.
+
+/** Codex r6's exact reproduction: full manual resolution of an uncatalogued matchup. */
+function r6ManualReproducer(marketType: string | undefined): SubmissionPayload {
+  const eventName = 'Ghost TCU @ Ghost UNC';
+  return {
+    source: 'smart-form',
+    submittedBy: 'reviewer',
+    market: 'game_total',
+    selection: 'Unchecked Player Points O 25.5',
+    eventName,
+    line: 25.5,
+    odds: 120,
+    stakeUnits: 1,
+    confidence: 0.7,
+    metadata: {
+      sport: 'NCAAF',
+      eventName,
+      distributionMode: 'track-only',
+      ...(marketType === undefined ? {} : { marketType }),
+      statType: 'Points',
+      playerName: 'Unchecked Player',
+      participantName: 'Unchecked Player',
+      participantResolution: {
+        resolution: 'manual',
+        sportId: 'NCAAF',
+        eventId: null,
+        manualOverride: true,
+        reason: 'canonical-coverage-gap',
+        enteredEventName: eventName,
+        enteredParticipants: [
+          { role: 'away', displayName: 'Ghost TCU', canonicalParticipantId: null },
+          { role: 'home', displayName: 'Ghost UNC', canonicalParticipantId: null },
+          { role: 'player', displayName: 'Unchecked Player', canonicalParticipantId: null },
+        ],
+      },
+    },
+  } as SubmissionPayload;
+}
+
+/** A catalog that genuinely holds none of the entered names, so the coverage gap is true. */
+function r6EmptyCatalogRepository(): ReferenceDataRepository {
+  const repository = referenceData();
+  repository.searchTeams = async () => [];
+  repository.searchPlayers = async () => [];
+  return repository;
+}
+
+test('Codex review r6: a declared player-prop type does not exempt a totals key from the selection check', async () => {
+  for (const marketType of ['player-prop', 'moneyline', 'total', undefined]) {
+    await assert.rejects(
+      () => validateSmartFormRelationships(r6ManualReproducer(marketType), r6EmptyCatalogRepository()),
+      (error: unknown) => {
+        assert.ok(error instanceof ApiError, `${String(marketType)}: expected ApiError, got ${String(error)}`);
+        assert.equal(error.status, 422, String(marketType));
+        assert.match(error.message, /a game-total selection must be Over\/Under \(O\/U\) and the line/);
+        return true;
+      },
+      String(marketType),
+    );
+  }
+});
+
+test('Codex review r6: end to end, the manual reproduction writes no pick, no outbox row and no settlement', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  (repositories as { referenceData: ReferenceDataRepository }).referenceData = r6EmptyCatalogRepository();
+  const refused = await handleSubmitPick({ body: r6ManualReproducer('player-prop') }, repositories);
+  assert.equal(refused.status, 422, JSON.stringify(refused.body));
+  assert.deepEqual(await repositories.picks.listBySource('smart-form'), [], 'no pick is written');
+  assert.equal((await runGradingPass(repositories)).graded, 0, 'nothing to settle');
+
+  // Non-vacuity: the same manual path admits the form's own game-total selection.
+  const legitimate = r6ManualReproducer('total');
+  legitimate.selection = 'O 25.5';
+  const admitted = await handleSubmitPick({ body: legitimate }, repositories);
+  assert.equal(admitted.status, 201, JSON.stringify(admitted.body));
+});
+
 async function withHumanDeliveryEnv<T>(run: () => Promise<T>): Promise<T> {
   const env: Record<string, string> = {
     UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED: 'true',
