@@ -1,0 +1,57 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026111104",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "e72318d5fd3bad21934167c3a4584014ea58ba82",
+    "verified_source_sha": "1b49c74c3be92ea5e99c82541230e6da0b98b407",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-11-13T01:22:30.277Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "focused_test": {
+      "command": "pnpm exec tsx --test 'scripts/ops/shared.test.ts'",
+      "status": "PASS",
+      "tests": 145,
+      "pass": 145,
+      "failures": 0
+    },
+    "full_ops_test": {
+      "command": "pnpm test:ops",
+      "status": "PASS",
+      "tests": 3798,
+      "pass": 3788,
+      "failures": 0,
+      "skipped": 10
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "note": "Exit 0 at 1b49c74c3: lint, type-check, build, full pnpm test and the remaining static stages."
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "changed_files": 7,
+      "rules_matched": [],
+      "note": "No R-level artifacts are required for this diff."
+    },
+    "canonical_verify": {
+      "command": "pnpm verify",
+      "status": "BLOCKED_DEFERRED",
+      "static_stage": "PASS",
+      "note": "verify:static passed, then ci:assert-staging refused host=127.0.0.1 because it could not prove the required staging project. The writable-DB stage runs in CI's staging job; the full gate is not claimed green locally."
+    },
+    "before_failure": "On main without the fix, the three WORK-2026111104 tests fail (0 pass, 3 fail): issueIdFromBranchName returned null for claude/work-<n>-<slug>, so open WORK lane PRs were skipped by resolveActiveLaneManifests and their file locks were invisible to activeManifestOverlap."
+  },
+  "runtime_proof": {
+    "claimed": false,
+    "reason": "Static T2 ops lane-discovery change only; no runtime, database, production, deployment or activation path is touched. Writable DB proof is covered by CI's staging job."
+  }
+}

@@ -766,11 +766,53 @@ test('deriveDeliveryUiApp fails closed when scope spans more than one app', () =
   );
 });
 
-test('deriveDeliveryUiApp fails closed when a path is outside any canonical app root', () => {
+test('deriveDeliveryUiApp fails closed when a supporting path is outside Delivery/UI policy', () => {
   assert.strictEqual(
-    deriveDeliveryUiApp(['apps/command-center/src/app/page.tsx', 'scripts/ops/shared.ts']),
+    deriveDeliveryUiApp(['apps/command-center/src/app/page.tsx', 'packages/domain/src/lifecycle/index.ts']),
     null,
   );
+});
+
+test('deriveDeliveryUiApp admits product and brand documentation beside exactly one app', () => {
+  assert.strictEqual(deriveDeliveryUiApp(['apps/web/**', 'docs/03_product/brand/**']), 'web');
+  assert.strictEqual(deriveDeliveryUiApp(['apps/web/src/components/PublicHeader.tsx', 'docs/03_product/brand/README.md']), 'web');
+  assert.strictEqual(deriveDeliveryUiApp(['docs/03_product/brand/**']), null);
+  assert.strictEqual(deriveDeliveryUiApp(['apps/web/**', 'apps/command-center/**', 'docs/03_product/brand/**']), null);
+});
+
+test('deriveDeliveryUiApp admits independently authorized lane, sync, proof and script paths', () => {
+  assert.strictEqual(deriveDeliveryUiApp([
+    'apps/web/**',
+    'docs/06_status/proof/UTV2-1976/verification.md',
+    'docs/06_status/lanes/UTV2-1976.json',
+    '.ops/sync/UTV2-1976.yml',
+  ]), 'web');
+  assert.strictEqual(deriveDeliveryUiApp(['apps/command-center/**', 'scripts/ops/shared.ts']), 'command-center');
+  assert.strictEqual(deriveDeliveryUiApp(['docs/06_status/proof/UTV2-1976/**', '.ops/sync/UTV2-1976.yml']), null);
+});
+
+test('deriveDeliveryUiApp rejects unauthorized, forbidden and malformed supporting paths', () => {
+  for (const supportingPath of ['unknown/file.ts', 'docs/governance/CONCURRENCY_CONFIG.json', 'supabase/migrations/example.sql', 'apps/unknown/page.tsx', 'docs/03_product/../../governance/file.md', '/docs/03_product/brand/README.md', '']) {
+    assert.strictEqual(deriveDeliveryUiApp(['apps/web/**', supportingPath]), null, supportingPath);
+  }
+});
+
+test('deriveDeliveryUiApp fails closed when supporting-path policy cannot be read', (t) => {
+  t.mock.method(fs, 'readFileSync', () => { throw new Error('policy unavailable'); });
+  assert.strictEqual(deriveDeliveryUiApp(['apps/web/**']), null);
+  assert.strictEqual(deriveDeliveryUiApp(['apps/web/**', 'docs/03_product/brand/**']), null);
+});
+
+test('deriveDeliveryUiApp fails closed when supporting-path policy is invalid', (t) => {
+  t.mock.method(fs, 'readFileSync', () => 'schema_version: 999\nlane_type: delivery-ui\n');
+  assert.strictEqual(deriveDeliveryUiApp(['apps/web/**']), null);
+  assert.strictEqual(deriveDeliveryUiApp(['apps/web/**', 'docs/03_product/brand/**']), null);
+});
+
+test('deriveDeliveryUiApp gives the policy denylist precedence over its allowlist', (t) => {
+  const policy = fs.readFileSync(path.join(ROOT, '.lane/lanes/delivery-ui.yml'), 'utf8');
+  t.mock.method(fs, 'readFileSync', () => policy.replace('forbidden_path_globs:', 'forbidden_path_globs:\n  - docs/03_product/brand/**'));
+  assert.strictEqual(deriveDeliveryUiApp(['apps/web/**', 'docs/03_product/brand/**']), null);
 });
 
 // ── mergeVerifierIdentity (UTV2-1642) ──────────────────────────────────────────
@@ -1009,6 +1051,70 @@ test('UTV2-1634 issueIdFromBranchName extracts the canonical id from lane branch
   assert.strictEqual(issueIdFromBranchName('griffadavi/uni-100-thing'), 'UNI-100');
   assert.strictEqual(issueIdFromBranchName('main'), null);
   assert.strictEqual(issueIdFromBranchName('dependabot/npm_and_yarn/foo-1.2.3'), null);
+});
+
+test('WORK-2026111104 issueIdFromBranchName recognizes repo-minted WORK-### lane branches', () => {
+  assert.strictEqual(
+    issueIdFromBranchName('claude/work-2026110804-lean-mode'),
+    'WORK-2026110804',
+  );
+  assert.strictEqual(
+    issueIdFromBranchName('codex/work-2026110601-guard-statement-retry'),
+    'WORK-2026110601',
+  );
+  // Still not lane branches: no namespace-prefixed id directly after the owner.
+  assert.strictEqual(issueIdFromBranchName('claude/readiness-contract-measurement'), null);
+  assert.strictEqual(issueIdFromBranchName('codex/website-primary-logo-owner-source'), null);
+  assert.strictEqual(issueIdFromBranchName('claude/workflow-cleanup'), null);
+  assert.strictEqual(issueIdFromBranchName('claude/work-abc-slug'), null);
+});
+
+test('WORK-2026111104: a WORK lane whose manifest exists ONLY on its PR head is discovered, so its file lock refuses an overlapping lane-start', () => {
+  // The exact gap: a WORK lane started from another checkout. Nothing local --
+  // no manifest, no lease -- so the PR head is the only place its lock lives.
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [],
+    listOpenPullRequests: (): OpenPullRequestRef[] => [
+      { number: 1842, headRefName: 'claude/work-2026110804-lean-mode' },
+    ],
+    readManifestAtRef: (issueId) =>
+      issueId === 'WORK-2026110804'
+        ? laneManifest({
+            issue_id: 'WORK-2026110804',
+            status: 'in_review',
+            file_scope_lock: ['docs/05_operations/LEAN_MODE.md'],
+          })
+        : null,
+  });
+
+  assert.deepStrictEqual(discovery.skippedPullRequests, []);
+  assert.deepStrictEqual(discovery.manifests.map((m) => m.issue_id), ['WORK-2026110804']);
+  assert.strictEqual(discovery.lanes[0]!.source, 'open_pr_head');
+  assert.strictEqual(discovery.lanes[0]!.prNumber, 1842);
+  assert.deepStrictEqual(
+    activeManifestOverlap('WORK-2026111199', ['docs/05_operations/LEAN_MODE.md'], discovery.manifests),
+    { issue_id: 'WORK-2026110804', overlapping_files: ['docs/05_operations/LEAN_MODE.md'] },
+  );
+});
+
+test('WORK-2026111104 fail-closed: an unreadable WORK lane manifest throws rather than being skipped', () => {
+  assert.throws(
+    () =>
+      resolveActiveLaneManifests({
+        readLocalManifests: () => [],
+        listOpenPullRequests: (): OpenPullRequestRef[] => [
+          { number: 1842, headRefName: 'claude/work-2026110804-lean-mode' },
+        ],
+        readManifestAtRef: () => {
+          throw new Error('gh: 502 Bad Gateway');
+        },
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof ActiveLaneDiscoveryError);
+      assert.match((error as Error).message, /WORK-2026110804 on PR #1842/);
+      return true;
+    },
+  );
 });
 
 test('UTV2-1634: a lane whose manifest exists ONLY on its PR branch is counted as active', () => {
