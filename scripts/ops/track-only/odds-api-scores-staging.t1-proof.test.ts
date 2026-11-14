@@ -35,7 +35,7 @@ test(
       ? false
       : 'CI-only staging proof; CI_FIXTURE_RUN_ID is absent',
   },
-  async () => {
+  async (t) => {
     // This loader is reached only in the staging CI job, never in local tests.
     const env = loadEnvironment();
     assert.ok(
@@ -159,58 +159,201 @@ test(
         await repositories.eventParticipants.listByEvent(event.id),
         links,
       );
-      const created = await processSubmission(
+      const teams = {
+        home: await repositories.participants.findById(
+          links.find((link) => link.role === 'home')!.participant_id,
+        ),
+        away: await repositories.participants.findById(
+          links.find((link) => link.role === 'away')!.participant_id,
+        ),
+      };
+      assert.ok(teams.home);
+      assert.ok(teams.away);
+      assert.equal(
+        teams.home.external_id,
+        ODDS_API_SCORES_TEAM_MAP.NBA[input.home_team],
+      );
+      assert.equal(
+        teams.away.external_id,
+        ODDS_API_SCORES_TEAM_MAP.NBA[input.away_team],
+      );
+      const cases: Array<{
+        market: string;
+        selection: string;
+        line?: number;
+        side?: 'home' | 'away';
+        expected: 'win' | 'loss' | 'push';
+        arithmetic: string;
+      }> = [
         {
-          source: 'api',
           market: 'game_total_ou',
-          selection: `Over 215.5 [WORK-2026111102:${namespace}]`,
+          selection: 'Over 215.5',
           line: 215.5,
-          odds: -110,
-          stakeUnits: 1,
-          eventName: event.event_name,
-          metadata: {
-            distributionMode: 'track-only',
-            sport: 'NBA',
-            eventId: event.id,
-            fixtureRunId: namespace,
-            fixtureProvenance: 'doc-derived',
-          },
+          expected: 'win',
+          arithmetic:
+            '113 + 103 = 216, which exceeds 215.5; outcome is derived',
         },
-        repositories,
-      );
-      const pickId = created.pick.id;
-      assert.equal(
-        await repositories.settlements.findLatestForPick(pickId),
-        null,
-      );
-      const grade = await runGradingPass(repositories, {
-        restrictToPickIds: new Set([pickId]),
-        now: () => new Date(fixture.evaluateAt),
-      });
-      assert.equal(grade.errors, 0, JSON.stringify(grade.details));
-      assert.equal(grade.graded, 1, JSON.stringify(grade.details));
-      const settlement =
-        await repositories.settlements.findLatestForPick(pickId);
-      assert.equal(
-        settlement?.result,
-        'win',
-        '113 + 103 = 216, which exceeds 215.5; outcome is derived',
-      );
-      assert.equal(
-        (await repositories.picks.findPickById(pickId))?.status,
-        'validated',
-      );
-      assert.deepEqual(await repositories.outbox.listByPickId(pickId), []);
+        {
+          market: 'game_total_ou',
+          selection: 'Under 215.5',
+          line: 215.5,
+          expected: 'loss',
+          arithmetic: '113 + 103 = 216 > 215.5, so Under loses',
+        },
+        {
+          market: 'moneyline',
+          selection: 'Sacramento Kings',
+          side: 'home',
+          expected: 'win',
+          arithmetic: 'Kings 113 > Thunder 103, so Kings moneyline wins',
+        },
+        {
+          market: 'moneyline',
+          selection: 'Oklahoma City Thunder',
+          side: 'away',
+          expected: 'loss',
+          arithmetic: 'Thunder 103 < Kings 113, so Thunder moneyline loses',
+        },
+        {
+          market: 'spread',
+          selection: 'Sacramento Kings -5.5',
+          line: -5.5,
+          side: 'home',
+          expected: 'win',
+          arithmetic: 'Kings margin 113 - 103 = 10; 10 - 5.5 = 4.5 > 0 wins',
+        },
+        {
+          market: 'spread',
+          selection: 'Oklahoma City Thunder +5.5',
+          line: 5.5,
+          side: 'away',
+          expected: 'loss',
+          arithmetic:
+            'Thunder margin 103 - 113 = -10; -10 + 5.5 = -4.5 < 0 loses',
+        },
+        {
+          market: 'spread',
+          selection: 'Sacramento Kings -10',
+          line: -10,
+          side: 'home',
+          expected: 'push',
+          arithmetic: 'Kings margin 113 - 103 = 10; 10 - 10 = 0 pushes',
+        },
+        {
+          market: 'team_total_ou',
+          selection: 'Sacramento Kings Over 110.5',
+          line: 110.5,
+          side: 'home',
+          expected: 'win',
+          arithmetic: 'Kings 113 > 110.5, so Kings Over wins',
+        },
+        {
+          market: 'team_total_ou',
+          selection: 'Oklahoma City Thunder Over 110.5',
+          line: 110.5,
+          side: 'away',
+          expected: 'loss',
+          arithmetic: 'Thunder 103 < 110.5, so Thunder Over loses',
+        },
+      ];
+      for (const scenario of cases) {
+        await t.test(
+          `${scenario.market}: ${scenario.selection} -> ${scenario.expected}`,
+          async () => {
+            const team = scenario.side ? teams[scenario.side] : null;
+            // participantId persists the canonical FK through submission; teamId is
+            // also understood by grading. Game totals deliberately have neither.
+            const created = await processSubmission(
+              {
+                source: 'api',
+                market: scenario.market,
+                selection: `${scenario.selection} [WORK-2026111102:${namespace}]`,
+                ...(scenario.line === undefined ? {} : { line: scenario.line }),
+                odds: -110,
+                stakeUnits: 1,
+                eventName: event.event_name,
+                metadata: {
+                  distributionMode: 'track-only',
+                  sport: 'NBA',
+                  eventId: event.id,
+                  fixtureRunId: namespace,
+                  fixtureProvenance: 'doc-derived',
+                  ...(team
+                    ? {
+                        participantId: team.id,
+                        teamId: team.id,
+                        team: team.display_name,
+                        participantResolution: {
+                          resolution: 'canonical',
+                          sportId: 'NBA',
+                          eventId: event.id,
+                          team: {
+                            participantId: team.id,
+                            displayName: team.display_name,
+                            participantType: 'team',
+                          },
+                        },
+                      }
+                    : {}),
+                },
+              },
+              repositories,
+            );
+            const pickId = created.pick.id;
+            const persistedPick = await repositories.picks.findPickById(pickId);
+            assert.ok(persistedPick);
+            assert.equal(persistedPick.participant_id, team?.id ?? null);
+            assert.equal(
+              await repositories.settlements.findLatestForPick(pickId),
+              null,
+            );
+            const grade = await runGradingPass(repositories, {
+              restrictToPickIds: new Set([pickId]),
+              now: () => new Date(fixture.evaluateAt),
+            });
+            assert.equal(grade.errors, 0, JSON.stringify(grade.details));
+            assert.equal(grade.graded, 1, JSON.stringify(grade.details));
+            const settlement =
+              await repositories.settlements.findLatestForPick(pickId);
+            assert.equal(
+              settlement?.result,
+              scenario.expected,
+              scenario.arithmetic,
+            );
+            const settlements =
+              await repositories.settlements.listByPick(pickId);
+            assert.equal(settlements.length, 1, scenario.arithmetic);
+            assert.equal(
+              (await repositories.picks.findPickById(pickId))?.status,
+              'validated',
+            );
+            assert.deepEqual(
+              await repositories.outbox.listByPickId(pickId),
+              [],
+            );
+            assert.equal(vendorCalls, 0);
+            const replay = await runGradingPass(repositories, {
+              restrictToPickIds: new Set([pickId]),
+              now: () => new Date(fixture.evaluateAt),
+            });
+            assert.equal(replay.errors, 0, JSON.stringify(replay.details));
+            assert.equal(replay.graded, 0);
+            assert.equal(
+              (await repositories.settlements.listByPick(pickId)).length,
+              1,
+            );
+            assert.deepEqual(
+              await repositories.settlements.listByPick(pickId),
+              settlements,
+            );
+            assert.deepEqual(
+              await repositories.outbox.listByPickId(pickId),
+              [],
+            );
+          },
+        );
+      }
       assert.equal(vendorCalls, 0);
-      const replay = await runGradingPass(repositories, {
-        restrictToPickIds: new Set([pickId]),
-        now: () => new Date(fixture.evaluateAt),
-      });
-      assert.equal(replay.graded, 0);
-      assert.equal(
-        (await repositories.settlements.listByPick(pickId)).length,
-        1,
-      );
     } finally {
       await rm(directory, { recursive: true, force: true });
       if (previousUrl === undefined) delete process.env.SUPABASE_URL;
