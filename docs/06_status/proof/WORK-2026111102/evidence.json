@@ -7,7 +7,7 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "36f0c28599e03c0f0f29d2f9923eb3c4f8e15648",
+    "verified_source_sha": "cb2488a3ec010fe4f878ba74e614bb90a424b5bd",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -16,7 +16,7 @@
     "lane_tests": {
       "command": "lane test files, each via tsx --test",
       "status": "PASS",
-      "pass": 220,
+      "pass": 245,
       "failures": 0,
       "skipped": 1,
       "todo": 1,
@@ -33,7 +33,7 @@
     "verify_static": {
       "command": "pnpm verify:static",
       "status": "PASS",
-      "pass": 8398,
+      "pass": 8423,
       "failures": 0,
       "skipped": 13,
       "todo": 1
@@ -42,16 +42,24 @@
       "command": "pnpm verify",
       "status": "BLOCKED_DEFERRED",
       "static_stage": "PASS",
-      "note": "Stops at test:db locally because ci:assert-staging refuses 127.0.0.1. CI verify at 36f0c2859 succeeded (run 43589817035)."
+      "note": "Stops at test:db locally because ci:assert-staging refuses 127.0.0.1. CI verify at cb2488a3e succeeded (run 43611503349)."
     },
     "provider_audit_d7": {
-      "status": "PM_DISPOSITION_REQUIRED",
-      "baseline_ref": "origin/main 1c13033ac",
+      "status": "PM_DISPOSITIONED_A1_SUBJECT_TO_FINAL_COMPARISON",
+      "baseline_ref": "origin/main 2e3bc1b5c",
       "baseline_findings": 61,
       "baseline_findings_missing_on_head": 0,
-      "candidate_findings": "see work order section D7 re-audit",
+      "candidate_findings": 95,
       "note": "Recomputed on the final proof content; counts per file and both full hit lists are in .ops/work/WORK-2026111102.md (not scanned by the audit, so quoting hits there does not create new hits). Audit script unchanged.",
-      "unauthorized_new_findings": 0
+      "unauthorized_new_findings": 0,
+      "new_findings": 34,
+      "new_findings_by_file": {
+        "docs/06_status/lanes/WORK-2026111102.json": 13,
+        "docs/06_status/proof/WORK-2026111102/diff-summary.md": 9,
+        "docs/06_status/proof/WORK-2026111102/verification.md": 8,
+        "docs/06_status/proof/WORK-2026111102/evidence.json": 4
+      },
+      "pm_disposition": "PM 2026-11-14: the newly observed references may be dispositioned as authorized Amendment A1 references only as audit evidence if the final full comparison supports it; preserve the original 61 and prove zero unauthorized new references; no audit bypass."
     }
   },
   "runtime_proof": {
@@ -64,55 +72,55 @@
     "queries": [
       {
         "table": "unknown (no literal .from() table reference found in test source)",
-        "description": "ingestor health check canonical freshness SELECT executes against staging (ok 1, 979.62ms)"
+        "description": "ingestor health check canonical freshness SELECT executes against staging (ok 1, 1153.82ms)"
       },
       {
         "table": "unknown (no literal .from() table reference found in test source)",
-        "description": "ingestor supervisor canonical freshness SELECT executes against staging (ok 2, 987.61ms)"
+        "description": "ingestor supervisor canonical freshness SELECT executes against staging (ok 2, 1071.79ms)"
       },
       {
         "table": "picks,submissions",
-        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 3, 3418.30ms)"
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 3, 6539.23ms)"
       },
       {
         "table": "pick_lifecycle,picks,submissions",
-        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 4, 2700.46ms)"
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 4, 3577.81ms)"
       },
       {
         "table": "audit_log,distribution_outbox,distribution_receipts,pick_lifecycle,picks,submissions",
-        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 5, 3307.23ms)"
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 5, 3590.65ms)"
       },
       {
         "table": "audit_log,pick_lifecycle,picks,settlement_records,submissions",
-        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 6, 3099.29ms)"
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 6, 3033.28ms)"
       },
       {
         "table": "unknown (no literal .from() table reference found in test source)",
-        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 7, 157.88ms)"
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 7, 199.74ms)"
       },
       {
         "table": "picks,settlement_records,submissions",
-        "description": "UTV2-996: re-settling a settled pick creates correction \u2014 no true duplicate base rows (ok 8, 3995.81ms)"
+        "description": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows (ok 8, 4272.01ms)"
       },
       {
         "table": "audit_log,picks,settlement_records,submissions",
-        "description": "UTV2-996: correction chain is additive \u2014 original settlement row is not mutated (ok 9, 4322.26ms)"
+        "description": "UTV2-996: correction chain is additive — original settlement row is not mutated (ok 9, 4071.22ms)"
       }
     ],
     "row_counts": [
       {
         "table": "distribution_receipts",
-        "count": 0,
+        "count": 2,
         "status": "reset (rows deleted)"
       },
       {
         "table": "distribution_outbox",
-        "count": 0,
+        "count": 14,
         "status": "reset (rows deleted)"
       },
       {
         "table": "system_runs",
-        "count": 0,
+        "count": 28,
         "status": "reset (rows deleted)"
       },
       {
@@ -141,26 +149,26 @@
         "status": "upserted (synthetic reference rows)"
       }
     ],
-    "row_counts_captured_at": "2026-11-14T11:24:51.749Z",
-    "row_counts_note": "Harvested automatically by ops:proof-generate's CI-DB-proof auto-harvest (UTV2-1641) from the \"Seed synthetic staging fixtures\" step's log of CI job \"Writable DB proof (staging only)\" (run 43589817035, job 132432038296), which ran immediately before the smoke-test step in the same job, on head 36f0c28599e03c0f0f29d2f9923eb3c4f8e15648. Not re-run locally -- this host has no credential to staging xskgrzbteyqdufktjrjx.",
+    "row_counts_captured_at": "2026-11-14T15:42:06.939Z",
+    "row_counts_note": "Harvested automatically by ops:proof-generate's CI-DB-proof auto-harvest (UTV2-1641) from the \"Seed synthetic staging fixtures\" step's log of CI job \"Writable DB proof (staging only)\" (run 43611503349, job 132497338503), which ran immediately before the smoke-test step in the same job, on head cb2488a3ec010fe4f878ba74e614bb90a424b5bd. Not re-run locally -- this host has no credential to staging xskgrzbteyqdufktjrjx.",
     "ci_run": {
       "workflow": "CI",
       "job": "Writable DB proof (staging only)",
-      "run_id": 43589817035,
+      "run_id": 43611503349,
       "run_attempt": 1,
-      "job_id": 132432038296,
-      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/43589817035/job/132432038296",
-      "target_head_sha": "36f0c28599e03c0f0f29d2f9923eb3c4f8e15648",
-      "target_merge_sha": "1594e1aad7a153bbcb5519a6c88089c0ac9a1880",
+      "job_id": 132497338503,
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/43611503349/job/132497338503",
+      "target_head_sha": "cb2488a3ec010fe4f878ba74e614bb90a424b5bd",
+      "target_merge_sha": "f0f67dbb5df3879c1fd3ba5493d5e4719da26f3e",
       "conclusion": "success",
       "identity_source": "pr_head_run"
     },
-    "harvest_method": "Exported, unmodified steps of scripts/ops/ci-db-proof-harvest.ts (findWorkflowJobForHeadSha, downloadCiDbProofReceipt, verifyHarvestedReceipt, verifyMergeRefDescendsFromHead, fetchCiDbProofJobLog, buildHarvestedRuntimeProof) composed for the PR-head pull_request run, because harvestCiDbProofForMergeSha resolves by merge SHA and only runs post-merge. Receipt run identity and merge-ref ancestry (receipt sha eac89a726918025749c89d09b2cdcd564907bf77 descends from head 64a66a0ec) verified.",
+    "harvest_method": "Exported, unmodified steps of scripts/ops/ci-db-proof-harvest.ts (findWorkflowJobForHeadSha, downloadCiDbProofReceipt, verifyHarvestedReceipt, verifyMergeRefDescendsFromHead, fetchCiDbProofJobLog, buildHarvestedRuntimeProof) composed for the PR-head pull_request run, because harvestCiDbProofForMergeSha resolves by merge SHA and only runs post-merge. Receipt run identity and merge-ref ancestry (receipt sha f0f67dbb5df3879c1fd3ba5493d5e4719da26f3e descends from head cb2488a3e) verified.",
     "lane_live_proof": {
       "command": "pnpm test:t1-proof:live",
       "test_file": "scripts/ops/track-only/odds-api-scores-staging.t1-proof.test.ts",
-      "ci_run_id": 43589817035,
-      "ci_job_id": 132432038296,
+      "ci_run_id": 43611503349,
+      "ci_job_id": 132497338503,
       "tap": "ok 1 - WORK-2026111102 38. fixture to staging results to Track Only settlement, with no delivery",
       "tests": 10,
       "pass": 10,
@@ -183,11 +191,22 @@
         "second apply changes zero rows",
         "nine picks graded in one batched pass (graded 9, errors 0); one settlement per pick; one batched replay grades 0 and leaves settlements unchanged",
         "no distribution_outbox row for any pick; picks stay validated",
-        "vendorCalls === 0"
+        "vendorCalls === 0",
+        "interruption after the first result insert (exit 1): event exists, not completed, no resultsProof, exactly 1 row; a Track Only pick on it grades 0 (event_not_completed), no settlement, no outbox",
+        "interruption after 3 more inserts (exit 1): exactly 4 rows, still not completed; grading again grades 0, no settlement",
+        "healthy resume: inserts the 3 missing rows, event completed with resultsProof, exactly 7 odds-api rows at the fixture last_update",
+        "repeated apply after recovery: eventsUpserted 0, resultsInserted 0, event and rows unchanged",
+        "recovered event: the pick grades once (win), exactly one settlement, still validated, outbox empty; replay grades 0",
+        "two concurrent final applies on a staged event: both exit 0, exactly 7 rows, one per (participant_id, market_key), completed with resultsProof; a further apply writes nothing",
+        "dry run records 2 event writes for 1 new event (uncompleted, then completing)"
       ],
       "timing_diagnostics_ms": {
-        "batched_grading_pass_9_picks": 21080,
-        "replay_pass": 620
+        "batched_grading_pass_9_picks": 24336,
+        "replay_pass": 746,
+        "after_first_interruption_pass": 748,
+        "after_mid_sequence_interruption_pass": 678,
+        "recovered_event_pass": 2887,
+        "recovered_event_replay_pass": 561
       }
     },
     "grading_query_performance": {
@@ -207,7 +226,7 @@
         "nine_id_lookup_ms": 15.5,
         "lifecycle_population_reads": 0
       },
-      "staging_results": "all 33 live suites pass, 0 fail, no statement timeout, at 36f0c2859 (run 43589817035); unrestricted cron path unchanged"
+      "staging_results": "all 33 live suites pass, 0 fail, no statement timeout, at 36f0c2859 (run 43589817035); unrestricted cron path unchanged; re-confirmed at cb2488a3e (run 43611503349): every live suite passes, 0 fail, no statement timeout"
     },
     "post_merge_pending": [
       "production read-only zero counts for odds-api game_results and events"
