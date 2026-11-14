@@ -29,6 +29,8 @@
  * No network: every fetch is injected. No API key: the key is a literal dummy.
  */
 
+import type { OddsApiScoreEvent } from './odds-api-fetcher.js';
+
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
@@ -326,9 +328,10 @@ test('WORK-2026111102 fetchOddsApiScores', { skip: FETCHER_SKIP }, async () => {
     for (const event of result.events) assert.ok(!('bookmakers' in event));
   });
 
-  await test.todo(
-    '4b. type-level: OddsApiScoreEvent has no `bookmakers` key (add a @ts-expect-error assertion once the type exists)',
-  );
+  await test('4b. scores type has no bookmakers key', () => {
+    const assertNoBookmakers: 'bookmakers' extends keyof OddsApiScoreEvent ? false : true = true;
+    assert.equal(assertNoBookmakers, true);
+  });
 });
 
 // ---------------------------------------------------------------------------
