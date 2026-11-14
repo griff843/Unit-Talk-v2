@@ -657,10 +657,10 @@ test(
         const event = firstEvent('nba-final');
         const h = await createHarness(teamsOf(event, 'NBA'));
         await run(h, [event], 'NBA');
-        const row = await h.raw.events.findByExternalId(event.id);
+        const row = structuredClone(await h.raw.events.findByExternalId(event.id));
         assert.ok(row);
         // Changed final scores conflict with the durable result facts; never overwrite them.
-        const before = await h.raw.gradeResults.listByEvent(row.id);
+        const before = structuredClone(await h.raw.gradeResults.listByEvent(row.id));
         assert.ok(before.length > 0);
 
         h.resetWrites();
@@ -682,6 +682,9 @@ test(
           before,
           'values and sourced_at unchanged',
         );
+        assert.deepEqual(h.writes, [], 'conflict preflight makes zero writes');
+        assert.deepEqual(await h.raw.events.findById(row.id), row,
+          'completed status and results proof unchanged');
       },
     );
 
@@ -1064,6 +1067,59 @@ async function assertComplete(h: Harness, input: ScoreEvent) {
     ),
   );
 }
+
+test('step 13a: a later provider timestamp cannot alter a completed proven event', async () => {
+  const input = firstEvent('nba-final');
+  const h = await createHarness(teamsOf(input, 'NBA'));
+  await run(h, [input], 'NBA');
+  const event = structuredClone(await h.raw.events.findByExternalId(input.id));
+  const rows = structuredClone(await resultsFor(h, input.id));
+  h.resetWrites();
+  const later = {
+    ...input,
+    last_update: new Date(
+      Date.parse(input.last_update!) + 60_000,
+    ).toISOString(),
+  };
+  const summary = await run(h, [later], 'NBA');
+  assert.deepEqual(summary.skipped, [
+    { eventId: input.id, reason: 'conflicting_results' },
+  ]);
+  assert.deepEqual(h.writes, []);
+  assert.deepEqual(await h.raw.events.findByExternalId(input.id), event);
+  assert.deepEqual(await resultsFor(h, input.id), rows);
+});
+
+test('step 13a: concurrent identical applies converge to seven facts and repeated applies write nothing', async () => {
+  const input = firstEvent('nba-final');
+  const h = await createHarness(teamsOf(input, 'NBA'));
+  const summaries = await Promise.all([
+    run(h, [input], 'NBA'),
+    run(h, [input], 'NBA'),
+  ]);
+  assert.ok(summaries.every((summary) => summary.skipped.length === 0));
+  await assertComplete(h, input);
+  const event = structuredClone(await h.raw.events.findByExternalId(input.id));
+  const rows = structuredClone(await resultsFor(h, input.id));
+  assert.equal(
+    new Set(
+      rows.map((row) => JSON.stringify([row.participant_id, row.market_key])),
+    ).size,
+    7,
+  );
+  for (let replay = 0; replay < 3; replay++) {
+    h.resetWrites();
+    const summary = await run(h, [input], 'NBA');
+    assert.equal(summary.eventsUpserted, 0);
+    assert.equal(summary.resultsInserted, 0);
+    assert.deepEqual(summary.skipped, [
+      { eventId: input.id, reason: 'results_already_present' },
+    ]);
+    assert.deepEqual(h.writes, []);
+    assert.deepEqual(await h.raw.events.findByExternalId(input.id), event);
+    assert.deepEqual(await resultsFor(h, input.id), rows);
+  }
+});
 
 for (const successfulInserts of [1, 4]) {
   test(`step 13: interruption after ${successfulInserts} rows resumes and replays without writes`, async () => {

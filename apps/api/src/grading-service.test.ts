@@ -5240,17 +5240,121 @@ async function createOddsApiGradingFixture(options: {
     } });
   const team = await repositories.participants.upsertByExternalId({ externalId: 'ODDS_SCORES_HOME_NHL',
     displayName: 'Odds Scores Home', participantType: 'team', sport: 'NHL', league: 'NHL', metadata: {} });
+  const away = await repositories.participants.upsertByExternalId({ externalId: 'ODDS_SCORES_AWAY_NHL',
+    displayName: 'Odds Scores Away', participantType: 'team', sport: 'NHL', league: 'NHL', metadata: {} });
   await repositories.eventParticipants.upsert({ eventId: event.id, participantId: team.id, role: 'home' });
+  await repositories.eventParticipants.upsert({ eventId: event.id, participantId: away.id, role: 'away' });
   mutatePick(repositories, pickId, (pick) => ({ ...pick, market, sport_id: 'NHL',
     participant_id: null, ...(market === 'moneyline' ? { line: null } : {}),
     metadata: { ...(asRecord(pick.metadata) ?? {}), sport: 'NHL', eventName, eventId: event.id,
       teamId: team.id, team: team.display_name } }));
-  const resultKey = market === 'moneyline' ? 'game_moneyline_win' : market === 'spread' ? 'game_spread_margin' : market;
-  if (!options.noResults) await seedGameResult(repositories, { eventId: event.id,
-    participantId: market === 'game_total_ou' ? null : team.id, marketKey: resultKey,
-    actualValue: options.actualValue ?? (market === 'moneyline' ? 1 : market === 'spread' ? 3 : 5),
-    source: 'odds-api', sourcedAt: '2026-11-08T04:00:00Z' });
-  return { repositories, pickId, event, team };
+  // Preserve each market's winning value while supplying the seven facts grading verifies.
+  const homeTotal = market === 'spread' || market === 'team_total_ou' ? 5 : 3;
+  const awayTotal = market === 'game_total_ou' ? (options.actualValue ?? 5) - homeTotal : 2;
+  const resultInputs = [
+    { participantId: null, marketKey: 'game_total_ou', actualValue: homeTotal + awayTotal },
+    ...([[team.id, homeTotal, awayTotal], [away.id, awayTotal, homeTotal]] as const).flatMap(([id, ownTotal, opponentTotal]) => {
+      return [
+        { participantId: id, marketKey: 'team_total_ou', actualValue: ownTotal },
+        { participantId: id, marketKey: 'game_spread_margin', actualValue: ownTotal - opponentTotal },
+        { participantId: id, marketKey: 'game_moneyline_win', actualValue: ownTotal === opponentTotal ? 0.5 : ownTotal > opponentTotal ? 1 : 0 },
+      ];
+    }),
+  ].map((input) => ({ ...input, eventId: event.id, source: 'odds-api', sourcedAt: '2026-11-08T04:00:00Z' }));
+  if (!options.noResults) for (const input of resultInputs) await seedGameResult(repositories, input);
+  return { repositories, pickId, event, team, away, resultInputs };
+}
+
+for (const defect of [
+  'six rows',
+  'foreign eighth row',
+  'unlinked participant',
+  'missing away link',
+  'wrong game total',
+  'wrong home margin',
+  'wrong away margin',
+  'wrong home moneyline',
+  'wrong away moneyline',
+  'different sourced_at',
+] as const) {
+  test(`WORK-2026111102 step 13a: ${defect} cannot settle a Track Only pick`, async () => {
+    const { repositories, pickId, event, team, resultInputs } =
+      await createOddsApiGradingFixture({ noResults: true });
+    await repositories.events.upsertByExternalId({
+      externalId: event.external_id!,
+      sportId: event.sport_id,
+      eventName: event.event_name,
+      eventDate: event.event_date,
+      status: 'completed',
+      metadata: event.metadata,
+    });
+    const inputs = structuredClone(resultInputs);
+    if (defect === 'six rows') inputs.pop();
+    if (defect === 'foreign eighth row')
+      inputs.push({ ...inputs[0]!, source: 'sgo' });
+    if (defect === 'unlinked participant') {
+      const stranger = await repositories.participants.upsertByExternalId({
+        externalId: 'UNLINKED_NHL',
+        displayName: 'Unlinked Team',
+        participantType: 'team',
+        sport: 'NHL',
+        league: 'NHL',
+        metadata: {},
+      });
+      inputs.find(
+        (row) =>
+          row.participantId === team.id && row.marketKey === 'team_total_ou',
+      )!.participantId = stranger.id;
+    }
+    if (defect === 'missing away link') {
+      const original = repositories.eventParticipants.listByEvent.bind(
+        repositories.eventParticipants,
+      );
+      repositories.eventParticipants.listByEvent = async (id) =>
+        (await original(id)).filter((link) => link.role !== 'away');
+    }
+    const badIndices: Partial<Record<typeof defect, number>> = {
+      'wrong game total': 0,
+      'wrong home margin': 2,
+      'wrong away margin': 5,
+      'wrong home moneyline': 3,
+      'wrong away moneyline': 6,
+    };
+    const badIndex = badIndices[defect];
+    if (badIndex !== undefined) inputs[badIndex]!.actualValue += 1;
+    if (defect === 'different sourced_at')
+      inputs[4]!.sourcedAt = '2026-11-08T04:01:00Z';
+    for (const input of inputs) await seedGameResult(repositories, input);
+    const result = await runGradingPass(repositories, {
+      restrictToPickIds: new Set([pickId]),
+      now: () => new Date('2026-11-08T04:02:00Z'),
+    });
+    assert.equal(result.errors, 0);
+    assert.equal(result.graded, 0);
+    const incomplete = [
+      'six rows',
+      'foreign eighth row',
+      'unlinked participant',
+      'missing away link',
+    ].includes(defect);
+    assert.equal(
+      result.details[0]?.reason,
+      incomplete
+        ? 'odds_api_results_incomplete'
+        : 'odds_api_results_inconsistent',
+    );
+    assert.deepEqual(await repositories.settlements.listByPick(pickId), []);
+    assert.deepEqual(await repositories.outbox.listByPickId(pickId), []);
+    assert.equal(
+      (await repositories.picks.findPickById(pickId))?.status,
+      'validated',
+    );
+    const [gradingRun] = await repositories.runs.listByType('grading.run');
+    assert.equal(
+      asRecord(gradingRun?.details)?.['data_dependent_skipped_count'],
+      1,
+    );
+  });
 }
 
 test('WORK-2026111102 29. Odds API grades Track Only total, team total, spread and moneyline', async () => {

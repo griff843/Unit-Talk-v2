@@ -571,6 +571,76 @@ test(
         await repositories.outbox.listByPickId(partialPickId),
         [],
       );
+      // Concurrent writers use the existing unique result keys and validate each returned row.
+      const concurrentFixture = structuredClone(fixture);
+      const concurrentInput = concurrentFixture.response[0]!;
+      concurrentInput.id = createHash('sha256')
+        .update(`WORK-2026111102:${namespace}:concurrent`)
+        .digest('hex')
+        .slice(0, 32);
+      const concurrentPath = join(directory, 'nba-concurrent.doc-derived.json');
+      await writeFile(concurrentPath, JSON.stringify(concurrentFixture));
+      const concurrentErrors: string[] = [];
+      const applyConcurrent = () =>
+        runOddsApiScoresSync({
+          argv: ['--league', 'NBA', '--fixture', concurrentPath, '--apply'],
+          env: { SUPABASE_URL: env.SUPABASE_URL },
+          fetchImpl: vendorForbidden,
+          createRepositories: () => ingestor,
+          now: () => new Date(fixture.evaluateAt),
+          log: () => {},
+          error: (message) => {
+            concurrentErrors.push(message);
+          },
+        });
+      const concurrentRuns = await Promise.all([
+        applyConcurrent(),
+        applyConcurrent(),
+      ]);
+      for (const result of concurrentRuns)
+        assert.equal(result.exitCode, 0, concurrentErrors.join('\n'));
+      const concurrentEvent = await repositories.events.findByExternalId(
+        concurrentInput.id,
+      );
+      assert.ok(concurrentEvent);
+      assert.equal(concurrentEvent.status, 'completed');
+      const concurrentProof = concurrentEvent.metadata['resultsProof'] as Record<
+        string,
+        unknown
+      >;
+      assert.equal(concurrentProof['completedObserved'], true);
+      assert.equal(concurrentProof['providerEventId'], concurrentInput.id);
+      const concurrentRows = await repositories.gradeResults.listByEvent(
+        concurrentEvent.id,
+      );
+      assert.equal(concurrentRows.length, 7);
+      assert.equal(
+        new Set(
+          concurrentRows.map((row) =>
+            JSON.stringify([row.participant_id, row.market_key]),
+          ),
+        ).size,
+        7,
+      );
+      assert.ok(
+        concurrentRows.every(
+          (row) =>
+            row.source === 'odds-api' &&
+            Date.parse(row.sourced_at) === Date.parse(concurrentInput.last_update!),
+        ),
+      );
+      const concurrentReplay = await applyConcurrent();
+      assert.equal(concurrentReplay.exitCode, 0, concurrentErrors.join('\n'));
+      assert.equal(concurrentReplay.report?.summary.eventsUpserted, 0);
+      assert.equal(concurrentReplay.report?.summary.resultsInserted, 0);
+      assert.deepEqual(
+        await repositories.events.findById(concurrentEvent.id),
+        concurrentEvent,
+      );
+      assert.deepEqual(
+        await repositories.gradeResults.listByEvent(concurrentEvent.id),
+        concurrentRows,
+      );
       assert.equal(vendorCalls, 0);
     } finally {
       await rm(directory, { recursive: true, force: true });

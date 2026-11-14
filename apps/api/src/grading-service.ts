@@ -174,6 +174,8 @@ const DATA_DEPENDENT_SKIP_REASONS = new Set([
   'moneyline_result_market_key_unsupported',
   'moneyline_result_value_invalid',
   'spread_result_market_key_unsupported',
+  'odds_api_results_incomplete',
+  'odds_api_results_inconsistent',
 ]);
 
 interface GradingPassExecution extends GradingPassResult {
@@ -553,7 +555,11 @@ async function executeGradingPass(
         continue;
       }
 
-      const provenance = validateEventProvenanceForGrading(pick, event);
+      const provenance = await validateEventProvenanceForGrading(
+        pick,
+        event,
+        repositories,
+      );
       if (!provenance.ok) {
         options.logger?.warn?.(
           `Skipping grading for pick ${pick.id}: ${provenance.reason}`,
@@ -1119,10 +1125,11 @@ export const COMMON_GRADING_MARKET_ALIASES: Record<string, string> = {
   player_3pm_ou: 'player_threes_ou',
 };
 
-function validateEventProvenanceForGrading(
+async function validateEventProvenanceForGrading(
   pick: PickRecord,
   event: EventRow,
-): { ok: true } | { ok: false; reason: string } {
+  repositories: Pick<RepositoryBundle, 'gradeResults' | 'eventParticipants'>,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
   if (!readNonEmptyString(event.external_id)) {
     return { ok: false, reason: 'event_provenance_missing_external_id' };
   }
@@ -1178,6 +1185,83 @@ function validateEventProvenanceForGrading(
     if (!['game_total', 'team_total', 'game_spread', 'game_moneyline'].includes(family)) {
       return { ok: false, reason: 'unsupported_market_family' };
     }
+    return validateOddsApiResults(event, lastUpdate, repositories);
+  }
+  return { ok: true };
+}
+
+/** Completion proof is usable only with the complete, mutually consistent result set. */
+async function validateOddsApiResults(
+  event: EventRow,
+  lastUpdate: string,
+  repositories: Pick<RepositoryBundle, 'gradeResults' | 'eventParticipants'>,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const [results, links] = await Promise.all([
+    repositories.gradeResults.listByEvent(event.id),
+    repositories.eventParticipants.listByEvent(event.id),
+  ]);
+  const teamKeys = [
+    'team_total_ou',
+    'game_spread_margin',
+    'game_moneyline_win',
+  ];
+  const rows = results.filter(
+    (row) =>
+      row.market_key === 'game_total_ou' || teamKeys.includes(row.market_key),
+  );
+  const homes = links.filter((link) => link.role === 'home');
+  const aways = links.filter((link) => link.role === 'away');
+  const homeId = homes[0]?.participant_id;
+  const awayId = aways[0]?.participant_id;
+  const gameTotals = rows.filter(
+    (row) => row.market_key === 'game_total_ou' && row.participant_id === null,
+  );
+  if (
+    rows.length !== 7 ||
+    rows.some((row) => row.source !== 'odds-api') ||
+    homes.length !== 1 ||
+    aways.length !== 1 ||
+    !homeId ||
+    !awayId ||
+    homeId === awayId ||
+    gameTotals.length !== 1 ||
+    rows.some(
+      (row) =>
+        row !== gameTotals[0] &&
+        (!teamKeys.includes(row.market_key) ||
+          (row.participant_id !== homeId && row.participant_id !== awayId)),
+    ) ||
+    [homeId, awayId].some((id) =>
+      teamKeys.some(
+        (key) =>
+          rows.filter(
+            (row) => row.participant_id === id && row.market_key === key,
+          ).length !== 1,
+      ),
+    )
+  ) {
+    return { ok: false, reason: 'odds_api_results_incomplete' };
+  }
+  const value = (id: string, key: string) =>
+    rows.find((row) => row.participant_id === id && row.market_key === key)!
+      .actual_value;
+  const homeTotal = value(homeId, 'team_total_ou');
+  const awayTotal = value(awayId, 'team_total_ou');
+  if (
+    rows.some(
+      (row) =>
+        !Number.isFinite(row.actual_value) ||
+        Date.parse(row.sourced_at) !== Date.parse(lastUpdate),
+    ) ||
+    gameTotals[0]!.actual_value !== homeTotal + awayTotal ||
+    value(homeId, 'game_spread_margin') !== homeTotal - awayTotal ||
+    value(awayId, 'game_spread_margin') !== awayTotal - homeTotal ||
+    value(homeId, 'game_moneyline_win') !==
+      (homeTotal === awayTotal ? 0.5 : homeTotal > awayTotal ? 1 : 0) ||
+    value(awayId, 'game_moneyline_win') !==
+      (homeTotal === awayTotal ? 0.5 : awayTotal > homeTotal ? 1 : 0)
+  ) {
+    return { ok: false, reason: 'odds_api_results_inconsistent' };
   }
   return { ok: true };
 }
