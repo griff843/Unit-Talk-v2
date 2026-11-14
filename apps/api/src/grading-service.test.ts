@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import {
   humanCapperDeliveryAuthorizationVersion,
   legacyManualPlayerProvenance,
@@ -2167,6 +2168,8 @@ test('fresh empty grading input is a no-op, never successful work', async () => 
   assert.equal(result.attempted, 0);
   assert.equal(result.outcomeClass, 'no_op_no_input');
   assert.equal(run?.status, 'succeeded');
+  assert.equal(details['restricted'], false);
+  assert.equal(details['requested_pick_count'], null);
   assert.equal(details['outcome_class'], 'no_op_no_input');
   assert.equal(details['rows_scanned'], 0);
   assert.equal(details['gradeable_rows'], 0);
@@ -4835,7 +4838,9 @@ test('restricted grading reapplies admission to every requested status and ignor
     excludedIds.push(pick.pickId);
   }
   const calls = spyOnRestrictedPickReads(fixture.repositories);
-  const ids = [...excludedIds, 'nonexistent-pick', fixture.firstTrackOnlyId];
+  // Postgres rejects malformed UUIDs and fails the pass closed; missing ids
+  // must still be valid UUIDs to exercise the not-found path.
+  const ids = [...excludedIds, randomUUID(), fixture.firstTrackOnlyId];
   const result = await runGradingPass(fixture.repositories, {
     restrictToPickIds: new Set(ids),
   });
@@ -4849,6 +4854,31 @@ test('restricted grading reapplies admission to every requested status and ignor
       (await fixture.repositories.settlements.listByPick(id)).length,
       id === fixture.firstTrackOnlyId ? 1 : 0,
     );
+    assert.deepEqual(await fixture.repositories.outbox.listByPickId(id), []);
+  }
+});
+
+test('an all-inadmissible restricted set does not assert an empty global backlog', async () => {
+  const fixture = await createMixedValidatedPopulation();
+  const ids = [fixture.deliveryEligibleId, fixture.noModeId, randomUUID()];
+  const calls = spyOnRestrictedPickReads(fixture.repositories);
+  const result = await runGradingPass(fixture.repositories, {
+    restrictToPickIds: new Set(ids),
+  });
+  assert.deepEqual(calls, [ids]);
+  assert.equal(result.attempted, 0);
+  assert.equal(result.graded, 0);
+  assert.equal(result.errors, 0);
+  assert.equal(result.outcomeClass, 'no_op_nothing_gradeable');
+  const [run] = await fixture.repositories.runs.listByType('grading.run');
+  const details = run?.details as Record<string, unknown>;
+  assert.equal(run?.status, 'succeeded');
+  assert.equal(details['outcome_class'], 'no_op_nothing_gradeable');
+  assert.equal(details['rows_scanned'], 0);
+  assert.equal(details['restricted'], true);
+  assert.equal(details['requested_pick_count'], ids.length);
+  for (const id of ids) {
+    assert.deepEqual(await fixture.repositories.settlements.listByPick(id), []);
     assert.deepEqual(await fixture.repositories.outbox.listByPickId(id), []);
   }
 });
@@ -4935,13 +4965,21 @@ test('an empty restricted grading set makes no pick read and grades nothing', as
   assert.equal(result.graded, 0);
   assert.equal(result.errors, 0);
   assert.deepEqual(result.details, []);
+  assert.equal(result.outcomeClass, 'no_op_nothing_gradeable');
+  const [run] = await repositories.runs.listByType('grading.run');
+  const details = run?.details as Record<string, unknown>;
+  assert.equal(run?.status, 'succeeded');
+  assert.equal(details['outcome_class'], 'no_op_nothing_gradeable');
+  assert.equal(details['rows_scanned'], 0);
+  assert.equal(details['restricted'], true);
+  assert.equal(details['requested_pick_count'], 0);
 });
 
 test('restricted grading loads every requested id in chunks of at most 100', async () => {
   const { repositories, firstPickId, secondPickId } =
     await seedTwoGradeablePostedPicks();
   const calls = spyOnRestrictedPickReads(repositories);
-  const ids = Array.from({ length: 205 }, (_, index) => `missing-${index}`);
+  const ids: string[] = Array.from({ length: 205 }, () => randomUUID());
   ids[0] = secondPickId;
   ids[204] = firstPickId;
   const result = await runGradingPass(repositories, {

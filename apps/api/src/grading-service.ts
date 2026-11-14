@@ -179,6 +179,8 @@ const DATA_DEPENDENT_SKIP_REASONS = new Set([
 interface GradingPassExecution extends GradingPassResult {
   rowsScanned: number;
   gradeableRows: number;
+  restricted: boolean;
+  requestedPickCount: number | null;
 }
 
 export async function fetchAllByLifecycleState(
@@ -240,6 +242,8 @@ export async function runGradingPass(
   const thresholdMs =
     options.inputFreshnessThresholdMs ?? GRADING_INPUT_FRESHNESS_THRESHOLD_MS;
   const readNow = options.now ?? (() => new Date());
+  const restricted = options.restrictToPickIds !== undefined;
+  const requestedPickCount = options.restrictToPickIds?.size ?? null;
   const runRecord = await repositories.runs.startRun({
     runType: 'grading.run',
     actor: 'grading-service',
@@ -247,6 +251,8 @@ export async function runGradingPass(
     // completeRun, the row cannot be mistaken for successful work.
     details: buildGradingRunDetails({
       outcomeClass: 'failed',
+      restricted,
+      requestedPickCount,
       rowsScanned: 0,
       gradeableRows: 0,
       graded: 0,
@@ -279,6 +285,7 @@ export async function runGradingPass(
     const dataDependentSkipped = countDataDependentSkips(execution.details);
     const identitySkipped = countIdentitySkips(execution.details);
     const outcomeClass = classifyGradingOutcome({
+      restricted: execution.restricted,
       graded: execution.graded,
       errors: execution.errors,
       rowsScanned: execution.rowsScanned,
@@ -301,6 +308,8 @@ export async function runGradingPass(
           : 'succeeded',
       details: buildGradingRunDetails({
         outcomeClass,
+        restricted: execution.restricted,
+        requestedPickCount: execution.requestedPickCount,
         rowsScanned: execution.rowsScanned,
         gradeableRows: execution.gradeableRows,
         graded: execution.graded,
@@ -338,6 +347,8 @@ export async function runGradingPass(
         status: 'failed',
         details: buildGradingRunDetails({
           outcomeClass: 'failed',
+          restricted,
+          requestedPickCount,
           rowsScanned: 0,
           gradeableRows: 0,
           graded: 0,
@@ -791,6 +802,8 @@ async function executeGradingPass(
     details,
     rowsScanned: population.length,
     gradeableRows,
+    restricted: options.restrictToPickIds !== undefined,
+    requestedPickCount: options.restrictToPickIds?.size ?? null,
   };
 }
 
@@ -820,6 +833,7 @@ export function classifyInputFreshness(
 }
 
 export function classifyGradingOutcome(input: {
+  restricted?: boolean;
   graded: number;
   errors: number;
   rowsScanned: number;
@@ -844,6 +858,11 @@ export function classifyGradingOutcome(input: {
   // positively asserts there was no input, so it is reachable only when nothing
   // was read.
   if (input.rowsScanned > 0 || input.skipped > 0) {
+    return 'no_op_nothing_gradeable';
+  }
+  // A restricted pass says nothing about the global backlog, even when none
+  // of its requested picks were admitted.
+  if (input.restricted) {
     return 'no_op_nothing_gradeable';
   }
   return 'no_op_no_input';
@@ -885,6 +904,8 @@ function countIdentitySkips(details: readonly GradingPickResult[]): number {
 
 function buildGradingRunDetails(input: {
   outcomeClass: GradingOutcomeClass;
+  restricted: boolean;
+  requestedPickCount: number | null;
   rowsScanned: number;
   gradeableRows: number;
   graded: number;
@@ -912,6 +933,8 @@ function buildGradingRunDetails(input: {
 
   return {
     outcome_class: input.outcomeClass,
+    restricted: input.restricted,
+    requested_pick_count: input.requestedPickCount,
     rows_scanned: input.rowsScanned,
     gradeable_rows: input.gradeableRows,
     graded_count: input.graded,
