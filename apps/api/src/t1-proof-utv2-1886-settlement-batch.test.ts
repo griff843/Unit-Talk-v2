@@ -376,7 +376,8 @@ test('UTV2-1605: real grading run persists the live input-freshness read', { ski
       reapStaleRuns: (input) => repositories.runs.reapStaleRuns(input),
     },
   }, {
-    // Real repository reads, deliberately no candidate settlement or delivery.
+    // An empty candidate restriction reads no candidate picks; the live
+    // freshness read and run record are still real. No settlement or delivery.
     restrictToPickIds: new Set<string>(),
     now: () => now,
   });
@@ -392,8 +393,8 @@ test('UTV2-1605: real grading run persists the live input-freshness read', { ski
   assert.equal(row.status, 'succeeded');
   const details = row.details as Record<string, unknown>;
   assert.equal(details['outcome_class'], 'no_op_nothing_gradeable');
-  assert.ok(typeof details['rows_scanned'] === 'number' && details['rows_scanned'] > 0,
-    'candidate restriction must not erase the rows the real repository scanned');
+  assert.equal(details['rows_scanned'], 0, 'an empty candidate restriction reads no picks');
+  assert.equal(details['restricted'], true);
   assert.equal(details['graded_count'], 0);
   assert.equal(details['error_count'], 0);
   assert.equal(details['newest_game_result_sourced_at'], observedTimestamp);
