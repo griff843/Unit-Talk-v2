@@ -36,7 +36,7 @@
 
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { before, test } from 'node:test';
+import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import type { IngestorRepositoryBundle, ParticipantRow } from '@unit-talk/db';
@@ -45,8 +45,8 @@ import { createInMemoryIngestorRepositoryBundle, InMemoryParticipantRepository }
 import { INGESTOR_WRITE_SURFACE } from '../../apps/ingestor/src/write-surface.ts';
 
 const PRODUCTION_URL = 'https://zfzdnfwdarxucxtaojxm.supabase.co';
-/** Any non-production ref; the CLI's own staging check is not asserted here. */
-const NON_PRODUCTION_URL = 'https://stagingrefnotproduction.supabase.co';
+/** Writes are restricted to the approved staging project, even with injected repositories. */
+const NON_PRODUCTION_URL = 'https://xskgrzbteyqdufktjrjx.supabase.co';
 const NOW = new Date('2026-11-09T12:00:00Z');
 
 const FIXTURE_DIR = new URL('../../apps/ingestor/src/__fixtures__/odds-api-scores/', import.meta.url);
@@ -191,14 +191,14 @@ async function runCli(argv: string[], env: Record<string, string | undefined> = 
 // CLI (plan tests 25-28)
 // ---------------------------------------------------------------------------
 
-test('WORK-2026111102 results:odds-api-scores CLI', { skip: CLI_SKIP }, () => {
-  before(async () => {
+test('WORK-2026111102 results:odds-api-scores CLI', { skip: CLI_SKIP }, async (t) => {
+  t.before(async () => {
     const mod = (await import(CLI_SPECIFIER)) as Partial<SyncModule>;
     assert.equal(typeof mod.runOddsApiScoresSync, 'function', 'runOddsApiScoresSync is exported');
     cli = mod as SyncModule;
   });
 
-  await test('25. no --apply: zero writes, blast-radius report printed', async () => {
+  await t.test('25. no --apply: zero writes, blast-radius report printed', async () => {
     const { h, exitCode, report } = await runCli(['--league', 'NBA', '--fixture', fixturePath('nba-final')]);
     assert.equal(exitCode, 0, h.stderr.join('\n'));
     assert.deepEqual(h.writes, [], 'the underlying repositories saw no write');
@@ -214,12 +214,12 @@ test('WORK-2026111102 results:odds-api-scores CLI', { skip: CLI_SKIP }, () => {
     assert.match(printed, /"remaining"/, 'credits are printed on every run');
   });
 
-  await test('25b. fixture runs print null credits rather than a guess', async () => {
+  await t.test('25b. fixture runs print null credits rather than a guess', async () => {
     const { report } = await runCli(['--league', 'NBA', '--fixture', fixturePath('nba-final')]);
     assert.deepEqual(report?.quota, { remaining: null, used: null, last: null });
   });
 
-  await test('25c. dry run of the equal-score NHL shootout fixture reports zero result writes', async () => {
+  await t.test('25c. dry run of the equal-score NHL shootout fixture reports zero result writes', async () => {
     const { report } = await runCli(['--league', 'NHL', '--fixture', fixturePath('nhl-shootout-equal-scores')]);
     assert.ok(report?.blastRadius);
     const resultWrites = (report.blastRadius.writes as Array<{ table: string }>).filter(
@@ -229,7 +229,7 @@ test('WORK-2026111102 results:odds-api-scores CLI', { skip: CLI_SKIP }, () => {
     assert.equal(report.decisions[0]?.reason, 'tie_not_possible');
   });
 
-  await test('26. --apply against the production ref exits non-zero before any read or write', async () => {
+  await t.test('26. --apply against the production ref exits non-zero before any read or write', async () => {
     for (const source of ['--fixture', '--live'] as const) {
       const argv =
         source === '--fixture'
@@ -247,7 +247,7 @@ test('WORK-2026111102 results:odds-api-scores CLI', { skip: CLI_SKIP }, () => {
     }
   });
 
-  await test('26b. there is no override flag for production apply', async () => {
+  await t.test('26b. there is no override flag for production apply', async () => {
     for (const flag of ['--force', '--allow-production', '--i-know']) {
       const { h, exitCode } = await runCli(
         ['--league', 'NBA', '--fixture', fixturePath('nba-final'), '--apply', flag],
@@ -258,7 +258,7 @@ test('WORK-2026111102 results:odds-api-scores CLI', { skip: CLI_SKIP }, () => {
     }
   });
 
-  await test('27. neither --fixture nor --live: one usage error listing every problem', async () => {
+  await t.test('27. neither --fixture nor --live: one usage error listing every problem', async () => {
     const { h, exitCode } = await runCli(['--days-from', '7']);
     assert.notEqual(exitCode, 0);
     assert.equal(h.repositoryFactoryCalls, 0);
@@ -271,7 +271,7 @@ test('WORK-2026111102 results:odds-api-scores CLI', { skip: CLI_SKIP }, () => {
     assert.match(message, /results:odds-api-scores --league/, 'full corrected invocation shown');
   });
 
-  await test('27b. both --fixture and --live is a usage error', async () => {
+  await t.test('27b. both --fixture and --live is a usage error', async () => {
     const { h, exitCode } = await runCli(
       ['--league', 'NBA', '--fixture', fixturePath('nba-final'), '--live'],
       { SUPABASE_URL: NON_PRODUCTION_URL, ODDS_API_KEY: 'dummy-not-a-key' },
@@ -281,7 +281,7 @@ test('WORK-2026111102 results:odds-api-scores CLI', { skip: CLI_SKIP }, () => {
     assert.equal(h.repositoryFactoryCalls, 0);
   });
 
-  await test('27c. --live without ODDS_API_KEY fails with no request', async () => {
+  await t.test('27c. --live without ODDS_API_KEY fails with no request', async () => {
     const { h, exitCode } = await runCli(['--league', 'NBA', '--days-from', '1', '--live'], {
       SUPABASE_URL: NON_PRODUCTION_URL,
     });
@@ -290,13 +290,13 @@ test('WORK-2026111102 results:odds-api-scores CLI', { skip: CLI_SKIP }, () => {
     assert.match(h.stderr.join('\n'), /ODDS_API_KEY/);
   });
 
-  await test('27d. unknown league is a usage error', async () => {
+  await t.test('27d. unknown league is a usage error', async () => {
     const { h, exitCode } = await runCli(['--league', 'WNBA', '--fixture', fixturePath('nba-final')]);
     assert.notEqual(exitCode, 0);
     assert.equal(h.repositoryFactoryCalls, 0);
   });
 
-  await test('28. --fixture makes no network call', async () => {
+  await t.test('28. --fixture makes no network call', async () => {
     const { h, exitCode } = await runCli(['--league', 'NBA', '--fixture', fixturePath('nba-final')], {
       SUPABASE_URL: NON_PRODUCTION_URL,
       ODDS_API_KEY: 'dummy-not-a-key',
@@ -305,7 +305,7 @@ test('WORK-2026111102 results:odds-api-scores CLI', { skip: CLI_SKIP }, () => {
     assert.deepEqual(h.fetchCalls, [], 'injected fetch saw zero calls even with a key present');
   });
 
-  await test('28b. --apply against a non-production ref writes and opens a system_runs row', async () => {
+  await t.test('28b. --apply against a non-production ref writes and opens a system_runs row', async () => {
     const { h, exitCode, report } = await runCli(
       ['--league', 'NBA', '--fixture', fixturePath('nba-final'), '--apply'],
       { SUPABASE_URL: NON_PRODUCTION_URL },
@@ -322,7 +322,37 @@ test('WORK-2026111102 results:odds-api-scores CLI', { skip: CLI_SKIP }, () => {
     assert.deepEqual(h.fetchCalls, []);
   });
 
-  await test.todo(
-    '28c. applied run row carries run_type odds-api-scores.operator-run, opened as failed and upgraded on completion (assert startRun/completeRun arguments once the run-row shape is implemented)',
-  );
+  await t.test('28c. applied run fails before event writes and upgrades only on completion', async () => {
+    assert.ok(cli);
+    const h = createHarness(['--league', 'NBA', '--fixture', fixturePath('nba-final'), '--apply'], { SUPABASE_URL: NON_PRODUCTION_URL });
+    const bundle = h.deps.createRepositories();
+    const order: string[] = [];
+    const originalComplete = bundle.runs.completeRun.bind(bundle.runs);
+    bundle.runs.completeRun = async (input) => {
+      order.push(input.status);
+      return originalComplete(input);
+    };
+    const originalUpsert = bundle.events.upsertByExternalId.bind(bundle.events);
+    bundle.events.upsertByExternalId = async (input) => {
+      assert.deepEqual(order, ['failed']);
+      return originalUpsert(input);
+    };
+    h.deps.createRepositories = () => bundle;
+    const result = await cli.runOddsApiScoresSync(h.deps);
+    assert.equal(result.exitCode, 0);
+    assert.deepEqual(order, ['failed', 'succeeded']);
+    const rows = await bundle.runs.listByType('odds-api-scores.operator-run');
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.status, 'succeeded');
+  });
+
+  await t.test('26c. unknown non-production targets are refused before any work', async () => {
+    const { h, exitCode } = await runCli(['--league', 'NBA', '--fixture', '/missing.doc-derived.json', '--apply'], {
+      SUPABASE_URL: 'https://stagingrefnotproduction.supabase.co',
+    });
+    assert.equal(exitCode, 1);
+    assert.equal(h.repositoryFactoryCalls, 0);
+    assert.deepEqual(h.fetchCalls, []);
+    assert.match(h.stderr.join(' '), /approved staging/);
+  });
 });

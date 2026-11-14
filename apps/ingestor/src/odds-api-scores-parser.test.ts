@@ -195,14 +195,14 @@ function recordingFetch(
 // Fixture provenance (acceptance criterion 9) -- runs now
 // ---------------------------------------------------------------------------
 
-test('WORK-2026111102 fixtures: provenance labels', async () => {
+test('WORK-2026111102 fixtures: provenance labels', async (t) => {
   const files = readdirSync(FIXTURE_DIR).filter((name) => name.endsWith('.json'));
 
-  await test('fixture directory is non-empty', () => {
+  await t.test('fixture directory is non-empty', () => {
     assert.ok(files.length >= 15, `expected at least 15 fixtures, found ${files.length}`);
   });
 
-  await test('every fixture file name carries doc-derived or recorded, and the body agrees', () => {
+  await t.test('every fixture file name carries doc-derived or recorded, and the body agrees', () => {
     for (const file of files) {
       const match = /\.(doc-derived|recorded)\.json$/.exec(file);
       assert.ok(match, `unlabelled fixture file: ${file}`);
@@ -212,13 +212,13 @@ test('WORK-2026111102 fixtures: provenance labels', async () => {
     }
   });
 
-  await test('both NHL shootout fixtures are marked behaviour unconfirmed by vendor', () => {
+  await t.test('both NHL shootout fixtures are marked behaviour unconfirmed by vendor', () => {
     for (const name of ['nhl-shootout-winner-credited', 'nhl-shootout-equal-scores']) {
       assert.equal(loadFixture(name).vendorBehaviour, 'behaviour unconfirmed by vendor', name);
     }
   });
 
-  await test('every doc-derived event matches the documented field set and has a 32-char id', () => {
+  await t.test('every doc-derived event matches the documented field set and has a 32-char id', () => {
     const documented = [
       'away_team',
       'commence_time',
@@ -239,7 +239,7 @@ test('WORK-2026111102 fixtures: provenance labels', async () => {
     }
   });
 
-  await test('every fixture states the evaluation instant the tests use', () => {
+  await t.test('every fixture states the evaluation instant the tests use', () => {
     for (const file of files) {
       assert.equal(loadFixture(file).evaluateAt, NOW.toISOString().replace('.000Z', 'Z'), file);
     }
@@ -250,8 +250,8 @@ test('WORK-2026111102 fixtures: provenance labels', async () => {
 // Fetcher (plan tests 1-4)
 // ---------------------------------------------------------------------------
 
-test('WORK-2026111102 fetchOddsApiScores', { skip: FETCHER_SKIP }, async () => {
-  await test('1. daysFrom 0, 4, 1.5 rejected before any request; 1, 2, 3 sent', async () => {
+test('WORK-2026111102 fetchOddsApiScores', { skip: FETCHER_SKIP }, async (t) => {
+  await t.test('1. daysFrom 0, 4, 1.5 rejected before any request; 1, 2, 3 sent', async () => {
     assert.ok(fetcher);
     for (const daysFrom of [0, 4, 1.5]) {
       const { fetchImpl, calls } = recordingFetch('[]');
@@ -272,7 +272,7 @@ test('WORK-2026111102 fetchOddsApiScores', { skip: FETCHER_SKIP }, async () => {
     }
   });
 
-  await test('2. non-200 (401, 429, 500) throws carrying status; no partial result', async () => {
+  await t.test('2. non-200 (401, 429, 500) throws carrying status; no partial result', async () => {
     assert.ok(fetcher);
     for (const status of [401, 429, 500]) {
       const { fetchImpl } = recordingFetch(`{"message":"status ${status}"}`, status);
@@ -287,7 +287,7 @@ test('WORK-2026111102 fetchOddsApiScores', { skip: FETCHER_SKIP }, async () => {
     }
   });
 
-  await test('3. quota headers surface in telemetry; missing headers give null', async () => {
+  await t.test('3. quota headers surface in telemetry; missing headers give null', async () => {
     assert.ok(fetcher);
     const body = JSON.stringify(loadFixture('nba-final').response);
     const withHeaders = recordingFetch(body, 200, {
@@ -315,7 +315,7 @@ test('WORK-2026111102 fetchOddsApiScores', { skip: FETCHER_SKIP }, async () => {
     assert.deepEqual(bare.quota, { remaining: null, used: null, last: null });
   });
 
-  await test('4. scores events carry no bookmakers', async () => {
+  await t.test('4. scores events carry no bookmakers', async () => {
     assert.ok(fetcher);
     const { fetchImpl } = recordingFetch(JSON.stringify(loadFixture('nba-final').response));
     const result = await fetcher.fetchOddsApiScores({
@@ -328,7 +328,7 @@ test('WORK-2026111102 fetchOddsApiScores', { skip: FETCHER_SKIP }, async () => {
     for (const event of result.events) assert.ok(!('bookmakers' in event));
   });
 
-  await test('4b. scores type has no bookmakers key', () => {
+  await t.test('4b. scores type has no bookmakers key', () => {
     const assertNoBookmakers: 'bookmakers' extends keyof OddsApiScoreEvent ? false : true = true;
     assert.equal(assertNoBookmakers, true);
   });
@@ -338,8 +338,8 @@ test('WORK-2026111102 fetchOddsApiScores', { skip: FETCHER_SKIP }, async () => {
 // Parser (plan tests 5-13)
 // ---------------------------------------------------------------------------
 
-test('WORK-2026111102 parseOddsApiScores', { skip: PARSER_SKIP }, async () => {
-  await test('5. documented completed example parses to final with integer scores', () => {
+test('WORK-2026111102 parseOddsApiScores', { skip: PARSER_SKIP }, async (t) => {
+  await t.test('5. documented completed example parses to final with integer scores', () => {
     const event = firstEvent('nba-final');
     const out = parseOne(event, 'NBA');
     assert.equal(out.status, 'final');
@@ -352,7 +352,7 @@ test('WORK-2026111102 parseOddsApiScores', { skip: PARSER_SKIP }, async () => {
     assert.equal(out.lastUpdate !== undefined && Date.parse(out.lastUpdate), Date.parse(event.last_update!));
   });
 
-  await test('5b. one outcome per event, in input order, for a multi-event payload', () => {
+  await t.test('5b. one outcome per event, in input order, for a multi-event payload', () => {
     const events = ['nba-final', 'nba-live', 'nba-upcoming'].map(firstEvent);
     const out = parse(events, 'NBA');
     assert.deepEqual(
@@ -365,12 +365,12 @@ test('WORK-2026111102 parseOddsApiScores', { skip: PARSER_SKIP }, async () => {
     );
   });
 
-  await test('6. live and upcoming are not_final', () => {
+  await t.test('6. live and upcoming are not_final', () => {
     assert.equal(parseOne(firstEvent('nba-live'), 'NBA').status, 'not_final');
     assert.equal(parseOne(firstEvent('nba-upcoming'), 'NBA').status, 'not_final');
   });
 
-  await test('7. completed with null, one, three, non-numeric, negative, decimal scores: rejected', () => {
+  await t.test('7. completed with null, one, three, non-numeric, negative, decimal scores: rejected', () => {
     const base = firstEvent('nba-final');
     const [home, away] = [base.home_team, base.away_team];
     const variants: Array<[string, ScoreEntry[] | null]> = [
@@ -398,7 +398,7 @@ test('WORK-2026111102 parseOddsApiScores', { skip: PARSER_SKIP }, async () => {
     assert.equal(parseOne(firstEvent('nba-non-numeric-score'), 'NBA').status, 'rejected');
   });
 
-  await test('8. score names not equal to home/away: rejected; swapped order assigns by name', () => {
+  await t.test('8. score names not equal to home/away: rejected; swapped order assigns by name', () => {
     const mismatch = parseOne(firstEvent('nba-score-name-mismatch'), 'NBA');
     assert.equal(mismatch.status, 'rejected');
     assert.ok(mismatch.reason);
@@ -424,7 +424,7 @@ test('WORK-2026111102 parseOddsApiScores', { skip: PARSER_SKIP }, async () => {
     assert.equal(swapped.awayScore, 120);
   });
 
-  await test('9. last_update null, before commence, in the future, or inside the settle delay: not final', () => {
+  await t.test('9. last_update null, before commence, in the future, or inside the settle delay: not final', () => {
     assert.notEqual(parseOne(firstEvent('nba-completed-last-update-null'), 'NBA').status, 'final');
 
     const base = firstEvent('nba-final');
@@ -451,14 +451,14 @@ test('WORK-2026111102 parseOddsApiScores', { skip: PARSER_SKIP }, async () => {
     assert.equal(atBoundary.status, 'final', 'exactly 15 minutes is settled');
   });
 
-  await test('9b. id not 32 characters or sport_key for another league: rejected', () => {
+  await t.test('9b. id not 32 characters or sport_key for another league: rejected', () => {
     const base = firstEvent('nba-final');
     assert.equal(parseOne({ ...base, id: 'short-id' }, 'NBA').status, 'rejected');
     assert.equal(parseOne(firstEvent('nba-wrong-sport-key'), 'NBA').status, 'rejected');
     assert.equal(parseOne(base, 'NHL').status, 'rejected', 'NBA event under an NHL request');
   });
 
-  await test('10. NFL tie accepted; NBA and MLB tie rejected tie_not_possible', () => {
+  await t.test('10. NFL tie accepted; NBA and MLB tie rejected tie_not_possible', () => {
     const nfl = parseOne(firstEvent('nfl-tie'), 'NFL');
     assert.equal(nfl.status, 'final');
     assert.equal(nfl.homeScore, 20);
@@ -496,7 +496,7 @@ test('WORK-2026111102 parseOddsApiScores', { skip: PARSER_SKIP }, async () => {
     assert.equal(mlbTie.reason, 'tie_not_possible');
   });
 
-  await test('11. NHL shootout, winner credited: 3-2 parses to final (total 5, margin +1/-1)', () => {
+  await t.test('11. NHL shootout, winner credited: 3-2 parses to final (total 5, margin +1/-1)', () => {
     const out = parseOne(firstEvent('nhl-shootout-winner-credited'), 'NHL');
     assert.equal(out.status, 'final');
     assert.equal(out.homeScore, 3);
@@ -506,14 +506,14 @@ test('WORK-2026111102 parseOddsApiScores', { skip: PARSER_SKIP }, async () => {
     assert.equal(out.awayScore! - out.homeScore!, -1);
   });
 
-  await test('12. NHL shootout, equal scores with completed true: rejected tie_not_possible', () => {
+  await t.test('12. NHL shootout, equal scores with completed true: rejected tie_not_possible', () => {
     const out = parseOne(firstEvent('nhl-shootout-equal-scores'), 'NHL');
     assert.equal(out.status, 'rejected');
     assert.equal(out.reason, 'tie_not_possible');
     // "nothing written" is asserted against repositories in odds-api-scores-resolver.test.ts.
   });
 
-  await test('13. NHL overtime one-goal final parses as an ordinary final', () => {
+  await t.test('13. NHL overtime one-goal final parses as an ordinary final', () => {
     const out = parseOne(firstEvent('nhl-overtime-final'), 'NHL');
     assert.equal(out.status, 'final');
     assert.equal(out.homeScore, 3);
@@ -521,7 +521,7 @@ test('WORK-2026111102 parseOddsApiScores', { skip: PARSER_SKIP }, async () => {
     assert.equal(parseOne(firstEvent('nhl-regulation-final'), 'NHL').status, 'final');
   });
 
-  await test('13b. every fixture parses to the outcome its envelope declares', () => {
+  await t.test('13b. every fixture parses to the outcome its envelope declares', () => {
     for (const file of readdirSync(FIXTURE_DIR).filter((name) => name.endsWith('.json'))) {
       const fixture = loadFixture(file);
       const at = new Date(fixture.evaluateAt);
@@ -537,7 +537,7 @@ test('WORK-2026111102 parseOddsApiScores', { skip: PARSER_SKIP }, async () => {
     }
   });
 
-  await test('13c. a non-array payload is refused rather than read as zero events', () => {
+  await t.test('13c. a non-array payload is refused rather than read as zero events', () => {
     assert.throws(() => parse({ message: 'quota exceeded' }, 'NBA'));
   });
 });

@@ -252,8 +252,8 @@ async function seedForeignEvent(
 // Team map (plan tests 14, 16)
 // ---------------------------------------------------------------------------
 
-test('WORK-2026111102 odds-api-scores team map', { skip: TEAM_MAP_SKIP }, async () => {
-  await test('14. 124 entries: 30 MLB, 30 NBA, 32 NFL, 32 NHL; ids unique and league-suffixed', () => {
+test('WORK-2026111102 odds-api-scores team map', { skip: TEAM_MAP_SKIP }, async (t) => {
+  await t.test('14. 124 entries: 30 MLB, 30 NBA, 32 NFL, 32 NHL; ids unique and league-suffixed', () => {
     assert.ok(teamMap);
     const expected: Record<League, number> = { MLB: 30, NBA: 30, NFL: 32, NHL: 32 };
     const all: string[] = [];
@@ -270,7 +270,7 @@ test('WORK-2026111102 odds-api-scores team map', { skip: TEAM_MAP_SKIP }, async 
     assert.equal(new Set(all).size, 124, 'no two vendor strings map to the same participant');
   });
 
-  await test('14b. the six explicit production ids are present', () => {
+  await t.test('14b. the six explicit production ids are present', () => {
     assert.ok(teamMap);
     const values = new Set(Object.values(teamMap).flatMap((m) => Object.values(m)));
     for (const id of [
@@ -289,7 +289,7 @@ test('WORK-2026111102 odds-api-scores team map', { skip: TEAM_MAP_SKIP }, async 
     '14c. every map entry resolves to an existing canonical team: assert against a catalog fixture generated from the production participants external-id list (read-only export; not created in this preparation pass)',
   );
 
-  await test('16. suffix collisions resolve only within their own league and only by full string', () => {
+  await t.test('16. suffix collisions resolve only within their own league and only by full string', () => {
     assert.ok(teamMap);
     const collisions: Array<[string, Array<[League, string]>]> = [
       ['Kings', [['NBA', 'Sacramento Kings'], ['NHL', 'Los Angeles Kings']]],
@@ -325,8 +325,8 @@ test('WORK-2026111102 odds-api-scores team map', { skip: TEAM_MAP_SKIP }, async 
 // Resolver (plan tests 12, 15, 17-24)
 // ---------------------------------------------------------------------------
 
-test('WORK-2026111102 resolveOddsApiScores', { skip: RESOLVER_SKIP }, async () => {
-  await test('final event: row, roles, metadata and the four result keys', async () => {
+test('WORK-2026111102 resolveOddsApiScores', { skip: RESOLVER_SKIP }, async (t) => {
+  await t.test('final event: row, roles, metadata and the four result keys', async () => {
     const event = firstEvent('nba-final');
     const h = await createHarness(teamsOf(event, 'NBA'));
     const summary = await run(h, [event], 'NBA');
@@ -370,7 +370,7 @@ test('WORK-2026111102 resolveOddsApiScores', { skip: RESOLVER_SKIP }, async () =
     assert.deepEqual([...new Set(results.map((r) => r.market_key))].sort(), FOUR_KEYS);
   });
 
-  await test('12. NHL shootout equal scores: rejected, nothing written to game_results', async () => {
+  await t.test('12. NHL shootout equal scores: rejected, nothing written to game_results', async () => {
     const event = firstEvent('nhl-shootout-equal-scores');
     const h = await createHarness(teamsOf(event, 'NHL'));
     const summary = await run(h, [event], 'NHL');
@@ -382,7 +382,7 @@ test('WORK-2026111102 resolveOddsApiScores', { skip: RESOLVER_SKIP }, async () =
     assert.ok(summary.skipped.some((s) => s.eventId === event.id && s.reason === 'tie_not_possible'));
   });
 
-  await test('15. unknown team string skips the whole event with team_unmapped; no partial rows', async () => {
+  await t.test('15. unknown team string skips the whole event with team_unmapped; no partial rows', async () => {
     const event = firstEvent('nba-unknown-team');
     // Only the away team exists canonically; the home string is not in the map at all.
     const h = await createHarness([['NBA', event.away_team]]);
@@ -392,7 +392,7 @@ test('WORK-2026111102 resolveOddsApiScores', { skip: RESOLVER_SKIP }, async () =
     assert.deepEqual(h.writes, [], 'no event, participant, role or result written');
   });
 
-  await test('15b. mapped string whose canonical participant is missing also skips team_unmapped', async () => {
+  await t.test('15b. mapped string whose canonical participant is missing also skips team_unmapped', async () => {
     const event = firstEvent('nba-final');
     const h = await createHarness([['NBA', event.home_team]]);
     const summary = await run(h, [event], 'NBA');
@@ -400,7 +400,7 @@ test('WORK-2026111102 resolveOddsApiScores', { skip: RESOLVER_SKIP }, async () =
     assert.deepEqual(h.writes, []);
   });
 
-  await test('16b. a team from another league does not resolve in this league', async () => {
+  await t.test('16b. a team from another league does not resolve in this league', async () => {
     const event = firstEvent('nba-final');
     event.home_team = 'Los Angeles Kings';
     event.scores = [
@@ -413,7 +413,7 @@ test('WORK-2026111102 resolveOddsApiScores', { skip: RESOLVER_SKIP }, async () =
     assert.deepEqual(h.writes, []);
   });
 
-  await test('17. foreign-provenance event for the same matchup and Eastern date: skipped, zero writes', async () => {
+  await t.test('17. foreign-provenance event for the same matchup and Eastern date: skipped, zero writes', async () => {
     const event = firstEvent('nba-final');
     for (const providerKey of ['sgo', 'operator-manual-entry']) {
       const h = await createHarness(teamsOf(event, 'NBA'));
@@ -432,7 +432,7 @@ test('WORK-2026111102 resolveOddsApiScores', { skip: RESOLVER_SKIP }, async () =
     }
   });
 
-  await test('18. pre-existing result rows on the event: skipped, rows and sourced_at unchanged', async () => {
+  await t.test('18. pre-existing result rows on the event: skipped, rows and sourced_at unchanged', async () => {
     const event = firstEvent('nba-final');
     const h = await createHarness(teamsOf(event, 'NBA'));
     await run(h, [event], 'NBA');
@@ -454,7 +454,7 @@ test('WORK-2026111102 resolveOddsApiScores', { skip: RESOLVER_SKIP }, async () =
     assert.deepEqual(await h.raw.gradeResults.listByEvent(row.id), before, 'values and sourced_at unchanged');
   });
 
-  await test('18b. a result row from another source on an odds-api event also blocks results', async () => {
+  await t.test('18b. a result row from another source on an odds-api event also blocks results', async () => {
     const event = firstEvent('nba-final');
     const h = await createHarness(teamsOf(event, 'NBA'));
     // Event exists (non-final run), then an operator result lands on it.
@@ -478,7 +478,7 @@ test('WORK-2026111102 resolveOddsApiScores', { skip: RESOLVER_SKIP }, async () =
     assert.deepEqual(await h.raw.gradeResults.listByEvent(row.id), before);
   });
 
-  await test('19. re-run is idempotent: second run writes nothing', async () => {
+  await t.test('19. re-run is idempotent: second run writes nothing', async () => {
     const event = firstEvent('nba-final');
     const h = await createHarness(teamsOf(event, 'NBA'));
     await run(h, [event], 'NBA');
@@ -495,7 +495,7 @@ test('WORK-2026111102 resolveOddsApiScores', { skip: RESOLVER_SKIP }, async () =
     assert.deepEqual(await h.raw.gradeResults.listByEvent(row.id), resultsBefore);
   });
 
-  await test('20. margin sign both sides; moneyline 1/0; NFL tie 0.5/0.5 and margin 0', async () => {
+  await t.test('20. margin sign both sides; moneyline 1/0; NFL tie 0.5/0.5 and margin 0', async () => {
     const valueOf = async (h: Harness, externalId: string, league: League, marketKey: string, team: string | null) => {
       const row = await h.raw.events.findByExternalId(externalId);
       assert.ok(row);
@@ -541,7 +541,7 @@ test('WORK-2026111102 resolveOddsApiScores', { skip: RESOLVER_SKIP }, async () =
     assert.equal(await valueOf(h4, shootout.id, 'NHL', 'game_spread_margin', shootout.away_team), -1);
   });
 
-  await test('21. no results before final; event stays non-completed', async () => {
+  await t.test('21. no results before final; event stays non-completed', async () => {
     for (const name of ['nba-live', 'nba-upcoming']) {
       const event = firstEvent(name);
       const h = await createHarness(teamsOf(event, 'NBA'));
@@ -553,7 +553,7 @@ test('WORK-2026111102 resolveOddsApiScores', { skip: RESOLVER_SKIP }, async () =
     }
   });
 
-  await test('22. only the four keys are ever written across every fixture', async () => {
+  await t.test('22. only the four keys are ever written across every fixture', async () => {
     const keys = new Set<string>();
     for (const file of readdirSync(FIXTURE_DIR).filter((name) => name.endsWith('.json'))) {
       const fixture = loadFixture(file);
@@ -572,7 +572,7 @@ test('WORK-2026111102 resolveOddsApiScores', { skip: RESOLVER_SKIP }, async () =
     assert.deepEqual([...keys].sort(), FOUR_KEYS);
   });
 
-  await test('23. commence_time drift over 6 hours on an existing event: skipped, zero writes', async () => {
+  await t.test('23. commence_time drift over 6 hours on an existing event: skipped, zero writes', async () => {
     const event = firstEvent('nba-final');
     const h = await createHarness(teamsOf(event, 'NBA'));
     const early = structuredClone(event);
@@ -590,7 +590,7 @@ test('WORK-2026111102 resolveOddsApiScores', { skip: RESOLVER_SKIP }, async () =
     assert.deepEqual(await resultsFor(h, event.id), []);
   });
 
-  await test('23b. drift of 6 hours or less is not a skip', async () => {
+  await t.test('23b. drift of 6 hours or less is not a skip', async () => {
     const event = firstEvent('nba-final');
     const h = await createHarness(teamsOf(event, 'NBA'));
     const early = structuredClone(event);
@@ -604,7 +604,7 @@ test('WORK-2026111102 resolveOddsApiScores', { skip: RESOLVER_SKIP }, async () =
     assert.equal((await resultsFor(h, event.id)).length, 7);
   });
 
-  await test('24. a completed event is never regressed by a later non-final response', async () => {
+  await t.test('24. a completed event is never regressed by a later non-final response', async () => {
     const event = firstEvent('nba-final');
     const h = await createHarness(teamsOf(event, 'NBA'));
     await run(h, [event], 'NBA');
@@ -616,7 +616,7 @@ test('WORK-2026111102 resolveOddsApiScores', { skip: RESOLVER_SKIP }, async () =
     assert.equal((await resultsFor(h, event.id)).length, 7, 'results untouched');
   });
 
-  await test('rejected and not-final outcomes are counted with a named reason', async () => {
+  await t.test('rejected and not-final outcomes are counted with a named reason', async () => {
     const events = ['nba-non-numeric-score', 'nba-score-name-mismatch', 'nba-wrong-sport-key'].map(firstEvent);
     const teams = events.flatMap((e) =>
       [e.home_team, e.away_team].filter((n) => teamMap?.NBA[n]).map((n): [League, string] => ['NBA', n]),
