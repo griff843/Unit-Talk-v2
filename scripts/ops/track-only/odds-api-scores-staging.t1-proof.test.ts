@@ -131,7 +131,11 @@ test(
       const rowsByTable = new Map(
         dry.report!.blastRadius!.byTable.map((r) => [r.table, r.count]),
       );
-      assert.equal(rowsByTable.get('events'), 1);
+      // One uncompleted write, followed by the completing write.
+      assert.equal(rowsByTable.get('events'), 2);
+      assert.deepEqual(dry.report!.blastRadius!.newEventExternalIds, [
+        input.id,
+      ]);
       assert.equal(rowsByTable.get('event_participants'), links.length);
       assert.equal(rowsByTable.get('game_results'), results.length);
       assert.equal(results.length, 7);
@@ -378,6 +382,181 @@ test(
         );
         assert.deepEqual(await repositories.outbox.listByPickId(pickId), []);
       }
+      // Exercise durable interruption recovery on a second namespaced game.
+      const partialFixture = structuredClone(fixture);
+      const partialInput = partialFixture.response[0]!;
+      partialInput.id = createHash('sha256')
+        .update(`WORK-2026111102:${namespace}:partial`)
+        .digest('hex')
+        .slice(0, 32);
+      const partialPath = join(directory, 'nba-partial.doc-derived.json');
+      await writeFile(partialPath, JSON.stringify(partialFixture));
+      const errors: string[] = [];
+      const partialRun = (failAfter?: number) => {
+        let inserted = 0;
+        const faulty: typeof ingestor.gradeResults = {
+          listByEvent: (id) => ingestor.gradeResults.listByEvent(id),
+          findResult: (criteria) => ingestor.gradeResults.findResult(criteria),
+          insert: async (value) => {
+            if (inserted === failAfter)
+              throw new Error('injected interruption');
+            const row = await ingestor.gradeResults.insert(value);
+            inserted++;
+            return row;
+          },
+        };
+        return runOddsApiScoresSync({
+          argv: ['--league', 'NBA', '--fixture', partialPath, '--apply'],
+          env: { SUPABASE_URL: env.SUPABASE_URL },
+          fetchImpl: vendorForbidden,
+          createRepositories: () => ({ ...ingestor, gradeResults: faulty }),
+          now: () => new Date(fixture.evaluateAt),
+          log: () => {},
+          error: (message) => {
+            errors.push(message);
+          },
+        });
+      };
+      assert.equal((await partialRun(1)).exitCode, 1);
+      assert.match(errors.at(-1)!, /injected interruption/);
+      const partialEvent = await repositories.events.findByExternalId(
+        partialInput.id,
+      );
+      assert.ok(partialEvent);
+      assert.notEqual(partialEvent.status, 'completed');
+      assert.equal(partialEvent.metadata['resultsProof'], undefined);
+      assert.equal(
+        (await repositories.gradeResults.listByEvent(partialEvent.id)).length,
+        1,
+      );
+      const partialSubmission = await processSubmission(
+        {
+          source: 'api',
+          market: 'game_total_ou',
+          selection: `Over 215.5 [WORK-2026111102:${namespace}:partial]`,
+          line: 215.5,
+          odds: -110,
+          stakeUnits: 1,
+          eventName: partialEvent.event_name,
+          metadata: {
+            distributionMode: 'track-only',
+            sport: 'NBA',
+            eventId: partialEvent.id,
+            fixtureRunId: namespace,
+            fixtureProvenance: 'doc-derived',
+          },
+        },
+        repositories,
+      );
+      const partialPickId = partialSubmission.pick.id;
+      const gradePartial = async (label: string) => {
+        const startedAt = performance.now();
+        const result = await runGradingPass(repositories, {
+          restrictToPickIds: new Set([partialPickId]),
+          now: () => new Date(fixture.evaluateAt),
+        });
+        t.diagnostic(
+          `${label} grading elapsed ms: ${performance.now() - startedAt}`,
+        );
+        assert.equal(result.errors, 0, JSON.stringify(result.details));
+        return result;
+      };
+      const uncompleted = await gradePartial('After first interrupted write');
+      assert.equal(uncompleted.graded, 0);
+      assert.equal(uncompleted.details[0]?.reason, 'event_not_completed');
+      assert.deepEqual(
+        await repositories.settlements.listByPick(partialPickId),
+        [],
+      );
+      assert.deepEqual(
+        await repositories.outbox.listByPickId(partialPickId),
+        [],
+      );
+      assert.equal((await partialRun(3)).exitCode, 1);
+      assert.match(errors.at(-1)!, /injected interruption/);
+      const midEvent = await repositories.events.findById(partialEvent.id);
+      assert.notEqual(midEvent?.status, 'completed');
+      assert.equal(midEvent?.metadata['resultsProof'], undefined);
+      assert.equal(
+        (await repositories.gradeResults.listByEvent(partialEvent.id)).length,
+        4,
+      );
+      const midGrade = await gradePartial('After mid-sequence interruption');
+      assert.equal(midGrade.graded, 0);
+      assert.equal(midGrade.details[0]?.reason, 'event_not_completed');
+      assert.deepEqual(
+        await repositories.settlements.listByPick(partialPickId),
+        [],
+      );
+      assert.deepEqual(
+        await repositories.outbox.listByPickId(partialPickId),
+        [],
+      );
+      const resumed = await partialRun();
+      assert.equal(resumed.exitCode, 0);
+      assert.equal(resumed.report?.summary.resultsInserted, 3);
+      const completeEvent = await repositories.events.findById(partialEvent.id);
+      assert.equal(completeEvent?.status, 'completed');
+      const proof = completeEvent?.metadata['resultsProof'] as Record<
+        string,
+        unknown
+      >;
+      assert.equal(proof['completedObserved'], true);
+      const completeRows = await repositories.gradeResults.listByEvent(
+        partialEvent.id,
+      );
+      assert.equal(completeRows.length, 7);
+      assert.ok(
+        completeRows.every(
+          (row) =>
+            row.source === 'odds-api' &&
+            Date.parse(row.sourced_at) ===
+              Date.parse(partialInput.last_update!),
+        ),
+      );
+      const reapplied = await partialRun();
+      assert.equal(reapplied.exitCode, 0);
+      assert.equal(reapplied.report?.summary.eventsUpserted, 0);
+      assert.equal(reapplied.report?.summary.resultsInserted, 0);
+      assert.deepEqual(
+        await repositories.events.findById(partialEvent.id),
+        completeEvent,
+      );
+      assert.deepEqual(
+        await repositories.gradeResults.listByEvent(partialEvent.id),
+        completeRows,
+      );
+      const recoveredGrade = await gradePartial('Recovered event');
+      assert.equal(
+        recoveredGrade.graded,
+        1,
+        JSON.stringify(recoveredGrade.details),
+      );
+      const recoveredSettlements =
+        await repositories.settlements.listByPick(partialPickId);
+      assert.equal(recoveredSettlements.length, 1);
+      assert.equal(
+        recoveredSettlements[0]?.result,
+        'win',
+        '113 + 103 = 216 > 215.5, so Over wins',
+      );
+      assert.equal(
+        (await repositories.picks.findPickById(partialPickId))?.status,
+        'validated',
+      );
+      assert.deepEqual(
+        await repositories.outbox.listByPickId(partialPickId),
+        [],
+      );
+      assert.equal((await gradePartial('Recovered event replay')).graded, 0);
+      assert.deepEqual(
+        await repositories.settlements.listByPick(partialPickId),
+        recoveredSettlements,
+      );
+      assert.deepEqual(
+        await repositories.outbox.listByPickId(partialPickId),
+        [],
+      );
       assert.equal(vendorCalls, 0);
     } finally {
       await rm(directory, { recursive: true, force: true });

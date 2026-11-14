@@ -5347,3 +5347,31 @@ test('WORK-2026111102 36. Odds API Track Only settlement creates no outbox or re
     assert.equal(calls, 0);
   } finally { globalThis.fetch = previous; }
 });
+
+
+for (const status of ['scheduled', 'completed'] as const) {
+  test(`WORK-2026111102 step 13: ${status} event without completion proof cannot settle`, async () => {
+    const { repositories, pickId, event, team } = await createOddsApiGradingFixture({
+      noResults: status === 'scheduled', metadata: { resultsProof: undefined },
+    });
+    const away = await repositories.participants.upsertByExternalId({ externalId: 'ODDS_SCORES_AWAY_NHL',
+      displayName: 'Odds Scores Away', participantType: 'team', sport: 'NHL', league: 'NHL', metadata: {} });
+    const rows = status === 'scheduled' ? [[null, 'game_total_ou', 5] as const] : [
+      [null, 'game_total_ou', 5], [team.id, 'team_total_ou', 3], [team.id, 'game_spread_margin', 1],
+      [team.id, 'game_moneyline_win', 1], [away.id, 'team_total_ou', 2],
+      [away.id, 'game_spread_margin', -1], [away.id, 'game_moneyline_win', 0],
+    ] as const;
+    for (const [participantId, marketKey, actualValue] of rows) {
+      await seedGameResult(repositories, { eventId: event.id, participantId, marketKey, actualValue,
+        source: 'odds-api', sourcedAt: '2026-11-08T04:00:00Z' });
+    }
+    assert.equal((await repositories.gradeResults.listByEvent(event.id)).length, status === 'scheduled' ? 1 : 7);
+    const result = await runGradingPass(repositories, { restrictToPickIds: new Set([pickId]) });
+    assert.equal(result.errors, 0);
+    assert.equal(result.graded, 0);
+    assert.equal(result.details[0]?.reason, status === 'scheduled' ? 'event_not_completed' : 'event_provenance_results_proof_missing');
+    assert.deepEqual(await repositories.settlements.listByPick(pickId), []);
+    assert.deepEqual(await repositories.outbox.listByPickId(pickId), []);
+    assert.equal((await repositories.picks.findPickById(pickId))?.status, 'validated');
+  });
+}

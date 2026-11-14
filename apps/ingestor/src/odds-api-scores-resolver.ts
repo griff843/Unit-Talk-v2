@@ -13,13 +13,14 @@ export interface ScoresContext {
   fetchedAt: string;
   payloadKind: 'live' | 'fixture-doc-derived' | 'fixture-recorded';
 }
+/** Two-phase writes count each event once and only missing result inserts. */
 export interface ScoresResolveSummary {
   eventsUpserted: number;
   resultsInserted: number;
   skipped: Array<{ eventId: string | null; reason: string }>;
 }
 
-/** Resolve only canonical teams; preserve existing provider and result truth. */
+/** Stage without completion proof, reconcile durable results, then publish completion. */
 export async function resolveOddsApiScores(
   parsed: ParsedScore[],
   league: ScoresLeague,
@@ -133,16 +134,101 @@ export async function resolveOddsApiScores(
         skip('commence_time_changed');
         continue;
       }
-      if (
-        (await repositories.gradeResults.listByEvent(existing.id)).some((r) =>
-          RESULT_KEYS.includes(r.market_key),
-        )
-      ) {
-        skip('results_already_present');
+    }
+    const expected: Array<{
+      participantId: string | null;
+      marketKey: string;
+      actualValue: number;
+    }> = [];
+    if (outcome.status === 'final') {
+      expected.push({
+        participantId: null,
+        marketKey: 'game_total_ou',
+        actualValue: outcome.homeScore + outcome.awayScore,
+      });
+      for (const [participant, own, opponent] of [
+        [home, outcome.homeScore, outcome.awayScore],
+        [away, outcome.awayScore, outcome.homeScore],
+      ] as const) {
+        expected.push(
+          {
+            participantId: participant.id,
+            marketKey: 'team_total_ou',
+            actualValue: own,
+          },
+          {
+            participantId: participant.id,
+            marketKey: 'game_spread_margin',
+            actualValue: own - opponent,
+          },
+          {
+            participantId: participant.id,
+            marketKey: 'game_moneyline_win',
+            actualValue: own === opponent ? 0.5 : own > opponent ? 1 : 0,
+          },
+        );
+      }
+    }
+    const key = (participantId: string | null, marketKey: string) =>
+      JSON.stringify([participantId, marketKey]);
+    type ResultRow = Awaited<
+      ReturnType<typeof repositories.gradeResults.insert>
+    >;
+    const matches = (row: ResultRow, target: (typeof expected)[number]) =>
+      row.participant_id === target.participantId &&
+      row.market_key === target.marketKey &&
+      row.source === 'odds-api' &&
+      Number(row.actual_value) === target.actualValue &&
+      outcome.status === 'final' &&
+      Date.parse(row.sourced_at) === Date.parse(outcome.lastUpdate);
+    const rows = existing
+      ? await repositories.gradeResults.listByEvent(existing.id)
+      : [];
+    const relevantRows = rows.filter((row) =>
+      RESULT_KEYS.includes(row.market_key),
+    );
+    if (
+      relevantRows.some((row) => row.source !== 'odds-api') ||
+      (outcome.status !== 'final' && relevantRows.length > 0)
+    ) {
+      skip('results_already_present');
+      continue;
+    }
+    if (existing?.status === 'completed' && outcome.status !== 'final') {
+      skip(outcome.reason);
+      continue;
+    }
+    const matched = new Set<string>();
+    let conflict = false;
+    if (outcome.status === 'final') {
+      for (const row of rows.filter((row) => row.source === 'odds-api')) {
+        const target = expected.find(
+          (candidate) =>
+            key(candidate.participantId, candidate.marketKey) ===
+            key(row.participant_id, row.market_key),
+        );
+        if (!target || !matches(row, target)) {
+          conflict = true;
+          break;
+        }
+        matched.add(key(target.participantId, target.marketKey));
+      }
+      if (conflict) {
+        skip('conflicting_results');
         continue;
       }
-      if (existing.status === 'completed' && outcome.status !== 'final') {
-        skip(outcome.reason);
+      const proof = existing?.metadata['resultsProof'];
+      if (
+        matched.size === expected.length &&
+        existing?.status === 'completed' &&
+        typeof proof === 'object' &&
+        proof !== null &&
+        'completedObserved' in proof &&
+        proof.completedObserved === true &&
+        'providerEventId' in proof &&
+        proof.providerEventId === input.id
+      ) {
+        skip('results_already_present');
         continue;
       }
     }
@@ -155,6 +241,9 @@ export async function resolveOddsApiScores(
       sport_key: input.sport_key,
       home_team_name: input.home_team,
       away_team_name: input.away_team,
+    };
+    const completedMetadata = {
+      ...metadata,
       ...(outcome.status === 'final'
         ? {
             resultsProof: {
@@ -173,7 +262,7 @@ export async function resolveOddsApiScores(
       sportId: league,
       eventName: `${away.display_name} @ ${home.display_name}`,
       eventDate: date,
-      status: outcome.status === 'final' ? 'completed' : 'scheduled',
+      status: 'scheduled',
       metadata,
     });
     summary.eventsUpserted++;
@@ -191,34 +280,38 @@ export async function resolveOddsApiScores(
       skip(outcome.reason);
       continue;
     }
-    const insert = async (
-      participantId: string | null,
-      marketKey: string,
-      actualValue: number,
-    ) => {
-      await repositories.gradeResults.insert({
+    for (const target of expected) {
+      const resultKey = key(target.participantId, target.marketKey);
+      if (matched.has(resultKey)) continue;
+      const row = await repositories.gradeResults.insert({
         eventId: event.id,
-        participantId,
-        marketKey,
-        actualValue,
+        ...target,
         source: 'odds-api',
         sourcedAt: outcome.lastUpdate,
       });
+      if (row.event_id !== event.id || !matches(row, target)) {
+        conflict = true;
+        break;
+      }
       summary.resultsInserted++;
-    };
-    await insert(null, 'game_total_ou', outcome.homeScore + outcome.awayScore);
-    for (const [participant, own, opponent] of [
-      [home, outcome.homeScore, outcome.awayScore],
-      [away, outcome.awayScore, outcome.homeScore],
-    ] as const) {
-      await insert(participant.id, 'team_total_ou', own);
-      await insert(participant.id, 'game_spread_margin', own - opponent);
-      await insert(
-        participant.id,
-        'game_moneyline_win',
-        own === opponent ? 0.5 : own > opponent ? 1 : 0,
-      );
+      matched.add(resultKey);
     }
+    if (conflict) {
+      skip('conflicting_results');
+      continue;
+    }
+    if (matched.size !== expected.length) {
+      skip('results_incomplete');
+      continue;
+    }
+    await repositories.events.upsertByExternalId({
+      externalId: input.id,
+      sportId: league,
+      eventName: event.event_name,
+      eventDate: date,
+      status: 'completed',
+      metadata: completedMetadata,
+    });
   }
   return summary;
 }

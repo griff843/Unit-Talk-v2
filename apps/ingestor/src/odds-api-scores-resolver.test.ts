@@ -99,6 +99,7 @@ type ParsedScore = {
 };
 
 interface ResolveSummary {
+  eventsUpserted: number;
   resultsInserted: number;
   skipped: Array<{ eventId: string | null; reason: string }>;
 }
@@ -658,7 +659,7 @@ test(
         await run(h, [event], 'NBA');
         const row = await h.raw.events.findByExternalId(event.id);
         assert.ok(row);
-        // A later response for the same event reports different scores; existing truth wins.
+        // Changed final scores conflict with the durable result facts; never overwrite them.
         const before = await h.raw.gradeResults.listByEvent(row.id);
         assert.ok(before.length > 0);
 
@@ -670,7 +671,7 @@ test(
         ];
         const summary = await run(h, [changed], 'NBA');
         assert.deepEqual(summary.skipped, [
-          { eventId: event.id, reason: 'results_already_present' },
+          { eventId: event.id, reason: 'conflicting_results' },
         ]);
         assert.ok(
           !h.writes.includes('gradeResults.insert'),
@@ -999,3 +1000,239 @@ test(
     );
   },
 );
+
+function interruptAfter(h: Harness, successfulInserts: number): Harness {
+  let inserted = 0;
+  return {
+    ...h,
+    repositories: {
+      ...h.repositories,
+      gradeResults: {
+        listByEvent: (id) => h.repositories.gradeResults.listByEvent(id),
+        findResult: (criteria) =>
+          h.repositories.gradeResults.findResult(criteria),
+        insert: async (input) => {
+          if (inserted === successfulInserts)
+            throw new Error('injected interruption');
+          const row = await h.repositories.gradeResults.insert(input);
+          inserted++;
+          return row;
+        },
+      },
+    },
+  };
+}
+
+async function assertComplete(h: Harness, input: ScoreEvent) {
+  const event = await h.raw.events.findByExternalId(input.id);
+  assert.ok(event);
+  assert.equal(event.status, 'completed');
+  assert.deepEqual(event.metadata['resultsProof'], {
+    matchMethod: 'static-team-map',
+    providerEventId: input.id,
+    providerLastUpdate: input.last_update,
+    fetchedAt: CONTEXT.fetchedAt,
+    completedObserved: true,
+    payloadKind: CONTEXT.payloadKind,
+  });
+  const home = await h.raw.participants.findByExternalId(
+    externalIdFor('NBA', input.home_team),
+  );
+  const away = await h.raw.participants.findByExternalId(
+    externalIdFor('NBA', input.away_team),
+  );
+  assert.ok(home && away);
+  const rows = await h.raw.gradeResults.listByEvent(event.id);
+  assert.equal(rows.length, 7);
+  assert.deepEqual(
+    rows.map((r) => [r.participant_id, r.market_key, Number(r.actual_value)]),
+    [
+      [null, 'game_total_ou', 216],
+      [home.id, 'team_total_ou', 113],
+      [home.id, 'game_spread_margin', 10],
+      [home.id, 'game_moneyline_win', 1],
+      [away.id, 'team_total_ou', 103],
+      [away.id, 'game_spread_margin', -10],
+      [away.id, 'game_moneyline_win', 0],
+    ],
+  );
+  assert.ok(
+    rows.every(
+      (r) =>
+        r.source === 'odds-api' &&
+        Date.parse(r.sourced_at) === Date.parse(input.last_update!),
+    ),
+  );
+}
+
+for (const successfulInserts of [1, 4]) {
+  test(`step 13: interruption after ${successfulInserts} rows resumes and replays without writes`, async () => {
+    const input = firstEvent('nba-final');
+    const h = await createHarness(teamsOf(input, 'NBA'));
+    await assert.rejects(
+      run(interruptAfter(h, successfulInserts), [input], 'NBA'),
+      /injected interruption/,
+    );
+    const partial = await h.raw.events.findByExternalId(input.id);
+    assert.ok(partial);
+    assert.notEqual(partial.status, 'completed');
+    assert.equal(partial.metadata['resultsProof'], undefined);
+    assert.equal(
+      (await h.raw.gradeResults.listByEvent(partial.id)).length,
+      successfulInserts,
+    );
+    h.resetWrites();
+    const resumed = await run(h, [input], 'NBA');
+    assert.equal(resumed.resultsInserted, 7 - successfulInserts);
+    assert.equal(resumed.eventsUpserted, 1);
+    assert.equal(
+      h.writes.filter((w) => w === 'gradeResults.insert').length,
+      7 - successfulInserts,
+    );
+    await assertComplete(h, input);
+    h.resetWrites();
+    const replay = await run(h, [input], 'NBA');
+    assert.equal(replay.eventsUpserted, 0);
+    assert.equal(replay.resultsInserted, 0);
+    assert.deepEqual(replay.skipped, [
+      { eventId: input.id, reason: 'results_already_present' },
+    ]);
+    assert.deepEqual(h.writes, []);
+  });
+}
+
+test('step 13: legacy completed partial event loses proof before repair and restores it only after completion', async () => {
+  const input = firstEvent('nba-final');
+  const h = await createHarness(teamsOf(input, 'NBA'));
+  const legacy = await h.raw.events.upsertByExternalId({
+    externalId: input.id,
+    sportId: 'NBA',
+    eventName: `${input.away_team} @ ${input.home_team}`,
+    eventDate: '2026-11-07',
+    status: 'completed',
+    metadata: {
+      source: 'odds-api',
+      providerKey: 'odds-api',
+      ingestionSource: 'odds-api-scores.operator-run',
+      ingestionCycleRunId: RUN_ID,
+      starts_at: input.commence_time,
+      sport_key: input.sport_key,
+      home_team_name: input.home_team,
+      away_team_name: input.away_team,
+      resultsProof: {
+        completedObserved: true,
+        providerEventId: input.id,
+        providerLastUpdate: input.last_update,
+        fetchedAt: CONTEXT.fetchedAt,
+        payloadKind: CONTEXT.payloadKind,
+        matchMethod: 'static-team-map',
+      },
+    },
+  });
+  await h.raw.gradeResults.insert({
+    eventId: legacy.id,
+    participantId: null,
+    marketKey: 'game_total_ou',
+    actualValue: 216,
+    source: 'odds-api',
+    sourcedAt: input.last_update!,
+  });
+  await assert.rejects(
+    run(interruptAfter(h, 1), [input], 'NBA'),
+    /injected interruption/,
+  );
+  const repairing = await h.raw.events.findById(legacy.id);
+  assert.equal(
+    repairing?.status,
+    'completed',
+    'repository preserves completed status',
+  );
+  assert.equal(repairing?.metadata['resultsProof'], undefined);
+  assert.equal((await h.raw.gradeResults.listByEvent(legacy.id)).length, 2);
+  assert.equal((await run(h, [input], 'NBA')).resultsInserted, 5);
+  await assertComplete(h, input);
+});
+
+for (const kind of [
+  'value',
+  'timestamp',
+  'participant',
+  'unexpected_key',
+] as const) {
+  test(`step 13: conflicting ${kind} leaves every fact unchanged with zero writes`, async () => {
+    const input = firstEvent('nba-final');
+    const h = await createHarness(teamsOf(input, 'NBA'));
+    await run(h, [{ ...input, completed: false }], 'NBA');
+    const event = await h.raw.events.findByExternalId(input.id);
+    assert.ok(event);
+    const outsider = await h.raw.participants.upsertByExternalId({
+      externalId: 'OUTSIDER_NBA',
+      displayName: 'Outside Team',
+      participantType: 'team',
+      sport: 'NBA',
+      league: 'NBA',
+      metadata: {},
+    });
+    await h.raw.gradeResults.insert({
+      eventId: event.id,
+      participantId: kind === 'participant' ? outsider.id : null,
+      marketKey: kind === 'unexpected_key' ? '1p_total_ou' : 'game_total_ou',
+      actualValue: kind === 'value' ? 999 : 216,
+      source: 'odds-api',
+      sourcedAt:
+        kind === 'timestamp' ? '2026-11-08T03:00:00Z' : input.last_update!,
+    });
+    const before = await h.raw.gradeResults.listByEvent(event.id);
+    h.resetWrites();
+    const summary = await run(h, [input], 'NBA');
+    assert.deepEqual(summary.skipped, [
+      { eventId: input.id, reason: 'conflicting_results' },
+    ]);
+    assert.deepEqual(h.writes, []);
+    assert.deepEqual(await h.raw.events.findById(event.id), event);
+    assert.deepEqual(await h.raw.gradeResults.listByEvent(event.id), before);
+    assert.notEqual(event.status, 'completed');
+  });
+}
+
+test('step 13: a mismatched insert return never publishes completion proof', async () => {
+  const input = firstEvent('nba-final');
+  for (const field of [
+    'source',
+    'actual_value',
+    'sourced_at',
+    'participant_id',
+    'market_key',
+    'event_id',
+  ] as const) {
+    const h = await createHarness(teamsOf(input, 'NBA'));
+    const bundle = {
+      ...h.repositories,
+      gradeResults: {
+        listByEvent: (id: string) =>
+          h.repositories.gradeResults.listByEvent(id),
+        findResult: (
+          criteria: Parameters<
+            typeof h.repositories.gradeResults.findResult
+          >[0],
+        ) => h.repositories.gradeResults.findResult(criteria),
+        insert: async (
+          value: Parameters<typeof h.repositories.gradeResults.insert>[0],
+        ) => {
+          const row = await h.repositories.gradeResults.insert(value);
+          return {
+            ...row,
+            [field]: field === 'actual_value' ? 999 : 'conflicting-return',
+          };
+        },
+      },
+    };
+    const summary = await run({ ...h, repositories: bundle }, [input], 'NBA');
+    assert.deepEqual(summary.skipped, [
+      { eventId: input.id, reason: 'conflicting_results' },
+    ]);
+    const event = await h.raw.events.findByExternalId(input.id);
+    assert.notEqual(event?.status, 'completed');
+    assert.equal(event?.metadata['resultsProof'], undefined);
+  }
+});
