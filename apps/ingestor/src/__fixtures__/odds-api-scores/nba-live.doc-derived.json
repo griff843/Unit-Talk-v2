@@ -1,0 +1,32 @@
+{
+  "provenance": "doc-derived",
+  "vendorBehaviour": "documented-shape",
+  "workOrder": "WORK-2026111102",
+  "source": "https://the-odds-api.com/liveapi/guides/v4/ (GET /v4/sports/{sport}/scores response example: fields id, sport_key, sport_title, commence_time, completed, home_team, away_team, scores[{name, score}] | null, last_update | null)",
+  "note": "Documented live-game shape: completed false with scores present.",
+  "league": "NBA",
+  "expectedParse": "not_final",
+  "evaluateAt": "2026-11-09T12:00:00Z",
+  "response": [
+    {
+      "id": "7b974776bb209eb24a3d3e936d13493f",
+      "sport_key": "basketball_nba",
+      "sport_title": "NBA",
+      "commence_time": "2026-11-08T00:10:00Z",
+      "completed": false,
+      "home_team": "Boston Celtics",
+      "away_team": "Miami Heat",
+      "scores": [
+        {
+          "name": "Boston Celtics",
+          "score": "54"
+        },
+        {
+          "name": "Miami Heat",
+          "score": "49"
+        }
+      ],
+      "last_update": "2026-11-08T01:30:00Z"
+    }
+  ]
+}

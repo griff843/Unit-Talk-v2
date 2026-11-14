@@ -1,0 +1,32 @@
+{
+  "provenance": "doc-derived",
+  "vendorBehaviour": "hypothetical-malformed",
+  "workOrder": "WORK-2026111102",
+  "source": "https://the-odds-api.com/liveapi/guides/v4/ (GET /v4/sports/{sport}/scores response example: fields id, sport_key, sport_title, commence_time, completed, home_team, away_team, scores[{name, score}] | null, last_update | null)",
+  "note": "Requested league NBA but event sport_key is basketball_wnba.",
+  "league": "NBA",
+  "expectedParse": "rejected",
+  "evaluateAt": "2026-11-09T12:00:00Z",
+  "response": [
+    {
+      "id": "491c1d93e21ee2cb479cee1b49ee9cda",
+      "sport_key": "basketball_wnba",
+      "sport_title": "NBA",
+      "commence_time": "2026-11-08T00:10:00Z",
+      "completed": true,
+      "home_team": "Sacramento Kings",
+      "away_team": "Utah Jazz",
+      "scores": [
+        {
+          "name": "Sacramento Kings",
+          "score": "88"
+        },
+        {
+          "name": "Utah Jazz",
+          "score": "80"
+        }
+      ],
+      "last_update": "2026-11-08T02:40:00Z"
+    }
+  ]
+}

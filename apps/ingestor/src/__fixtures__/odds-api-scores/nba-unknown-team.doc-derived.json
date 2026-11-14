@@ -1,0 +1,32 @@
+{
+  "provenance": "doc-derived",
+  "vendorBehaviour": "hypothetical-malformed",
+  "workOrder": "WORK-2026111102",
+  "source": "https://the-odds-api.com/liveapi/guides/v4/ (GET /v4/sports/{sport}/scores response example: fields id, sport_key, sport_title, commence_time, completed, home_team, away_team, scores[{name, score}] | null, last_update | null)",
+  "note": "Parses as final; the home team string is not in the static team map, so the resolver must skip the whole event (team_unmapped).",
+  "league": "NBA",
+  "expectedParse": "final",
+  "evaluateAt": "2026-11-09T12:00:00Z",
+  "response": [
+    {
+      "id": "7738f1eef00a5e220409c37da36f4301",
+      "sport_key": "basketball_nba",
+      "sport_title": "NBA",
+      "commence_time": "2026-11-08T00:10:00Z",
+      "completed": true,
+      "home_team": "Seattle SuperSonics",
+      "away_team": "Portland Trail Blazers",
+      "scores": [
+        {
+          "name": "Seattle SuperSonics",
+          "score": "99"
+        },
+        {
+          "name": "Portland Trail Blazers",
+          "score": "97"
+        }
+      ],
+      "last_update": "2026-11-08T02:40:00Z"
+    }
+  ]
+}

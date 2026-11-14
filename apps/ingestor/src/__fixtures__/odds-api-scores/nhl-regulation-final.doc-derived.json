@@ -1,0 +1,32 @@
+{
+  "provenance": "doc-derived",
+  "vendorBehaviour": "documented-shape",
+  "workOrder": "WORK-2026111102",
+  "source": "https://the-odds-api.com/liveapi/guides/v4/ (GET /v4/sports/{sport}/scores response example: fields id, sport_key, sport_title, commence_time, completed, home_team, away_team, scores[{name, score}] | null, last_update | null)",
+  "note": "NHL final decided in regulation.",
+  "league": "NHL",
+  "expectedParse": "final",
+  "evaluateAt": "2026-11-09T12:00:00Z",
+  "response": [
+    {
+      "id": "f2c505bf9cb770123ebcf7fdd04d0750",
+      "sport_key": "icehockey_nhl",
+      "sport_title": "NHL",
+      "commence_time": "2026-11-08T00:10:00Z",
+      "completed": true,
+      "home_team": "Boston Bruins",
+      "away_team": "Toronto Maple Leafs",
+      "scores": [
+        {
+          "name": "Boston Bruins",
+          "score": "4"
+        },
+        {
+          "name": "Toronto Maple Leafs",
+          "score": "2"
+        }
+      ],
+      "last_update": "2026-11-08T02:40:00Z"
+    }
+  ]
+}

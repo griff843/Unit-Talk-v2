@@ -1,0 +1,32 @@
+{
+  "provenance": "doc-derived",
+  "vendorBehaviour": "behaviour unconfirmed by vendor",
+  "workOrder": "WORK-2026111102",
+  "source": "https://the-odds-api.com/liveapi/guides/v4/ (GET /v4/sports/{sport}/scores response example: fields id, sport_key, sport_title, commence_time, completed, home_team, away_team, scores[{name, score}] | null, last_update | null)",
+  "note": "behaviour unconfirmed by vendor. HYPOTHESISED shape: shootout winner credited one goal (2-2 after OT, 3-2 final).",
+  "league": "NHL",
+  "expectedParse": "final",
+  "evaluateAt": "2026-11-09T12:00:00Z",
+  "response": [
+    {
+      "id": "6c3224b577143dbe3b91ec6b86597ce6",
+      "sport_key": "icehockey_nhl",
+      "sport_title": "NHL",
+      "commence_time": "2026-11-08T00:10:00Z",
+      "completed": true,
+      "home_team": "Los Angeles Kings",
+      "away_team": "Vegas Golden Knights",
+      "scores": [
+        {
+          "name": "Los Angeles Kings",
+          "score": "3"
+        },
+        {
+          "name": "Vegas Golden Knights",
+          "score": "2"
+        }
+      ],
+      "last_update": "2026-11-08T02:40:00Z"
+    }
+  ]
+}
