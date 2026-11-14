@@ -3944,7 +3944,7 @@ async function makeFirstTrackOnlyPickGradeable(
   });
 }
 
-test('runGradingPass uses the filtered validated read without changing population, restriction, or rowsScanned semantics', async () => {
+test('runGradingPass restricted reads load only requested ids and count admitted picks in rowsScanned', async () => {
   const fixture = await createMixedValidatedPopulation();
   await makeFirstTrackOnlyPickGradeable(fixture);
 
@@ -3973,20 +3973,15 @@ test('runGradingPass uses the filtered validated read without changing populatio
   };
 
   const result = await runGradingPass(fixture.repositories, {
-    // The named delivery-eligible row must not be admitted. The restriction is
-    // still applied after population construction and can only remove rows.
+    // The named delivery-eligible row must not pass lifecycle/evidence admission.
     restrictToPickIds: new Set([
       fixture.firstTrackOnlyId,
       fixture.deliveryEligibleId,
     ]),
   });
 
-  assert.deepEqual(optimizedReads, ['validated']);
-  assert.deepEqual(
-    lifecycleReads.sort(),
-    ['awaiting_approval', 'posted'],
-    'awaiting_approval and posted keep their existing paged reads',
-  );
+  assert.deepEqual(optimizedReads, []);
+  assert.deepEqual(lifecycleReads, []);
   assert.equal(result.attempted, 1);
   assert.equal(result.graded, 1);
   assert.equal(result.details[0]?.pickId, fixture.firstTrackOnlyId);
@@ -4008,8 +4003,8 @@ test('runGradingPass uses the filtered validated read without changing populatio
   const details = run?.details as Record<string, unknown>;
   assert.equal(
     details['rows_scanned'],
-    2,
-    'rowsScanned remains the admitted population before restrictToPickIds, not the raw validated table or restricted attempt count',
+    1,
+    'rowsScanned counts only admitted requested picks after loading by id',
   );
 });
 
@@ -4625,8 +4620,8 @@ test("the composed journey: an ingested result makes Milestone 1's exact pick sh
 //
 //   1. Absent, the pass is byte-for-byte what it was -- no caller in production
 //      passes it, so a change in the default is a change in production behaviour.
-//   2. Present, it can only REMOVE candidates. The restriction is intersected with
-//      the population the pass already read.
+//   2. Present, it loads by id and reapplies the same admission rules, so it can
+//      only REMOVE candidates from the unrestricted population.
 //   3. It cannot ADMIT anything. An id outside the population -- a pick in a
 //      lifecycle state grading does not read, or one that does not exist -- stays
 //      ungraded. Without this, the option would be a second, weaker admission path
@@ -4733,8 +4728,7 @@ test('runGradingPass with restrictToPickIds cannot admit a pick the population n
   // A real pick that the population read does not return: `processSubmission`
   // leaves it `validated`, and `validated` enters the population only for the
   // Track Only subset (UTV2-1861), which this one is not. If the restriction were
-  // used AS the population query rather than intersected with it, naming this id
-  // would pull it into grading -- a second, weaker admission path.
+  // loaded without reapplying admission, naming this id would pull it into grading.
   const outside = await processSubmission(
     {
       source: 'api',
@@ -4765,6 +4759,204 @@ test('runGradingPass with restrictToPickIds cannot admit a pick the population n
   assert.equal(
     (await repositories.picks.findPickById(outside.pick.id))?.status,
     'validated',
+  );
+});
+
+function spyOnRestrictedPickReads(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+) {
+  const calls: string[][] = [];
+  const findPicksByIds = repositories.picks.findPicksByIds.bind(
+    repositories.picks,
+  );
+  repositories.picks.findPicksByIds = async (ids) => {
+    calls.push([...ids]);
+    const rows = await findPicksByIds(ids);
+    // Database result order need not match request order.
+    return new Map([...rows].reverse());
+  };
+  repositories.picks.listByLifecycleState = async () => {
+    assert.fail('restricted grading must not read lifecycle populations');
+  };
+  repositories.picks.listTrackOnlyByLifecycleState = async () => {
+    assert.fail('restricted grading must not read the Track Only population');
+  };
+  return calls;
+}
+
+test('restricted grading loads requested ids once, preserves order, and admits posted and awaiting_approval', async () => {
+  const { repositories, firstPickId, secondPickId } =
+    await seedTwoGradeablePostedPicks();
+  mutatePick(repositories, firstPickId, (pick) => ({
+    ...pick,
+    status: 'awaiting_approval',
+  }));
+  const calls = spyOnRestrictedPickReads(repositories);
+  const ids = [secondPickId, firstPickId];
+  const result = await runGradingPass(repositories, {
+    restrictToPickIds: new Set(ids),
+  });
+  assert.deepEqual(calls, [ids]);
+  assert.equal(result.errors, 0);
+  assert.equal(result.graded, 2);
+  assert.deepEqual(
+    result.details.map((detail) => detail.pickId),
+    ids,
+  );
+});
+
+test('restricted grading reapplies admission to every requested status and ignores missing ids', async () => {
+  const fixture = await createMixedValidatedPopulation();
+  await makeFirstTrackOnlyPickGradeable(fixture);
+  const excludedIds = [fixture.deliveryEligibleId, fixture.noModeId];
+  for (const status of ['draft', 'queued', 'settled', 'voided']) {
+    const pick = await createPostedPickFixture({
+      repositories: fixture.repositories,
+      eventName: `Restricted excluded ${status}`,
+    });
+    const { participant, event } = await attachPlayerEventContext(
+      fixture.repositories,
+      pick.pickId,
+      {
+        eventName: pick.eventName,
+        eventStatus: 'completed',
+      },
+    );
+    await seedGameResult(fixture.repositories, {
+      eventId: event.id,
+      participantId: participant.id,
+      marketKey: 'points-all-game-ou',
+      actualValue: 29,
+    });
+    mutatePick(fixture.repositories, pick.pickId, (row) => ({
+      ...row,
+      status,
+    }));
+    excludedIds.push(pick.pickId);
+  }
+  const calls = spyOnRestrictedPickReads(fixture.repositories);
+  const ids = [...excludedIds, 'nonexistent-pick', fixture.firstTrackOnlyId];
+  const result = await runGradingPass(fixture.repositories, {
+    restrictToPickIds: new Set(ids),
+  });
+  assert.deepEqual(calls, [ids]);
+  assert.equal(result.errors, 0);
+  assert.equal(result.attempted, 1);
+  assert.equal(result.graded, 1);
+  assert.equal(result.details[0]?.pickId, fixture.firstTrackOnlyId);
+  for (const id of ids) {
+    assert.equal(
+      (await fixture.repositories.settlements.listByPick(id)).length,
+      id === fixture.firstTrackOnlyId ? 1 : 0,
+    );
+    assert.deepEqual(await fixture.repositories.outbox.listByPickId(id), []);
+  }
+});
+
+test('unrestricted grading retains all three population reads and their ordering', async () => {
+  const fixture = await createMixedValidatedPopulation();
+  await makeFirstTrackOnlyPickGradeable(fixture);
+  const posted = await seedTwoGradeablePostedPicks();
+  const reads: string[] = [];
+  const list = fixture.repositories.picks.listByLifecycleState.bind(
+    fixture.repositories.picks,
+  );
+  fixture.repositories.picks.listByLifecycleState = async (
+    state,
+    limit,
+    offset,
+  ) => {
+    reads.push(state);
+    return list(state, limit, offset);
+  };
+  fixture.repositories.picks.listTrackOnlyByLifecycleState = async (state) => {
+    reads.push(`track-only:${state}`);
+    const rows = await fixture.repositories.picks.findPicksByIds([
+      fixture.firstTrackOnlyId,
+      fixture.secondTrackOnlyId,
+    ]);
+    return [...rows.values()];
+  };
+  const result = await runGradingPass(fixture.repositories);
+  assert.deepEqual(reads, [
+    'posted',
+    'awaiting_approval',
+    'track-only:validated',
+  ]);
+  assert.equal(result.attempted, 2);
+  assert.equal(result.graded, 1);
+  assert.deepEqual(
+    result.details.map((detail) => detail.pickId),
+    [fixture.firstTrackOnlyId, fixture.secondTrackOnlyId],
+  );
+  // Existing posted-population coverage remains independent of the optimized read.
+  assert.equal((await runGradingPass(posted.repositories)).graded, 2);
+});
+
+test('restricted Track Only replay leaves the existing settlement unchanged and creates no delivery', async () => {
+  const fixture = await createMixedValidatedPopulation();
+  await makeFirstTrackOnlyPickGradeable(fixture);
+  const calls = spyOnRestrictedPickReads(fixture.repositories);
+  const options = { restrictToPickIds: new Set([fixture.firstTrackOnlyId]) };
+  assert.equal((await runGradingPass(fixture.repositories, options)).graded, 1);
+  const before = await fixture.repositories.settlements.listByPick(
+    fixture.firstTrackOnlyId,
+  );
+  assert.equal(before.length, 1);
+  const replay = await runGradingPass(fixture.repositories, options);
+  assert.equal(replay.errors, 0);
+  assert.equal(replay.graded, 0);
+  assert.equal(replay.details[0]?.reason, 'settlement_already_exists');
+  assert.deepEqual(
+    await fixture.repositories.settlements.listByPick(fixture.firstTrackOnlyId),
+    before,
+  );
+  assert.deepEqual(
+    await fixture.repositories.outbox.listByPickId(fixture.firstTrackOnlyId),
+    [],
+  );
+  assert.deepEqual(calls, [
+    [fixture.firstTrackOnlyId],
+    [fixture.firstTrackOnlyId],
+  ]);
+});
+
+test('an empty restricted grading set makes no pick read and grades nothing', async () => {
+  const { repositories } = await seedTwoGradeablePostedPicks();
+  const calls = spyOnRestrictedPickReads(repositories);
+  repositories.picks.findPickById = async () => {
+    assert.fail('empty restriction must not read an individual pick');
+  };
+  const result = await runGradingPass(repositories, {
+    restrictToPickIds: new Set(),
+  });
+  assert.deepEqual(calls, []);
+  assert.equal(result.attempted, 0);
+  assert.equal(result.graded, 0);
+  assert.equal(result.errors, 0);
+  assert.deepEqual(result.details, []);
+});
+
+test('restricted grading loads every requested id in chunks of at most 100', async () => {
+  const { repositories, firstPickId, secondPickId } =
+    await seedTwoGradeablePostedPicks();
+  const calls = spyOnRestrictedPickReads(repositories);
+  const ids = Array.from({ length: 205 }, (_, index) => `missing-${index}`);
+  ids[0] = secondPickId;
+  ids[204] = firstPickId;
+  const result = await runGradingPass(repositories, {
+    restrictToPickIds: new Set(ids),
+  });
+  assert.deepEqual(
+    calls.map((call) => call.length),
+    [100, 100, 5],
+  );
+  assert.deepEqual(calls.flat(), ids);
+  assert.equal(result.errors, 0);
+  assert.equal(result.graded, 2);
+  assert.deepEqual(
+    result.details.map((detail) => detail.pickId),
+    [secondPickId, firstPickId],
   );
 });
 

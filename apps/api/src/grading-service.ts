@@ -69,8 +69,8 @@ export interface RunGradingPassOptions {
   logger?: Pick<Console, 'error' | 'warn'>;
   retryState?: GradingRetryState;
   /**
-   * Restricts the pass to these pick ids, applied AFTER the normal population
-   * read. Absent -- which is how every production caller invokes this -- the
+   * Loads only these pick ids and reapplies normal lifecycle and evidence-plane
+   * admission. Absent -- which is how every production caller invokes this -- the
    * pass grades its whole population exactly as before.
    *
    * This exists for the staging journey proof (UTV2-1889), which drives the real
@@ -78,7 +78,7 @@ export interface RunGradingPassOptions {
    * fixture pick settles would sweep and settle the entire staging backlog, and
    * the proof's own counters would be a statement about that backlog rather than
    * about the fixture. It narrows what is graded; it can never widen it, and it
-   * cannot admit a pick the population read did not already return.
+   * cannot admit a pick the unrestricted population would not admit.
    */
   restrictToPickIds?: ReadonlySet<string>;
   /** Test seam for deterministic freshness classification. */
@@ -383,35 +383,50 @@ async function executeGradingPass(
     Partial<Pick<RepositoryBundle, 'killSwitch'>>,
   options: RunGradingPassOptions,
 ): Promise<GradingPassExecution> {
-  // Evidence plane: also process awaiting_approval picks so outcome data
-  // accumulates without requiring public delivery approval. Per UTV2-1253.
-  // Paginated to bypass the Supabase 1000-row default cap (UTV2-1258).
-  // UTV2-1861: Track Only picks never reach `posted`. They are structurally
-  // unable to be delivered, so `validated` is where they stop, and grading
-  // never saw them. Admit the Track Only subset of `validated` -- and only
-  // that subset: `validated` on its own is the entire pre-delivery backlog
-  // (21,364 rows in production on 2026-09-10, against 1 Track Only pick), so
-  // the filter is what keeps this a targeted admission rather than a sweep.
-  const [postedPicks, evidencePicks, validatedPicks] = await Promise.all([
-    fetchAllByLifecycleState(repositories.picks, 'posted'),
-    fetchAllByLifecycleState(repositories.picks, 'awaiting_approval'),
-    typeof repositories.picks.listTrackOnlyByLifecycleState === 'function'
-      ? repositories.picks.listTrackOnlyByLifecycleState('validated')
-      : fetchAllByLifecycleState(repositories.picks, 'validated'),
-  ]);
-  // Keep the contract predicate as a backstop: the optimized repository read
-  // may only remove candidates, never admit a non-Track-Only validated pick.
-  const trackOnlyPicks = validatedPicks.filter((pick) =>
-    isEvidencePlanePick(pick),
-  );
-  const population = [...postedPicks, ...evidencePicks, ...trackOnlyPicks];
-  // Applied after the read, never instead of it: the restriction is an
-  // intersection with what the population already contained, so it can only ever
-  // remove candidates. An id that is not in the population stays ungraded.
-  const restrictToPickIds = options.restrictToPickIds;
-  const picks = restrictToPickIds
-    ? population.filter((pick) => restrictToPickIds.has(pick.id))
-    : population;
+  let population: PickRecord[];
+  if (options.restrictToPickIds !== undefined) {
+    population = [];
+    const requestedIds = [...options.restrictToPickIds];
+    for (let offset = 0; offset < requestedIds.length; offset += 100) {
+      const chunk = requestedIds.slice(offset, offset + 100);
+      const requestedPicks = await repositories.picks.findPicksByIds(chunk);
+      for (const id of chunk) {
+        const pick = requestedPicks.get(id);
+        if (
+          pick &&
+          (pick.status === 'posted' ||
+            pick.status === 'awaiting_approval' ||
+            (pick.status === 'validated' && isEvidencePlanePick(pick)))
+        ) {
+          population.push(pick);
+        }
+      }
+    }
+  } else {
+    // Evidence plane: also process awaiting_approval picks so outcome data
+    // accumulates without requiring public delivery approval. Per UTV2-1253.
+    // Paginated to bypass the Supabase 1000-row default cap (UTV2-1258).
+    // UTV2-1861: Track Only picks never reach `posted`. They are structurally
+    // unable to be delivered, so `validated` is where they stop, and grading
+    // never saw them. Admit the Track Only subset of `validated` -- and only
+    // that subset: `validated` on its own is the entire pre-delivery backlog
+    // (21,364 rows in production on 2026-09-10, against 1 Track Only pick), so
+    // the filter is what keeps this a targeted admission rather than a sweep.
+    const [postedPicks, evidencePicks, validatedPicks] = await Promise.all([
+      fetchAllByLifecycleState(repositories.picks, 'posted'),
+      fetchAllByLifecycleState(repositories.picks, 'awaiting_approval'),
+      typeof repositories.picks.listTrackOnlyByLifecycleState === 'function'
+        ? repositories.picks.listTrackOnlyByLifecycleState('validated')
+        : fetchAllByLifecycleState(repositories.picks, 'validated'),
+    ]);
+    // Keep the contract predicate as a backstop: the optimized repository read
+    // may only remove candidates, never admit a non-Track-Only validated pick.
+    const trackOnlyPicks = validatedPicks.filter((pick) =>
+      isEvidencePlanePick(pick),
+    );
+    population = [...postedPicks, ...evidencePicks, ...trackOnlyPicks];
+  }
+  const picks = population;
 
   // UTV2-1886: one batched read instead of one query per pick. The loop below used to
   // open with `findLatestForPick(pick.id)` -- a sequential round trip for every pick in

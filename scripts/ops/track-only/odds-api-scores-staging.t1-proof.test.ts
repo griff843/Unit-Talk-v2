@@ -310,14 +310,18 @@ test(
         );
         submitted.push({ scenario, pickId });
       }
-      // Each pass reads the shared staging grading population before restricting
-      // it to these picks. Batch the nine cases to avoid repeating that read.
+      // Batch the nine cases; each restricted pass loads only these pick ids
+      // and reapplies the normal lifecycle and Track Only admission rules.
       const restrictToPickIds = new Set(submitted.map(({ pickId }) => pickId));
       assert.equal(restrictToPickIds.size, cases.length);
+      const gradingStartedAt = performance.now();
       const grade = await runGradingPass(repositories, {
         restrictToPickIds,
         now: () => new Date(fixture.evaluateAt),
       });
+      t.diagnostic(
+        `Batched grading elapsed ms: ${performance.now() - gradingStartedAt}`,
+      );
       assert.equal(grade.errors, 0, JSON.stringify(grade.details));
       assert.equal(grade.graded, 9, JSON.stringify(grade.details));
       const settlementsByPick = new Map<
@@ -351,10 +355,14 @@ test(
           },
         );
       }
+      const replayStartedAt = performance.now();
       const replay = await runGradingPass(repositories, {
         restrictToPickIds,
         now: () => new Date(fixture.evaluateAt),
       });
+      t.diagnostic(
+        `Replay grading elapsed ms: ${performance.now() - replayStartedAt}`,
+      );
       assert.equal(replay.errors, 0, JSON.stringify(replay.details));
       assert.equal(replay.graded, 0);
       for (const { scenario, pickId } of submitted) {
