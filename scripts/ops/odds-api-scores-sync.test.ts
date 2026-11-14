@@ -35,41 +35,55 @@
  */
 
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import type { IngestorRepositoryBundle, ParticipantRow } from '@unit-talk/db';
-import { createInMemoryIngestorRepositoryBundle, InMemoryParticipantRepository } from '@unit-talk/db';
+import {
+  createInMemoryIngestorRepositoryBundle,
+  createInMemoryRepositoryBundle,
+  InMemoryParticipantRepository,
+} from '@unit-talk/db';
 
 import { INGESTOR_WRITE_SURFACE } from '../../apps/ingestor/src/write-surface.ts';
+
+import { ODDS_API_SCORES_TEAM_MAP } from '../../apps/ingestor/src/odds-api-scores-team-map.js';
+import { runGradingPass } from '../../apps/api/src/grading-service.js';
+import { processSubmission } from '../../apps/api/src/submission-service.js';
 
 const PRODUCTION_URL = 'https://zfzdnfwdarxucxtaojxm.supabase.co';
 /** Writes are restricted to the approved staging project, even with injected repositories. */
 const NON_PRODUCTION_URL = 'https://xskgrzbteyqdufktjrjx.supabase.co';
 const NOW = new Date('2026-11-09T12:00:00Z');
 
-const FIXTURE_DIR = new URL('../../apps/ingestor/src/__fixtures__/odds-api-scores/', import.meta.url);
-const fixturePath = (name: string) => fileURLToPath(new URL(`${name}.doc-derived.json`, FIXTURE_DIR));
+const FIXTURE_DIR = new URL(
+  '../../apps/ingestor/src/__fixtures__/odds-api-scores/',
+  import.meta.url,
+);
+const fixturePath = (name: string) =>
+  fileURLToPath(new URL(`${name}.doc-derived.json`, FIXTURE_DIR));
 
 /**
  * Canonical teams for the fixtures these tests run, keyed by the production-style
  * external id (`UPPER(name, non-alphanumerics to "_") + "_" + league`) the team map
  * uses for these six teams.
  */
-const CANONICAL_TEAMS: Array<[string, string]> = [
-  ['NBA', 'Sacramento Kings'],
-  ['NBA', 'Oklahoma City Thunder'],
-  ['NHL', 'Winnipeg Jets'],
-  ['NHL', 'Florida Panthers'],
-];
+const CANONICAL_TEAMS: Array<[string, string]> = Object.entries(
+  ODDS_API_SCORES_TEAM_MAP,
+).flatMap(([league, teams]) =>
+  Object.keys(teams).map((name): [string, string] => [league, name]),
+);
 
 function canonicalTeamRows(): ParticipantRow[] {
   const at = '2026-11-01T00:00:00.000Z';
   return CANONICAL_TEAMS.map(([league, name], index) => ({
     id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
     display_name: name,
-    external_id: `${name.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_${league}`,
+    external_id:
+      ODDS_API_SCORES_TEAM_MAP[league as keyof typeof ODDS_API_SCORES_TEAM_MAP][
+        name
+      ]!,
     league,
     metadata: {},
     participant_type: 'team',
@@ -88,7 +102,11 @@ interface SyncReport {
   wroteNothing: boolean;
   blastRadius: { writes: unknown[] } | null;
   quota: { remaining: number | null; used: number | null; last: number | null };
-  decisions: Array<{ eventId: string | null; status: string; reason: string | null }>;
+  decisions: Array<{
+    eventId: string | null;
+    status: string;
+    reason: string | null;
+  }>;
 }
 
 interface SyncDeps {
@@ -102,7 +120,9 @@ interface SyncDeps {
 }
 
 interface SyncModule {
-  runOddsApiScoresSync(deps: SyncDeps): Promise<{ exitCode: number; report: SyncReport | null }>;
+  runOddsApiScoresSync(
+    deps: SyncDeps,
+  ): Promise<{ exitCode: number; report: SyncReport | null }>;
 }
 
 // The root package is CommonJS for tsx, so no top-level await: existence decides the
@@ -110,9 +130,8 @@ interface SyncModule {
 // file exists, a missing or misnamed export fails the suite rather than skipping it.
 const CLI_FILE = new URL('./odds-api-scores-sync.ts', import.meta.url);
 const CLI_SPECIFIER = './odds-api-scores-sync.ts';
-const CLI_SKIP = existsSync(CLI_FILE)
-  ? false
-  : 'not implemented yet: scripts/ops/odds-api-scores-sync.ts (WORK-2026111102)';
+assert.ok(existsSync(CLI_FILE), 'scores CLI must exist');
+const CLI_SKIP = false;
 let cli: SyncModule | null = null;
 
 // ---------------------------------------------------------------------------
@@ -129,7 +148,10 @@ interface Harness {
   stderr: string[];
 }
 
-function createHarness(argv: string[], env: Record<string, string | undefined>): Harness {
+function createHarness(
+  argv: string[],
+  env: Record<string, string | undefined>,
+): Harness {
   const h: Harness = {
     deps: undefined as unknown as SyncDeps,
     fetchCalls: [],
@@ -140,7 +162,13 @@ function createHarness(argv: string[], env: Record<string, string | undefined>):
     stderr: [],
   };
   const fetchImpl = (async (input: string | URL | Request) => {
-    h.fetchCalls.push(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+    h.fetchCalls.push(
+      typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url,
+    );
     return new Response('[]', { status: 200 });
   }) as typeof fetch;
 
@@ -151,7 +179,9 @@ function createHarness(argv: string[], env: Record<string, string | undefined>):
       participants: new InMemoryParticipantRepository(canonicalTeamRows()),
     };
     const wrapped: Record<string, unknown> = {};
-    for (const [name, repo] of Object.entries(bundle) as Array<[string, object]>) {
+    for (const [name, repo] of Object.entries(bundle) as Array<
+      [string, object]
+    >) {
       wrapped[name] = new Proxy(repo, {
         get(target, prop, receiver) {
           const value = Reflect.get(target, prop, receiver) as unknown;
@@ -180,7 +210,12 @@ function createHarness(argv: string[], env: Record<string, string | undefined>):
   return h;
 }
 
-async function runCli(argv: string[], env: Record<string, string | undefined> = { SUPABASE_URL: NON_PRODUCTION_URL }) {
+async function runCli(
+  argv: string[],
+  env: Record<string, string | undefined> = {
+    SUPABASE_URL: NON_PRODUCTION_URL,
+  },
+) {
   assert.ok(cli);
   const h = createHarness(argv, env);
   const result = await cli.runOddsApiScoresSync(h.deps);
@@ -191,168 +226,409 @@ async function runCli(argv: string[], env: Record<string, string | undefined> = 
 // CLI (plan tests 25-28)
 // ---------------------------------------------------------------------------
 
-test('WORK-2026111102 results:odds-api-scores CLI', { skip: CLI_SKIP }, async (t) => {
-  t.before(async () => {
-    const mod = (await import(CLI_SPECIFIER)) as Partial<SyncModule>;
-    assert.equal(typeof mod.runOddsApiScoresSync, 'function', 'runOddsApiScoresSync is exported');
-    cli = mod as SyncModule;
-  });
-
-  await t.test('25. no --apply: zero writes, blast-radius report printed', async () => {
-    const { h, exitCode, report } = await runCli(['--league', 'NBA', '--fixture', fixturePath('nba-final')]);
-    assert.equal(exitCode, 0, h.stderr.join('\n'));
-    assert.deepEqual(h.writes, [], 'the underlying repositories saw no write');
-    assert.ok(report);
-    assert.equal(report.mode, 'dry-run');
-    assert.equal(report.wroteNothing, true);
-    assert.ok(report.blastRadius, 'blast radius present');
-    assert.ok(report.blastRadius.writes.length > 0, 'a final fixture would have written rows');
-    assert.equal(report.decisions.length, 1);
-    assert.equal(report.decisions[0]?.status, 'final');
-    const printed = h.stdout.join('\n');
-    assert.match(printed, /blastRadius/);
-    assert.match(printed, /"remaining"/, 'credits are printed on every run');
-  });
-
-  await t.test('25b. fixture runs print null credits rather than a guess', async () => {
-    const { report } = await runCli(['--league', 'NBA', '--fixture', fixturePath('nba-final')]);
-    assert.deepEqual(report?.quota, { remaining: null, used: null, last: null });
-  });
-
-  await t.test('25c. dry run of the equal-score NHL shootout fixture reports zero result writes', async () => {
-    const { report } = await runCli(['--league', 'NHL', '--fixture', fixturePath('nhl-shootout-equal-scores')]);
-    assert.ok(report?.blastRadius);
-    const resultWrites = (report.blastRadius.writes as Array<{ table: string }>).filter(
-      (w) => w.table === 'game_results',
-    );
-    assert.equal(resultWrites.length, 0);
-    assert.equal(report.decisions[0]?.reason, 'tie_not_possible');
-  });
-
-  await t.test('26. --apply against the production ref exits non-zero before any read or write', async () => {
-    for (const source of ['--fixture', '--live'] as const) {
-      const argv =
-        source === '--fixture'
-          ? ['--league', 'NBA', '--fixture', fixturePath('nba-final'), '--apply']
-          : ['--league', 'NBA', '--days-from', '1', '--live', '--apply'];
-      const { h, exitCode } = await runCli(argv, {
-        SUPABASE_URL: PRODUCTION_URL,
-        ODDS_API_KEY: 'dummy-not-a-key',
-      });
-      assert.notEqual(exitCode, 0, source);
-      assert.equal(h.repositoryFactoryCalls, 0, `${source}: no repository constructed`);
-      assert.deepEqual(h.repositoryCalls, [], `${source}: no read or write`);
-      assert.deepEqual(h.fetchCalls, [], `${source}: vendor not contacted`);
-      assert.match(h.stderr.join('\n'), /production/i);
-    }
-  });
-
-  await t.test('26b. there is no override flag for production apply', async () => {
-    for (const flag of ['--force', '--allow-production', '--i-know']) {
-      const { h, exitCode } = await runCli(
-        ['--league', 'NBA', '--fixture', fixturePath('nba-final'), '--apply', flag],
-        { SUPABASE_URL: PRODUCTION_URL },
+test(
+  'WORK-2026111102 results:odds-api-scores CLI',
+  { skip: CLI_SKIP },
+  async (t) => {
+    t.before(async () => {
+      const mod = (await import(CLI_SPECIFIER)) as Partial<SyncModule>;
+      assert.equal(
+        typeof mod.runOddsApiScoresSync,
+        'function',
+        'runOddsApiScoresSync is exported',
       );
-      assert.notEqual(exitCode, 0, flag);
-      assert.deepEqual(h.repositoryCalls, [], flag);
-    }
-  });
-
-  await t.test('27. neither --fixture nor --live: one usage error listing every problem', async () => {
-    const { h, exitCode } = await runCli(['--days-from', '7']);
-    assert.notEqual(exitCode, 0);
-    assert.equal(h.repositoryFactoryCalls, 0);
-    assert.deepEqual(h.fetchCalls, []);
-    const message = h.stderr.join('\n');
-    assert.match(message, /--league/, 'missing league reported');
-    assert.match(message, /--fixture/, 'missing source reported');
-    assert.match(message, /--live/);
-    assert.match(message, /--days-from/, 'bad days-from reported in the same message');
-    assert.match(message, /results:odds-api-scores --league/, 'full corrected invocation shown');
-  });
-
-  await t.test('27b. both --fixture and --live is a usage error', async () => {
-    const { h, exitCode } = await runCli(
-      ['--league', 'NBA', '--fixture', fixturePath('nba-final'), '--live'],
-      { SUPABASE_URL: NON_PRODUCTION_URL, ODDS_API_KEY: 'dummy-not-a-key' },
-    );
-    assert.notEqual(exitCode, 0);
-    assert.deepEqual(h.fetchCalls, []);
-    assert.equal(h.repositoryFactoryCalls, 0);
-  });
-
-  await t.test('27c. --live without ODDS_API_KEY fails with no request', async () => {
-    const { h, exitCode } = await runCli(['--league', 'NBA', '--days-from', '1', '--live'], {
-      SUPABASE_URL: NON_PRODUCTION_URL,
+      cli = mod as SyncModule;
     });
-    assert.notEqual(exitCode, 0);
-    assert.deepEqual(h.fetchCalls, []);
-    assert.match(h.stderr.join('\n'), /ODDS_API_KEY/);
-  });
 
-  await t.test('27d. unknown league is a usage error', async () => {
-    const { h, exitCode } = await runCli(['--league', 'WNBA', '--fixture', fixturePath('nba-final')]);
-    assert.notEqual(exitCode, 0);
-    assert.equal(h.repositoryFactoryCalls, 0);
-  });
-
-  await t.test('28. --fixture makes no network call', async () => {
-    const { h, exitCode } = await runCli(['--league', 'NBA', '--fixture', fixturePath('nba-final')], {
-      SUPABASE_URL: NON_PRODUCTION_URL,
-      ODDS_API_KEY: 'dummy-not-a-key',
-    });
-    assert.equal(exitCode, 0, h.stderr.join('\n'));
-    assert.deepEqual(h.fetchCalls, [], 'injected fetch saw zero calls even with a key present');
-  });
-
-  await t.test('28b. --apply against a non-production ref writes and opens a system_runs row', async () => {
-    const { h, exitCode, report } = await runCli(
-      ['--league', 'NBA', '--fixture', fixturePath('nba-final'), '--apply'],
-      { SUPABASE_URL: NON_PRODUCTION_URL },
+    await t.test(
+      '25. no --apply: zero writes, blast-radius report printed',
+      async () => {
+        const { h, exitCode, report } = await runCli([
+          '--league',
+          'NBA',
+          '--fixture',
+          fixturePath('nba-final'),
+        ]);
+        assert.equal(exitCode, 0, h.stderr.join('\n'));
+        assert.deepEqual(
+          h.writes,
+          [],
+          'the underlying repositories saw no write',
+        );
+        assert.ok(report);
+        assert.equal(report.mode, 'dry-run');
+        assert.equal(report.wroteNothing, true);
+        assert.ok(report.blastRadius, 'blast radius present');
+        assert.ok(
+          report.blastRadius.writes.length > 0,
+          'a final fixture would have written rows',
+        );
+        assert.equal(report.decisions.length, 1);
+        assert.equal(report.decisions[0]?.status, 'final');
+        const printed = h.stdout.join('\n');
+        assert.match(printed, /blastRadius/);
+        assert.match(
+          printed,
+          /"remaining"/,
+          'credits are printed on every run',
+        );
+      },
     );
-    assert.equal(exitCode, 0, h.stderr.join('\n'));
-    assert.equal(report?.mode, 'apply');
-    assert.ok(h.writes.includes('runs.startRun'), 'run opened');
-    assert.ok(h.writes.includes('runs.completeRun'), 'run completed');
-    assert.ok(h.writes.includes('gradeResults.insert'));
-    assert.ok(
-      h.writes.indexOf('runs.startRun') < h.writes.indexOf('events.upsertByExternalId'),
-      'run opened before any event write',
+
+    await t.test(
+      '25b. fixture runs print null credits rather than a guess',
+      async () => {
+        const { report } = await runCli([
+          '--league',
+          'NBA',
+          '--fixture',
+          fixturePath('nba-final'),
+        ]);
+        assert.deepEqual(report?.quota, {
+          remaining: null,
+          used: null,
+          last: null,
+        });
+      },
     );
-    assert.deepEqual(h.fetchCalls, []);
-  });
 
-  await t.test('28c. applied run fails before event writes and upgrades only on completion', async () => {
-    assert.ok(cli);
-    const h = createHarness(['--league', 'NBA', '--fixture', fixturePath('nba-final'), '--apply'], { SUPABASE_URL: NON_PRODUCTION_URL });
-    const bundle = h.deps.createRepositories();
-    const order: string[] = [];
-    const originalComplete = bundle.runs.completeRun.bind(bundle.runs);
-    bundle.runs.completeRun = async (input) => {
-      order.push(input.status);
-      return originalComplete(input);
-    };
-    const originalUpsert = bundle.events.upsertByExternalId.bind(bundle.events);
-    bundle.events.upsertByExternalId = async (input) => {
-      assert.deepEqual(order, ['failed']);
-      return originalUpsert(input);
-    };
-    h.deps.createRepositories = () => bundle;
-    const result = await cli.runOddsApiScoresSync(h.deps);
-    assert.equal(result.exitCode, 0);
-    assert.deepEqual(order, ['failed', 'succeeded']);
-    const rows = await bundle.runs.listByType('odds-api-scores.operator-run');
-    assert.equal(rows.length, 1);
-    assert.equal(rows[0]?.status, 'succeeded');
-  });
+    await t.test(
+      '25c. dry run of the equal-score NHL shootout fixture reports zero result writes',
+      async () => {
+        const { report } = await runCli([
+          '--league',
+          'NHL',
+          '--fixture',
+          fixturePath('nhl-shootout-equal-scores'),
+        ]);
+        assert.ok(report?.blastRadius);
+        const resultWrites = (
+          report.blastRadius.writes as Array<{ table: string }>
+        ).filter((w) => w.table === 'game_results');
+        assert.equal(resultWrites.length, 0);
+        assert.equal(report.decisions[0]?.reason, 'tie_not_possible');
+      },
+    );
 
-  await t.test('26c. unknown non-production targets are refused before any work', async () => {
-    const { h, exitCode } = await runCli(['--league', 'NBA', '--fixture', '/missing.doc-derived.json', '--apply'], {
-      SUPABASE_URL: 'https://stagingrefnotproduction.supabase.co',
+    await t.test(
+      '26. --apply against the production ref exits non-zero before any read or write',
+      async () => {
+        for (const source of ['--fixture', '--live'] as const) {
+          const argv =
+            source === '--fixture'
+              ? [
+                  '--league',
+                  'NBA',
+                  '--fixture',
+                  fixturePath('nba-final'),
+                  '--apply',
+                ]
+              : ['--league', 'NBA', '--days-from', '1', '--live', '--apply'];
+          const { h, exitCode } = await runCli(argv, {
+            SUPABASE_URL: PRODUCTION_URL,
+            ODDS_API_KEY: 'dummy-not-a-key',
+          });
+          assert.notEqual(exitCode, 0, source);
+          assert.equal(
+            h.repositoryFactoryCalls,
+            0,
+            `${source}: no repository constructed`,
+          );
+          assert.deepEqual(
+            h.repositoryCalls,
+            [],
+            `${source}: no read or write`,
+          );
+          assert.deepEqual(h.fetchCalls, [], `${source}: vendor not contacted`);
+          assert.match(h.stderr.join('\n'), /production/i);
+        }
+      },
+    );
+
+    await t.test(
+      '26b. there is no override flag for production apply',
+      async () => {
+        for (const flag of ['--force', '--allow-production', '--i-know']) {
+          const { h, exitCode } = await runCli(
+            [
+              '--league',
+              'NBA',
+              '--fixture',
+              fixturePath('nba-final'),
+              '--apply',
+              flag,
+            ],
+            { SUPABASE_URL: PRODUCTION_URL },
+          );
+          assert.notEqual(exitCode, 0, flag);
+          assert.deepEqual(h.repositoryCalls, [], flag);
+        }
+      },
+    );
+
+    await t.test(
+      '27. neither --fixture nor --live: one usage error listing every problem',
+      async () => {
+        const { h, exitCode } = await runCli(['--days-from', '7']);
+        assert.notEqual(exitCode, 0);
+        assert.equal(h.repositoryFactoryCalls, 0);
+        assert.deepEqual(h.fetchCalls, []);
+        const message = h.stderr.join('\n');
+        assert.match(message, /--league/, 'missing league reported');
+        assert.match(message, /--fixture/, 'missing source reported');
+        assert.match(message, /--live/);
+        assert.match(
+          message,
+          /--days-from/,
+          'bad days-from reported in the same message',
+        );
+        assert.match(
+          message,
+          /results:odds-api-scores --league/,
+          'full corrected invocation shown',
+        );
+      },
+    );
+
+    await t.test(
+      '27b. both --fixture and --live is a usage error',
+      async () => {
+        const { h, exitCode } = await runCli(
+          ['--league', 'NBA', '--fixture', fixturePath('nba-final'), '--live'],
+          { SUPABASE_URL: NON_PRODUCTION_URL, ODDS_API_KEY: 'dummy-not-a-key' },
+        );
+        assert.notEqual(exitCode, 0);
+        assert.deepEqual(h.fetchCalls, []);
+        assert.equal(h.repositoryFactoryCalls, 0);
+      },
+    );
+
+    await t.test(
+      '27c. --live without ODDS_API_KEY fails with no request',
+      async () => {
+        const { h, exitCode } = await runCli(
+          ['--league', 'NBA', '--days-from', '1', '--live'],
+          {
+            SUPABASE_URL: NON_PRODUCTION_URL,
+          },
+        );
+        assert.notEqual(exitCode, 0);
+        assert.deepEqual(h.fetchCalls, []);
+        assert.match(h.stderr.join('\n'), /ODDS_API_KEY/);
+      },
+    );
+
+    await t.test('27d. unknown league is a usage error', async () => {
+      const { h, exitCode } = await runCli([
+        '--league',
+        'WNBA',
+        '--fixture',
+        fixturePath('nba-final'),
+      ]);
+      assert.notEqual(exitCode, 0);
+      assert.equal(h.repositoryFactoryCalls, 0);
     });
-    assert.equal(exitCode, 1);
-    assert.equal(h.repositoryFactoryCalls, 0);
-    assert.deepEqual(h.fetchCalls, []);
-    assert.match(h.stderr.join(' '), /approved staging/);
-  });
-});
+
+    await t.test('28. --fixture makes no network call', async () => {
+      const { h, exitCode } = await runCli(
+        ['--league', 'NBA', '--fixture', fixturePath('nba-final')],
+        {
+          SUPABASE_URL: NON_PRODUCTION_URL,
+          ODDS_API_KEY: 'dummy-not-a-key',
+        },
+      );
+      assert.equal(exitCode, 0, h.stderr.join('\n'));
+      assert.deepEqual(
+        h.fetchCalls,
+        [],
+        'injected fetch saw zero calls even with a key present',
+      );
+    });
+
+    await t.test(
+      '28b. --apply against a non-production ref writes and opens a system_runs row',
+      async () => {
+        const { h, exitCode, report } = await runCli(
+          ['--league', 'NBA', '--fixture', fixturePath('nba-final'), '--apply'],
+          { SUPABASE_URL: NON_PRODUCTION_URL },
+        );
+        assert.equal(exitCode, 0, h.stderr.join('\n'));
+        assert.equal(report?.mode, 'apply');
+        assert.ok(h.writes.includes('runs.startRun'), 'run opened');
+        assert.ok(h.writes.includes('runs.completeRun'), 'run completed');
+        assert.ok(h.writes.includes('gradeResults.insert'));
+        assert.ok(
+          h.writes.indexOf('runs.startRun') <
+            h.writes.indexOf('events.upsertByExternalId'),
+          'run opened before any event write',
+        );
+        assert.deepEqual(h.fetchCalls, []);
+      },
+    );
+
+    await t.test(
+      '28c. applied run fails before event writes and upgrades only on completion',
+      async () => {
+        assert.ok(cli);
+        const h = createHarness(
+          ['--league', 'NBA', '--fixture', fixturePath('nba-final'), '--apply'],
+          { SUPABASE_URL: NON_PRODUCTION_URL },
+        );
+        const bundle = h.deps.createRepositories();
+        const order: string[] = [];
+        const originalComplete = bundle.runs.completeRun.bind(bundle.runs);
+        bundle.runs.completeRun = async (input) => {
+          order.push(input.status);
+          return originalComplete(input);
+        };
+        const originalUpsert = bundle.events.upsertByExternalId.bind(
+          bundle.events,
+        );
+        bundle.events.upsertByExternalId = async (input) => {
+          assert.deepEqual(order, ['failed']);
+          return originalUpsert(input);
+        };
+        h.deps.createRepositories = () => bundle;
+        const result = await cli.runOddsApiScoresSync(h.deps);
+        assert.equal(result.exitCode, 0);
+        assert.deepEqual(order, ['failed', 'succeeded']);
+        const rows = await bundle.runs.listByType(
+          'odds-api-scores.operator-run',
+        );
+        assert.equal(rows.length, 1);
+        assert.equal(rows[0]?.status, 'succeeded');
+      },
+    );
+
+    await t.test(
+      '26c. unknown non-production targets are refused before any work',
+      async () => {
+        const { h, exitCode } = await runCli(
+          [
+            '--league',
+            'NBA',
+            '--fixture',
+            '/missing.doc-derived.json',
+            '--apply',
+          ],
+          {
+            SUPABASE_URL: 'https://stagingrefnotproduction.supabase.co',
+          },
+        );
+        assert.equal(exitCode, 1);
+        assert.equal(h.repositoryFactoryCalls, 0);
+        assert.deepEqual(h.fetchCalls, []);
+        assert.match(h.stderr.join(' '), /approved staging/);
+      },
+    );
+    await t.test(
+      '25d. every labelled fixture dry-runs with zero underlying writes and zero requests',
+      async () => {
+        for (const filename of readdirSync(FIXTURE_DIR)) {
+          const envelope = JSON.parse(
+            readFileSync(new URL(filename, FIXTURE_DIR), 'utf8'),
+          ) as { league: string };
+          const { h, exitCode, report } = await runCli([
+            '--league',
+            envelope.league,
+            '--fixture',
+            fileURLToPath(new URL(filename, FIXTURE_DIR)),
+          ]);
+          assert.equal(exitCode, 0, filename);
+          assert.equal(report?.wroteNothing, true, filename);
+          assert.deepEqual(h.writes, [], filename);
+          assert.deepEqual(h.fetchCalls, [], filename);
+        }
+      },
+    );
+
+    await t.test(
+      '34 composed. NHL fixture ingestion derives the credited settlement; equal scores never settle',
+      async () => {
+        assert.ok(cli);
+        const previousUrl = process.env.SUPABASE_URL;
+        process.env.SUPABASE_URL = 'http://127.0.0.1:1';
+        try {
+          for (const name of [
+            'nhl-shootout-winner-credited',
+            'nhl-shootout-equal-scores',
+          ]) {
+            const repositories = {
+              ...createInMemoryRepositoryBundle(),
+              participants: new InMemoryParticipantRepository(
+                canonicalTeamRows(),
+              ),
+            };
+            const fixture = JSON.parse(
+              readFileSync(fixturePath(name), 'utf8'),
+            ) as {
+              response: Array<{
+                id: string;
+                away_team: string;
+                home_team: string;
+              }>;
+            };
+            const input = fixture.response[0]!;
+            const ingested = await cli.runOddsApiScoresSync({
+              argv: [
+                '--league',
+                'NHL',
+                '--fixture',
+                fixturePath(name),
+                '--apply',
+              ],
+              env: { SUPABASE_URL: NON_PRODUCTION_URL },
+              now: () => NOW,
+              fetchImpl: async () => {
+                assert.fail('no vendor or delivery request allowed');
+              },
+              createRepositories: () => repositories,
+              log: () => {},
+              error: (message) => assert.fail(message),
+            });
+            assert.equal(ingested.exitCode, 0);
+            const event = await repositories.events.findByExternalId(input.id);
+            const created = await processSubmission(
+              {
+                source: 'api',
+                market: 'game_total_ou',
+                selection: 'Over 4.5',
+                line: 4.5,
+                odds: -110,
+                stakeUnits: 1,
+                eventName: `${input.away_team} @ ${input.home_team}`,
+                metadata: {
+                  distributionMode: 'track-only',
+                  sport: 'NHL',
+                  ...(event ? { eventId: event.id } : {}),
+                },
+              },
+              repositories,
+            );
+            const graded = await runGradingPass(repositories, {
+              now: () => NOW,
+            });
+            const settlement = await repositories.settlements.findLatestForPick(
+              created.pick.id,
+            );
+            if (name === 'nhl-shootout-winner-credited') {
+              assert.equal(graded.graded, 1, JSON.stringify(graded.details));
+              assert.equal(settlement?.result, 'win');
+            } else {
+              assert.equal(graded.graded, 0);
+              assert.equal(settlement, null);
+              assert.equal(event, null);
+            }
+            assert.deepEqual(
+              await repositories.outbox.listByPickId(created.pick.id),
+              [],
+            );
+          }
+        } finally {
+          if (previousUrl === undefined) delete process.env.SUPABASE_URL;
+          else process.env.SUPABASE_URL = previousUrl;
+        }
+      },
+    );
+  },
+);
