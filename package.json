@@ -9,6 +9,7 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
+    "results:odds-api-scores": "tsx scripts/ops/odds-api-scores-sync.ts",
     "backfill:sgo-history": "tsx scripts/backfill-sgo-history.ts",
     "build": "pnpm exec tsc -b tsconfig.json",
     "bootstrap:canonical-reference": "tsx scripts/run-canonical-reference-bootstrap.ts",
