@@ -5268,6 +5268,7 @@ async function createOddsApiGradingFixture(options: {
 for (const defect of [
   'six rows',
   'foreign eighth row',
+  'foreign team row among seven',
   'unlinked participant',
   'missing away link',
   'wrong game total',
@@ -5292,6 +5293,12 @@ for (const defect of [
     if (defect === 'six rows') inputs.pop();
     if (defect === 'foreign eighth row')
       inputs.push({ ...inputs[0]!, source: 'sgo' });
+    if (defect === 'foreign team row among seven') {
+      inputs.find(
+        (row) => row.participantId === team.id && row.marketKey === 'team_total_ou',
+      )!.source = 'sgo';
+      assert.equal(inputs.length, 7);
+    }
     if (defect === 'unlinked participant') {
       const stranger = await repositories.participants.upsertByExternalId({
         externalId: 'UNLINKED_NHL',
@@ -5334,6 +5341,7 @@ for (const defect of [
     const incomplete = [
       'six rows',
       'foreign eighth row',
+      'foreign team row among seven',
       'unlinked participant',
       'missing away link',
     ].includes(defect);

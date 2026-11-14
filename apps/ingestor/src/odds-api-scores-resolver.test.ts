@@ -1157,6 +1157,95 @@ for (const successfulInserts of [1, 4]) {
   });
 }
 
+test('step 13b: interruption after seven inserts resumes completion without reinserting results', async () => {
+  const input = firstEvent('nba-final');
+  const h = await createHarness(teamsOf(input, 'NBA'));
+  let upserts = 0;
+  const faulty = {
+    ...h,
+    repositories: {
+      ...h.repositories,
+      events: new Proxy(h.repositories.events, {
+        get(target, prop, receiver) {
+          if (prop === 'upsertByExternalId') {
+            return async (value: Parameters<typeof target.upsertByExternalId>[0]) => {
+              if (++upserts === 2) throw new Error('injected interruption');
+              return target.upsertByExternalId(value);
+            };
+          }
+          return Reflect.get(target, prop, receiver);
+        },
+      }),
+    },
+  };
+  await assert.rejects(run(faulty, [input], 'NBA'), /injected interruption/);
+  assert.equal(upserts, 2);
+  const partial = await h.raw.events.findByExternalId(input.id);
+  assert.ok(partial);
+  assert.notEqual(partial.status, 'completed');
+  assert.equal(partial.metadata['resultsProof'], undefined);
+  const rows = structuredClone(await resultsFor(h, input.id));
+  assert.equal(rows.length, 7);
+
+  h.resetWrites();
+  const resumed = await run(h, [input], 'NBA');
+  assert.equal(resumed.resultsInserted, 0);
+  assert.equal(resumed.eventsUpserted, 1);
+  assert.ok(!h.writes.includes('gradeResults.insert'));
+  assert.deepEqual(await resultsFor(h, input.id), rows);
+  await assertComplete(h, input);
+
+  const completed = structuredClone(
+    await h.raw.events.findByExternalId(input.id),
+  );
+  h.resetWrites();
+  const replay = await run(h, [input], 'NBA');
+  assert.equal(replay.eventsUpserted, 0);
+  assert.equal(replay.resultsInserted, 0);
+  assert.deepEqual(replay.skipped, [
+    { eventId: input.id, reason: 'results_already_present' },
+  ]);
+  assert.deepEqual(h.writes, []);
+  assert.deepEqual(await h.raw.events.findByExternalId(input.id), completed);
+  assert.deepEqual(await resultsFor(h, input.id), rows);
+});
+
+test('step 13b: a completed event with seven matching rows but no proof must finish repair', async () => {
+  const input = firstEvent('nba-final');
+  const h = await createHarness(teamsOf(input, 'NBA'));
+  await run(h, [input], 'NBA');
+  const completed = await h.raw.events.findByExternalId(input.id);
+  assert.ok(completed);
+  const metadata = { ...completed.metadata };
+  delete metadata['resultsProof'];
+  await h.raw.events.upsertByExternalId({
+    externalId: input.id,
+    sportId: completed.sport_id,
+    eventName: completed.event_name,
+    eventDate: completed.event_date,
+    status: 'completed',
+    metadata,
+  });
+  assert.equal(
+    (await h.raw.events.findById(completed.id))?.metadata['resultsProof'],
+    undefined,
+  );
+  const rows = structuredClone(await resultsFor(h, input.id));
+  assert.equal(rows.length, 7);
+  h.resetWrites();
+  const repaired = await run(h, [input], 'NBA');
+  assert.equal(repaired.resultsInserted, 0);
+  assert.equal(repaired.eventsUpserted, 1);
+  assert.deepEqual(repaired.skipped, []);
+  assert.equal(
+    h.writes.filter((write) => write === 'events.upsertByExternalId').length,
+    2,
+  );
+  assert.ok(!h.writes.includes('gradeResults.insert'));
+  assert.deepEqual(await resultsFor(h, input.id), rows);
+  await assertComplete(h, input);
+});
+
 test('step 13: legacy completed partial event loses proof before repair and restores it only after completion', async () => {
   const input = firstEvent('nba-final');
   const h = await createHarness(teamsOf(input, 'NBA'));

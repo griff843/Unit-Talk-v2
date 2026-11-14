@@ -580,6 +580,32 @@ test(
         .slice(0, 32);
       const concurrentPath = join(directory, 'nba-concurrent.doc-derived.json');
       await writeFile(concurrentPath, JSON.stringify(concurrentFixture));
+      // Event creation races fail closed (loser exits 1 with no result); stage it before racing results.
+      const nonFinalFixture = structuredClone(concurrentFixture);
+      nonFinalFixture.response[0]!.completed = false;
+      nonFinalFixture.response[0]!.scores = null;
+      const nonFinalPath = join(
+        directory, 'nba-concurrent-non-final.doc-derived.json',
+      );
+      await writeFile(nonFinalPath, JSON.stringify(nonFinalFixture));
+      const staged = await runOddsApiScoresSync({
+        argv: ['--league', 'NBA', '--fixture', nonFinalPath, '--apply'],
+        env: { SUPABASE_URL: env.SUPABASE_URL },
+        fetchImpl: vendorForbidden,
+        createRepositories: () => ingestor,
+        now: () => new Date(fixture.evaluateAt),
+        log: () => {},
+        error: assert.fail,
+      });
+      assert.equal(staged.exitCode, 0);
+      const stagedEvent = await repositories.events.findByExternalId(
+        concurrentInput.id,
+      );
+      assert.ok(stagedEvent);
+      assert.notEqual(stagedEvent.status, 'completed');
+      assert.deepEqual(
+        await repositories.gradeResults.listByEvent(stagedEvent.id), [],
+      );
       const concurrentErrors: string[] = [];
       const applyConcurrent = () =>
         runOddsApiScoresSync({
