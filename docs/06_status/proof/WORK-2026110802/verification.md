@@ -1,6 +1,6 @@
 # PROOF: WORK-2026110802
 
-MERGE_SHA: pending merge
+MERGE_SHA: fde68a982a585a3ae7ea8cf12c84f4d3e6b7737c
 
 > `post-merge-lane-close.yml` binds the merge SHA; it is never written here by hand.
 
@@ -445,6 +445,6 @@ exact-head CI re-runs the same staging job.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: fde68a982a585a3ae7ea8cf12c84f4d3e6b7737c
 PR: pending
 Execution SHA: 8f4320b38411ac71f2af5f977fcf2ea44afef3ea

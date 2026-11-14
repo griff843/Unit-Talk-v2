@@ -55,5 +55,5 @@ scope, not needed). No migration, provider, ingestion, delivery or kill-switch c
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: fde68a982a585a3ae7ea8cf12c84f4d3e6b7737c
 PR: pending

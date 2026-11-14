@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110802/.out/worktrees/claude__work-2026110802-manual-player-fallback",
   "branch": "claude/work-2026110802-manual-player-fallback",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "fde68a982a585a3ae7ea8cf12c84f4d3e6b7737c",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1841",
   "files_changed": [],
   "file_scope_lock": [
@@ -29,14 +29,22 @@
     "docs/06_status/proof/WORK-2026110802/evidence.json",
     "docs/06_status/proof/WORK-2026110802/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-11-11T05:29:43.281Z",
-  "heartbeat_at": "2026-11-11T05:50:41.622Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-11-14T02:58:54.190Z",
+  "closed_at": "2026-11-14T02:58:54.190Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026110802-manual-player-fallback.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-11-14T02:58:51.805Z",
+      "verdict": "pass",
+      "merge_sha": "fde68a982a585a3ae7ea8cf12c84f4d3e6b7737c",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {
