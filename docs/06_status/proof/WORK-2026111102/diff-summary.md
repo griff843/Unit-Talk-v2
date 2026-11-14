@@ -1,12 +1,22 @@
 # Diff summary: WORK-2026111102
 
-> Scaffolded by `ops:lane-start`. Replace this note with the files this lane changed
-> and why. Until then this file records nothing.
+Odds API scores results ingestion: operator CLI, doc-derived fixtures and staging only. No deployment, scheduling, provider key, live vendor call or production write.
 
 | File | Change |
 |---|---|
+| `apps/ingestor/src/odds-api-fetcher.ts` | `fetchOddsApiScores`: validated GET of the scores endpoint with quota telemetry. |
+| `apps/ingestor/src/odds-api-scores-parser.ts` | Classifies an event as `final` only when completed, both scores numeric, names matching the home/away teams, and a fresh `last_update`. |
+| `apps/ingestor/src/odds-api-scores-team-map.ts` | Static map from Odds API team names to canonical external ids; no fuzzy matching. |
+| `apps/ingestor/src/odds-api-scores-resolver.ts` | Writes the event, participants and the four full-game result keys idempotently, with `resultsProof` provenance. |
+| `scripts/ops/odds-api-scores-sync.ts` | `results:odds-api-scores` CLI: dry run by default, `--apply` refused on anything but staging, blast-radius report, run audit row. |
+| `apps/api/src/grading-service.ts` | Trusts `odds-api` results only for Track Only evidence-plane picks with a complete `resultsProof`, for game total, team total, spread and moneyline; fixture payloads only on staging or loopback. |
+| `apps/ingestor/src/__fixtures__/odds-api-scores/*.doc-derived.json` | 15 fixtures derived from the documented response shape. |
+| `*.test.ts` (parser, resolver, sync, grading-service, staging proof) | Tests 1-38; test 38 is the CI-only staging journey across all four families. |
+| `package.json` | `results:odds-api-scores` script and test registration only (PM D6). |
+| `.ops/work/WORK-2026111102.md`, `docs/06_status/lanes/WORK-2026111102.json`, `.ops/sync/WORK-2026111102.yml` | Work order (incl. step 9), lane manifest and sync record. |
+| `docs/06_status/proof/WORK-2026111102/*` | This proof bundle and the model-routing sidecar. |
 
 ## SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1846
