@@ -1,0 +1,107 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110804",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110804/.out/worktrees/claude__work-2026110804-lean-mode",
+  "branch": "claude/work-2026110804-lean-mode",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1842",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/executor-result-validator.yml",
+    ".github/workflows/independent-review.yml",
+    ".github/workflows/merge-gate.yml",
+    ".github/workflows/post-merge-qa-gate.yml",
+    ".github/workflows/required-check-refresh.yml",
+    ".github/workflows/risk-class.yml",
+    ".ops/work/WORK-2026110804.md",
+    "docs/05_operations/LEAN_MODE_ACTIVATION.md",
+    "docs/05_operations/OPERATING_MODEL_SONNET5.md",
+    "scripts/ops/operating-model-workflows.test.ts",
+    "scripts/ops/operating-model.cjs",
+    "scripts/ops/operating-model.test.ts",
+    "scripts/ops/workflow-hardening.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026110804/diff-summary.md",
+    "docs/06_status/proof/WORK-2026110804/evidence.json",
+    "docs/06_status/proof/WORK-2026110804/verification.md"
+  ],
+  "status": "in_review",
+  "started_at": "2026-11-11T05:54:14.073Z",
+  "heartbeat_at": "2026-11-11T06:00:32.143Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/work-2026110804-lean-mode.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110804/.out/worktrees/claude__work-2026110804-lean-mode",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  },
+  "scope_release_history": [
+    {
+      "released_at": "2026-11-11T17:57:51.947Z",
+      "actor": "claude",
+      "reason": "PM pause decision 2026-11-11: PR #1842 CHANGES REQUIRED and paused; test:ops wiring dropped (0aaf97bbc) so package.json leaves the PR diff and is freed for WORK-2026111102 (Odds API)",
+      "pr_number": 1842,
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1842",
+      "head_sha": "0aaf97bbcfeb609892e765daba609200aefebc0c",
+      "previous_lock_hash": "e8714600e6196134770d8a459017eb15eeee9475d7e7b2c9b2bd8c6b8046ab43",
+      "resulting_lock_hash": "45eb7b2384cff0acb5898459477f780353004da2866de577708ffc43013f67a2",
+      "released_paths": [
+        "package.json"
+      ],
+      "verifications": [
+        {
+          "check": "lane_worktree",
+          "status": "pass",
+          "detail": "ran in /home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110804/.out/worktrees/claude__work-2026110804-lean-mode on branch claude/work-2026110804-lean-mode"
+        },
+        {
+          "check": "manifest_identity",
+          "status": "pass",
+          "detail": "issue WORK-2026110804, pr_url https://github.com/griff843/Unit-Talk-v2/pull/1842"
+        },
+        {
+          "check": "pr_head",
+          "status": "pass",
+          "detail": "PR #1842 OPEN at 0aaf97bbcfeb609892e765daba609200aefebc0c"
+        },
+        {
+          "check": "previous_lock_hash",
+          "status": "pass",
+          "detail": "e8714600e6196134770d8a459017eb15eeee9475d7e7b2c9b2bd8c6b8046ab43"
+        },
+        {
+          "check": "paths_absent_from_pr_diff",
+          "status": "pass",
+          "detail": "18 changed file(s) scanned"
+        },
+        {
+          "check": "paths_absent_from_local_work",
+          "status": "pass",
+          "detail": "staged=0 unstaged=0 untracked=0 unpushed=0"
+        },
+        {
+          "check": "no_concurrent_lane_dependency",
+          "status": "pass",
+          "detail": "1021 other manifest(s) scanned"
+        },
+        {
+          "check": "resulting_lock_valid",
+          "status": "pass",
+          "detail": "13 entries remain"
+        }
+      ]
+    }
+  ]
+}
