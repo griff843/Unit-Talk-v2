@@ -256,63 +256,78 @@ test(
           arithmetic: 'Thunder 103 < 110.5, so Thunder Over loses',
         },
       ];
+      const submitted: Array<{
+        scenario: (typeof cases)[number];
+        pickId: string;
+      }> = [];
       for (const scenario of cases) {
+        const team = scenario.side ? teams[scenario.side] : null;
+        // participantId persists the canonical FK through submission; teamId is
+        // also understood by grading. Game totals deliberately have neither.
+        const created = await processSubmission(
+          {
+            source: 'api',
+            market: scenario.market,
+            selection: `${scenario.selection} [WORK-2026111102:${namespace}]`,
+            ...(scenario.line === undefined ? {} : { line: scenario.line }),
+            odds: -110,
+            stakeUnits: 1,
+            eventName: event.event_name,
+            metadata: {
+              distributionMode: 'track-only',
+              sport: 'NBA',
+              eventId: event.id,
+              fixtureRunId: namespace,
+              fixtureProvenance: 'doc-derived',
+              ...(team
+                ? {
+                    participantId: team.id,
+                    teamId: team.id,
+                    team: team.display_name,
+                    participantResolution: {
+                      resolution: 'canonical',
+                      sportId: 'NBA',
+                      eventId: event.id,
+                      team: {
+                        participantId: team.id,
+                        displayName: team.display_name,
+                        participantType: 'team',
+                      },
+                    },
+                  }
+                : {}),
+            },
+          },
+          repositories,
+        );
+        const pickId = created.pick.id;
+        const persistedPick = await repositories.picks.findPickById(pickId);
+        assert.ok(persistedPick);
+        assert.equal(persistedPick.participant_id, team?.id ?? null);
+        assert.equal(
+          await repositories.settlements.findLatestForPick(pickId),
+          null,
+        );
+        submitted.push({ scenario, pickId });
+      }
+      // Each pass reads the shared staging grading population before restricting
+      // it to these picks. Batch the nine cases to avoid repeating that read.
+      const restrictToPickIds = new Set(submitted.map(({ pickId }) => pickId));
+      assert.equal(restrictToPickIds.size, cases.length);
+      const grade = await runGradingPass(repositories, {
+        restrictToPickIds,
+        now: () => new Date(fixture.evaluateAt),
+      });
+      assert.equal(grade.errors, 0, JSON.stringify(grade.details));
+      assert.equal(grade.graded, 9, JSON.stringify(grade.details));
+      const settlementsByPick = new Map<
+        string,
+        Awaited<ReturnType<typeof repositories.settlements.listByPick>>
+      >();
+      for (const { scenario, pickId } of submitted) {
         await t.test(
           `${scenario.market}: ${scenario.selection} -> ${scenario.expected}`,
           async () => {
-            const team = scenario.side ? teams[scenario.side] : null;
-            // participantId persists the canonical FK through submission; teamId is
-            // also understood by grading. Game totals deliberately have neither.
-            const created = await processSubmission(
-              {
-                source: 'api',
-                market: scenario.market,
-                selection: `${scenario.selection} [WORK-2026111102:${namespace}]`,
-                ...(scenario.line === undefined ? {} : { line: scenario.line }),
-                odds: -110,
-                stakeUnits: 1,
-                eventName: event.event_name,
-                metadata: {
-                  distributionMode: 'track-only',
-                  sport: 'NBA',
-                  eventId: event.id,
-                  fixtureRunId: namespace,
-                  fixtureProvenance: 'doc-derived',
-                  ...(team
-                    ? {
-                        participantId: team.id,
-                        teamId: team.id,
-                        team: team.display_name,
-                        participantResolution: {
-                          resolution: 'canonical',
-                          sportId: 'NBA',
-                          eventId: event.id,
-                          team: {
-                            participantId: team.id,
-                            displayName: team.display_name,
-                            participantType: 'team',
-                          },
-                        },
-                      }
-                    : {}),
-                },
-              },
-              repositories,
-            );
-            const pickId = created.pick.id;
-            const persistedPick = await repositories.picks.findPickById(pickId);
-            assert.ok(persistedPick);
-            assert.equal(persistedPick.participant_id, team?.id ?? null);
-            assert.equal(
-              await repositories.settlements.findLatestForPick(pickId),
-              null,
-            );
-            const grade = await runGradingPass(repositories, {
-              restrictToPickIds: new Set([pickId]),
-              now: () => new Date(fixture.evaluateAt),
-            });
-            assert.equal(grade.errors, 0, JSON.stringify(grade.details));
-            assert.equal(grade.graded, 1, JSON.stringify(grade.details));
             const settlement =
               await repositories.settlements.findLatestForPick(pickId);
             assert.equal(
@@ -323,6 +338,7 @@ test(
             const settlements =
               await repositories.settlements.listByPick(pickId);
             assert.equal(settlements.length, 1, scenario.arithmetic);
+            settlementsByPick.set(pickId, settlements);
             assert.equal(
               (await repositories.picks.findPickById(pickId))?.status,
               'validated',
@@ -332,26 +348,27 @@ test(
               [],
             );
             assert.equal(vendorCalls, 0);
-            const replay = await runGradingPass(repositories, {
-              restrictToPickIds: new Set([pickId]),
-              now: () => new Date(fixture.evaluateAt),
-            });
-            assert.equal(replay.errors, 0, JSON.stringify(replay.details));
-            assert.equal(replay.graded, 0);
-            assert.equal(
-              (await repositories.settlements.listByPick(pickId)).length,
-              1,
-            );
-            assert.deepEqual(
-              await repositories.settlements.listByPick(pickId),
-              settlements,
-            );
-            assert.deepEqual(
-              await repositories.outbox.listByPickId(pickId),
-              [],
-            );
           },
         );
+      }
+      const replay = await runGradingPass(repositories, {
+        restrictToPickIds,
+        now: () => new Date(fixture.evaluateAt),
+      });
+      assert.equal(replay.errors, 0, JSON.stringify(replay.details));
+      assert.equal(replay.graded, 0);
+      for (const { scenario, pickId } of submitted) {
+        assert.equal(
+          (await repositories.settlements.listByPick(pickId)).length,
+          1,
+          scenario.arithmetic,
+        );
+        assert.deepEqual(
+          await repositories.settlements.listByPick(pickId),
+          settlementsByPick.get(pickId),
+          scenario.arithmetic,
+        );
+        assert.deepEqual(await repositories.outbox.listByPickId(pickId), []);
       }
       assert.equal(vendorCalls, 0);
     } finally {
