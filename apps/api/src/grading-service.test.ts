@@ -4979,3 +4979,141 @@ test('Codex review F3 control: a game-line pick is unaffected', async () => {
   assert.equal(result.details[0]?.result, 'win');
   assert.equal((await repositories.settlements.listByPick(pickId)).length, 1);
 });
+
+// WORK-2026111102: Odds API trust is bounded to Track Only full-game lines.
+async function createOddsApiGradingFixture(options: {
+  market?: string; posted?: boolean; metadata?: Record<string, unknown>;
+  noResults?: boolean; actualValue?: number; line?: number;
+} = {}) {
+  const market = options.market ?? 'game_total_ou';
+  const repositories = createInMemoryRepositoryBundle();
+  const eventName = 'Odds Scores Away @ Odds Scores Home';
+  const created = await processSubmission({ source: 'smart-form', market,
+    selection: market === 'moneyline' ? 'Odds Scores Home' : market === 'spread' ? 'Odds Scores Home -2.5' : 'Over 4.5',
+    ...(market === 'moneyline' ? {} : { line: options.line ?? (market === 'spread' ? -2.5 : 4.5) }),
+    odds: -110, stakeUnits: 1, eventName,
+    metadata: options.posted ? {} : { distributionMode: 'track-only' },
+  }, repositories);
+  const pickId = created.pick.id;
+  if (options.posted) {
+    await transitionPickLifecycle(repositories.picks, pickId, 'queued', 'queued');
+    await transitionPickLifecycle(repositories.picks, pickId, 'posted', 'posted', 'poster');
+  }
+  const externalId = '12345678901234567890123456789012';
+  const event = await repositories.events.upsertByExternalId({ externalId, sportId: 'NHL', eventName,
+    eventDate: '2026-11-08', status: options.noResults ? 'scheduled' : 'completed', metadata: {
+      source: 'odds-api', providerKey: 'odds-api', ingestionSource: 'odds-api-scores.operator-run',
+      ingestionCycleRunId: 'odds-scores-test-run', starts_at: '2026-11-08T01:00:00Z',
+      resultsProof: { completedObserved: true, providerEventId: externalId,
+        providerLastUpdate: '2026-11-08T04:00:00Z', payloadKind: 'live' },
+      ...options.metadata,
+    } });
+  const team = await repositories.participants.upsertByExternalId({ externalId: 'ODDS_SCORES_HOME_NHL',
+    displayName: 'Odds Scores Home', participantType: 'team', sport: 'NHL', league: 'NHL', metadata: {} });
+  await repositories.eventParticipants.upsert({ eventId: event.id, participantId: team.id, role: 'home' });
+  mutatePick(repositories, pickId, (pick) => ({ ...pick, market, sport_id: 'NHL',
+    participant_id: null, ...(market === 'moneyline' ? { line: null } : {}),
+    metadata: { ...(asRecord(pick.metadata) ?? {}), sport: 'NHL', eventName, eventId: event.id,
+      teamId: team.id, team: team.display_name } }));
+  const resultKey = market === 'moneyline' ? 'game_moneyline_win' : market === 'spread' ? 'game_spread_margin' : market;
+  if (!options.noResults) await seedGameResult(repositories, { eventId: event.id,
+    participantId: market === 'game_total_ou' ? null : team.id, marketKey: resultKey,
+    actualValue: options.actualValue ?? (market === 'moneyline' ? 1 : market === 'spread' ? 3 : 5),
+    source: 'odds-api', sourcedAt: '2026-11-08T04:00:00Z' });
+  return { repositories, pickId, event, team };
+}
+
+test('WORK-2026111102 29. Odds API grades Track Only total, team total, spread and moneyline', async () => {
+  for (const market of ['game_total_ou', 'team_total_ou', 'spread', 'moneyline']) {
+    const { repositories, pickId } = await createOddsApiGradingFixture({ market });
+    const result = await runGradingPass(repositories);
+    assert.equal(result.graded, 1, `${market}: ${JSON.stringify(result.details)}`);
+    const settlement = await repositories.settlements.findLatestForPick(pickId);
+    assert.equal(settlement?.result, 'win', market);
+    assert.equal((await repositories.picks.findPickById(pickId))?.status, 'validated');
+  }
+});
+
+test('WORK-2026111102 30. Odds API refuses a posted pick', async () => {
+  const { repositories } = await createOddsApiGradingFixture({ posted: true });
+  const result = await runGradingPass(repositories);
+  assert.equal(result.graded, 0);
+  assert.equal(result.details[0]?.reason, 'event_provenance_provider_scope_track_only');
+});
+
+test('WORK-2026111102 31-32. Odds API requires its own ingestion chain and matching results proof', async () => {
+  const cases: Array<[Record<string, unknown>, string]> = [
+    [{ ingestionSource: 'ingestor.cycle' }, 'event_provenance_invalid_ingestion_cycle'],
+    [{ resultsProof: null }, 'event_provenance_results_proof_missing'],
+    [{ resultsProof: { completedObserved: true, providerEventId: 'wrong', providerLastUpdate: '2026-11-08T04:00:00Z', payloadKind: 'live' } }, 'event_provenance_results_proof_missing'],
+    [{ providerKey: null, ingestionCycleRunId: null }, 'event_provenance_missing_ingestion_cycle'],
+    [{ resultsProof: { completedObserved: false } }, 'event_provenance_results_proof_missing'],
+    [{ resultsProof: { completedObserved: true, providerEventId: '12345678901234567890123456789012', providerLastUpdate: '2026-11-08T00:00:00Z', payloadKind: 'live' } }, 'event_provenance_results_proof_missing'],
+  ];
+  for (const [metadata, reason] of cases) {
+    const { repositories } = await createOddsApiGradingFixture({ metadata });
+    const result = await runGradingPass(repositories);
+    assert.equal(result.graded, 0);
+    assert.equal(result.details[0]?.reason, reason);
+  }
+});
+
+test('WORK-2026111102 31b. fixture results require positively identified non-production DB', async () => {
+  const previous = process.env.SUPABASE_URL;
+  try {
+    for (const target of ['https://zfzdnfwdarxucxtaojxm.supabase.co', 'https://unknown.example', 'https://xskgrzbteyqdufktjrjx.supabase.co']) {
+      process.env.SUPABASE_URL = target;
+      const { repositories } = await createOddsApiGradingFixture({ metadata: {
+        resultsProof: { completedObserved: true, providerEventId: '12345678901234567890123456789012',
+          providerLastUpdate: '2026-11-08T04:00:00Z', payloadKind: 'fixture-doc-derived' },
+      } });
+      const result = await runGradingPass(repositories);
+      assert.equal(result.graded, target.includes('xskgrzbteyqdufktjrjx') ? 1 : 0, target);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = previous;
+  }
+});
+
+test('WORK-2026111102 33. NHL period and regulation markets remain unsupported', async () => {
+  for (const market of ['1p_total_ou', '1p_moneyline', 'regulation_moneyline']) {
+    assert.equal(classifyMarketFamilyForGrading(market).family, 'unsupported');
+    const { repositories } = await createOddsApiGradingFixture({ market });
+    const result = await runGradingPass(repositories);
+    assert.equal(result.graded, 0);
+    assert.equal(result.details[0]?.reason, 'unsupported_market_family');
+  }
+});
+
+test('WORK-2026111102 34. NHL credited shootout total grades; absent equal-score result stays ungraded', async () => {
+  const credited = await createOddsApiGradingFixture({ actualValue: 5, line: 4.5 });
+  assert.equal((await runGradingPass(credited.repositories)).graded, 1);
+  assert.equal((await credited.repositories.settlements.findLatestForPick(credited.pickId))?.result, 'win');
+  const equal = await createOddsApiGradingFixture({ noResults: true });
+  assert.equal((await runGradingPass(equal.repositories)).graded, 0);
+  assert.equal(await equal.repositories.settlements.findLatestForPick(equal.pickId), null);
+});
+
+test('WORK-2026111102 35. Odds API never replaces an existing evidence settlement', async () => {
+  const { repositories, pickId } = await createOddsApiGradingFixture();
+  await recordEvidenceSettlement(pickId, 'loss', { actualValue: 0, marketKey: 'game_total_ou',
+    eventId: 'existing-event', gameResultId: 'existing-result' }, repositories);
+  const before = await repositories.settlements.listByPick(pickId);
+  const result = await runGradingPass(repositories);
+  assert.equal(result.graded, 0);
+  assert.equal(result.details[0]?.reason, 'settlement_already_exists');
+  assert.deepEqual(await repositories.settlements.listByPick(pickId), before);
+});
+
+test('WORK-2026111102 36. Odds API Track Only settlement creates no outbox or recap', async () => {
+  const { repositories, pickId } = await createOddsApiGradingFixture();
+  const previous = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; throw new Error('No delivery allowed'); };
+  try {
+    assert.equal((await runGradingPass(repositories)).graded, 1);
+    assert.deepEqual(await repositories.outbox.listByPickId(pickId), []);
+    assert.equal(calls, 0);
+  } finally { globalThis.fetch = previous; }
+});

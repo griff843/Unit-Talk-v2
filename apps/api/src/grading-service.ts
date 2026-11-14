@@ -1,3 +1,4 @@
+import { isApprovedStagingTarget, isLoopbackTarget } from '@unit-talk/db/target-identity';
 import {
   resolveOutcome,
   buildRecapEmbedData,
@@ -99,12 +100,13 @@ export type GradingRetryState = Map<
 // before merge, so `operator` is deliberately NOT here: with no shipped writer for
 // that provenance, an allow-list entry for it would be trust with nothing to trust.
 // Re-admitting it is a review decision that arrives with its writer, not before.
-const TRUSTED_GRADING_EVENT_PROVIDERS = new Set(['sgo']);
+const TRUSTED_GRADING_EVENT_PROVIDERS = new Set(['sgo', 'odds-api']);
 
 // Keyed by provider rather than a flat allow-list of sources, so a provider can never
 // borrow another's ingestion source. An unknown provider has no entry and fails closed.
 const REQUIRED_INGESTION_SOURCE_BY_PROVIDER: Record<string, string> = {
   sgo: 'ingestor.cycle',
+  'odds-api': 'odds-api-scores.operator-run',
 };
 
 // The dedicated result key for a moneyline outcome. Deliberately NOT
@@ -1115,6 +1117,30 @@ function validateEventProvenanceForGrading(
     return { ok: false, reason: 'event_provenance_invalid_ingestion_cycle' };
   }
 
+  if (provider === 'odds-api') {
+    if (!isEvidencePlanePick(pick)) {
+      return { ok: false, reason: 'event_provenance_provider_scope_track_only' };
+    }
+    const proof = asRecord(metadata?.resultsProof);
+    const lastUpdate = readNonEmptyString(proof?.providerLastUpdate);
+    const startsAt = readNonEmptyString(metadata?.starts_at);
+    const payloadKind = readNonEmptyString(proof?.payloadKind);
+    const nonProduction = isApprovedStagingTarget(process.env.SUPABASE_URL) ||
+      isLoopbackTarget(process.env.SUPABASE_URL);
+    if (proof?.completedObserved !== true || proof?.providerEventId !== event.external_id ||
+        !lastUpdate || !startsAt || !Number.isFinite(Date.parse(lastUpdate)) ||
+        !Number.isFinite(Date.parse(startsAt)) || Date.parse(lastUpdate) <= Date.parse(startsAt) ||
+        !payloadKind || !['live', 'fixture-doc-derived', 'fixture-recorded'].includes(payloadKind) ||
+        (payloadKind.startsWith('fixture') && !nonProduction)) {
+      return { ok: false, reason: 'event_provenance_results_proof_missing' };
+    }
+    // Inspect the stored key before the legacy normalizer can collapse a period
+    // or regulation moneyline into a full-game moneyline.
+    const family = classifyMarketFamilyForGrading(pick.market).family;
+    if (!['game_total', 'team_total', 'game_spread', 'game_moneyline'].includes(family)) {
+      return { ok: false, reason: 'unsupported_market_family' };
+    }
+  }
   return { ok: true };
 }
 
