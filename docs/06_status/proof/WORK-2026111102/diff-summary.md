@@ -10,10 +10,12 @@ Odds API scores results ingestion: operator CLI, doc-derived fixtures and stagin
 | `apps/ingestor/src/odds-api-scores-resolver.ts` | Writes the event, participants and the four full-game result keys idempotently, with `resultsProof` provenance. |
 | `scripts/ops/odds-api-scores-sync.ts` | `results:odds-api-scores` CLI: dry run by default, `--apply` refused on anything but staging, blast-radius report, run audit row. |
 | `apps/api/src/grading-service.ts` | Trusts `odds-api` results only for Track Only evidence-plane picks with a complete `resultsProof`, for game total, team total, spread and moneyline; fixture payloads only on staging or loopback. |
+| `apps/api/src/grading-service.ts` (steps 11-12) | Restricted passes load only the requested pick ids and reapply lifecycle and Track Only admission; run records carry `restricted` and `requested_pick_count`, and a restricted pass never reports `no_op_no_input`. Unrestricted cron path unchanged. |
+| `apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts` | Outside the lane lock, pending PM `scope-override/v1`: the empty-restriction live proof now expects 0 picks read and `restricted: true`; outcome, freshness and run assertions unchanged. |
 | `apps/ingestor/src/__fixtures__/odds-api-scores/*.doc-derived.json` | 15 fixtures derived from the documented response shape. |
 | `*.test.ts` (parser, resolver, sync, grading-service, staging proof) | Tests 1-38; test 38 is the CI-only staging journey across all four families. |
 | `package.json` | `results:odds-api-scores` script and test registration only (PM D6). |
-| `.ops/work/WORK-2026111102.md`, `docs/06_status/lanes/WORK-2026111102.json`, `.ops/sync/WORK-2026111102.yml` | Work order (incl. step 9), lane manifest and sync record. |
+| `.ops/work/WORK-2026111102.md`, `docs/06_status/lanes/WORK-2026111102.json`, `.ops/sync/WORK-2026111102.yml` | Work order (incl. steps 9-12 and the D7 re-audit lists), lane manifest and sync record. |
 | `docs/06_status/proof/WORK-2026111102/*` | This proof bundle and the model-routing sidecar. |
 
 ## SHA Binding
