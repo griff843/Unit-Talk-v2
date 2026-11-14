@@ -3,8 +3,20 @@ import type { EventOfferBrowseResult, EventOffersState } from './api-client';
 import type { BetFormValues } from './form-schema';
 import type { SubmitPickPayload } from './api-client';
 import type {
+  CanonicalParticipantResolution,
+  ManualPlayerCoverageGap,
   SmartFormDistributionMode,
   SmartFormParticipantResolution,
+} from '@unit-talk/contracts';
+// Type-only on purpose: the contracts index uses NodeNext `.js` specifiers that the Next.js
+// bundler cannot resolve, so a runtime import breaks `next build`. The annotation below binds
+// the client value to the contract constant at compile time, and form-utils.test.ts asserts
+// runtime equality against the real contract export.
+import type {
+  ManualPlayerCandidate,
+  manualPlayerConfirmationRequiredCode,
+  manualPlayerProvenance,
+  manualPlayerReason,
 } from '@unit-talk/contracts';
 import {
   getMarketTypeFamily,
@@ -38,6 +50,12 @@ export interface SubmissionContext {
   selectedOffer?: Pick<EventOfferBrowseResult, 'providerKey' | 'providerMarketKey' | 'providerParticipantId' | 'snapshotAt'> | null;
   distributionMode?: SmartFormDistributionMode;
   participantResolution?: SmartFormParticipantResolution;
+  /**
+   * WORK-2026110802: set only when the player is a manual entry beside
+   * canonical teams. Recorded on metadata so the persisted pick says how its
+   * player was identified; the API requires it beside `manualPlayer`.
+   */
+  playerProvenance?: typeof MANUAL_PLAYER_PROVENANCE | null;
 }
 
 export function getMarketTypesForSport(
@@ -329,7 +347,15 @@ export function buildSubmissionPayload(
   // rounding trick.
   const confidence = values.capperConviction >= 10 ? 0.99 : values.capperConviction / 10;
 
-  const manualOverrideFields = context.manualOverrideFields ?? [];
+  // WORK-2026110802: a manual player is a manual field. Recording it here keeps
+  // `manualEntry`/`manualOverrideFields` consistent with `playerProvenance` (the API stamps the
+  // same labels authoritatively; this is what the request says before it does).
+  const manualOverrideFields = [
+    ...new Set([
+      ...(context.manualOverrideFields ?? []).filter((field) => field !== 'player'),
+      ...(context.playerProvenance ? ['player'] : []),
+    ]),
+  ];
   return {
     source: 'smart-form',
     submittedBy: values.capper,
@@ -373,6 +399,7 @@ export function buildSubmissionPayload(
           values.playerName ? { role: 'player' as const, displayName: values.playerName, canonicalParticipantId: null } : null,
         ].filter((value): value is NonNullable<typeof value> => value !== null),
       },
+      ...(context.playerProvenance ? { playerProvenance: context.playerProvenance } : {}),
       manualEntry: manualOverrideFields.length > 0,
       manualOverrideFields,
       selectedOffer: context.selectedOffer
@@ -705,12 +732,141 @@ export function buildManualEnteredParticipants(
   return participants;
 }
 
+// WORK-2026110802 MANUAL_PLAYER_CLIENT_START
+/** Mirrors `ParticipantAutocompleteField`'s per-field search state. */
+export type PlayerSearchResolution = 'idle' | 'searching' | 'results' | 'not-found' | 'error' | 'resolved';
+
+/**
+ * The player provenance recorded beside a manual player, bound to the contract constant
+ * `manualPlayerProvenance` (type-checked here, value-checked in form-utils.test.ts) so the
+ * client, the API stamp and the CLV exclusion cannot drift apart. The API overwrites whatever
+ * the client sends; the client sends it so the request is self-describing.
+ */
+export const MANUAL_PLAYER_PROVENANCE: typeof manualPlayerProvenance = 'manual-unverified-identity';
+
+/**
+ * The `manualPlayer.reason` the form sends: the player's identity is unverified (the catalog
+ * search found no match, which does not prove the catalog lacks the player). Bound to the
+ * contract constant `manualPlayerReason` like `MANUAL_PLAYER_PROVENANCE`.
+ */
+export const MANUAL_PLAYER_REASON: typeof manualPlayerReason = 'unverified-identity';
+
+/**
+ * Whether the form may offer "Player not found: enter manually".
+ *
+ * Only after a DEFINITIVE not-found in the structured team fallback: canonical
+ * teams are chosen, no event exists, the market is a player prop, and the player
+ * search completed and returned nothing. A search that errored, is still
+ * running, or never ran found nothing, so it offers nothing
+ * and the ordinary "select a search result" refusal stands.
+ */
+export function canOfferManualPlayer(input: {
+  identityMode: SmartFormIdentityMode;
+  isPlayerProp: boolean;
+  selectedPlayerId: string | null | undefined;
+  playerSearchResolution: PlayerSearchResolution;
+}): boolean {
+  return (
+    input.identityMode === 'structured-fallback' &&
+    input.isPlayerProp &&
+    !input.selectedPlayerId &&
+    input.playerSearchResolution === 'not-found'
+  );
+}
+
+/** The `manualPlayer` entry the API checks: unverified identity, never a canonical id. */
+export function buildManualPlayerCoverageGap(
+  playerName: string,
+  confirmedNotCandidates?: readonly string[] | null,
+): ManualPlayerCoverageGap {
+  return {
+    displayName: playerName.trim(),
+    canonicalParticipantId: null,
+    reason: MANUAL_PLAYER_REASON,
+    ...(confirmedNotCandidates ? { confirmedNotCandidates: [...confirmedNotCandidates] } : {}),
+  };
+}
+
+/**
+ * The API's 409 code when a manual player is similar to catalog players. A copy of the contract
+ * constant `manualPlayerConfirmationRequiredCode` (the client cannot import contract runtime
+ * values); a test keeps them equal.
+ */
+export const MANUAL_PLAYER_CONFIRMATION_REQUIRED_CODE: typeof manualPlayerConfirmationRequiredCode =
+  'SMART_FORM_MANUAL_PLAYER_CONFIRMATION_REQUIRED';
+
+/**
+ * The catalog candidates of a 409 confirmation-required refusal, or null when `error` is not
+ * one. Malformed candidate entries make the whole answer null: the operator is never shown,
+ * and never confirms against, a list the server did not send.
+ */
+export function readManualPlayerCandidates(error: unknown): ManualPlayerCandidate[] | null {
+  if (typeof error !== 'object' || error === null) return null;
+  const { code, details } = error as { code?: unknown; details?: unknown };
+  if (code !== MANUAL_PLAYER_CONFIRMATION_REQUIRED_CODE) return null;
+  const candidates = (details as { candidates?: unknown } | null | undefined)?.candidates;
+  if (!Array.isArray(candidates)) return null;
+  const parsed: ManualPlayerCandidate[] = [];
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'object' || candidate === null) return null;
+    const { participantId, displayName, teamId, teamName } = candidate as Record<string, unknown>;
+    if (typeof participantId !== 'string' || typeof displayName !== 'string') return null;
+    parsed.push({
+      participantId,
+      displayName,
+      teamId: typeof teamId === 'string' ? teamId : null,
+      teamName: typeof teamName === 'string' ? teamName : null,
+    });
+  }
+  return parsed;
+}
+
+/**
+ * The matchup side a suggested catalog player belongs to, or null when the player is on neither
+ * side. The 409 candidates are gathered across the whole sport (a similar player on another team
+ * is still a duplicate risk), but only a player on one of the two matchup teams can become this
+ * leg: picking one switches the selected team to that side, and any other candidate is shown but
+ * cannot be picked, because the API refuses a player whose team is not a side of the matchup.
+ */
+export function manualPlayerCandidateSide<Side extends { participantId: string | null }>(
+  candidate: Pick<ManualPlayerCandidate, 'teamId'>,
+  sides: readonly Side[],
+): Side | null {
+  if (!candidate.teamId) return null;
+  return sides.find((side) => side.participantId !== null && side.participantId === candidate.teamId) ?? null;
+}
+
+/**
+ * Replace the player of a structured-fallback resolution with a manual player.
+ * Teams keep their canonical identities; the canonical `player` is removed,
+ * because the API refuses the two together.
+ */
+export function withManualPlayer(
+  resolution: CanonicalParticipantResolution,
+  playerName: string,
+  confirmedNotCandidates?: readonly string[] | null,
+): CanonicalParticipantResolution {
+  return {
+    ...resolution,
+    eventId: null,
+    player: null,
+    manualPlayer: buildManualPlayerCoverageGap(playerName, confirmedNotCandidates),
+  };
+}
+// WORK-2026110802 MANUAL_PLAYER_CLIENT_END
+
 export interface SubmissionGuardFailure {
   code:
     | 'manual-team-sport-requires-both-sides'
     | 'manual-requires-a-participant'
     | 'canonical-requires-event'
-    | 'canonical-without-event-requires-team-sport';
+    | 'canonical-without-event-requires-team-sport'
+    | 'player-requires-selection'
+    | 'manual-player-requires-structured-teams'
+    | 'manual-player-with-canonical-player'
+    | 'manual-player-requires-definitive-not-found'
+    | 'manual-player-requires-track-only'
+    | 'manual-player-requires-name';
   title: string;
   description: string;
 }
@@ -728,6 +884,14 @@ export interface SubmissionGuardInput {
   canonicalEventId?: string | null;
   /** A canonical player participant id, set only when one was chosen from search. */
   selectedPlayerId?: string | null;
+  /** WORK-2026110802: the market is a player prop, so a player must be identified. */
+  isPlayerProp?: boolean;
+  /** WORK-2026110802: the operator chose "Player not found: enter manually". */
+  manualPlayerRequested?: boolean;
+  /** WORK-2026110802: the player field's search state at submit time. */
+  playerSearchResolution?: PlayerSearchResolution;
+  /** WORK-2026110802: the distribution mode this submission will request. */
+  distributionMode?: SmartFormDistributionMode;
 }
 
 /**
@@ -738,6 +902,63 @@ export function evaluateSubmissionGuards(
   input: SubmissionGuardInput,
 ): SubmissionGuardFailure | null {
   const teamSport = isTeamSportId(input.sportId);
+
+  // WORK-2026110802: canonical teams + one manually entered player.
+  if (input.manualPlayerRequested) {
+    // SERVER-RULE: manualPlayer is only valid on a structured team fallback with canonical teams
+    if (input.identityMode !== 'structured-fallback' || input.canonicalEventId) {
+      return {
+        code: 'manual-player-requires-structured-teams',
+        title: 'Manual player needs both teams',
+        description: 'A manual player is only accepted beside two teams chosen from search, with no event selected.',
+      };
+    }
+    // SERVER-RULE: manualPlayer and a canonical player selection are mutually exclusive
+    if (input.selectedPlayerId) {
+      return {
+        code: 'manual-player-with-canonical-player',
+        title: 'Player already selected',
+        description: 'A player was chosen from search; the manual entry is not needed.',
+      };
+    }
+    // A search that errored, is still running, or never ran has found nothing yet.
+    // SERVER-RULE: a failed search is never recorded as an unverified manual player
+    if (input.playerSearchResolution !== 'not-found') {
+      return {
+        code: 'manual-player-requires-definitive-not-found',
+        title: 'Player search did not finish',
+        description:
+          input.playerSearchResolution === 'error'
+            ? 'The player search failed. Retry the search; a failed search is never saved as an unverified manual player.'
+            : 'Wait for the player search to finish. Manual entry is only available when the search finds no match.',
+      };
+    }
+    // SERVER-RULE: a manually entered player is accepted only as Track Only
+    if (input.distributionMode !== 'track-only') {
+      return {
+        code: 'manual-player-requires-track-only',
+        title: 'Manual player picks are Track Only',
+        description: 'A manually entered player is saved only as Track Only. Turn Track Only back on to submit.',
+      };
+    }
+    // SERVER-RULE: manualPlayer.displayName
+    if (!input.playerName?.trim()) {
+      return {
+        code: 'manual-player-requires-name',
+        title: 'Enter the player name',
+        description: 'Type the player name to save it as a manual entry.',
+      };
+    }
+  } else if (input.isPlayerProp && input.identityMode !== 'manual' && !input.selectedPlayerId) {
+    return {
+      code: 'player-requires-selection',
+      title: 'Select a player from the results',
+      description:
+        input.identityMode === 'structured-fallback' && input.playerSearchResolution === 'not-found'
+          ? 'The player search found no match in the reference data. Choose "Player not found: enter manually" to save it as an unverified manual entry (Track Only).'
+          : 'Typing a name is not enough; select a search result.',
+    };
+  }
 
   if (input.identityMode === 'manual') {
     const participants = buildManualEnteredParticipants(input);

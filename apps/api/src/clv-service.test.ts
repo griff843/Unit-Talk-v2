@@ -7,6 +7,8 @@ import {
   computeCLVOutcome,
   isCLVFallbackSource,
   CLOSING_SOURCE_HIERARCHY_VERSION,
+  isManualPlayerUnverifiedIdentityPick,
+  resolveParticipantId,
 } from './clv-service.js';
 
 function makeGameTotalPick(overrides: Partial<PickRecord> = {}): PickRecord {
@@ -2469,4 +2471,162 @@ test('INIT-4.3.3: isCLVFallbackSource returns true for rank 3 and 4 (secondary f
   };
   assert.equal(isCLVFallbackSource(rank3), true, 'rank 3 is a fallback');
   assert.equal(isCLVFallbackSource(rank4), true, 'rank 4 is a fallback');
+});
+
+// ── WORK-2026110802: a manual coverage-gap player never receives CLV ────────────
+// The fixture is deliberately the worst case: the typed name equals a canonical participant
+// with an event link and a priced offer, so the metadata.player name fallback WOULD compute
+// CLV. A manual player is unverified by definition, and the mission forbids a CLV claim on it.
+
+async function seedNameMatchedPlayerProp() {
+  const repositories = createInMemoryRepositoryBundle();
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: 'PLAYER_TATUM',
+    displayName: 'Jayson Tatum',
+    participantType: 'player',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'evt-tatum',
+    sportId: 'NBA',
+    eventName: 'Boston Celtics @ Milwaukee Bucks',
+    eventDate: '2026-11-08',
+    status: 'scheduled',
+    metadata: { starts_at: '2026-11-08T23:30:00.000Z' },
+  });
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: participant.id,
+    role: 'competitor',
+  });
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-tatum',
+      providerMarketKey: 'points-all-game-ou',
+      providerParticipantId: 'PLAYER_TATUM',
+      sportKey: 'NBA',
+      line: 27.5,
+      overOdds: -110,
+      underOdds: -110,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-11-08T23:00:00.000Z',
+      idempotencyKey: 'tatum-offer-1',
+      bookmakerKey: null,
+    },
+  ]);
+  return repositories;
+}
+
+function nameMatchedPick(metadata: Record<string, unknown>): PickRecord {
+  return makeGameTotalPick({
+    id: 'pick-manual-player',
+    submission_id: 'submission-manual-player',
+    market_type_id: null,
+    sport_id: null,
+    market: 'points-all-game-ou',
+    selection: 'Jayson Tatum O 27.5',
+    line: 27.5,
+    odds: -105,
+    source: 'smart-form',
+    metadata: { player: 'Jayson Tatum', sport: 'NBA', eventName: 'Boston Celtics @ Milwaukee Bucks', ...metadata },
+  });
+}
+
+const manualPlayerResolution = {
+  resolution: 'canonical',
+  sportId: 'NBA',
+  eventId: null,
+  player: null,
+  manualPlayer: { displayName: 'Jayson Tatum', canonicalParticipantId: null, reason: 'unverified-identity' },
+};
+
+// WORK-2026110802 PM ruling: stored rows written before the rewording keep the legacy stamp
+// and reason, and must be excluded exactly like new ones.
+const legacyManualPlayerResolution = {
+  ...manualPlayerResolution,
+  manualPlayer: { ...manualPlayerResolution.manualPlayer, reason: 'canonical-coverage-gap' },
+};
+
+test('WORK-2026110802: control -- the same name-matched pick without manual provenance computes CLV', async () => {
+  const repositories = await seedNameMatchedPlayerProp();
+  const outcome = await computeCLVOutcome(nameMatchedPick({}), repositories);
+  assert.equal(outcome.status, 'computed');
+  assert.ok(outcome.result, 'non-vacuity: the fixture must be one the name fallback prices');
+});
+
+for (const [label, metadata] of [
+  ['server-stamped playerProvenance', { playerProvenance: 'manual-unverified-identity' }],
+  ['legacy server-stamped playerProvenance', { playerProvenance: 'manual-coverage-gap' }],
+  ['participantResolution.manualPlayer only', { participantResolution: manualPlayerResolution }],
+  ['legacy participantResolution.manualPlayer only', { participantResolution: legacyManualPlayerResolution }],
+  ['both markers', { playerProvenance: 'manual-unverified-identity', participantResolution: manualPlayerResolution }],
+  ['both legacy markers', { playerProvenance: 'manual-coverage-gap', participantResolution: legacyManualPlayerResolution }],
+] as const) {
+  test(`WORK-2026110802: a manual, unverified player gets no CLV through the name fallback (${label})`, async () => {
+    const repositories = await seedNameMatchedPlayerProp();
+    assert.equal(isManualPlayerUnverifiedIdentityPick(nameMatchedPick(metadata)), true);
+    const outcome = await computeCLVOutcome(nameMatchedPick(metadata), repositories);
+    assert.equal(outcome.result, null);
+    assert.equal(outcome.status, 'manual_player_unverified_identity');
+    assert.equal(outcome.resolvedClosingLine, undefined);
+
+    const warnings: unknown[] = [];
+    const attached = await computeAndAttachCLV(nameMatchedPick(metadata), repositories, {
+      logger: { warn: (...args: unknown[]) => warnings.push(args) },
+    });
+    assert.equal(attached, null);
+    assert.equal(warnings.length, 1, 'the skip is logged with its explicit reason');
+  });
+}
+
+test('WORK-2026110802: a manual, unverified player gets no CLV even with a caller pre-resolved context', async () => {
+  // settlement-service builds preResolvedContext with its own metadata.player name match;
+  // the exclusion must hold on that path too.
+  const repositories = await seedNameMatchedPlayerProp();
+  const preResolvedContext = {
+    providerEventId: 'evt-tatum',
+    eventStartTime: '2026-11-08T23:30:00.000Z',
+    participantExternalId: 'PLAYER_TATUM',
+  };
+  const control = await computeCLVOutcome(nameMatchedPick({}), repositories, { preResolvedContext });
+  assert.equal(control.status, 'computed', 'non-vacuity: the pre-resolved context prices the control pick');
+
+  for (const playerProvenance of ['manual-unverified-identity', 'manual-coverage-gap']) {
+    const outcome = await computeCLVOutcome(nameMatchedPick({ playerProvenance }), repositories, {
+      preResolvedContext,
+    });
+    assert.equal(outcome.result, null, playerProvenance);
+    assert.equal(outcome.status, 'manual_player_unverified_identity', playerProvenance);
+  }
+});
+
+test('WORK-2026110802: an unrelated playerProvenance value does not suppress CLV', async () => {
+  const repositories = await seedNameMatchedPlayerProp();
+  const outcome = await computeCLVOutcome(
+    nameMatchedPick({ playerProvenance: 'something-else', participantResolution: { resolution: 'canonical', manualPlayer: null } }),
+    repositories,
+  );
+  assert.equal(outcome.status, 'computed');
+});
+
+test('WORK-2026110802 P3: the participant name fallback itself never resolves a manual, unverified player', async () => {
+  // computeCLVOutcome's early exclusion shadows this guard, so it is pinned directly: any
+  // other caller of the resolver must not launder a manual player into a canonical id.
+  const repositories = await seedNameMatchedPlayerProp();
+  const control = await resolveParticipantId(nameMatchedPick({}), repositories.participants);
+  assert.ok(control, 'non-vacuity: the name fallback resolves the unmarked control pick');
+
+  for (const metadata of [
+    { playerProvenance: 'manual-unverified-identity' },
+    { playerProvenance: 'manual-coverage-gap' },
+    { participantResolution: manualPlayerResolution },
+    { participantResolution: legacyManualPlayerResolution },
+  ]) {
+    assert.equal(await resolveParticipantId(nameMatchedPick(metadata), repositories.participants), null);
+  }
 });

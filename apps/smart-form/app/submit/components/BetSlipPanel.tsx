@@ -38,6 +38,12 @@ interface BetSlipPanelProps {
   legRefusals?: Readonly<Record<string, string>>;
   /** Why a multi-leg slip cannot be submitted today. Null when it can. */
   multiLegRefusal?: string | null;
+  /**
+   * WORK-2026110802: set when the player is a manual entry the reference data
+   * search did not match (identity unverified, not proved absent). The slip then
+   * says so, and never presents the player as verified.
+   */
+  manualPlayerName?: string | null;
 }
 
 function LineItem({ label, value }: { label: string; value?: string | number | null }) {
@@ -167,6 +173,7 @@ export function BetSlipPanel({
   slipRefusal = null,
   legRefusals = {},
   multiLegRefusal = null,
+  manualPlayerName = null,
 }: BetSlipPanelProps) {
   const marketLabel = values.marketType ? getMarketTypeLabel(values.marketType as MarketTypeId) : null;
   const selection = values.marketType && values.sport
@@ -245,6 +252,7 @@ export function BetSlipPanel({
               <LineItem label="Market" value={marketLabel} />
               {values.eventName && <LineItem label="Game" value={values.eventName} />}
               {selection && <LineItem label="Pick" value={selection} />}
+              {manualPlayerName && <LineItem label="Player" value={`${manualPlayerName} (manually entered, unverified)`} />}
               {values.sportsbook && <LineItem label="Book" value={values.sportsbook} />}
               {values.odds && <LineItem label="Odds" value={Number(values.odds) > 0 ? `+${Number(values.odds)}` : Number(values.odds)} />}
               {values.units && <LineItem label="Units" value={`${values.units}u`} />}
@@ -273,6 +281,17 @@ export function BetSlipPanel({
                 {values.sport ? `Add or check: ${remaining.join(', ')}.` : 'Choose a sport and build your selection. Your pick will take shape here.'}
               </p>
             </div>
+          )}
+
+          {manualPlayerName && (
+            <p
+              className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs leading-relaxed text-muted-foreground"
+              data-testid="slip-manual-player"
+            >
+              Unverified player: the reference player search found no match for {manualPlayerName}, which
+              does not prove the player is missing from the reference data. It is saved as manually entered,
+              with an unverified identity, no provider verification and no CLV, and only as Track Only.
+            </p>
           )}
 
           {/* UTV2-1925: this is pre-submission, so it describes the REQUEST. The

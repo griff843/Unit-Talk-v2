@@ -13,6 +13,7 @@ export interface ApiErrorResponse {
     error: {
       code: string;
       message: string;
+      details?: Readonly<Record<string, unknown>>;
     };
   };
 }
@@ -36,15 +37,15 @@ export function errorResponse(
   status: number,
   code: string,
   message: string,
+  details?: Readonly<Record<string, unknown>>,
 ): ApiErrorResponse {
+  // Without details the body is exactly `{ ok, error: { code, message } }`, as before: the key
+  // is added only when there is something to carry.
   return {
     status,
     body: {
       ok: false,
-      error: {
-        code,
-        message,
-      },
+      error: details === undefined ? { code, message } : { code, message, details },
     },
   };
 }

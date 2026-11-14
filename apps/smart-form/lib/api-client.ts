@@ -285,6 +285,23 @@ export function resolveSubmitAuthorization(input: {
   return null;
 }
 
+/**
+ * A refused submission, carrying the API's error `code` and optional `details` (for example
+ * the catalog candidates of a 409 SMART_FORM_MANUAL_PLAYER_CONFIRMATION_REQUIRED). `message`
+ * is the API's message, exactly as before.
+ */
+export class SubmitPickError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code: string | null,
+    readonly details: unknown,
+  ) {
+    super(message);
+    this.name = 'SubmitPickError';
+  }
+}
+
 export async function submitPick(payload: SubmitPickPayload): Promise<SubmitPickResult> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   // The API validates the bearer and derives capperId from the claim.
@@ -311,5 +328,15 @@ export async function submitPick(payload: SubmitPickPayload): Promise<SubmitPick
     headers,
     body: JSON.stringify(payload),
   });
-  return readJsonResponse<SubmitPickResult>(res, 'Submit failed');
+  const json = await res.json();
+  if (!res.ok) {
+    const error = json?.error;
+    throw new SubmitPickError(
+      error?.message ?? `Submit failed: ${res.status}`,
+      res.status,
+      typeof error?.code === 'string' ? error.code : null,
+      error?.details,
+    );
+  }
+  return json.data as SubmitPickResult;
 }

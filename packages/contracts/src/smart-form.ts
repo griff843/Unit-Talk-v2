@@ -20,6 +20,287 @@ export interface CanonicalParticipantResolution {
   home?: CanonicalParticipantIdentity | null;
   team?: CanonicalParticipantIdentity | null;
   player?: CanonicalParticipantIdentity | null;
+  /**
+   * WORK-2026110802: a player entered by hand alongside canonical teams, whose identity is
+   * UNVERIFIED: a bounded name search of the reference catalog found no canonical match, which
+   * is not proof that the catalog lacks the player (the search does not fold accents, for one).
+   * Structured team fallback only (`eventId` null, team sports), mutually exclusive with
+   * `player`, and Track Only only. The server refuses a name that resolves, or may resolve, to
+   * a canonical player it can retrieve.
+   */
+  manualPlayer?: ManualPlayerCoverageGap | null;
+}
+
+/**
+ * Player provenance the server stamps on pick metadata when `manualPlayer` is used: the
+ * player's identity is unverified (no canonical match from a bounded name search), not proved
+ * absent from the catalog.
+ */
+export const manualPlayerProvenance = 'manual-unverified-identity' as const;
+
+/**
+ * LEGACY. The provenance stamped on manual-player picks before the unverified-identity wording.
+ * It overstated the evidence (catalog absence was never proved) and is no longer written, but
+ * stored rows keep it, so every guard must still treat it exactly like `manualPlayerProvenance`.
+ */
+export const legacyManualPlayerProvenance = 'manual-coverage-gap' as const;
+
+/** Every provenance value that marks a manual, unverified player: current and legacy. */
+export const manualPlayerProvenances = [manualPlayerProvenance, legacyManualPlayerProvenance] as const;
+
+export type ManualPlayerProvenance = (typeof manualPlayerProvenances)[number];
+
+/** True for the current AND the legacy manual-player provenance. */
+export function isManualPlayerProvenance(value: unknown): value is ManualPlayerProvenance {
+  return (manualPlayerProvenances as readonly unknown[]).includes(value);
+}
+
+/** The `manualPlayer.reason` the server persists: the identity is unverified. */
+export const manualPlayerReason = 'unverified-identity' as const;
+
+/**
+ * LEGACY `manualPlayer.reason`, shared in spelling with the whole-manual resolution's
+ * `canonical-coverage-gap` (which is unchanged). Accepted on a request so a form built before
+ * the rewording keeps working, but the server always persists `manualPlayerReason`.
+ */
+export const legacyManualPlayerReason = 'canonical-coverage-gap' as const;
+
+// WORK-2026110802: the Smart Form's player-prop market key for a (sport, stat type), shared so
+// the API can require a manual player's `market` to be EXACTLY the key the form builds rather
+// than any `player.`-prefixed string. This is a copy of the table in
+// apps/smart-form/lib/form-utils.ts (`resolvePlayerPropMarketKey`), which cannot import runtime
+// values from this package (its `.js` re-exports break `next build`); a smart-form unit test
+// pins the two to the same output for every sport and stat type.
+// Legacy flat map, keyed by stat name only. It is consulted ONLY for sports that
+// have no entry in SPORT_PLAYER_PROP_MARKET_KEYS, so a stat name shared across
+// sports (Points, Assists) can never leak one sport's market onto another.
+const LEGACY_PLAYER_PROP_MARKET_KEYS: Readonly<Record<string, string>> = {
+  // NBA / basketball
+  points: 'player.points',
+  rebounds: 'player.rebounds',
+  assists: 'player.assists',
+  threes: 'player.threes',
+  steals: 'player.steals',
+  blocks: 'player.blocks',
+  turnovers: 'player.turnovers',
+  'points + rebounds + assists': 'player.pra',
+  'points + rebounds': 'player.points_rebounds',
+  'points + assists': 'player.points_assists',
+  'rebounds + assists': 'player.rebounds_assists',
+  // MLB / baseball
+  hits: 'player.hits',
+  'home runs': 'player.home_runs',
+  rbi: 'player.rbi',
+  walks: 'player.walks',
+  'total bases': 'player.total_bases',
+  singles: 'player.singles',
+  doubles: 'player.doubles',
+  triples: 'player.triples',
+  'hits + runs + rbis': 'player.hits_runs_rbis',
+  'earned runs': 'player.earned_runs',
+  'hits allowed': 'player.hits_allowed',
+  'pitcher outs': 'player.pitcher_outs',
+  'pitching strikeouts': 'player.pitching_strikeouts',
+  'pitching innings pitched': 'player.pitching_innings_pitched',
+  strikeouts: 'player.strikeouts',
+  // NHL / hockey
+  goals: 'player.goals',
+  'shots on goal': 'player.shots',
+  'blocked shots': 'player.blocked_shots',
+  saves: 'player.saves',
+  'penalty minutes': 'player.pim',
+  // NFL / football
+  'passing yards': 'player.passing_yards',
+  'passing touchdowns': 'player.passing_touchdowns',
+  'passing attempts': 'player.passing_attempts',
+  'rushing yards': 'player.rushing_yards',
+  'rushing attempts': 'player.rushing_attempts',
+  'rush + rec yards': 'player.rush_rec_yards',
+  'receiving yards': 'player.receiving_yards',
+  receptions: 'player.receptions',
+  touchdowns: 'player.touchdowns',
+  tackles: 'player.tackles',
+  interceptions: 'player.interceptions',
+};
+
+const PP_BASKETBALL_STAT_TYPE_MARKET_KEYS: Readonly<Record<string, string>> = {
+  points: 'player.points',
+  rebounds: 'player.rebounds',
+  assists: 'player.assists',
+  threes: 'player.threes',
+  steals: 'player.steals',
+  blocks: 'player.blocks',
+  turnovers: 'player.turnovers',
+  'points + rebounds + assists': 'player.pra',
+  'points + rebounds': 'player.points_rebounds',
+  'points + assists': 'player.points_assists',
+  'rebounds + assists': 'player.rebounds_assists',
+};
+
+// Production market_types ids (player_fgm_ou, player_ftm_ou, player_minutes_ou,
+// player_plus_minus_ou). sport_market_type_availability lists them for NBA and
+// WNBA only, so NCAAB deliberately does not receive them. stat_types names are
+// "Plus Minus" (NBA) and "Plus/Minus" (NHL).
+const NBA_WNBA_PP_BASKETBALL_STAT_TYPE_MARKET_KEYS: Readonly<Record<string, string>> = {
+  ...PP_BASKETBALL_STAT_TYPE_MARKET_KEYS,
+  'field goals made': 'player_fgm_ou',
+  'free throws made': 'player_ftm_ou',
+  'minutes played': 'player_minutes_ou',
+  'plus minus': 'player_plus_minus_ou',
+  'plus/minus': 'player_plus_minus_ou',
+};
+
+const PP_COLLEGE_FOOTBALL_STAT_TYPE_MARKET_KEYS: Readonly<Record<string, string>> = {
+  'passing yards': 'player.passing_yards',
+  'passing touchdowns': 'player.passing_touchdowns',
+  'passing attempts': 'player.passing_attempts',
+  'rushing yards': 'player.rushing_yards',
+  'rushing attempts': 'player.rushing_attempts',
+  'rush + rec yards': 'player.rush_rec_yards',
+  'receiving yards': 'player.receiving_yards',
+  receptions: 'player.receptions',
+  touchdowns: 'player.touchdowns',
+  interceptions: 'player.interceptions',
+};
+
+// Tackles and Sacks exist as stat_types for NFL only; player_sacks_ou is available
+// for NFL only.
+const PP_NFL_STAT_TYPE_MARKET_KEYS: Readonly<Record<string, string>> = {
+  ...PP_COLLEGE_FOOTBALL_STAT_TYPE_MARKET_KEYS,
+  tackles: 'player.tackles',
+  sacks: 'player_sacks_ou',
+};
+
+const SPORT_PLAYER_PROP_MARKET_KEYS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  NBA: NBA_WNBA_PP_BASKETBALL_STAT_TYPE_MARKET_KEYS,
+  WNBA: NBA_WNBA_PP_BASKETBALL_STAT_TYPE_MARKET_KEYS,
+  NCAAB: PP_BASKETBALL_STAT_TYPE_MARKET_KEYS,
+  NFL: PP_NFL_STAT_TYPE_MARKET_KEYS,
+  NCAAF: PP_COLLEGE_FOOTBALL_STAT_TYPE_MARKET_KEYS,
+  MLB: {
+    hits: 'player.hits',
+    'home runs': 'player.home_runs',
+    rbi: 'player.rbi',
+    // MLB Runs is deliberately absent: production market_types has no canonical id
+    // for it, so it is refused explicitly rather than given an invented key.
+    walks: 'player.walks',
+    'total bases': 'player.total_bases',
+    singles: 'player.singles',
+    doubles: 'player.doubles',
+    triples: 'player.triples',
+    'hits + runs + rbis': 'player.hits_runs_rbis',
+    'earned runs': 'player.earned_runs',
+    'hits allowed': 'player.hits_allowed',
+    'pitcher outs': 'player.pitcher_outs',
+    'pitching strikeouts': 'player.pitching_strikeouts',
+    'pitching innings pitched': 'player.pitching_innings_pitched',
+    strikeouts: 'player.strikeouts',
+  },
+  NHL: {
+    goals: 'player.goals',
+    // Hockey points are goals + assists: production id player_hockey_points_ou,
+    // never the basketball player.points key.
+    points: 'player_hockey_points_ou',
+    // Production shares player_assists_ou across NHL and NBA (NHL availability row).
+    assists: 'player.assists',
+    'shots on goal': 'player.shots',
+    'blocked shots': 'player.blocked_shots',
+    saves: 'player.saves',
+    'penalty minutes': 'player.pim',
+    'goals against': 'player_goals_against_ou',
+    'save percentage': 'player_save_pct_ou',
+    'plus/minus': 'player_plus_minus_ou',
+    'plus minus': 'player_plus_minus_ou',
+  },
+};
+
+/**
+ * Sport-aware stat type -> Smart Form player-prop market key, exactly as the form resolves it.
+ * Returns null when the stat type is not mapped.
+ */
+export function resolveSmartFormPlayerPropMarketKey(
+  sport: string | null | undefined,
+  statType: string | null | undefined,
+): string | null {
+  const stat = (statType ?? '').trim().toLowerCase();
+  if (!stat) {
+    return null;
+  }
+  const sportTable = SPORT_PLAYER_PROP_MARKET_KEYS[(sport ?? '').trim().toUpperCase()];
+  if (sportTable) {
+    return sportTable[stat] ?? null;
+  }
+  return LEGACY_PLAYER_PROP_MARKET_KEYS[stat] ?? null;
+}
+
+/** Every player-prop market key the Smart Form can build for a sport. */
+export function smartFormPlayerPropMarketKeysForSport(sport: string | null | undefined): string[] {
+  const sportTable = SPORT_PLAYER_PROP_MARKET_KEYS[(sport ?? '').trim().toUpperCase()];
+  return [...new Set(Object.values(sportTable ?? LEGACY_PLAYER_PROP_MARKET_KEYS))];
+}
+
+/** Every stat type named in the tables (lower case), for parity tests. */
+export function smartFormPlayerPropStatTypes(): string[] {
+  const stats = new Set(Object.keys(LEGACY_PLAYER_PROP_MARKET_KEYS));
+  for (const table of Object.values(SPORT_PLAYER_PROP_MARKET_KEYS)) {
+    for (const stat of Object.keys(table)) stats.add(stat);
+  }
+  return [...stats];
+}
+
+/** Sports with their own table, for parity tests. */
+export const smartFormPlayerPropSports: readonly string[] = Object.keys(SPORT_PLAYER_PROP_MARKET_KEYS);
+
+/**
+ * A manually entered player with an unverified identity (the name keeps its historical
+ * "coverage gap" spelling; renaming exported types is not part of the rewording). Stored rows
+ * written before the rewording carry the legacy reason.
+ */
+export interface ManualPlayerCoverageGap {
+  displayName: string;
+  canonicalParticipantId: null;
+  reason: typeof manualPlayerReason | typeof legacyManualPlayerReason;
+  /**
+   * The operator's confirmation that the player is none of the catalog candidates the API
+   * listed in its 409 `SMART_FORM_MANUAL_PLAYER_CONFIRMATION_REQUIRED` response. The API
+   * recomputes the candidates and accepts only when this is exactly their participant ids.
+   */
+  confirmedNotCandidates?: string[];
+}
+
+/** Error code of the 409 asking the operator to rule out catalog candidates. */
+export const manualPlayerConfirmationRequiredCode = 'SMART_FORM_MANUAL_PLAYER_CONFIRMATION_REQUIRED' as const;
+
+/** At most this many candidates are listed (and must be confirmed). */
+export const manualPlayerMaxCandidates = 5;
+
+/** One catalog player the operator must rule out before an unverified player is recorded. */
+export interface ManualPlayerCandidate {
+  participantId: string;
+  displayName: string;
+  teamId: string | null;
+  /** The team's name when it is one of the submitted matchup's two sides, else null. */
+  teamName: string | null;
+}
+
+/** `details` of the 409 confirmation-required error. */
+export interface ManualPlayerConfirmationDetails {
+  candidates: ManualPlayerCandidate[];
+}
+
+/**
+ * Server-written audit record on a manual-player pick (`metadata.manualPlayerReview`); any
+ * client value is overwritten. `operatorConfirmed` is true when candidates were listed and the
+ * operator confirmed the player is none of them; `rejectedCandidates` are those candidates.
+ * `searchedName` is the name the bounded catalog search was run on, and `identity` records
+ * what that search established: no canonical match, so the identity is unverified. Rows
+ * written before these two fields existed lack them.
+ */
+export interface ManualPlayerReview {
+  operatorConfirmed: boolean;
+  rejectedCandidates: Array<{ participantId: string; displayName: string }>;
+  searchedName?: string;
+  identity?: 'unverified-no-canonical-match';
 }
 
 export interface ManualParticipantResolution {

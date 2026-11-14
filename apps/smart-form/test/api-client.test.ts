@@ -9,6 +9,7 @@ import {
   searchBrowse,
   resolveSubmitAuthorization,
   submitPick,
+  SubmitPickError,
 } from '../lib/api-client.ts';
 import {
   buildManualEnteredParticipants,
@@ -371,6 +372,36 @@ test('api-client surfaces error messages from failed responses', async () => {
 
   await assert.rejects(() => getCatalog(), /Reference data unavailable/);
   restoreFetch();
+});
+
+test('WORK-2026110802: a refused submission keeps its message and carries the code and details', async () => {
+  const candidates = [{ participantId: 'p-1', displayName: 'Tyler Adams', teamId: null, teamName: null }];
+  for (const [status, error, code, details] of [
+    [409, { code: 'SMART_FORM_MANUAL_PLAYER_CONFIRMATION_REQUIRED', message: 'confirm', details: { candidates } }, 'SMART_FORM_MANUAL_PLAYER_CONFIRMATION_REQUIRED', { candidates }],
+    [422, { code: 'SMART_FORM_RELATIONSHIP_INVALID', message: 'refused' }, 'SMART_FORM_RELATIONSHIP_INVALID', undefined],
+    [500, {}, null, undefined],
+  ] as const) {
+    const restoreFetch = installFetchMock(async () =>
+      new Response(JSON.stringify({ ok: false, error }), { status, headers: { 'Content-Type': 'application/json' } }),
+    );
+    try {
+      await assert.rejects(
+        () => submitPick({ source: 'smart-form', market: 'player.threes', selection: 'X' }),
+        (thrown: unknown) => {
+          assert.ok(thrown instanceof SubmitPickError);
+          assert.ok(thrown instanceof Error);
+          // The message is exactly what the client surfaced before.
+          assert.equal(thrown.message, 'message' in error ? error.message : `Submit failed: ${status}`);
+          assert.equal(thrown.status, status);
+          assert.equal(thrown.code, code);
+          assert.deepEqual(thrown.details, details);
+          return true;
+        },
+      );
+    } finally {
+      restoreFetch();
+    }
+  }
 });
 
 // UTV2-1786 — regression coverage for the five review findings on PR #1469.

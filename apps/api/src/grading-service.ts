@@ -26,6 +26,7 @@ import {
   recordGradedSettlement,
   recordEvidenceSettlement,
 } from './settlement-service.js';
+import { isManualPlayerUnverifiedIdentityPick } from './clv-service.js';
 
 export interface GradingPickResult {
   pickId: string;
@@ -133,6 +134,21 @@ const MONEYLINE_OUTCOME_BY_ACTUAL_VALUE = new Map<
 export const GRADING_SKIP_EVIDENCE_LIMIT = 100;
 const GRADING_FETCH_PAGE_SIZE = 500;
 export const GRADING_INPUT_FRESHNESS_THRESHOLD_MS = 6 * 60 * 60 * 1000;
+
+// WORK-2026110802: a Smart Form manual-player pick names a player whose identity is
+// unverified: a bounded catalog name search found no canonical match, which is not proof
+// the catalog lacks the player. Both the current `manual-unverified-identity` stamp and the
+// legacy `manual-coverage-gap` stamp count. Its player name is free text the capper
+// typed, so it is never resolved to a participant and never graded from provider
+// results: a name that
+// happens to equal a catalog player's would otherwise settle the pick against a
+// player nobody verified. The skip is permanent policy, like
+// `unsupported_market_family`, so it is deliberately in neither the identity nor the
+// data-dependent set below: fresher provider data cannot make it gradeable. It is
+// reported in `skipped_reasons`, and the pick stays open for manual operator
+// settlement, which does not pass through this loop.
+export const MANUAL_PLAYER_UNVERIFIED_IDENTITY_SKIP_REASON =
+  'manual_player_unverified_identity';
 
 const IDENTITY_SKIP_REASONS = new Set([
   'event_id_mismatch',
@@ -421,6 +437,17 @@ async function executeGradingPass(
           pickId: pick.id,
           outcome: 'skipped',
           reason: 'settlement_already_exists',
+        });
+        continue;
+      }
+
+      // Before any participant resolution: the name fallback in
+      // `resolvePickParticipantId` must never see a manual player's name.
+      if (isManualPlayerUnverifiedIdentityPick(pick)) {
+        details.push({
+          pickId: pick.id,
+          outcome: 'skipped',
+          reason: MANUAL_PLAYER_UNVERIFIED_IDENTITY_SKIP_REASON,
         });
         continue;
       }
@@ -955,7 +982,13 @@ export function classifyMarketFamilyForGrading(
   };
 }
 
-function isPlayerPropMarket(marketKey: string): boolean {
+/**
+ * The player-prop market keys grading classifies as `player_prop` (and so resolves a player
+ * for). Exported so Smart Form validation classifies a market exactly as grading will: a key
+ * grading treats as a player prop must never be admitted as a team market (WORK-2026110802
+ * Codex High review r4).
+ */
+export function isPlayerPropMarket(marketKey: string): boolean {
   return (
     marketKey.endsWith('-all-game-ou') ||
     /^player_[a-z0-9_]+_ou$/.test(marketKey) ||
