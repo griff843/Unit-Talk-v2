@@ -1,3 +1,4 @@
+import { isApprovedStagingTarget, isLoopbackTarget } from '@unit-talk/db/target-identity';
 import {
   resolveOutcome,
   buildRecapEmbedData,
@@ -68,8 +69,8 @@ export interface RunGradingPassOptions {
   logger?: Pick<Console, 'error' | 'warn'>;
   retryState?: GradingRetryState;
   /**
-   * Restricts the pass to these pick ids, applied AFTER the normal population
-   * read. Absent -- which is how every production caller invokes this -- the
+   * Loads only these pick ids and reapplies normal lifecycle and evidence-plane
+   * admission. Absent -- which is how every production caller invokes this -- the
    * pass grades its whole population exactly as before.
    *
    * This exists for the staging journey proof (UTV2-1889), which drives the real
@@ -77,7 +78,7 @@ export interface RunGradingPassOptions {
    * fixture pick settles would sweep and settle the entire staging backlog, and
    * the proof's own counters would be a statement about that backlog rather than
    * about the fixture. It narrows what is graded; it can never widen it, and it
-   * cannot admit a pick the population read did not already return.
+   * cannot admit a pick the unrestricted population would not admit.
    */
   restrictToPickIds?: ReadonlySet<string>;
   /** Test seam for deterministic freshness classification. */
@@ -99,12 +100,13 @@ export type GradingRetryState = Map<
 // before merge, so `operator` is deliberately NOT here: with no shipped writer for
 // that provenance, an allow-list entry for it would be trust with nothing to trust.
 // Re-admitting it is a review decision that arrives with its writer, not before.
-const TRUSTED_GRADING_EVENT_PROVIDERS = new Set(['sgo']);
+const TRUSTED_GRADING_EVENT_PROVIDERS = new Set(['sgo', 'odds-api']);
 
 // Keyed by provider rather than a flat allow-list of sources, so a provider can never
 // borrow another's ingestion source. An unknown provider has no entry and fails closed.
 const REQUIRED_INGESTION_SOURCE_BY_PROVIDER: Record<string, string> = {
   sgo: 'ingestor.cycle',
+  'odds-api': 'odds-api-scores.operator-run',
 };
 
 // The dedicated result key for a moneyline outcome. Deliberately NOT
@@ -172,11 +174,15 @@ const DATA_DEPENDENT_SKIP_REASONS = new Set([
   'moneyline_result_market_key_unsupported',
   'moneyline_result_value_invalid',
   'spread_result_market_key_unsupported',
+  'odds_api_results_incomplete',
+  'odds_api_results_inconsistent',
 ]);
 
 interface GradingPassExecution extends GradingPassResult {
   rowsScanned: number;
   gradeableRows: number;
+  restricted: boolean;
+  requestedPickCount: number | null;
 }
 
 export async function fetchAllByLifecycleState(
@@ -238,6 +244,8 @@ export async function runGradingPass(
   const thresholdMs =
     options.inputFreshnessThresholdMs ?? GRADING_INPUT_FRESHNESS_THRESHOLD_MS;
   const readNow = options.now ?? (() => new Date());
+  const restricted = options.restrictToPickIds !== undefined;
+  const requestedPickCount = options.restrictToPickIds?.size ?? null;
   const runRecord = await repositories.runs.startRun({
     runType: 'grading.run',
     actor: 'grading-service',
@@ -245,6 +253,8 @@ export async function runGradingPass(
     // completeRun, the row cannot be mistaken for successful work.
     details: buildGradingRunDetails({
       outcomeClass: 'failed',
+      restricted,
+      requestedPickCount,
       rowsScanned: 0,
       gradeableRows: 0,
       graded: 0,
@@ -277,6 +287,7 @@ export async function runGradingPass(
     const dataDependentSkipped = countDataDependentSkips(execution.details);
     const identitySkipped = countIdentitySkips(execution.details);
     const outcomeClass = classifyGradingOutcome({
+      restricted: execution.restricted,
       graded: execution.graded,
       errors: execution.errors,
       rowsScanned: execution.rowsScanned,
@@ -299,6 +310,8 @@ export async function runGradingPass(
           : 'succeeded',
       details: buildGradingRunDetails({
         outcomeClass,
+        restricted: execution.restricted,
+        requestedPickCount: execution.requestedPickCount,
         rowsScanned: execution.rowsScanned,
         gradeableRows: execution.gradeableRows,
         graded: execution.graded,
@@ -336,6 +349,8 @@ export async function runGradingPass(
         status: 'failed',
         details: buildGradingRunDetails({
           outcomeClass: 'failed',
+          restricted,
+          requestedPickCount,
           rowsScanned: 0,
           gradeableRows: 0,
           graded: 0,
@@ -381,35 +396,50 @@ async function executeGradingPass(
     Partial<Pick<RepositoryBundle, 'killSwitch'>>,
   options: RunGradingPassOptions,
 ): Promise<GradingPassExecution> {
-  // Evidence plane: also process awaiting_approval picks so outcome data
-  // accumulates without requiring public delivery approval. Per UTV2-1253.
-  // Paginated to bypass the Supabase 1000-row default cap (UTV2-1258).
-  // UTV2-1861: Track Only picks never reach `posted`. They are structurally
-  // unable to be delivered, so `validated` is where they stop, and grading
-  // never saw them. Admit the Track Only subset of `validated` -- and only
-  // that subset: `validated` on its own is the entire pre-delivery backlog
-  // (21,364 rows in production on 2026-09-10, against 1 Track Only pick), so
-  // the filter is what keeps this a targeted admission rather than a sweep.
-  const [postedPicks, evidencePicks, validatedPicks] = await Promise.all([
-    fetchAllByLifecycleState(repositories.picks, 'posted'),
-    fetchAllByLifecycleState(repositories.picks, 'awaiting_approval'),
-    typeof repositories.picks.listTrackOnlyByLifecycleState === 'function'
-      ? repositories.picks.listTrackOnlyByLifecycleState('validated')
-      : fetchAllByLifecycleState(repositories.picks, 'validated'),
-  ]);
-  // Keep the contract predicate as a backstop: the optimized repository read
-  // may only remove candidates, never admit a non-Track-Only validated pick.
-  const trackOnlyPicks = validatedPicks.filter((pick) =>
-    isEvidencePlanePick(pick),
-  );
-  const population = [...postedPicks, ...evidencePicks, ...trackOnlyPicks];
-  // Applied after the read, never instead of it: the restriction is an
-  // intersection with what the population already contained, so it can only ever
-  // remove candidates. An id that is not in the population stays ungraded.
-  const restrictToPickIds = options.restrictToPickIds;
-  const picks = restrictToPickIds
-    ? population.filter((pick) => restrictToPickIds.has(pick.id))
-    : population;
+  let population: PickRecord[];
+  if (options.restrictToPickIds !== undefined) {
+    population = [];
+    const requestedIds = [...options.restrictToPickIds];
+    for (let offset = 0; offset < requestedIds.length; offset += 100) {
+      const chunk = requestedIds.slice(offset, offset + 100);
+      const requestedPicks = await repositories.picks.findPicksByIds(chunk);
+      for (const id of chunk) {
+        const pick = requestedPicks.get(id);
+        if (
+          pick &&
+          (pick.status === 'posted' ||
+            pick.status === 'awaiting_approval' ||
+            (pick.status === 'validated' && isEvidencePlanePick(pick)))
+        ) {
+          population.push(pick);
+        }
+      }
+    }
+  } else {
+    // Evidence plane: also process awaiting_approval picks so outcome data
+    // accumulates without requiring public delivery approval. Per UTV2-1253.
+    // Paginated to bypass the Supabase 1000-row default cap (UTV2-1258).
+    // UTV2-1861: Track Only picks never reach `posted`. They are structurally
+    // unable to be delivered, so `validated` is where they stop, and grading
+    // never saw them. Admit the Track Only subset of `validated` -- and only
+    // that subset: `validated` on its own is the entire pre-delivery backlog
+    // (21,364 rows in production on 2026-09-10, against 1 Track Only pick), so
+    // the filter is what keeps this a targeted admission rather than a sweep.
+    const [postedPicks, evidencePicks, validatedPicks] = await Promise.all([
+      fetchAllByLifecycleState(repositories.picks, 'posted'),
+      fetchAllByLifecycleState(repositories.picks, 'awaiting_approval'),
+      typeof repositories.picks.listTrackOnlyByLifecycleState === 'function'
+        ? repositories.picks.listTrackOnlyByLifecycleState('validated')
+        : fetchAllByLifecycleState(repositories.picks, 'validated'),
+    ]);
+    // Keep the contract predicate as a backstop: the optimized repository read
+    // may only remove candidates, never admit a non-Track-Only validated pick.
+    const trackOnlyPicks = validatedPicks.filter((pick) =>
+      isEvidencePlanePick(pick),
+    );
+    population = [...postedPicks, ...evidencePicks, ...trackOnlyPicks];
+  }
+  const picks = population;
 
   // UTV2-1886: one batched read instead of one query per pick. The loop below used to
   // open with `findLatestForPick(pick.id)` -- a sequential round trip for every pick in
@@ -525,7 +555,11 @@ async function executeGradingPass(
         continue;
       }
 
-      const provenance = validateEventProvenanceForGrading(pick, event);
+      const provenance = await validateEventProvenanceForGrading(
+        pick,
+        event,
+        repositories,
+      );
       if (!provenance.ok) {
         options.logger?.warn?.(
           `Skipping grading for pick ${pick.id}: ${provenance.reason}`,
@@ -774,6 +808,8 @@ async function executeGradingPass(
     details,
     rowsScanned: population.length,
     gradeableRows,
+    restricted: options.restrictToPickIds !== undefined,
+    requestedPickCount: options.restrictToPickIds?.size ?? null,
   };
 }
 
@@ -803,6 +839,7 @@ export function classifyInputFreshness(
 }
 
 export function classifyGradingOutcome(input: {
+  restricted?: boolean;
   graded: number;
   errors: number;
   rowsScanned: number;
@@ -827,6 +864,11 @@ export function classifyGradingOutcome(input: {
   // positively asserts there was no input, so it is reachable only when nothing
   // was read.
   if (input.rowsScanned > 0 || input.skipped > 0) {
+    return 'no_op_nothing_gradeable';
+  }
+  // A restricted pass says nothing about the global backlog, even when none
+  // of its requested picks were admitted.
+  if (input.restricted) {
     return 'no_op_nothing_gradeable';
   }
   return 'no_op_no_input';
@@ -868,6 +910,8 @@ function countIdentitySkips(details: readonly GradingPickResult[]): number {
 
 function buildGradingRunDetails(input: {
   outcomeClass: GradingOutcomeClass;
+  restricted: boolean;
+  requestedPickCount: number | null;
   rowsScanned: number;
   gradeableRows: number;
   graded: number;
@@ -895,6 +939,8 @@ function buildGradingRunDetails(input: {
 
   return {
     outcome_class: input.outcomeClass,
+    restricted: input.restricted,
+    requested_pick_count: input.requestedPickCount,
     rows_scanned: input.rowsScanned,
     gradeable_rows: input.gradeableRows,
     graded_count: input.graded,
@@ -1079,10 +1125,11 @@ export const COMMON_GRADING_MARKET_ALIASES: Record<string, string> = {
   player_3pm_ou: 'player_threes_ou',
 };
 
-function validateEventProvenanceForGrading(
+async function validateEventProvenanceForGrading(
   pick: PickRecord,
   event: EventRow,
-): { ok: true } | { ok: false; reason: string } {
+  repositories: Pick<RepositoryBundle, 'gradeResults' | 'eventParticipants'>,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
   if (!readNonEmptyString(event.external_id)) {
     return { ok: false, reason: 'event_provenance_missing_external_id' };
   }
@@ -1115,6 +1162,107 @@ function validateEventProvenanceForGrading(
     return { ok: false, reason: 'event_provenance_invalid_ingestion_cycle' };
   }
 
+  if (provider === 'odds-api') {
+    if (!isEvidencePlanePick(pick)) {
+      return { ok: false, reason: 'event_provenance_provider_scope_track_only' };
+    }
+    const proof = asRecord(metadata?.resultsProof);
+    const lastUpdate = readNonEmptyString(proof?.providerLastUpdate);
+    const startsAt = readNonEmptyString(metadata?.starts_at);
+    const payloadKind = readNonEmptyString(proof?.payloadKind);
+    const nonProduction = isApprovedStagingTarget(process.env.SUPABASE_URL) ||
+      isLoopbackTarget(process.env.SUPABASE_URL);
+    if (proof?.completedObserved !== true || proof?.providerEventId !== event.external_id ||
+        !lastUpdate || !startsAt || !Number.isFinite(Date.parse(lastUpdate)) ||
+        !Number.isFinite(Date.parse(startsAt)) || Date.parse(lastUpdate) <= Date.parse(startsAt) ||
+        !payloadKind || !['live', 'fixture-doc-derived', 'fixture-recorded'].includes(payloadKind) ||
+        (payloadKind.startsWith('fixture') && !nonProduction)) {
+      return { ok: false, reason: 'event_provenance_results_proof_missing' };
+    }
+    // Inspect the stored key before the legacy normalizer can collapse a period
+    // or regulation moneyline into a full-game moneyline.
+    const family = classifyMarketFamilyForGrading(pick.market).family;
+    if (!['game_total', 'team_total', 'game_spread', 'game_moneyline'].includes(family)) {
+      return { ok: false, reason: 'unsupported_market_family' };
+    }
+    return validateOddsApiResults(event, lastUpdate, repositories);
+  }
+  return { ok: true };
+}
+
+/** Completion proof is usable only with the complete, mutually consistent result set. */
+async function validateOddsApiResults(
+  event: EventRow,
+  lastUpdate: string,
+  repositories: Pick<RepositoryBundle, 'gradeResults' | 'eventParticipants'>,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const [results, links] = await Promise.all([
+    repositories.gradeResults.listByEvent(event.id),
+    repositories.eventParticipants.listByEvent(event.id),
+  ]);
+  const teamKeys = [
+    'team_total_ou',
+    'game_spread_margin',
+    'game_moneyline_win',
+  ];
+  const rows = results.filter(
+    (row) =>
+      row.market_key === 'game_total_ou' || teamKeys.includes(row.market_key),
+  );
+  const homes = links.filter((link) => link.role === 'home');
+  const aways = links.filter((link) => link.role === 'away');
+  const homeId = homes[0]?.participant_id;
+  const awayId = aways[0]?.participant_id;
+  const gameTotals = rows.filter(
+    (row) => row.market_key === 'game_total_ou' && row.participant_id === null,
+  );
+  if (
+    rows.length !== 7 ||
+    rows.some((row) => row.source !== 'odds-api') ||
+    homes.length !== 1 ||
+    aways.length !== 1 ||
+    !homeId ||
+    !awayId ||
+    homeId === awayId ||
+    gameTotals.length !== 1 ||
+    rows.some(
+      (row) =>
+        row !== gameTotals[0] &&
+        (!teamKeys.includes(row.market_key) ||
+          (row.participant_id !== homeId && row.participant_id !== awayId)),
+    ) ||
+    [homeId, awayId].some((id) =>
+      teamKeys.some(
+        (key) =>
+          rows.filter(
+            (row) => row.participant_id === id && row.market_key === key,
+          ).length !== 1,
+      ),
+    )
+  ) {
+    return { ok: false, reason: 'odds_api_results_incomplete' };
+  }
+  const value = (id: string, key: string) =>
+    rows.find((row) => row.participant_id === id && row.market_key === key)!
+      .actual_value;
+  const homeTotal = value(homeId, 'team_total_ou');
+  const awayTotal = value(awayId, 'team_total_ou');
+  if (
+    rows.some(
+      (row) =>
+        !Number.isFinite(row.actual_value) ||
+        Date.parse(row.sourced_at) !== Date.parse(lastUpdate),
+    ) ||
+    gameTotals[0]!.actual_value !== homeTotal + awayTotal ||
+    value(homeId, 'game_spread_margin') !== homeTotal - awayTotal ||
+    value(awayId, 'game_spread_margin') !== awayTotal - homeTotal ||
+    value(homeId, 'game_moneyline_win') !==
+      (homeTotal === awayTotal ? 0.5 : homeTotal > awayTotal ? 1 : 0) ||
+    value(awayId, 'game_moneyline_win') !==
+      (homeTotal === awayTotal ? 0.5 : awayTotal > homeTotal ? 1 : 0)
+  ) {
+    return { ok: false, reason: 'odds_api_results_inconsistent' };
+  }
   return { ok: true };
 }
 

@@ -1,0 +1,23 @@
+{
+  "provenance": "doc-derived",
+  "vendorBehaviour": "documented-shape",
+  "workOrder": "WORK-2026111102",
+  "source": "https://the-odds-api.com/liveapi/guides/v4/ (GET /v4/sports/{sport}/scores response example: fields id, sport_key, sport_title, commence_time, completed, home_team, away_team, scores[{name, score}] | null, last_update | null)",
+  "note": "Documented upcoming-game shape: completed false, scores null, last_update null.",
+  "league": "NBA",
+  "expectedParse": "not_final",
+  "evaluateAt": "2026-11-09T12:00:00Z",
+  "response": [
+    {
+      "id": "c030a895d8b4fb9dc5e61231d683d000",
+      "sport_key": "basketball_nba",
+      "sport_title": "NBA",
+      "commence_time": "2026-11-10T00:10:00Z",
+      "completed": false,
+      "home_team": "Denver Nuggets",
+      "away_team": "Phoenix Suns",
+      "scores": null,
+      "last_update": null
+    }
+  ]
+}

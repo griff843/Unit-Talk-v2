@@ -1,0 +1,32 @@
+{
+  "provenance": "doc-derived",
+  "vendorBehaviour": "hypothetical-malformed",
+  "workOrder": "WORK-2026111102",
+  "source": "https://the-odds-api.com/liveapi/guides/v4/ (GET /v4/sports/{sport}/scores response example: fields id, sport_key, sport_title, commence_time, completed, home_team, away_team, scores[{name, score}] | null, last_update | null)",
+  "note": "A score entry name equals neither home_team nor away_team. Not a documented shape; defensive.",
+  "league": "NBA",
+  "expectedParse": "rejected",
+  "evaluateAt": "2026-11-09T12:00:00Z",
+  "response": [
+    {
+      "id": "3c0c91c180b11002474181ca299ce9d0",
+      "sport_key": "basketball_nba",
+      "sport_title": "NBA",
+      "commence_time": "2026-11-08T00:10:00Z",
+      "completed": true,
+      "home_team": "New York Knicks",
+      "away_team": "Brooklyn Nets",
+      "scores": [
+        {
+          "name": "New York Knicks",
+          "score": "110"
+        },
+        {
+          "name": "Brooklyn",
+          "score": "99"
+        }
+      ],
+      "last_update": "2026-11-08T02:40:00Z"
+    }
+  ]
+}

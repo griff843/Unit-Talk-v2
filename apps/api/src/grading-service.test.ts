@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import {
   humanCapperDeliveryAuthorizationVersion,
   legacyManualPlayerProvenance,
@@ -2167,6 +2168,8 @@ test('fresh empty grading input is a no-op, never successful work', async () => 
   assert.equal(result.attempted, 0);
   assert.equal(result.outcomeClass, 'no_op_no_input');
   assert.equal(run?.status, 'succeeded');
+  assert.equal(details['restricted'], false);
+  assert.equal(details['requested_pick_count'], null);
   assert.equal(details['outcome_class'], 'no_op_no_input');
   assert.equal(details['rows_scanned'], 0);
   assert.equal(details['gradeable_rows'], 0);
@@ -3944,7 +3947,7 @@ async function makeFirstTrackOnlyPickGradeable(
   });
 }
 
-test('runGradingPass uses the filtered validated read without changing population, restriction, or rowsScanned semantics', async () => {
+test('runGradingPass restricted reads load only requested ids and count admitted picks in rowsScanned', async () => {
   const fixture = await createMixedValidatedPopulation();
   await makeFirstTrackOnlyPickGradeable(fixture);
 
@@ -3973,20 +3976,15 @@ test('runGradingPass uses the filtered validated read without changing populatio
   };
 
   const result = await runGradingPass(fixture.repositories, {
-    // The named delivery-eligible row must not be admitted. The restriction is
-    // still applied after population construction and can only remove rows.
+    // The named delivery-eligible row must not pass lifecycle/evidence admission.
     restrictToPickIds: new Set([
       fixture.firstTrackOnlyId,
       fixture.deliveryEligibleId,
     ]),
   });
 
-  assert.deepEqual(optimizedReads, ['validated']);
-  assert.deepEqual(
-    lifecycleReads.sort(),
-    ['awaiting_approval', 'posted'],
-    'awaiting_approval and posted keep their existing paged reads',
-  );
+  assert.deepEqual(optimizedReads, []);
+  assert.deepEqual(lifecycleReads, []);
   assert.equal(result.attempted, 1);
   assert.equal(result.graded, 1);
   assert.equal(result.details[0]?.pickId, fixture.firstTrackOnlyId);
@@ -4008,8 +4006,8 @@ test('runGradingPass uses the filtered validated read without changing populatio
   const details = run?.details as Record<string, unknown>;
   assert.equal(
     details['rows_scanned'],
-    2,
-    'rowsScanned remains the admitted population before restrictToPickIds, not the raw validated table or restricted attempt count',
+    1,
+    'rowsScanned counts only admitted requested picks after loading by id',
   );
 });
 
@@ -4625,8 +4623,8 @@ test("the composed journey: an ingested result makes Milestone 1's exact pick sh
 //
 //   1. Absent, the pass is byte-for-byte what it was -- no caller in production
 //      passes it, so a change in the default is a change in production behaviour.
-//   2. Present, it can only REMOVE candidates. The restriction is intersected with
-//      the population the pass already read.
+//   2. Present, it loads by id and reapplies the same admission rules, so it can
+//      only REMOVE candidates from the unrestricted population.
 //   3. It cannot ADMIT anything. An id outside the population -- a pick in a
 //      lifecycle state grading does not read, or one that does not exist -- stays
 //      ungraded. Without this, the option would be a second, weaker admission path
@@ -4733,8 +4731,7 @@ test('runGradingPass with restrictToPickIds cannot admit a pick the population n
   // A real pick that the population read does not return: `processSubmission`
   // leaves it `validated`, and `validated` enters the population only for the
   // Track Only subset (UTV2-1861), which this one is not. If the restriction were
-  // used AS the population query rather than intersected with it, naming this id
-  // would pull it into grading -- a second, weaker admission path.
+  // loaded without reapplying admission, naming this id would pull it into grading.
   const outside = await processSubmission(
     {
       source: 'api',
@@ -4765,6 +4762,239 @@ test('runGradingPass with restrictToPickIds cannot admit a pick the population n
   assert.equal(
     (await repositories.picks.findPickById(outside.pick.id))?.status,
     'validated',
+  );
+});
+
+function spyOnRestrictedPickReads(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+) {
+  const calls: string[][] = [];
+  const findPicksByIds = repositories.picks.findPicksByIds.bind(
+    repositories.picks,
+  );
+  repositories.picks.findPicksByIds = async (ids) => {
+    calls.push([...ids]);
+    const rows = await findPicksByIds(ids);
+    // Database result order need not match request order.
+    return new Map([...rows].reverse());
+  };
+  repositories.picks.listByLifecycleState = async () => {
+    assert.fail('restricted grading must not read lifecycle populations');
+  };
+  repositories.picks.listTrackOnlyByLifecycleState = async () => {
+    assert.fail('restricted grading must not read the Track Only population');
+  };
+  return calls;
+}
+
+test('restricted grading loads requested ids once, preserves order, and admits posted and awaiting_approval', async () => {
+  const { repositories, firstPickId, secondPickId } =
+    await seedTwoGradeablePostedPicks();
+  mutatePick(repositories, firstPickId, (pick) => ({
+    ...pick,
+    status: 'awaiting_approval',
+  }));
+  const calls = spyOnRestrictedPickReads(repositories);
+  const ids = [secondPickId, firstPickId];
+  const result = await runGradingPass(repositories, {
+    restrictToPickIds: new Set(ids),
+  });
+  assert.deepEqual(calls, [ids]);
+  assert.equal(result.errors, 0);
+  assert.equal(result.graded, 2);
+  assert.deepEqual(
+    result.details.map((detail) => detail.pickId),
+    ids,
+  );
+});
+
+test('restricted grading reapplies admission to every requested status and ignores missing ids', async () => {
+  const fixture = await createMixedValidatedPopulation();
+  await makeFirstTrackOnlyPickGradeable(fixture);
+  const excludedIds = [fixture.deliveryEligibleId, fixture.noModeId];
+  for (const status of ['draft', 'queued', 'settled', 'voided']) {
+    const pick = await createPostedPickFixture({
+      repositories: fixture.repositories,
+      eventName: `Restricted excluded ${status}`,
+    });
+    const { participant, event } = await attachPlayerEventContext(
+      fixture.repositories,
+      pick.pickId,
+      {
+        eventName: pick.eventName,
+        eventStatus: 'completed',
+      },
+    );
+    await seedGameResult(fixture.repositories, {
+      eventId: event.id,
+      participantId: participant.id,
+      marketKey: 'points-all-game-ou',
+      actualValue: 29,
+    });
+    mutatePick(fixture.repositories, pick.pickId, (row) => ({
+      ...row,
+      status,
+    }));
+    excludedIds.push(pick.pickId);
+  }
+  const calls = spyOnRestrictedPickReads(fixture.repositories);
+  // Postgres rejects malformed UUIDs and fails the pass closed; missing ids
+  // must still be valid UUIDs to exercise the not-found path.
+  const ids = [...excludedIds, randomUUID(), fixture.firstTrackOnlyId];
+  const result = await runGradingPass(fixture.repositories, {
+    restrictToPickIds: new Set(ids),
+  });
+  assert.deepEqual(calls, [ids]);
+  assert.equal(result.errors, 0);
+  assert.equal(result.attempted, 1);
+  assert.equal(result.graded, 1);
+  assert.equal(result.details[0]?.pickId, fixture.firstTrackOnlyId);
+  for (const id of ids) {
+    assert.equal(
+      (await fixture.repositories.settlements.listByPick(id)).length,
+      id === fixture.firstTrackOnlyId ? 1 : 0,
+    );
+    assert.deepEqual(await fixture.repositories.outbox.listByPickId(id), []);
+  }
+});
+
+test('an all-inadmissible restricted set does not assert an empty global backlog', async () => {
+  const fixture = await createMixedValidatedPopulation();
+  const ids = [fixture.deliveryEligibleId, fixture.noModeId, randomUUID()];
+  const calls = spyOnRestrictedPickReads(fixture.repositories);
+  const result = await runGradingPass(fixture.repositories, {
+    restrictToPickIds: new Set(ids),
+  });
+  assert.deepEqual(calls, [ids]);
+  assert.equal(result.attempted, 0);
+  assert.equal(result.graded, 0);
+  assert.equal(result.errors, 0);
+  assert.equal(result.outcomeClass, 'no_op_nothing_gradeable');
+  const [run] = await fixture.repositories.runs.listByType('grading.run');
+  const details = run?.details as Record<string, unknown>;
+  assert.equal(run?.status, 'succeeded');
+  assert.equal(details['outcome_class'], 'no_op_nothing_gradeable');
+  assert.equal(details['rows_scanned'], 0);
+  assert.equal(details['restricted'], true);
+  assert.equal(details['requested_pick_count'], ids.length);
+  for (const id of ids) {
+    assert.deepEqual(await fixture.repositories.settlements.listByPick(id), []);
+    assert.deepEqual(await fixture.repositories.outbox.listByPickId(id), []);
+  }
+});
+
+test('unrestricted grading retains all three population reads and their ordering', async () => {
+  const fixture = await createMixedValidatedPopulation();
+  await makeFirstTrackOnlyPickGradeable(fixture);
+  const posted = await seedTwoGradeablePostedPicks();
+  const reads: string[] = [];
+  const list = fixture.repositories.picks.listByLifecycleState.bind(
+    fixture.repositories.picks,
+  );
+  fixture.repositories.picks.listByLifecycleState = async (
+    state,
+    limit,
+    offset,
+  ) => {
+    reads.push(state);
+    return list(state, limit, offset);
+  };
+  fixture.repositories.picks.listTrackOnlyByLifecycleState = async (state) => {
+    reads.push(`track-only:${state}`);
+    const rows = await fixture.repositories.picks.findPicksByIds([
+      fixture.firstTrackOnlyId,
+      fixture.secondTrackOnlyId,
+    ]);
+    return [...rows.values()];
+  };
+  const result = await runGradingPass(fixture.repositories);
+  assert.deepEqual(reads, [
+    'posted',
+    'awaiting_approval',
+    'track-only:validated',
+  ]);
+  assert.equal(result.attempted, 2);
+  assert.equal(result.graded, 1);
+  assert.deepEqual(
+    result.details.map((detail) => detail.pickId),
+    [fixture.firstTrackOnlyId, fixture.secondTrackOnlyId],
+  );
+  // Existing posted-population coverage remains independent of the optimized read.
+  assert.equal((await runGradingPass(posted.repositories)).graded, 2);
+});
+
+test('restricted Track Only replay leaves the existing settlement unchanged and creates no delivery', async () => {
+  const fixture = await createMixedValidatedPopulation();
+  await makeFirstTrackOnlyPickGradeable(fixture);
+  const calls = spyOnRestrictedPickReads(fixture.repositories);
+  const options = { restrictToPickIds: new Set([fixture.firstTrackOnlyId]) };
+  assert.equal((await runGradingPass(fixture.repositories, options)).graded, 1);
+  const before = await fixture.repositories.settlements.listByPick(
+    fixture.firstTrackOnlyId,
+  );
+  assert.equal(before.length, 1);
+  const replay = await runGradingPass(fixture.repositories, options);
+  assert.equal(replay.errors, 0);
+  assert.equal(replay.graded, 0);
+  assert.equal(replay.details[0]?.reason, 'settlement_already_exists');
+  assert.deepEqual(
+    await fixture.repositories.settlements.listByPick(fixture.firstTrackOnlyId),
+    before,
+  );
+  assert.deepEqual(
+    await fixture.repositories.outbox.listByPickId(fixture.firstTrackOnlyId),
+    [],
+  );
+  assert.deepEqual(calls, [
+    [fixture.firstTrackOnlyId],
+    [fixture.firstTrackOnlyId],
+  ]);
+});
+
+test('an empty restricted grading set makes no pick read and grades nothing', async () => {
+  const { repositories } = await seedTwoGradeablePostedPicks();
+  const calls = spyOnRestrictedPickReads(repositories);
+  repositories.picks.findPickById = async () => {
+    assert.fail('empty restriction must not read an individual pick');
+  };
+  const result = await runGradingPass(repositories, {
+    restrictToPickIds: new Set(),
+  });
+  assert.deepEqual(calls, []);
+  assert.equal(result.attempted, 0);
+  assert.equal(result.graded, 0);
+  assert.equal(result.errors, 0);
+  assert.deepEqual(result.details, []);
+  assert.equal(result.outcomeClass, 'no_op_nothing_gradeable');
+  const [run] = await repositories.runs.listByType('grading.run');
+  const details = run?.details as Record<string, unknown>;
+  assert.equal(run?.status, 'succeeded');
+  assert.equal(details['outcome_class'], 'no_op_nothing_gradeable');
+  assert.equal(details['rows_scanned'], 0);
+  assert.equal(details['restricted'], true);
+  assert.equal(details['requested_pick_count'], 0);
+});
+
+test('restricted grading loads every requested id in chunks of at most 100', async () => {
+  const { repositories, firstPickId, secondPickId } =
+    await seedTwoGradeablePostedPicks();
+  const calls = spyOnRestrictedPickReads(repositories);
+  const ids: string[] = Array.from({ length: 205 }, () => randomUUID());
+  ids[0] = secondPickId;
+  ids[204] = firstPickId;
+  const result = await runGradingPass(repositories, {
+    restrictToPickIds: new Set(ids),
+  });
+  assert.deepEqual(
+    calls.map((call) => call.length),
+    [100, 100, 5],
+  );
+  assert.deepEqual(calls.flat(), ids);
+  assert.equal(result.errors, 0);
+  assert.equal(result.graded, 2);
+  assert.deepEqual(
+    result.details.map((detail) => detail.pickId),
+    [secondPickId, firstPickId],
   );
 });
 
@@ -4979,3 +5209,281 @@ test('Codex review F3 control: a game-line pick is unaffected', async () => {
   assert.equal(result.details[0]?.result, 'win');
   assert.equal((await repositories.settlements.listByPick(pickId)).length, 1);
 });
+
+// WORK-2026111102: Odds API trust is bounded to Track Only full-game lines.
+async function createOddsApiGradingFixture(options: {
+  market?: string; posted?: boolean; metadata?: Record<string, unknown>;
+  noResults?: boolean; actualValue?: number; line?: number;
+} = {}) {
+  const market = options.market ?? 'game_total_ou';
+  const repositories = createInMemoryRepositoryBundle();
+  const eventName = 'Odds Scores Away @ Odds Scores Home';
+  const created = await processSubmission({ source: 'smart-form', market,
+    selection: market === 'moneyline' ? 'Odds Scores Home' : market === 'spread' ? 'Odds Scores Home -2.5' : 'Over 4.5',
+    ...(market === 'moneyline' ? {} : { line: options.line ?? (market === 'spread' ? -2.5 : 4.5) }),
+    odds: -110, stakeUnits: 1, eventName,
+    metadata: options.posted ? {} : { distributionMode: 'track-only' },
+  }, repositories);
+  const pickId = created.pick.id;
+  if (options.posted) {
+    await transitionPickLifecycle(repositories.picks, pickId, 'queued', 'queued');
+    await transitionPickLifecycle(repositories.picks, pickId, 'posted', 'posted', 'poster');
+  }
+  const externalId = '12345678901234567890123456789012';
+  const event = await repositories.events.upsertByExternalId({ externalId, sportId: 'NHL', eventName,
+    eventDate: '2026-11-08', status: options.noResults ? 'scheduled' : 'completed', metadata: {
+      source: 'odds-api', providerKey: 'odds-api', ingestionSource: 'odds-api-scores.operator-run',
+      ingestionCycleRunId: 'odds-scores-test-run', starts_at: '2026-11-08T01:00:00Z',
+      resultsProof: { completedObserved: true, providerEventId: externalId,
+        providerLastUpdate: '2026-11-08T04:00:00Z', payloadKind: 'live' },
+      ...options.metadata,
+    } });
+  const team = await repositories.participants.upsertByExternalId({ externalId: 'ODDS_SCORES_HOME_NHL',
+    displayName: 'Odds Scores Home', participantType: 'team', sport: 'NHL', league: 'NHL', metadata: {} });
+  const away = await repositories.participants.upsertByExternalId({ externalId: 'ODDS_SCORES_AWAY_NHL',
+    displayName: 'Odds Scores Away', participantType: 'team', sport: 'NHL', league: 'NHL', metadata: {} });
+  await repositories.eventParticipants.upsert({ eventId: event.id, participantId: team.id, role: 'home' });
+  await repositories.eventParticipants.upsert({ eventId: event.id, participantId: away.id, role: 'away' });
+  mutatePick(repositories, pickId, (pick) => ({ ...pick, market, sport_id: 'NHL',
+    participant_id: null, ...(market === 'moneyline' ? { line: null } : {}),
+    metadata: { ...(asRecord(pick.metadata) ?? {}), sport: 'NHL', eventName, eventId: event.id,
+      teamId: team.id, team: team.display_name } }));
+  // Preserve each market's winning value while supplying the seven facts grading verifies.
+  const homeTotal = market === 'spread' || market === 'team_total_ou' ? 5 : 3;
+  const awayTotal = market === 'game_total_ou' ? (options.actualValue ?? 5) - homeTotal : 2;
+  const resultInputs = [
+    { participantId: null, marketKey: 'game_total_ou', actualValue: homeTotal + awayTotal },
+    ...([[team.id, homeTotal, awayTotal], [away.id, awayTotal, homeTotal]] as const).flatMap(([id, ownTotal, opponentTotal]) => {
+      return [
+        { participantId: id, marketKey: 'team_total_ou', actualValue: ownTotal },
+        { participantId: id, marketKey: 'game_spread_margin', actualValue: ownTotal - opponentTotal },
+        { participantId: id, marketKey: 'game_moneyline_win', actualValue: ownTotal === opponentTotal ? 0.5 : ownTotal > opponentTotal ? 1 : 0 },
+      ];
+    }),
+  ].map((input) => ({ ...input, eventId: event.id, source: 'odds-api', sourcedAt: '2026-11-08T04:00:00Z' }));
+  if (!options.noResults) for (const input of resultInputs) await seedGameResult(repositories, input);
+  return { repositories, pickId, event, team, away, resultInputs };
+}
+
+for (const defect of [
+  'six rows',
+  'foreign eighth row',
+  'foreign team row among seven',
+  'unlinked participant',
+  'missing away link',
+  'wrong game total',
+  'wrong home margin',
+  'wrong away margin',
+  'wrong home moneyline',
+  'wrong away moneyline',
+  'different sourced_at',
+] as const) {
+  test(`WORK-2026111102 step 13a: ${defect} cannot settle a Track Only pick`, async () => {
+    const { repositories, pickId, event, team, resultInputs } =
+      await createOddsApiGradingFixture({ noResults: true });
+    await repositories.events.upsertByExternalId({
+      externalId: event.external_id!,
+      sportId: event.sport_id,
+      eventName: event.event_name,
+      eventDate: event.event_date,
+      status: 'completed',
+      metadata: event.metadata,
+    });
+    const inputs = structuredClone(resultInputs);
+    if (defect === 'six rows') inputs.pop();
+    if (defect === 'foreign eighth row')
+      inputs.push({ ...inputs[0]!, source: 'sgo' });
+    if (defect === 'foreign team row among seven') {
+      inputs.find(
+        (row) => row.participantId === team.id && row.marketKey === 'team_total_ou',
+      )!.source = 'sgo';
+      assert.equal(inputs.length, 7);
+    }
+    if (defect === 'unlinked participant') {
+      const stranger = await repositories.participants.upsertByExternalId({
+        externalId: 'UNLINKED_NHL',
+        displayName: 'Unlinked Team',
+        participantType: 'team',
+        sport: 'NHL',
+        league: 'NHL',
+        metadata: {},
+      });
+      inputs.find(
+        (row) =>
+          row.participantId === team.id && row.marketKey === 'team_total_ou',
+      )!.participantId = stranger.id;
+    }
+    if (defect === 'missing away link') {
+      const original = repositories.eventParticipants.listByEvent.bind(
+        repositories.eventParticipants,
+      );
+      repositories.eventParticipants.listByEvent = async (id) =>
+        (await original(id)).filter((link) => link.role !== 'away');
+    }
+    const badIndices: Partial<Record<typeof defect, number>> = {
+      'wrong game total': 0,
+      'wrong home margin': 2,
+      'wrong away margin': 5,
+      'wrong home moneyline': 3,
+      'wrong away moneyline': 6,
+    };
+    const badIndex = badIndices[defect];
+    if (badIndex !== undefined) inputs[badIndex]!.actualValue += 1;
+    if (defect === 'different sourced_at')
+      inputs[4]!.sourcedAt = '2026-11-08T04:01:00Z';
+    for (const input of inputs) await seedGameResult(repositories, input);
+    const result = await runGradingPass(repositories, {
+      restrictToPickIds: new Set([pickId]),
+      now: () => new Date('2026-11-08T04:02:00Z'),
+    });
+    assert.equal(result.errors, 0);
+    assert.equal(result.graded, 0);
+    const incomplete = [
+      'six rows',
+      'foreign eighth row',
+      'foreign team row among seven',
+      'unlinked participant',
+      'missing away link',
+    ].includes(defect);
+    assert.equal(
+      result.details[0]?.reason,
+      incomplete
+        ? 'odds_api_results_incomplete'
+        : 'odds_api_results_inconsistent',
+    );
+    assert.deepEqual(await repositories.settlements.listByPick(pickId), []);
+    assert.deepEqual(await repositories.outbox.listByPickId(pickId), []);
+    assert.equal(
+      (await repositories.picks.findPickById(pickId))?.status,
+      'validated',
+    );
+    const [gradingRun] = await repositories.runs.listByType('grading.run');
+    assert.equal(
+      asRecord(gradingRun?.details)?.['data_dependent_skipped_count'],
+      1,
+    );
+  });
+}
+
+test('WORK-2026111102 29. Odds API grades Track Only total, team total, spread and moneyline', async () => {
+  for (const market of ['game_total_ou', 'team_total_ou', 'spread', 'moneyline']) {
+    const { repositories, pickId } = await createOddsApiGradingFixture({ market });
+    const result = await runGradingPass(repositories);
+    assert.equal(result.graded, 1, `${market}: ${JSON.stringify(result.details)}`);
+    const settlement = await repositories.settlements.findLatestForPick(pickId);
+    assert.equal(settlement?.result, 'win', market);
+    assert.equal((await repositories.picks.findPickById(pickId))?.status, 'validated');
+  }
+});
+
+test('WORK-2026111102 30. Odds API refuses a posted pick', async () => {
+  const { repositories } = await createOddsApiGradingFixture({ posted: true });
+  const result = await runGradingPass(repositories);
+  assert.equal(result.graded, 0);
+  assert.equal(result.details[0]?.reason, 'event_provenance_provider_scope_track_only');
+});
+
+test('WORK-2026111102 31-32. Odds API requires its own ingestion chain and matching results proof', async () => {
+  const cases: Array<[Record<string, unknown>, string]> = [
+    [{ ingestionSource: 'ingestor.cycle' }, 'event_provenance_invalid_ingestion_cycle'],
+    [{ resultsProof: null }, 'event_provenance_results_proof_missing'],
+    [{ resultsProof: { completedObserved: true, providerEventId: 'wrong', providerLastUpdate: '2026-11-08T04:00:00Z', payloadKind: 'live' } }, 'event_provenance_results_proof_missing'],
+    [{ providerKey: null, ingestionCycleRunId: null }, 'event_provenance_missing_ingestion_cycle'],
+    [{ resultsProof: { completedObserved: false } }, 'event_provenance_results_proof_missing'],
+    [{ resultsProof: { completedObserved: true, providerEventId: '12345678901234567890123456789012', providerLastUpdate: '2026-11-08T00:00:00Z', payloadKind: 'live' } }, 'event_provenance_results_proof_missing'],
+  ];
+  for (const [metadata, reason] of cases) {
+    const { repositories } = await createOddsApiGradingFixture({ metadata });
+    const result = await runGradingPass(repositories);
+    assert.equal(result.graded, 0);
+    assert.equal(result.details[0]?.reason, reason);
+  }
+});
+
+test('WORK-2026111102 31b. fixture results require positively identified non-production DB', async () => {
+  const previous = process.env.SUPABASE_URL;
+  try {
+    for (const target of ['https://zfzdnfwdarxucxtaojxm.supabase.co', 'https://unknown.example', 'https://xskgrzbteyqdufktjrjx.supabase.co']) {
+      process.env.SUPABASE_URL = target;
+      const { repositories } = await createOddsApiGradingFixture({ metadata: {
+        resultsProof: { completedObserved: true, providerEventId: '12345678901234567890123456789012',
+          providerLastUpdate: '2026-11-08T04:00:00Z', payloadKind: 'fixture-doc-derived' },
+      } });
+      const result = await runGradingPass(repositories);
+      assert.equal(result.graded, target.includes('xskgrzbteyqdufktjrjx') ? 1 : 0, target);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = previous;
+  }
+});
+
+test('WORK-2026111102 33. NHL period and regulation markets remain unsupported', async () => {
+  for (const market of ['1p_total_ou', '1p_moneyline', 'regulation_moneyline']) {
+    assert.equal(classifyMarketFamilyForGrading(market).family, 'unsupported');
+    const { repositories } = await createOddsApiGradingFixture({ market });
+    const result = await runGradingPass(repositories);
+    assert.equal(result.graded, 0);
+    assert.equal(result.details[0]?.reason, 'unsupported_market_family');
+  }
+});
+
+test('WORK-2026111102 34. NHL credited shootout total grades; absent equal-score result stays ungraded', async () => {
+  const credited = await createOddsApiGradingFixture({ actualValue: 5, line: 4.5 });
+  assert.equal((await runGradingPass(credited.repositories)).graded, 1);
+  assert.equal((await credited.repositories.settlements.findLatestForPick(credited.pickId))?.result, 'win');
+  const equal = await createOddsApiGradingFixture({ noResults: true });
+  assert.equal((await runGradingPass(equal.repositories)).graded, 0);
+  assert.equal(await equal.repositories.settlements.findLatestForPick(equal.pickId), null);
+});
+
+test('WORK-2026111102 35. Odds API never replaces an existing evidence settlement', async () => {
+  const { repositories, pickId } = await createOddsApiGradingFixture();
+  await recordEvidenceSettlement(pickId, 'loss', { actualValue: 0, marketKey: 'game_total_ou',
+    eventId: 'existing-event', gameResultId: 'existing-result' }, repositories);
+  const before = await repositories.settlements.listByPick(pickId);
+  const result = await runGradingPass(repositories);
+  assert.equal(result.graded, 0);
+  assert.equal(result.details[0]?.reason, 'settlement_already_exists');
+  assert.deepEqual(await repositories.settlements.listByPick(pickId), before);
+});
+
+test('WORK-2026111102 36. Odds API Track Only settlement creates no outbox or recap', async () => {
+  const { repositories, pickId } = await createOddsApiGradingFixture();
+  const previous = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; throw new Error('No delivery allowed'); };
+  try {
+    assert.equal((await runGradingPass(repositories)).graded, 1);
+    assert.deepEqual(await repositories.outbox.listByPickId(pickId), []);
+    assert.equal(calls, 0);
+  } finally { globalThis.fetch = previous; }
+});
+
+
+for (const status of ['scheduled', 'completed'] as const) {
+  test(`WORK-2026111102 step 13: ${status} event without completion proof cannot settle`, async () => {
+    const { repositories, pickId, event, team } = await createOddsApiGradingFixture({
+      noResults: status === 'scheduled', metadata: { resultsProof: undefined },
+    });
+    const away = await repositories.participants.upsertByExternalId({ externalId: 'ODDS_SCORES_AWAY_NHL',
+      displayName: 'Odds Scores Away', participantType: 'team', sport: 'NHL', league: 'NHL', metadata: {} });
+    const rows = status === 'scheduled' ? [[null, 'game_total_ou', 5] as const] : [
+      [null, 'game_total_ou', 5], [team.id, 'team_total_ou', 3], [team.id, 'game_spread_margin', 1],
+      [team.id, 'game_moneyline_win', 1], [away.id, 'team_total_ou', 2],
+      [away.id, 'game_spread_margin', -1], [away.id, 'game_moneyline_win', 0],
+    ] as const;
+    for (const [participantId, marketKey, actualValue] of rows) {
+      await seedGameResult(repositories, { eventId: event.id, participantId, marketKey, actualValue,
+        source: 'odds-api', sourcedAt: '2026-11-08T04:00:00Z' });
+    }
+    assert.equal((await repositories.gradeResults.listByEvent(event.id)).length, status === 'scheduled' ? 1 : 7);
+    const result = await runGradingPass(repositories, { restrictToPickIds: new Set([pickId]) });
+    assert.equal(result.errors, 0);
+    assert.equal(result.graded, 0);
+    assert.equal(result.details[0]?.reason, status === 'scheduled' ? 'event_not_completed' : 'event_provenance_results_proof_missing');
+    assert.deepEqual(await repositories.settlements.listByPick(pickId), []);
+    assert.deepEqual(await repositories.outbox.listByPickId(pickId), []);
+    assert.equal((await repositories.picks.findPickById(pickId))?.status, 'validated');
+  });
+}

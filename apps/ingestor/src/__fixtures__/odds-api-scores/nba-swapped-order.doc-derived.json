@@ -1,0 +1,32 @@
+{
+  "provenance": "doc-derived",
+  "vendorBehaviour": "documented-shape",
+  "workOrder": "WORK-2026111102",
+  "source": "https://the-odds-api.com/liveapi/guides/v4/ (GET /v4/sports/{sport}/scores response example: fields id, sport_key, sport_title, commence_time, completed, home_team, away_team, scores[{name, score}] | null, last_update | null)",
+  "note": "Scores array lists the away team first. The docs do not promise order; home/away must be assigned by name.",
+  "league": "NBA",
+  "expectedParse": "final",
+  "evaluateAt": "2026-11-09T12:00:00Z",
+  "response": [
+    {
+      "id": "db4fff9021eef0a3cfa46d84cdd4265d",
+      "sport_key": "basketball_nba",
+      "sport_title": "NBA",
+      "commence_time": "2026-11-08T00:10:00Z",
+      "completed": true,
+      "home_team": "Dallas Mavericks",
+      "away_team": "Houston Rockets",
+      "scores": [
+        {
+          "name": "Houston Rockets",
+          "score": "120"
+        },
+        {
+          "name": "Dallas Mavericks",
+          "score": "98"
+        }
+      ],
+      "last_update": "2026-11-08T02:40:00Z"
+    }
+  ]
+}

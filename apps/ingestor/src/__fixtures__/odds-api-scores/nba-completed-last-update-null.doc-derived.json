@@ -1,0 +1,32 @@
+{
+  "provenance": "doc-derived",
+  "vendorBehaviour": "hypothetical-malformed",
+  "workOrder": "WORK-2026111102",
+  "source": "https://the-odds-api.com/liveapi/guides/v4/ (GET /v4/sports/{sport}/scores response example: fields id, sport_key, sport_title, commence_time, completed, home_team, away_team, scores[{name, score}] | null, last_update | null)",
+  "note": "completed true but last_update null. Not a documented shape; defensive.",
+  "league": "NBA",
+  "expectedParse": "not_final_or_rejected",
+  "evaluateAt": "2026-11-09T12:00:00Z",
+  "response": [
+    {
+      "id": "5cda8108a0277459b5c772918df1ed63",
+      "sport_key": "basketball_nba",
+      "sport_title": "NBA",
+      "commence_time": "2026-11-08T00:10:00Z",
+      "completed": true,
+      "home_team": "Atlanta Hawks",
+      "away_team": "Orlando Magic",
+      "scores": [
+        {
+          "name": "Atlanta Hawks",
+          "score": "105"
+        },
+        {
+          "name": "Orlando Magic",
+          "score": "100"
+        }
+      ],
+      "last_update": null
+    }
+  ]
+}
