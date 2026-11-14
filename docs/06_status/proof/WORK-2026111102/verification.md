@@ -6,7 +6,7 @@ Issue: WORK-2026111102
 Tier: T1
 result: pass
 
-Verified source SHA: `930a379744227bc7af40c87af429331c65388c40` (PR #1846 head; code unchanged after it, only proof files).
+Verified source SHA: `64a66a0ec8e919afa7fad3aeac04df80029087c6` (PR #1846 head; code unchanged after it, only proof files). Test 38 grades in one batched pass (work order step 10) after per-pick passes timed out on shared staging at `1a3662e0a`.
 `post-merge-lane-close.yml` binds the merge SHA; none is written here by hand.
 
 ## ASSERTIONS:
@@ -16,15 +16,15 @@ Verified source SHA: `930a379744227bc7af40c87af429331c65388c40` (PR #1846 head; 
 - [x] The dry run writes nothing and its blast-radius counts equal the staging apply's row counts (`events` 1, `event_participants`, `game_results`) — test 38.
 - [x] A second staging apply changes zero rows (`eventsUpserted` 0, `resultsInserted` 0; event, results and links byte-identical) — test 38.
 - [x] Full-game outcomes are derived from the score (Kings 113, Thunder 103) and correct for every family and side, graded by `runGradingPass` on staging: game total Over 215.5 win / Under 215.5 loss; moneyline Kings win / Thunder loss; spread Kings -5.5 win / Thunder +5.5 loss / Kings -10 push; team total Kings Over 110.5 win / Thunder Over 110.5 loss — test 38 subtests 1-9.
-- [x] Settlement is idempotent: each pick has exactly one settlement, and a replay grading pass grades 0 and leaves the settlement list unchanged — test 38.
+- [x] Settlement is idempotent: the nine picks are graded in one batched pass (graded 9, errors 0), each has exactly one settlement, and one batched replay pass grades 0 and leaves every settlement list unchanged — test 38.
 - [x] Zero member delivery: every pick stays `validated`, `distribution_outbox` has no row for any pick — test 38.
 - [x] No vendor contact (`vendorCalls === 0`), no provider credential, and the proof refuses any target other than the approved staging project — test 38, `ci:assert-staging`.
 - [x] `odds-api` events grade only Track Only evidence-plane picks with a complete `resultsProof`, and fixture payloads only against staging or loopback — `grading-service.test.ts` 29-37.
 
 ## EVIDENCE:
 
-CI run 43554872965 on head `930a379744227bc7af40c87af429331c65388c40`, job "Writable DB proof (staging only)" 132325443885, conclusion success:
-https://github.com/griff843/Unit-Talk-v2/actions/runs/43554872965/job/132325443885
+CI run 43560058388 on head `64a66a0ec8e919afa7fad3aeac04df80029087c6`, job "Writable DB proof (staging only)" 132341607284, conclusion success:
+https://github.com/griff843/Unit-Talk-v2/actions/runs/43560058388/job/132341607284
 
 Command: `pnpm test:t1-proof:live` (target asserted by `pnpm ci:assert-staging`: "OK: target is the approved staging project")
 
@@ -56,11 +56,11 @@ ok 9 - UTV2-996: correction chain is additive — original settlement row is not
 # tests 9
 ```
 
-Same CI run, job `verify` 132332102457: success.
+Same CI run, job `verify` 132344915942: success.
 
 ## Verification
 
-Run on the final code commit `930a37974` (Codex High via `ops:codex-exec`, codex-sol-high; locally, no database):
+Run on the final code commit `64a66a0ec` (Codex High via `ops:codex-exec`, codex-sol-high; locally, no database):
 
 | Command | Result |
 |---|---|
@@ -69,7 +69,7 @@ Run on the final code commit `930a37974` (Codex High via `ops:codex-exec`, codex
 | `pnpm type-check` | PASS |
 | `pnpm verify:static` | PASS (8,391 pass, 0 fail, 13 skip, 1 todo-marked) |
 | `pnpm verify` | static stages PASS; stops at `test:db` because `ci:assert-staging` refuses `127.0.0.1`. Not claimed green locally; writable DB proof is the CI staging job above. |
-| CI `verify` and "Writable DB proof (staging only)" at `930a37974` | success |
+| CI `verify` and "Writable DB proof (staging only)" at `64a66a0ec` | success |
 
 Not yet verified (post-merge or PM-owned):
 - Production read-only counts of `game_results` with `source = 'odds-api'` and `events` with `metadata->>'providerKey' = 'odds-api'` both 0 after merge.
@@ -81,4 +81,4 @@ D7 provider audit: 61 baseline findings preserved; the candidate adds 13, all in
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1846
-Execution SHA: 930a379744227bc7af40c87af429331c65388c40
+Execution SHA: 64a66a0ec8e919afa7fad3aeac04df80029087c6
