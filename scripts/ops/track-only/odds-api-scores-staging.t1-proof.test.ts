@@ -392,14 +392,18 @@ test(
       const partialPath = join(directory, 'nba-partial.doc-derived.json');
       await writeFile(partialPath, JSON.stringify(partialFixture));
       const errors: string[] = [];
+      let interruptionObserved = false;
       const partialRun = (failAfter?: number) => {
         let inserted = 0;
+        interruptionObserved = false;
         const faulty: typeof ingestor.gradeResults = {
           listByEvent: (id) => ingestor.gradeResults.listByEvent(id),
           findResult: (criteria) => ingestor.gradeResults.findResult(criteria),
           insert: async (value) => {
-            if (inserted === failAfter)
+            if (inserted === failAfter) {
+              interruptionObserved = true;
               throw new Error('injected interruption');
+            }
             const row = await ingestor.gradeResults.insert(value);
             inserted++;
             return row;
@@ -418,7 +422,12 @@ test(
         });
       };
       assert.equal((await partialRun(1)).exitCode, 1);
-      assert.match(errors.at(-1)!, /injected interruption/);
+      assert.equal(
+        interruptionObserved,
+        true,
+        'the intended insert fault fired',
+      );
+      assert.equal(errors.at(-1), 'Scores sync failed (Error).');
       const partialEvent = await repositories.events.findByExternalId(
         partialInput.id,
       );
@@ -473,7 +482,12 @@ test(
         [],
       );
       assert.equal((await partialRun(3)).exitCode, 1);
-      assert.match(errors.at(-1)!, /injected interruption/);
+      assert.equal(
+        interruptionObserved,
+        true,
+        'the intended insert fault fired',
+      );
+      assert.equal(errors.at(-1), 'Scores sync failed (Error).');
       const midEvent = await repositories.events.findById(partialEvent.id);
       assert.notEqual(midEvent?.status, 'completed');
       assert.equal(midEvent?.metadata['resultsProof'], undefined);
