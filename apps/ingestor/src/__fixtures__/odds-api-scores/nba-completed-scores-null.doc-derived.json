@@ -1,0 +1,23 @@
+{
+  "provenance": "doc-derived",
+  "vendorBehaviour": "hypothetical-malformed",
+  "workOrder": "WORK-2026111102",
+  "source": "https://the-odds-api.com/liveapi/guides/v4/ (GET /v4/sports/{sport}/scores response example: fields id, sport_key, sport_title, commence_time, completed, home_team, away_team, scores[{name, score}] | null, last_update | null)",
+  "note": "completed true with scores null. Not a documented shape; defensive.",
+  "league": "NBA",
+  "expectedParse": "rejected",
+  "evaluateAt": "2026-11-09T12:00:00Z",
+  "response": [
+    {
+      "id": "666a55bfbb55a244bd66d4aab5d505df",
+      "sport_key": "basketball_nba",
+      "sport_title": "NBA",
+      "commence_time": "2026-11-08T00:10:00Z",
+      "completed": true,
+      "home_team": "Golden State Warriors",
+      "away_team": "Los Angeles Lakers",
+      "scores": null,
+      "last_update": "2026-11-08T02:40:00Z"
+    }
+  ]
+}

@@ -234,29 +234,54 @@ export async function fetchOddsApiHistorical(
   };
 }
 
-/**
- * Fetch scores from The Odds API.
- * Returns final scores for completed events (supplementary to SGO results).
- */
+/** The /scores response has no bookmaker or odds payload. */
+export interface OddsApiScoreEvent {
+  id: string;
+  sport_key: string;
+  sport_title: string;
+  commence_time: string;
+  completed: boolean;
+  home_team: string;
+  away_team: string;
+  scores: Array<{ name: string; score: string }> | null;
+  last_update: string | null;
+}
+
+/** Fetch scores only on explicit operator request. */
 export async function fetchOddsApiScores(
   options: Pick<OddsApiFetchOptions, 'apiKey' | 'league' | 'fetchImpl'> & { daysFrom?: number },
-): Promise<{ events: OddsApiEvent[]; eventsCount: number }> {
+): Promise<{
+  events: OddsApiScoreEvent[];
+  eventsCount: number;
+  rawBody: string;
+  fetchedAt: string;
+  quota: { remaining: number | null; used: number | null; last: number | null };
+}> {
+  const daysFrom = options.daysFrom ?? 1;
+  if (!Number.isInteger(daysFrom) || daysFrom < 1 || daysFrom > 3) {
+    throw new Error('daysFrom must be an integer from 1 to 3');
+  }
   const sportKey = LEAGUE_TO_SPORT_KEY[options.league.toUpperCase()];
-  if (!sportKey) return { events: [], eventsCount: 0 };
-
-  const fetchFn = options.fetchImpl ?? fetch;
+  if (!sportKey) throw new Error('Unsupported scores league');
   const url = new URL(`${ODDS_API_BASE}/sports/${sportKey}/scores/`);
   url.searchParams.set('apiKey', options.apiKey);
-  if (options.daysFrom) url.searchParams.set('daysFrom', String(options.daysFrom));
-
-  const response = await fetchFn(url.toString());
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Odds API scores error ${response.status}: ${errorText}`);
+  url.searchParams.set('daysFrom', String(daysFrom));
+  const response = await (options.fetchImpl ?? fetch)(url.toString());
+  const rawBody = await response.text();
+  if (response.status !== 200) {
+    throw Object.assign(new Error(`Odds API scores error ${response.status}: ${rawBody}`), {
+      status: response.status, body: rawBody,
+    });
   }
-
-  const events = (await response.json()) as OddsApiEvent[];
-  return { events, eventsCount: events.length };
+  const parsed: unknown = JSON.parse(rawBody);
+  if (!Array.isArray(parsed)) throw new Error('Scores payload must be an array');
+  const header = (name: string): number | null => {
+    const value = response.headers.get(name);
+    return value !== null && value.trim() !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
+  };
+  const events = parsed as OddsApiScoreEvent[];
+  return { events, eventsCount: events.length, rawBody, fetchedAt: new Date().toISOString(),
+    quota: { remaining: header('x-requests-remaining'), used: header('x-requests-used'), last: header('x-requests-last') } };
 }
 
 /**

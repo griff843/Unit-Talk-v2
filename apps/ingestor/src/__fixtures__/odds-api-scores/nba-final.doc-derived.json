@@ -1,0 +1,32 @@
+{
+  "provenance": "doc-derived",
+  "vendorBehaviour": "documented-shape",
+  "workOrder": "WORK-2026111102",
+  "source": "https://the-odds-api.com/liveapi/guides/v4/ (GET /v4/sports/{sport}/scores response example: fields id, sport_key, sport_title, commence_time, completed, home_team, away_team, scores[{name, score}] | null, last_update | null)",
+  "note": "Documented completed-game example shape (Sacramento Kings vs Oklahoma City Thunder, as in the guide example). Id is a synthetic 32-hex value; timestamps are synthetic 2026-11 values.",
+  "league": "NBA",
+  "expectedParse": "final",
+  "evaluateAt": "2026-11-09T12:00:00Z",
+  "response": [
+    {
+      "id": "ca5b78ce2d8c8c8e5fa8a282bc77d9b1",
+      "sport_key": "basketball_nba",
+      "sport_title": "NBA",
+      "commence_time": "2026-11-08T00:10:00Z",
+      "completed": true,
+      "home_team": "Sacramento Kings",
+      "away_team": "Oklahoma City Thunder",
+      "scores": [
+        {
+          "name": "Sacramento Kings",
+          "score": "113"
+        },
+        {
+          "name": "Oklahoma City Thunder",
+          "score": "103"
+        }
+      ],
+      "last_update": "2026-11-08T02:40:00Z"
+    }
+  ]
+}
