@@ -1,6 +1,6 @@
 # PROOF: WORK-2026111102
 
-MERGE_SHA: pending merge
+MERGE_SHA: 5ce41f29eb7b443b8b464bf78f9c1ba5c964ee60
 
 Issue: WORK-2026111102
 Tier: T1
@@ -94,6 +94,6 @@ D7 provider audit, re-run on the final proof content against `origin/main` `2e3b
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 5ce41f29eb7b443b8b464bf78f9c1ba5c964ee60
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1846
 Execution SHA: cb2488a3ec010fe4f878ba74e614bb90a424b5bd

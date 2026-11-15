@@ -21,5 +21,5 @@ Odds API scores results ingestion: operator CLI, doc-derived fixtures and stagin
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 5ce41f29eb7b443b8b464bf78f9c1ba5c964ee60
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1846
