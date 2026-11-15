@@ -34,6 +34,7 @@
 | Active Claude lanes | 3 (infrastructure sprint) |
 | Runtime readiness | NOT READY — burn-in not complete |
 | Ingestor freshness | FAILING — root cause identified, fix in UTV2-1014 |
+| Provider | SGO Pro (sole live provider). Odds API: game-score evaluation only, engineering/staging (A1). Updated 2026-11-11 under the Provider Change Protocol (`PROVIDER_AUTHORITY_LOCK.md` Amendment A1, WORK-2026111101). |
 
 ---
 

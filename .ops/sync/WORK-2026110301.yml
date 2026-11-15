@@ -1,0 +1,176 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026110301
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026110301
+  objective: "WORK-2026110301 — NHL headshots: build URLs on the live NHL asset host"
+  acceptance_criteria:
+    - "**Regression test first.** In
+      `apps/api/src/player-enrichment-service.test.ts`, assert that a uniquely
+      matched NHL player resolves to
+      `https://assets.nhle.com/mugs/nhl/latest/<playerId>.png`. Show it failing
+      on unmodified main and record the failing output, then make it pass."
+    - "**The URL is built from the matched provider `playerId` only.** No team
+      or season segment is added unless measured to be required. If you find the
+      `latest` path is not stable, stop and report it rather than guessing a
+      different format."
+    - "**No dead host remains in the builder.** A test fails if any NHL URL
+      produced by the resolver uses `cms.nhl.bamgrid.com`. Run a mutation that
+      restores the old host, and record that the test fails."
+    - "**Identity behaviour is unchanged.** Every existing #1822 matcher test
+      still passes unmodified: name, team and league agreement, ambiguity, the
+      saturated window and unknown provider teams. No assertion is loosened."
+    - "**Runtime proof against the live provider (read-only).** For the NHL rows
+      in the merged revalidation file
+      `docs/06_status/proof/WORK-2026110205/stored-headshots-revalidated.json`
+      with verdict `confirmed`, or with `mismatch` where a unique new-matcher
+      URL exists, fetch the new `assets.nhle.com` URL. Record each one's HTTP
+      status, content type and byte size in
+      `docs/06_status/proof/WORK-2026110301/nhl-asset-host-check.json`, together
+      with a nonexistent-id control. Never connect to production."
+    - "**No stored data is changed.** Code in this lane does not rewrite any
+      stored `headshot_url`. Rewriting stored NHL URLs is Griff's separate
+      production-write decision."
+    - "**No change to canonical pick submission or delivery behavior.** No file
+      in `apps/api/src/submission-*`, `handlers/submit-pick.ts`, distribution,
+      outbox, worker, domain or Discord paths is touched."
+    - "**T1 verification:**"
+    - "`pnpm verify` green at the exact head;"
+    - the CI `Writable DB proof (staging only)` job green at the exact head;
+    - the runtime provider check above;
+    - an evidence bundle v1 tied to the merge SHA.
+    - The enrichment pass's DB write (`updateMetadata`) is unchanged, so no new
+      live DB test is added. Say this plainly in the proof, and never claim a
+      live DB enrichment proof.
+    - Merge requires Griff's `t1-approved` label and a `pm-verdict/v1` APPROVED
+      comment at the exact head.
+  guardrails:
+    - No schema change, no new provider, no new media host and no ingestion
+      unpark.
+    - The approved-host lists are unchanged in this lane.
+    - Staging only for any DB write, through CI. Never write to production.
+  non_goals:
+    - Rewriting stored production headshots (Griff's separate decision; proposal
+      at `.out/headshot-rewrite-proposal-20261103/`).
+    - Discord shared-artwork presentation (WORK-2026110302).
+    - Team/alias spelling refusals (Athletics, Cardinals, Utah) and the NHL
+      search-window limit. These are known follow-ups and are not in this lane.
+  required_evidence:
+    - Failing-then-passing output for the regression test, the mutation record
+      and `nhl-asset-host-check.json`.
+    - "T1 evidence bundle: `verification.md` (`## Verification` with
+      `ASSERTIONS:` checklist items and `EVIDENCE:` fenced blocks),
+      `evidence.json`, `diff-summary.md` and an observed `model-routing.json`
+      (model and effort as observed, never inferred)."
+  exit_criteria:
+    - Exact-head CI green, `executor-result/v1` posted for that head,
+      independent Claude review, then Griff's T1 verdict.
+  unmapped_sections:
+    - |-
+      WORK-2026110301 — NHL headshots: build URLs on the live NHL asset host
+      Tier: T1
+      Lane type: data-canonical
+      Executor: codex-cli
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). Admitted by Production Claude on 2026-11-03 under Griff's direction to "Admit the T1 participant-media correction". Griff chose, on 2026-11-03, "Both, as two lanes": this NHL URL-builder fix first, then the Discord shared-artwork resolver lane (WORK-2026110302). This lane completes the identity-matching repair from #1822 (WORK-2026110205, merged `449b28f79`). It does not duplicate that repair. Product authority: `docs/03_product/smart-form/intent.md`. No production data write, deploy or provider change is authorized.
+
+      ## Defect (measured 2026-11-03 at main 00d6c2640)
+
+      `apps/api/src/player-enrichment-service.ts:306` builds every NHL headshot as `https://cms.nhl.bamgrid.com/images/headshots/current/168x168/<playerId>.jpg`. That host is a CNAME to `d1bb7cbz9hm6hr.cloudfront.net`, and both dns.google and cloudflare-dns return NODATA for it. So every NHL headshot the matcher emits is a dead link. In production, all 318 stored NHL headshots (300 distinct URLs) sit on this host; this was read-only measured.
+
+      The NHL's live asset host, `assets.nhle.com`, is already in both approved-host lists: `apps/api/src/handlers/participant-media.ts:9` and `apps/smart-form/lib/participant-media.ts`. For 46 measured NHL player ids, `https://assets.nhle.com/mugs/nhl/latest/<playerId>.png` returned HTTP 200 `image/png`, each with a distinct body size. A nonexistent id (9999999) returned HTTP 302, not 200. Evidence for the measurement is at `.out/headshot-rewrite-proposal-20261103/` in the main checkout. Copy what you cite into this lane's proof; do not reference it by path alone.
+
+      ## File Scope
+
+      - apps/api/src/player-enrichment-service.ts
+      - apps/api/src/player-enrichment-service.test.ts
+
+      ## PR opening is sequenced (overrides any generic "open a draft PR" step)
+
+      Every pull request, including a draft, runs the shared `staging-ci-db` job. That job holds one running and one pending slot, and a third arrival cancels the pending proof of another lane. So:
+
+      - Commit and push the lane branch as normal.
+      - **Do not open a pull request.** When implementation and local verification are complete, write `.out/ops/ready-for-pr/<this issue id>.md` in the lane worktree. List the head SHA, the focused test commands and their results, and the observed model and effort.
+      - Production Claude opens the PR when the staging slot is free, then reports the PR number back. After that, ask Production Claude before every push to the open PR.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026110301.md
+    title: "WORK-2026110301 — NHL headshots: build URLs on the live NHL asset host"
+    description: |-
+      # WORK-2026110301 — NHL headshots: build URLs on the live NHL asset host
+
+      Tier: T1
+      Lane type: data-canonical
+      Executor: codex-cli
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). Admitted by Production Claude on 2026-11-03 under Griff's direction to "Admit the T1 participant-media correction". Griff chose, on 2026-11-03, "Both, as two lanes": this NHL URL-builder fix first, then the Discord shared-artwork resolver lane (WORK-2026110302). This lane completes the identity-matching repair from #1822 (WORK-2026110205, merged `449b28f79`). It does not duplicate that repair. Product authority: `docs/03_product/smart-form/intent.md`. No production data write, deploy or provider change is authorized.
+
+      ## Defect (measured 2026-11-03 at main 00d6c2640)
+
+      `apps/api/src/player-enrichment-service.ts:306` builds every NHL headshot as `https://cms.nhl.bamgrid.com/images/headshots/current/168x168/<playerId>.jpg`. That host is a CNAME to `d1bb7cbz9hm6hr.cloudfront.net`, and both dns.google and cloudflare-dns return NODATA for it. So every NHL headshot the matcher emits is a dead link. In production, all 318 stored NHL headshots (300 distinct URLs) sit on this host; this was read-only measured.
+
+      The NHL's live asset host, `assets.nhle.com`, is already in both approved-host lists: `apps/api/src/handlers/participant-media.ts:9` and `apps/smart-form/lib/participant-media.ts`. For 46 measured NHL player ids, `https://assets.nhle.com/mugs/nhl/latest/<playerId>.png` returned HTTP 200 `image/png`, each with a distinct body size. A nonexistent id (9999999) returned HTTP 302, not 200. Evidence for the measurement is at `.out/headshot-rewrite-proposal-20261103/` in the main checkout. Copy what you cite into this lane's proof; do not reference it by path alone.
+
+      ## Acceptance Criteria
+
+      - **Regression test first.** In `apps/api/src/player-enrichment-service.test.ts`, assert that a uniquely matched NHL player resolves to `https://assets.nhle.com/mugs/nhl/latest/<playerId>.png`. Show it failing on unmodified main and record the failing output, then make it pass.
+      - **The URL is built from the matched provider `playerId` only.** No team or season segment is added unless measured to be required. If you find the `latest` path is not stable, stop and report it rather than guessing a different format.
+      - **No dead host remains in the builder.** A test fails if any NHL URL produced by the resolver uses `cms.nhl.bamgrid.com`. Run a mutation that restores the old host, and record that the test fails.
+      - **Identity behaviour is unchanged.** Every existing #1822 matcher test still passes unmodified: name, team and league agreement, ambiguity, the saturated window and unknown provider teams. No assertion is loosened.
+      - **Runtime proof against the live provider (read-only).** For the NHL rows in the merged revalidation file `docs/06_status/proof/WORK-2026110205/stored-headshots-revalidated.json` with verdict `confirmed`, or with `mismatch` where a unique new-matcher URL exists, fetch the new `assets.nhle.com` URL. Record each one's HTTP status, content type and byte size in `docs/06_status/proof/WORK-2026110301/nhl-asset-host-check.json`, together with a nonexistent-id control. Never connect to production.
+      - **No stored data is changed.** Code in this lane does not rewrite any stored `headshot_url`. Rewriting stored NHL URLs is Griff's separate production-write decision.
+      - **No change to canonical pick submission or delivery behavior.** No file in `apps/api/src/submission-*`, `handlers/submit-pick.ts`, distribution, outbox, worker, domain or Discord paths is touched.
+      - **T1 verification:**
+        - `pnpm verify` green at the exact head;
+        - the CI `Writable DB proof (staging only)` job green at the exact head;
+        - the runtime provider check above;
+        - an evidence bundle v1 tied to the merge SHA.
+
+        The enrichment pass's DB write (`updateMetadata`) is unchanged, so no new live DB test is added. Say this plainly in the proof, and never claim a live DB enrichment proof.
+
+      Merge requires Griff's `t1-approved` label and a `pm-verdict/v1` APPROVED comment at the exact head.
+
+      ## Guardrails
+
+      - No schema change, no new provider, no new media host and no ingestion unpark.
+      - The approved-host lists are unchanged in this lane.
+      - Staging only for any DB write, through CI. Never write to production.
+
+      ## Non-goals
+
+      - Rewriting stored production headshots (Griff's separate decision; proposal at `.out/headshot-rewrite-proposal-20261103/`).
+      - Discord shared-artwork presentation (WORK-2026110302).
+      - Team/alias spelling refusals (Athletics, Cardinals, Utah) and the NHL search-window limit. These are known follow-ups and are not in this lane.
+
+      ## Required Evidence
+
+      - Failing-then-passing output for the regression test, the mutation record and `nhl-asset-host-check.json`.
+      - T1 evidence bundle: `verification.md` (`## Verification` with `ASSERTIONS:` checklist items and `EVIDENCE:` fenced blocks), `evidence.json`, `diff-summary.md` and an observed `model-routing.json` (model and effort as observed, never inferred).
+
+      ## Exit Criteria
+
+      - Exact-head CI green, `executor-result/v1` posted for that head, independent Claude review, then Griff's T1 verdict.
+
+      ## File Scope
+
+      - apps/api/src/player-enrichment-service.ts
+      - apps/api/src/player-enrichment-service.test.ts
+
+      ## PR opening is sequenced (overrides any generic "open a draft PR" step)
+
+      Every pull request, including a draft, runs the shared `staging-ci-db` job. That job holds one running and one pending slot, and a third arrival cancels the pending proof of another lane. So:
+
+      - Commit and push the lane branch as normal.
+      - **Do not open a pull request.** When implementation and local verification are complete, write `.out/ops/ready-for-pr/<this issue id>.md` in the lane worktree. List the head SHA, the focused test commands and their results, and the observed model and effort.
+      - Production Claude opens the PR when the staging slot is free, then reports the PR number back. After that, ask Production Claude before every push to the open PR.
+    captured_at: 2026-11-03T12:55:05.811Z
+    description_sha256: 17e812c0cc874fcb648a7917dd2af478f438927d5d81fddfb4788995311e8a2d
+  contract_hash: f40cdbeeaec2c1aa0d79da4a887c5a989f84a7e1eb185979fc5d7c492441c4a8

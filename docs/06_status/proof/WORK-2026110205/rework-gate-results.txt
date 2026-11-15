@@ -1,0 +1,14 @@
+WORK-2026110205 authorized rework
+Implementation commit: d7d2683699a9974da79e6d082d6e3d0d3889f131
+Focused: pnpm exec tsx --test apps/api/src/player-enrichment-service.test.ts apps/smart-form/test/participant-media.test.ts — exit 0; 24 pass, 0 fail.
+Rework regressions before repair at 1ac76bdfe — exit 1; 14 pass, 3 fail. Original motivating regressions unchanged verbatim.
+NHL data[0] and NFL first-hit mutations — both exit 1, killed; isolated copies, original source never mutated.
+Read-only revalidation — exit 0; 1497 rows, 320 HTTP 200; 1260 confirmed, 229 mismatch, 8 ambiguous, 0 unresolved. URL differences: 55 total, 47 non-null stored / 8 null stored.
+Live MLB/NBA/NFL/NHL probes — exit 0; four HTTP 200 responses, raw bodies retained.
+Evidence schema-v2 contract — valid=true, app-runtime, no failures.
+R-level at implementation commit — PASS, operator-ui. Existing caveat: checker selects unrelated command-center QA evidence; Smart Form general QA is not proven.
+pnpm verify — exit 1; all static gates passed (lint, type-check, build, root tests, Smart Form verify, command/migration checks), then staging guard refused localhost before any DB suites. Repaired runtime source stayed identical throughout; command began before source commit and finished at d7d268369. Full output: .out/media-0205/verify-rework.txt. No exact-final-head full-green claim.
+pnpm test:db — exit 1; staging guard refused host=127.0.0.1, ref=unidentified; no suite or DB write executed. Required target xskgrzbteyqdufktjrjx via staging-ci CI_SUPABASE_* credentials.
+Smart Form e2e — not run; UNIT_TALK_SMART_FORM_E2E unset. Prior isolated component browser evidence remains, general QA preflight skipped.
+Pending: staging CI/T1 live suites at exact head, independent Claude review, outer-wrapper provenance/attestation, Griff T1 approval, governed merge and merge-SHA binding. No PR/push/production action in rework.
+package.json is held by WORK-2026103022 and out of scope. Existing updateMetadata write unchanged; no new live DB enrichment test and no live DB enrichment proof claim.

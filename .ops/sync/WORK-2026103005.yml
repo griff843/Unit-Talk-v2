@@ -1,0 +1,385 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026103005
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026103005
+  objective: "WORK-2026103005 — Private canary audience: pin it at release,
+    exclude it from every member read"
+  acceptance_criteria:
+    - "`pnpm verify` green in CI at the exact head."
+    - The proof lists every member-reachable reader audited, with the decision
+      for each.
+    - Mutation evidence for each reader class.
+    - No behavior change for picks without an audience marker. Existing
+      member-read tests pass unchanged.
+  guardrails: []
+  non_goals:
+    - The worker (WORK-2026103006 and WORK-2026103008 own `apps/worker`).
+    - Kill switches, production data, deploys, Discord permissions.
+    - Any schema/DDL change. The marker lives in JSON metadata. If you believe
+      DDL is required, stop and report.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026103005 — Private canary audience: pin it at release, exclude it
+      from every member read
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05).
+
+
+      On 2026-10-30 Griff approved preparing one private human-capper
+      delivery-to-recap canary. **No production mutation is authorized by this
+      lane.** It builds the boundary so a canary pick can never become ordinary
+      member-facing data.
+
+
+      ## Background (measured 2026-10-30)
+
+
+      - A human-capper pick posts to `cappers.metadata.discord.picksChannelId`.
+      That destination is pinned onto `metadata.deliveryAuthorization` and the
+      outbox payload at release
+      (`apps/api/src/capper-delivery-authorization.ts:233-307`,
+      `packages/contracts/src/smart-form.ts:283` `readCapperDiscordRouting`,
+      `:364` `readPinnedDeliveryDestination`).
+
+      - For the canary, Griff will later point griff843's `picksChannelId` at a
+      staff-only private thread, under a separate authorization. The pick it
+      produces is real, `delivery-eligible` and `authorized`.
+
+      - Today every member read would treat that pick as ordinary member data.
+      The member-reachable surfaces are:
+        - `GET /api/member/picks` (`apps/api/src/routes/member-picks.ts`, used by the Discord `/live` and `/today` commands and by `apps/web`);
+        - member performance (`apps/api/src/member-performance-service.ts`, `routes/member-performance.ts`). It keys off the pin on the outbox row, so the pick stays in the numbers after the channel is restored;
+        - Discord bot commands `/stats` (`/api/operator/stats`), `/leaderboard` (`/api/operator/leaderboard`), `/recap` (`/api/operator/capper-recap`), `/results` (`/api/picks`, `/api/settlements/recent`), and `/my-picks`;
+        - the daily, weekly and monthly aggregate human-capper recaps (`apps/api/src/recap-service.ts`, gated by `human-capper-recap-gate.ts`);
+        - anything else you find under `apps/web`, `apps/discord-bot` or `apps/api` routes that a member, or the member bot, can reach. **Audit exhaustively and list every reader you checked in the proof**, including the ones you decided need no change and why.
+
+      ## Required behavior
+
+
+      1. **Audience marker, declared on the capper's routing.**
+         - Add an optional `audience` to `cappers.metadata.discord`, read by `readCapperDiscordRouting`.
+         - Recognized values: absent → `members` (today's behavior, unchanged), and `staff-canary`.
+         - **Any other value refuses routing** (fail closed) with a distinct reason.
+         - Contract constants live in `@unit-talk/contracts`.
+      2. **Pinned at release.** The resolved audience is pinned with the
+      destination onto `metadata.deliveryAuthorization` and onto the outbox
+      payload, through the same path that pins `channelId`.
+         - A pick released before this change has no pinned audience and reads as `members`.
+      3. **One shared predicate.**
+         - Add a single pure helper, e.g. `isMemberVisibleDeliveryAudience(metadata)` in `@unit-talk/contracts` or `@unit-talk/domain`.
+         - It returns true **only** for absent or `members`. `staff-canary`, an unrecognized value, a non-string, or a disagreement between the pick's pin and the outbox pin all return **false**.
+         - Every member-reachable reader above uses it. No reader keeps its own copy of the rule (see memory: duplicated guard regexes drift).
+      4. **Excluded, never deleted.**
+         - Operator surfaces (Command Center, operator analytics split by `distributionMode`) still show the canary pick, labelled as canary.
+         - The canary must not silently disappear from operator truth.
+         - It must not appear in any member read, member statistic, leaderboard, or aggregate recap.
+      5. **The per-pick settlement recap** still posts, to the pick's pinned
+      channel (the private thread), when both recap controls are released.
+         - The canary's audience must never widen where the recap goes.
+         - Add a test that a `staff-canary` recap resolves only the pinned channel.
+      6. **Track Only is unchanged.**
+         - The audience marker never makes a Track Only pick deliverable.
+         - The `TRACK_ONLY_INTENT_GUARD` and the UTV2-1672 guards keep their mutation tests.
+
+      ## Tests (node:test, `pnpm exec tsx --test`)
+
+
+      - **Unit tests for the predicate:** absent, `members`, `staff-canary`, an
+      unknown string, a non-string, and a pick/outbox mismatch.
+
+      - **For each member reader:** a canary pick and a normal pick in the same
+      fixture. The canary is excluded, the normal pick is included, and an
+      unknown-marker pick is excluded.
+
+      - **Mutation:** making the predicate return true for `staff-canary` must
+      fail at least one test per reader class (member picks, member performance,
+      bot-facing operator stats/leaderboard/recap, results and settlements,
+      aggregate recap). Record each mutation in the proof.
+
+      - **No live-DB test in this lane.** WORK-2026103007 owns live-test
+      registration in the root `package.json`, and the two lanes run
+      concurrently. Prove the exclusion through the real route handlers and
+      services with the in-memory bundle. The production canary is the runtime
+      proof.
+
+
+      ## File Scope
+
+
+      Fixed at lane-start and cannot be widened later. If the audit finds a
+      member-reachable reader outside this list, stop and report it; do not edit
+      outside scope.
+
+
+      - packages/contracts/src/delivery-audience.ts (new: audience constants and
+      the shared predicate)
+
+      - packages/contracts/src/index.ts
+
+      - packages/contracts/src/smart-form.ts
+
+      - apps/api/src/capper-delivery-authorization.ts
+
+      - apps/api/src/capper-delivery-authorization.test.ts
+
+      - apps/api/src/run-audit-service.ts
+
+      - apps/api/src/routes/member-picks.ts
+
+      - apps/api/src/member-picks.test.ts
+
+      - apps/api/src/member-performance-service.ts
+
+      - apps/api/src/member-performance-service.test.ts
+
+      - apps/api/src/member-performance-routes.test.ts
+
+      - apps/api/src/routes/picks-query.ts
+
+      - apps/api/src/routes/settlements-query.ts
+
+      - apps/api/src/recap-service.ts
+
+      - apps/api/src/recap-service.test.ts
+
+      - apps/api/src/grading-service.test.ts
+
+
+      Test registration: every test file in this list is already registered
+      (root `package.json` `test:apps` / apps/api `test`). Put the predicate's
+      unit tests in `capper-delivery-authorization.test.ts`. A new test file
+      would need `package.json`, which WORK-2026103007 owns concurrently.
+      `run-audit-service.test.ts` does not appear to be registered, so don't
+      rely on it; prove pinning through `capper-delivery-authorization.test.ts`
+      or `member-picks.test.ts`.
+
+
+      Notes from the pre-admission audit (verify, don't trust):
+
+      - `apps/web` makes no pick/settlement data reads (`app/results/page.tsx`
+      is static).
+
+      - The Discord bot's `/recap` calls `/api/operator/capper-recap`, but no
+      API route serves that path. Report it in the proof and don't build it
+      here.
+
+      - `/api/operator/stats` and `/api/operator/leaderboard` are served by
+      `member-performance-service`.
+
+      - `picks-query.ts` (`GET /api/picks`) and `settlements-query.ts` (`GET
+      /api/settlements/recent`) are reached by the bot's `/results`. If their
+      tests live in files outside this list, add the new cases to
+      `member-picks.test.ts` or `member-performance-routes.test.ts` through the
+      real handlers.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026103005.md
+    title: "WORK-2026103005 — Private canary audience: pin it at release, exclude it
+      from every member read"
+    description: >-
+      # WORK-2026103005 — Private canary audience: pin it at release, exclude it
+      from every member read
+
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05).
+
+
+      On 2026-10-30 Griff approved preparing one private human-capper
+      delivery-to-recap canary. **No production mutation is authorized by this
+      lane.** It builds the boundary so a canary pick can never become ordinary
+      member-facing data.
+
+
+      ## Background (measured 2026-10-30)
+
+
+      - A human-capper pick posts to `cappers.metadata.discord.picksChannelId`.
+      That destination is pinned onto `metadata.deliveryAuthorization` and the
+      outbox payload at release
+      (`apps/api/src/capper-delivery-authorization.ts:233-307`,
+      `packages/contracts/src/smart-form.ts:283` `readCapperDiscordRouting`,
+      `:364` `readPinnedDeliveryDestination`).
+
+      - For the canary, Griff will later point griff843's `picksChannelId` at a
+      staff-only private thread, under a separate authorization. The pick it
+      produces is real, `delivery-eligible` and `authorized`.
+
+      - Today every member read would treat that pick as ordinary member data.
+      The member-reachable surfaces are:
+        - `GET /api/member/picks` (`apps/api/src/routes/member-picks.ts`, used by the Discord `/live` and `/today` commands and by `apps/web`);
+        - member performance (`apps/api/src/member-performance-service.ts`, `routes/member-performance.ts`). It keys off the pin on the outbox row, so the pick stays in the numbers after the channel is restored;
+        - Discord bot commands `/stats` (`/api/operator/stats`), `/leaderboard` (`/api/operator/leaderboard`), `/recap` (`/api/operator/capper-recap`), `/results` (`/api/picks`, `/api/settlements/recent`), and `/my-picks`;
+        - the daily, weekly and monthly aggregate human-capper recaps (`apps/api/src/recap-service.ts`, gated by `human-capper-recap-gate.ts`);
+        - anything else you find under `apps/web`, `apps/discord-bot` or `apps/api` routes that a member, or the member bot, can reach. **Audit exhaustively and list every reader you checked in the proof**, including the ones you decided need no change and why.
+
+      ## Required behavior
+
+
+      1. **Audience marker, declared on the capper's routing.**
+         - Add an optional `audience` to `cappers.metadata.discord`, read by `readCapperDiscordRouting`.
+         - Recognized values: absent → `members` (today's behavior, unchanged), and `staff-canary`.
+         - **Any other value refuses routing** (fail closed) with a distinct reason.
+         - Contract constants live in `@unit-talk/contracts`.
+      2. **Pinned at release.** The resolved audience is pinned with the
+      destination onto `metadata.deliveryAuthorization` and onto the outbox
+      payload, through the same path that pins `channelId`.
+         - A pick released before this change has no pinned audience and reads as `members`.
+      3. **One shared predicate.**
+         - Add a single pure helper, e.g. `isMemberVisibleDeliveryAudience(metadata)` in `@unit-talk/contracts` or `@unit-talk/domain`.
+         - It returns true **only** for absent or `members`. `staff-canary`, an unrecognized value, a non-string, or a disagreement between the pick's pin and the outbox pin all return **false**.
+         - Every member-reachable reader above uses it. No reader keeps its own copy of the rule (see memory: duplicated guard regexes drift).
+      4. **Excluded, never deleted.**
+         - Operator surfaces (Command Center, operator analytics split by `distributionMode`) still show the canary pick, labelled as canary.
+         - The canary must not silently disappear from operator truth.
+         - It must not appear in any member read, member statistic, leaderboard, or aggregate recap.
+      5. **The per-pick settlement recap** still posts, to the pick's pinned
+      channel (the private thread), when both recap controls are released.
+         - The canary's audience must never widen where the recap goes.
+         - Add a test that a `staff-canary` recap resolves only the pinned channel.
+      6. **Track Only is unchanged.**
+         - The audience marker never makes a Track Only pick deliverable.
+         - The `TRACK_ONLY_INTENT_GUARD` and the UTV2-1672 guards keep their mutation tests.
+
+      ## Tests (node:test, `pnpm exec tsx --test`)
+
+
+      - **Unit tests for the predicate:** absent, `members`, `staff-canary`, an
+      unknown string, a non-string, and a pick/outbox mismatch.
+
+      - **For each member reader:** a canary pick and a normal pick in the same
+      fixture. The canary is excluded, the normal pick is included, and an
+      unknown-marker pick is excluded.
+
+      - **Mutation:** making the predicate return true for `staff-canary` must
+      fail at least one test per reader class (member picks, member performance,
+      bot-facing operator stats/leaderboard/recap, results and settlements,
+      aggregate recap). Record each mutation in the proof.
+
+      - **No live-DB test in this lane.** WORK-2026103007 owns live-test
+      registration in the root `package.json`, and the two lanes run
+      concurrently. Prove the exclusion through the real route handlers and
+      services with the in-memory bundle. The production canary is the runtime
+      proof.
+
+
+      ## Out of scope
+
+
+      - The worker (WORK-2026103006 and WORK-2026103008 own `apps/worker`).
+
+      - Kill switches, production data, deploys, Discord permissions.
+
+      - Any schema/DDL change. The marker lives in JSON metadata. If you believe
+      DDL is required, stop and report.
+
+
+      ## Acceptance Criteria
+
+
+      - `pnpm verify` green in CI at the exact head.
+
+      - The proof lists every member-reachable reader audited, with the decision
+      for each.
+
+      - Mutation evidence for each reader class.
+
+      - No behavior change for picks without an audience marker. Existing
+      member-read tests pass unchanged.
+
+
+      ## File Scope
+
+
+      Fixed at lane-start and cannot be widened later. If the audit finds a
+      member-reachable reader outside this list, stop and report it; do not edit
+      outside scope.
+
+
+      - packages/contracts/src/delivery-audience.ts (new: audience constants and
+      the shared predicate)
+
+      - packages/contracts/src/index.ts
+
+      - packages/contracts/src/smart-form.ts
+
+      - apps/api/src/capper-delivery-authorization.ts
+
+      - apps/api/src/capper-delivery-authorization.test.ts
+
+      - apps/api/src/run-audit-service.ts
+
+      - apps/api/src/routes/member-picks.ts
+
+      - apps/api/src/member-picks.test.ts
+
+      - apps/api/src/member-performance-service.ts
+
+      - apps/api/src/member-performance-service.test.ts
+
+      - apps/api/src/member-performance-routes.test.ts
+
+      - apps/api/src/routes/picks-query.ts
+
+      - apps/api/src/routes/settlements-query.ts
+
+      - apps/api/src/recap-service.ts
+
+      - apps/api/src/recap-service.test.ts
+
+      - apps/api/src/grading-service.test.ts
+
+
+      Test registration: every test file in this list is already registered
+      (root `package.json` `test:apps` / apps/api `test`). Put the predicate's
+      unit tests in `capper-delivery-authorization.test.ts`. A new test file
+      would need `package.json`, which WORK-2026103007 owns concurrently.
+      `run-audit-service.test.ts` does not appear to be registered, so don't
+      rely on it; prove pinning through `capper-delivery-authorization.test.ts`
+      or `member-picks.test.ts`.
+
+
+      Notes from the pre-admission audit (verify, don't trust):
+
+      - `apps/web` makes no pick/settlement data reads (`app/results/page.tsx`
+      is static).
+
+      - The Discord bot's `/recap` calls `/api/operator/capper-recap`, but no
+      API route serves that path. Report it in the proof and don't build it
+      here.
+
+      - `/api/operator/stats` and `/api/operator/leaderboard` are served by
+      `member-performance-service`.
+
+      - `picks-query.ts` (`GET /api/picks`) and `settlements-query.ts` (`GET
+      /api/settlements/recent`) are reached by the bot's `/results`. If their
+      tests live in files outside this list, add the new cases to
+      `member-picks.test.ts` or `member-performance-routes.test.ts` through the
+      real handlers.
+    captured_at: 2026-10-30T14:25:07.631Z
+    description_sha256: 20abd6d2a5492bbed768a237dd2f572e53c63efd709979b403589164e4b8d77e
+  contract_hash: daf9ce979ff0f1d585f4edaebbd3d91b960b0db7fe36dc88404f58d36daf2a96

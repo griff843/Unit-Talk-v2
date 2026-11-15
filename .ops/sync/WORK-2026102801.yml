@@ -1,0 +1,167 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102801
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102801
+  objective: WORK-2026102801 — Command Center lists Track Only picks awaiting settlement
+  acceptance_criteria:
+    - "`getResultsOpsSnapshot` returns a `trackOnlyAwaitingSettlement` list and
+      an authoritative count. The predicate on `picks_current_state` is
+      `settlement_recorded_at IS NULL`, `metadata->>distributionMode =
+      'track-only'` and `status` not `voided`. It goes through
+      `applyOperatorPickPopulation`, oldest `created_at` first, limit 50, and a
+      query error throws as the existing lists do."
+    - Each row carries the pick id, capper id (or display name), sport, the
+      event name from `metadata.eventName`, market, selection, line, odds, stake
+      units and submitted time.
+    - The Settlement page renders a "Track Only — Awaiting Settlement (N)"
+      section and stat card next to the delivered one. Each row links to
+      `/picks/<id>` (where settlement happens), and the section has an explicit
+      empty state.
+    - Picks from every capper appear together, with the capper shown per row.
+      Nothing is hard-coded to griff843 or kingro623.
+    - The existing delivered-awaiting list, its count and its predicate are
+      unchanged.
+    - A unit test in `apps/command-center/src/lib/data/` proves the predicate.
+      It includes an unsettled track-only pick, excludes a settled one, a voided
+      one and a delivery-authorized one, and checks the ordering.
+  guardrails:
+    - "Read-only: no settlement, write, API, schema, migration, delivery, worker
+      or containment change."
+    - No change to authentication, operator identity or `settled_by` attribution.
+    - No new dependency.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged through `ops:merge-wrapper pr-merge` on green required checks.
+      Deployment is a separate, owner-authorized release.
+  unmapped_sections:
+    - >-
+      WORK-2026102801 — Command Center lists Track Only picks awaiting
+      settlement
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). Griff
+      approved the Private Capper Operations V1 plan on 2026-10-28. Griff and
+      Kingro623 submit genuine Track Only picks, and every one is settled
+      manually by Griff in Command Center. The Settlement page's only awaiting
+      list is "Delivered — Awaiting Settlement", which requires
+      `metadata.deliveryAuthorization.decision = 'authorized'`. Track Only picks
+      are refused delivery by design, so they never appear anywhere as waiting
+      for settlement. Production has one such pick today, which Griff had to
+      find by id.
+
+
+      ## File Scope
+
+
+      - apps/command-center/src/lib/data/results-ops.ts
+
+      - apps/command-center/src/lib/data/results-ops.test.ts
+
+      - apps/command-center/src/app/settlement/page.tsx
+
+      - apps/command-center/src/lib/types.ts
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102801.md
+    title: WORK-2026102801 — Command Center lists Track Only picks awaiting settlement
+    description: >-
+      # WORK-2026102801 — Command Center lists Track Only picks awaiting
+      settlement
+
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). Griff
+      approved the Private Capper Operations V1 plan on 2026-10-28. Griff and
+      Kingro623 submit genuine Track Only picks, and every one is settled
+      manually by Griff in Command Center. The Settlement page's only awaiting
+      list is "Delivered — Awaiting Settlement", which requires
+      `metadata.deliveryAuthorization.decision = 'authorized'`. Track Only picks
+      are refused delivery by design, so they never appear anywhere as waiting
+      for settlement. Production has one such pick today, which Griff had to
+      find by id.
+
+
+      ## Acceptance Criteria
+
+
+      - `getResultsOpsSnapshot` returns a `trackOnlyAwaitingSettlement` list and
+      an authoritative count. The predicate on `picks_current_state` is
+      `settlement_recorded_at IS NULL`, `metadata->>distributionMode =
+      'track-only'` and `status` not `voided`. It goes through
+      `applyOperatorPickPopulation`, oldest `created_at` first, limit 50, and a
+      query error throws as the existing lists do.
+
+      - Each row carries the pick id, capper id (or display name), sport, the
+      event name from `metadata.eventName`, market, selection, line, odds, stake
+      units and submitted time.
+
+      - The Settlement page renders a "Track Only — Awaiting Settlement (N)"
+      section and stat card next to the delivered one. Each row links to
+      `/picks/<id>` (where settlement happens), and the section has an explicit
+      empty state.
+
+      - Picks from every capper appear together, with the capper shown per row.
+      Nothing is hard-coded to griff843 or kingro623.
+
+      - The existing delivered-awaiting list, its count and its predicate are
+      unchanged.
+
+      - A unit test in `apps/command-center/src/lib/data/` proves the predicate.
+      It includes an unsettled track-only pick, excludes a settled one, a voided
+      one and a delivery-authorized one, and checks the ordering.
+
+
+      ## File Scope
+
+
+      - apps/command-center/src/lib/data/results-ops.ts
+
+      - apps/command-center/src/lib/data/results-ops.test.ts
+
+      - apps/command-center/src/app/settlement/page.tsx
+
+      - apps/command-center/src/lib/types.ts
+
+
+      ## Guardrails
+
+
+      - Read-only: no settlement, write, API, schema, migration, delivery,
+      worker or containment change.
+
+      - No change to authentication, operator identity or `settled_by`
+      attribution.
+
+      - No new dependency.
+
+
+      ## Exit Criteria
+
+
+      - PR merged through `ops:merge-wrapper pr-merge` on green required checks.
+      Deployment is a separate, owner-authorized release.
+    captured_at: 2026-10-28T11:51:17.145Z
+    description_sha256: e391861b15889f884e770bb1c799cadb9ede4947394a3e8ec030a2da02279f10
+  contract_hash: 5c0bf4eadc7d2712904820ee5893fd426b983765dde41428d48611a471d487a5

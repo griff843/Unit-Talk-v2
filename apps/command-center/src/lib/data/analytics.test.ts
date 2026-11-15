@@ -150,6 +150,12 @@ test('computeStats reports an empty cohort as null ROI', () => {
   assert.equal(stats.unitsNet, null);
 });
 
+test('CLV sample counts only observations with a recorded value', () => {
+  const stats = computeStats([{ result: 'win', payload: { clvPercent: 2 } }, { result: 'loss', payload: {} }]);
+  assert.equal(stats.avgClvPct, 2);
+  assert.equal(stats.clvSampleSize, 1);
+});
+
 test('per-capper partitions reconcile against the aggregate by construction', () => {
   // The invariant the operator actually checks: the capper totals sum to the
   // Unit Talk aggregate. It holds because both are the SAME function over

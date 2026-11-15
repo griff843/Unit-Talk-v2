@@ -1,0 +1,30 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102705",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "static",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "e095bb926a79c8b2babf36e973555bc9dca8ae1b",
+    "verified_source_sha": "9a8e2558458f21dd712674741963954a91dfd0d5",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-27T15:56:54.153Z"
+  },
+  "static_proof": {
+    "status": "pass",
+    "scope": "Smart Form canonical participant artwork and entry corrections (apps/smart-form); Codex-authored, carried unchanged from draft PR #1791",
+    "local_checks": [
+      "ops:preflight PASS (39 checks)",
+      "pnpm type-check exit 0",
+      "apps/smart-form pnpm test: 224 tests, 224 pass, 0 fail",
+      "lane:check delivery-ui PASS (15 files)",
+      "scripts/ci/r-level-check.ts Verdict PASS (operator-ui)",
+      "Codex fixture browser evidence PASS at 1440/390/320px (browser-evidence-result.json)"
+    ],
+    "ci_run": null,
+    "note": "CI verify on the PR head is the pnpm verify of record. Artwork renders only once the WORK-2026102704 endpoint is deployed; until then it falls back to initials, with no submission impact."
+  }
+}

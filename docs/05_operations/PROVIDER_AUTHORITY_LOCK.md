@@ -8,9 +8,41 @@
 
 ## Canonical Authority Statement
 
-**Active provider: SGO Pro. Odds API: suspended until further notice.**
+**Active provider: SGO Pro. Odds API: suspended, except for Amendment A1 (game-score evaluation, engineering and staging only).**
 
-SGO Pro is the sole live data provider for Unit Talk V2 during the active trial window (started 2026-04-04). The Odds API is suspended for this period and must not be used in active-work reasoning, analysis, or implementation.
+SGO Pro is the sole live data provider for Unit Talk V2 during the active trial window (started 2026-04-04). The Odds API is suspended for this period and must not be used in active-work reasoning, analysis, or implementation, except as Amendment A1 permits.
+
+---
+
+## Amendment A1 — The Odds API: game-score evaluation (engineering and staging only)
+
+**Ratified:** 2026-11-11 by Griff (reserved authority). **PM directive:** 2026-11-10.
+
+SGO Pro keeps its authority for every provider function it holds today: odds, props,
+CLV (`openFairOdds`), bookmaker coverage, Pinnacle, and the existing results-grading path.
+Nothing in this amendment reduces, replaces or reorders that authority.
+
+The Odds API is authorized for **one function only**: **full-game final scores** for
+**NFL, NBA, NHL and MLB** game-line settlement evaluation (moneyline, spread, game total,
+team total), sourced from its `/scores` endpoint (and the free `/events` endpoint for
+event matching).
+
+That authority holds only within these limits:
+
+| Limit | Rule |
+|---|---|
+| Environments | Engineering (recorded fixtures) and the **staging** project only. No production read path, write path, key or apply. |
+| Trigger | Operator-run CLI only, dry-run by default. No scheduler, daemon, cron or deploy wiring. |
+| Settlement use | Track Only picks only, and only after event matching and freshness proof pass. Never member delivery. |
+| Provenance | Every row carries provider `odds-api` and ingestion source `odds-api-scores.operator-run`. Never relabelled as SGO. |
+| Overwrite | Never overwrites an existing result from any provider. A conflicting result fails closed. |
+| Markets | Game lines only. No player props, no period or half markets, no odds or CLV from this provider. |
+| NHL | Shootout and overtime settlement stays **blocked** until verified against a real, authoritative example. |
+| Commercial | No plan purchase, no paid key, no production key. Free-tier or test keys in staging only, configured by Griff. |
+
+Anything outside this table still follows the fail-closed rule below: the answer is SGO Pro.
+Activation in production (a production key, a production apply, scheduled ingestion, or any
+non-Track-Only settlement) needs a separate amendment ratified by Griff.
 
 ---
 
@@ -18,7 +50,7 @@ SGO Pro is the sole live data provider for Unit Talk V2 during the active trial 
 
 Provider-bound work MUST reference this file and fail closed to the active provider.
 
-**Do not use Odds API reasoning for active-work analysis.**
+**Do not use Odds API reasoning for active-work analysis outside Amendment A1's scope.**
 
 If a task requires provider data and it is unclear which provider to reference, stop and consult this document. The answer is SGO Pro. Do not fall back to Odds API assumptions.
 
@@ -46,6 +78,8 @@ The following patterns in active-work surfaces are stale drift and must be caugh
 - Reasoning about Pinnacle data via Odds API when SGO provides it natively
 - Issue bodies or analysis that describes Odds API behavior as the expected current behavior
 - Proof procedures that call Odds API endpoints for current grading validation
+
+References scoped to Amendment A1 (game-score evaluation files listed in the audit allow-list) are not drift.
 
 **Active-work surfaces that must stay clean:**
 - `scripts/` (except historical/backfill scripts)

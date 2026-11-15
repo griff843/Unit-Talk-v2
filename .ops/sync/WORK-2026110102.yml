@@ -1,0 +1,284 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026110102
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026110102
+  objective: "WORK-2026110102 — Command Center: label a staff-canary pick on the
+    operator pick detail"
+  acceptance_criteria:
+    - "`pnpm verify` green in CI at the exact head."
+    - The mutation is recorded.
+    - Member-pick rendering is byte-identical in the existing pick-detail tests.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026110102 — Command Center: label a staff-canary pick on the
+      operator pick detail
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05).
+      Required by `docs/mission/intent.md` § "Bounded exception", item 5:
+      "operator surfaces still show it, labelled". Griff's PM priority decision
+      of 2026-11-01 says to prepare the smallest necessary correction. Command
+      Center UI belongs to the Codex terminal. No production mutation is
+      authorized.
+
+
+      ## Gap (Production Claude, 2026-11-01, read at `main` 8c48e719)
+
+
+      - No Command Center file reads the delivery audience. `staff-canary`
+      appears nowhere under `apps/command-center/src`.
+
+      - Pick detail (`app/picks/[id]/page.tsx` →
+      `components/GovernedPickTruth.tsx`) shows delivery authorization and
+      stage, but not the audience. An operator cannot tell that a delivered
+      canary pick never went to members.
+
+      - `getPickDetail` (`lib/data/queues.ts` ~838) selects outbox rows without
+      `payload`, so the audience pinned at release (WORK-2026103005,
+      `payload.deliveryDestination.audience`) is not available to the page.
+
+      - `lib/human-capper-recap.ts:44` says that a pick with no confirmed
+      delivery "never reached members". For a canary pick, members are never the
+      audience, so the copy is misleading.
+
+
+      ## Required behavior
+
+
+      1. **Data.** Add `payload` to the outbox select in `getPickDetail`.
+      Nothing else in that query changes.
+
+      2. **Label**, on pick detail in `GovernedPickTruth`. Put the decision in a
+      pure module, `apps/command-center/src/lib/delivery-audience-label.ts`,
+      that `GovernedPickTruth` renders. The CC test glob (`src/lib/*.test.ts`)
+      does not run component tests. The module reads the pick's
+      `metadata.deliveryAuthorization.audience` and each outbox row's
+      `payload.deliveryDestination.audience` through the shared contracts
+      helpers (`readDeliveryAudience` and `isMemberVisibleDeliveryAudience` from
+      `@unit-talk/contracts`). Do not reimplement the rule.
+         - Every value reads `members`, or is absent and so defaults to members: no change to today's rendering.
+         - Every present value reads `staff-canary`: a visible label, **"Staff canary: private staff destination, hidden from members"**.
+         - An unrecognized marker, a non-string, or pick and outbox pins that disagree: **"Audience unrecognized: hidden from members (fail closed)"**.
+         - The label is text, not color alone, and is read correctly by assistive technology.
+      3. **Recap copy.** When the pick's audience is not member-visible,
+      `lib/human-capper-recap.ts` must not say "members"; use "the private staff
+      destination". Member picks keep today's copy.
+
+      4. Read only. No query beyond the added column, no write, no auth change,
+      and no change to which picks Command Center lists.
+
+
+      ## Tests
+
+
+      - Unit tests next to the changed modules:
+        - members or absent → no label;
+        - staff-canary on the pick only, on the outbox only, and on both → the canary label;
+        - an unknown marker or a mismatch → the fail-closed label;
+        - the recap copy for each case.
+      - **Mutation:** remove the label branch, and the staff-canary test fails.
+      Record it.
+
+      - Browser check on a local Next server with synthetic read fixtures, at
+      desktop 1440 and mobile 390×844: pick detail for a member pick, a
+      staff-canary pick and a mismatch pick. Label the captures as synthetic,
+      not deployed acceptance.
+
+
+      ## File Scope
+
+
+      - apps/command-center/src/lib/data/queues.ts
+
+      - apps/command-center/src/components/GovernedPickTruth.tsx
+
+      - apps/command-center/src/lib/human-capper-recap.ts
+
+      - apps/command-center/src/lib/delivery-audience-label.ts (new)
+
+      - apps/command-center/src/lib/delivery-audience-label.test.ts (new; picked
+      up by the existing `src/lib/*.test.ts` glob, so no package.json change)
+
+      - apps/command-center/src/lib/human-capper-recap.test.ts
+
+      - apps/command-center/src/lib/data/queues-governed-population.test.ts
+      (only if the outbox select change needs a fixture update)
+
+
+      ## PR opening is sequenced (overrides any generic "open a draft PR" step)
+
+
+      Every pull request, including a draft, runs the shared `staging-ci-db`
+      job. That job holds one running and one pending slot, and a third arrival
+      cancels the pending proof of another lane. So:
+
+
+      - Commit and push the lane branch as normal.
+
+      - **Do not open a pull request.** When implementation and local
+      verification are complete, write `.out/ops/ready-for-pr/<this issue
+      id>.md` in the lane worktree. List the head SHA, the focused test commands
+      and their results, and the observed model and effort.
+
+      - Production Claude opens the PR when the staging slot is free, then
+      reports the PR number back. After that, ask Production Claude before every
+      push to the open PR.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026110102.md
+    title: "WORK-2026110102 — Command Center: label a staff-canary pick on the
+      operator pick detail"
+    description: >-
+      # WORK-2026110102 — Command Center: label a staff-canary pick on the
+      operator pick detail
+
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05).
+      Required by `docs/mission/intent.md` § "Bounded exception", item 5:
+      "operator surfaces still show it, labelled". Griff's PM priority decision
+      of 2026-11-01 says to prepare the smallest necessary correction. Command
+      Center UI belongs to the Codex terminal. No production mutation is
+      authorized.
+
+
+      ## Gap (Production Claude, 2026-11-01, read at `main` 8c48e719)
+
+
+      - No Command Center file reads the delivery audience. `staff-canary`
+      appears nowhere under `apps/command-center/src`.
+
+      - Pick detail (`app/picks/[id]/page.tsx` →
+      `components/GovernedPickTruth.tsx`) shows delivery authorization and
+      stage, but not the audience. An operator cannot tell that a delivered
+      canary pick never went to members.
+
+      - `getPickDetail` (`lib/data/queues.ts` ~838) selects outbox rows without
+      `payload`, so the audience pinned at release (WORK-2026103005,
+      `payload.deliveryDestination.audience`) is not available to the page.
+
+      - `lib/human-capper-recap.ts:44` says that a pick with no confirmed
+      delivery "never reached members". For a canary pick, members are never the
+      audience, so the copy is misleading.
+
+
+      ## Required behavior
+
+
+      1. **Data.** Add `payload` to the outbox select in `getPickDetail`.
+      Nothing else in that query changes.
+
+      2. **Label**, on pick detail in `GovernedPickTruth`. Put the decision in a
+      pure module, `apps/command-center/src/lib/delivery-audience-label.ts`,
+      that `GovernedPickTruth` renders. The CC test glob (`src/lib/*.test.ts`)
+      does not run component tests. The module reads the pick's
+      `metadata.deliveryAuthorization.audience` and each outbox row's
+      `payload.deliveryDestination.audience` through the shared contracts
+      helpers (`readDeliveryAudience` and `isMemberVisibleDeliveryAudience` from
+      `@unit-talk/contracts`). Do not reimplement the rule.
+         - Every value reads `members`, or is absent and so defaults to members: no change to today's rendering.
+         - Every present value reads `staff-canary`: a visible label, **"Staff canary: private staff destination, hidden from members"**.
+         - An unrecognized marker, a non-string, or pick and outbox pins that disagree: **"Audience unrecognized: hidden from members (fail closed)"**.
+         - The label is text, not color alone, and is read correctly by assistive technology.
+      3. **Recap copy.** When the pick's audience is not member-visible,
+      `lib/human-capper-recap.ts` must not say "members"; use "the private staff
+      destination". Member picks keep today's copy.
+
+      4. Read only. No query beyond the added column, no write, no auth change,
+      and no change to which picks Command Center lists.
+
+
+      ## Tests
+
+
+      - Unit tests next to the changed modules:
+        - members or absent → no label;
+        - staff-canary on the pick only, on the outbox only, and on both → the canary label;
+        - an unknown marker or a mismatch → the fail-closed label;
+        - the recap copy for each case.
+      - **Mutation:** remove the label branch, and the staff-canary test fails.
+      Record it.
+
+      - Browser check on a local Next server with synthetic read fixtures, at
+      desktop 1440 and mobile 390×844: pick detail for a member pick, a
+      staff-canary pick and a mismatch pick. Label the captures as synthetic,
+      not deployed acceptance.
+
+
+      ## Acceptance Criteria
+
+
+      - `pnpm verify` green in CI at the exact head.
+
+      - The mutation is recorded.
+
+      - Member-pick rendering is byte-identical in the existing pick-detail
+      tests.
+
+
+      ## File Scope
+
+
+      - apps/command-center/src/lib/data/queues.ts
+
+      - apps/command-center/src/components/GovernedPickTruth.tsx
+
+      - apps/command-center/src/lib/human-capper-recap.ts
+
+      - apps/command-center/src/lib/delivery-audience-label.ts (new)
+
+      - apps/command-center/src/lib/delivery-audience-label.test.ts (new; picked
+      up by the existing `src/lib/*.test.ts` glob, so no package.json change)
+
+      - apps/command-center/src/lib/human-capper-recap.test.ts
+
+      - apps/command-center/src/lib/data/queues-governed-population.test.ts
+      (only if the outbox select change needs a fixture update)
+
+
+      ## PR opening is sequenced (overrides any generic "open a draft PR" step)
+
+
+      Every pull request, including a draft, runs the shared `staging-ci-db`
+      job. That job holds one running and one pending slot, and a third arrival
+      cancels the pending proof of another lane. So:
+
+
+      - Commit and push the lane branch as normal.
+
+      - **Do not open a pull request.** When implementation and local
+      verification are complete, write `.out/ops/ready-for-pr/<this issue
+      id>.md` in the lane worktree. List the head SHA, the focused test commands
+      and their results, and the observed model and effort.
+
+      - Production Claude opens the PR when the staging slot is free, then
+      reports the PR number back. After that, ask Production Claude before every
+      push to the open PR.
+    captured_at: 2026-11-02T10:00:47.382Z
+    description_sha256: db4c118c9442377f08e54a5f5b7d56236c1b0ee521348263fc733738b33decfc
+  contract_hash: d45c76adeec44b0865bbff944ca8c0f010dd15e4f3c243f4c79e59f528c0b496

@@ -110,3 +110,24 @@ test('anonymous document gets a sign-in form at 401, while API requests stay ref
     Object.assign(process.env, saved);
   }
 });
+
+// WORK-2026102703: a session minted from a Basic login carries the identity that
+// login authenticated as, and cannot be replayed as any other actor.
+test('a Basic login with a canonical username mints a session for that operator only', async () => {
+  const usernameEnv = {
+    NODE_ENV: 'production', COMMAND_CENTER_AUTH_TOKEN: 'machine-token',
+    COMMAND_CENTER_AUTH_USERNAME: 'griff843', COMMAND_CENTER_AUTH_PASSWORD: 'test-password',
+  };
+  const login = new Headers({ authorization: `Basic ${Buffer.from('griff843:test-password').toString('base64')}` });
+  const session = await issueOperatorSession(login, usernameEnv, now);
+  assert.deepEqual(await authenticateSessionOrHeader(sessionHeaders(session), usernameEnv, now), {
+    ok: true, auth: { actor: 'griff843', role: 'operator', method: 'session' },
+  });
+  // A session minted from the machine token is the machine identity, never the human.
+  const machine = await issueOperatorSession(new Headers({ authorization: 'Bearer machine-token' }), usernameEnv, now);
+  const machineAuth = await authenticateSessionOrHeader(sessionHeaders(machine), usernameEnv, now);
+  assert.equal(machineAuth.ok && machineAuth.auth.actor, 'command-center');
+  // Changing the Basic username invalidates the session rather than re-attributing it.
+  const renamed = { ...usernameEnv, COMMAND_CENTER_AUTH_USERNAME: 'kingro623' };
+  assert.equal((await authenticateSessionOrHeader(sessionHeaders(session), renamed, now)).ok, false);
+});

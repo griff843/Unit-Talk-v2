@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102801",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "merged",
+  "focused_tests": {
+    "command": "pnpm exec tsx --test apps/command-center/src/lib/data/results-ops.test.ts",
+    "tests": 1,
+    "passed": 1,
+    "failed": 0
+  },
+  "suite_tests": {
+    "command": "pnpm test:command-center",
+    "tests": 695,
+    "passed": 695,
+    "failed": 0
+  },
+  "type_check": {
+    "command": "pnpm --filter @unit-talk/command-center type-check",
+    "status": "PASS"
+  },
+  "writable_live_db": {
+    "status": "BLOCKED_DEFERRED",
+    "reason": "Target identity could not be resolved from URL (host=unparseable); staging-ci with xskgrzbteyqdufktjrjx is required."
+  },
+  "verify_static": {
+    "command": "pnpm verify:static",
+    "status": "PASS"
+  },
+  "r_level": {
+    "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "status": "PASS",
+    "rules_matched": []
+  },
+  "merge_sha": null,
+  "sha_binding": {
+    "merge_sha": "f4354929bd700d105f8103eb61038c174c0958f1",
+    "verified_source_sha": "4fdc61527e01ba1626b4c8b8881cb439c80aa8ae",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-28T13:05:41.589Z"
+  }
+}

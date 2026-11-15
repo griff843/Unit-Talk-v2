@@ -32,12 +32,20 @@ import {
 import {
   buildManualEnteredParticipants,
   buildSubmissionPayload,
+  canOfferManualPlayer,
+  describeOffersState,
+  easternDateIso,
   evaluateSubmissionGuards,
   getMarketTypesForSport,
   getStatTypesForSport,
   inferStatTypeFromMarketTypeId,
   mapOfferToFormMarketType,
+  MANUAL_PLAYER_PROVENANCE,
   resolveSportsbookId,
+  withManualPlayer,
+  manualPlayerCandidateSide,
+  readManualPlayerCandidates,
+  type PlayerSearchResolution,
   type SmartFormIdentityMode,
 } from '@/lib/form-utils';
 import {
@@ -73,6 +81,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+import { lineInputExample, matchupInputExample } from '@/lib/input-examples';
 import { createSessionSubmissionGuard } from '@/lib/submission-guard';
 import { isQaAuthBypassEnabled } from '@/lib/auth-config';
 import { deriveMatchupTeamChoices, isMissingQaIdentity, type MatchupTeamChoice } from '@/lib/team-choice';
@@ -92,15 +101,17 @@ import { SignedNumberInput } from '@/components/SignedNumberInput';
 import { getStoredCapperClaims, clearStoredToken } from '@/lib/auth-token';
 import type {
   CanonicalParticipantIdentity,
+  CanonicalParticipantResolution,
+  ManualPlayerCandidate,
   SmartFormParticipantResolution,
 } from '@unit-talk/contracts';
 import { BetSlipPanel } from './BetSlipPanel';
+import { mediaTeamParticipantId } from '@/lib/participant-media';
 import { MarketTypeGrid } from './MarketTypeGrid';
 import { SuccessReceipt } from './SuccessReceipt';
 
 export { buildParticipantSearchUrl, normalizeParticipantSearchResults };
 
-const TODAY = new Date().toISOString().slice(0, 10);
 const PARTICIPANT_QUERY_MIN = 2;
 const BROWSE_SEARCH_MIN = 2;
 const OFFER_STALE_MINUTES = 30;
@@ -118,7 +129,7 @@ type BrowseMode = 'live-offer' | 'manual';
 type LiveEntryMode = 'browse' | 'search';
 type OfferSelectionSide = 'over' | 'under' | 'side';
 type ParticipantFieldName = 'playerName' | 'team' | 'awayParticipantName' | 'homeParticipantName';
-type ParticipantSearchResolution = 'idle' | 'searching' | 'results' | 'not-found' | 'error' | 'resolved';
+type ParticipantSearchResolution = PlayerSearchResolution;
 
 interface SelectedOfferState {
   offer: EventOfferBrowseResult;
@@ -157,8 +168,12 @@ function formatMatchup(matchup: MatchupBrowseResult) {
 }
 
 function getRelativeDayPrefix(dateStr: string): string {
-  const today = new Date().toISOString().slice(0, 10);
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const now = new Date();
+  const today = easternDateIso(now);
+  const todayParts = today.split('-').map((value) => Number.parseInt(value, 10));
+  const tomorrow = easternDateIso(
+    new Date(Date.UTC((todayParts[0] ?? 0), (todayParts[1] ?? 1) - 1, (todayParts[2] ?? 1) + 1, 12)),
+  );
   if (dateStr === today) return 'Today · ';
   if (dateStr === tomorrow) return 'Tomorrow · ';
   return '';
@@ -180,7 +195,7 @@ function formatTimestampLabel(isoString: string) {
   if (Number.isNaN(timestamp.getTime())) {
     return 'Unknown time';
   }
-  const dateStr = timestamp.toISOString().slice(0, 10);
+  const dateStr = easternDateIso(timestamp);
   const prefix = getRelativeDayPrefix(dateStr);
   return `${prefix}${timestamp.toLocaleTimeString([], {
     hour: 'numeric',
@@ -282,6 +297,11 @@ function isOfferSnapshotStale(snapshotAt: string | null) {
 
 function buildOfferStatus(eventBrowse: EventBrowseResult | null, filteredCount?: number) {
   if (!eventBrowse || eventBrowse.offers.length === 0) {
+    // WORK-2026110705: stale (with its last-observed time) is not the same as no offers.
+    const notice = describeOffersState(eventBrowse?.offersState);
+    if (notice) {
+      return { tone: notice.tone, label: notice.label };
+    }
     return { tone: 'none' as const, label: 'No live offers' };
   }
 
@@ -415,9 +435,20 @@ function ParticipantAutocompleteField({
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<ParticipantSuggestion[]>([]);
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  const blurTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (blurTimeoutRef.current !== null) window.clearTimeout(blurTimeoutRef.current);
+  }, []);
 
   useEffect(() => {
     const query = value.trim();
+    // Results belong to one exact query, sport, event and team scope.
+    setSuggestions([]);
+    setHasSearched(false);
+    setSearchError(null);
+    setIsLoading(false);
     if (!sport || query.length < PARTICIPANT_QUERY_MIN) {
       setSuggestions([]);
       setHasSearched(false);
@@ -457,18 +488,22 @@ function ParticipantAutocompleteField({
           throw new Error(message);
         }
 
+        if (controller.signal.aborted) return;
         const normalizedSuggestions = normalizeParticipantSearchResults(
           isRecord(json) ? json : { data: [] },
           searchType,
         );
-        const nextSuggestions = allowedParticipantIds
-          ? normalizedSuggestions.filter((suggestion) => allowedParticipantIds.has(suggestion.participantId))
+        const scopedSuggestions = searchType === 'player' && teamId
+          ? normalizedSuggestions.filter((suggestion) => suggestion.teamId === teamId)
           : normalizedSuggestions;
+        const nextSuggestions = allowedParticipantIds
+          ? scopedSuggestions.filter((suggestion) => allowedParticipantIds.has(suggestion.participantId))
+          : scopedSuggestions;
         setSuggestions(nextSuggestions);
         setHasSearched(true);
         onResolutionStateChange?.(nextSuggestions.length > 0 ? 'results' : 'not-found');
       } catch (error) {
-        if ((error as Error).name === 'AbortError') {
+        if (controller.signal.aborted || (error as Error).name === 'AbortError') {
           return;
         }
 
@@ -477,7 +512,7 @@ function ParticipantAutocompleteField({
         setSearchError(error instanceof Error ? error.message : 'Participant search unavailable');
         onResolutionStateChange?.('error');
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       }
     }, 250);
 
@@ -485,7 +520,7 @@ function ParticipantAutocompleteField({
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [allowedParticipantIds, eventId, name, onResolutionStateChange, searchType, sport, teamId, value]);
+  }, [allowedParticipantIds, eventId, name, onResolutionStateChange, searchType, sport, teamId, value, retryAttempt]);
 
   const shouldShowMenu =
     isFocused &&
@@ -512,13 +547,20 @@ function ParticipantAutocompleteField({
                                 : placeholder
                           }
                           value={field.value ?? ''}
-              onFocus={() => setIsFocused(true)}
+              onFocus={() => {
+                if (blurTimeoutRef.current !== null) window.clearTimeout(blurTimeoutRef.current);
+                blurTimeoutRef.current = null;
+                setIsFocused(true);
+              }}
               onBlur={() => {
-                window.setTimeout(() => setIsFocused(false), 120);
+                if (blurTimeoutRef.current !== null) window.clearTimeout(blurTimeoutRef.current);
+                blurTimeoutRef.current = window.setTimeout(() => setIsFocused(false), 120);
               }}
               onChange={(event) => {
                 onManualChange(event.target.value);
                 field.onChange(event.target.value);
+                setSuggestions([]);
+                setHasSearched(false);
                 setSearchError(null);
                 onResolutionStateChange?.('idle');
               }}
@@ -530,13 +572,23 @@ function ParticipantAutocompleteField({
             </p>
           ) : null}
           {shouldShowMenu ? (
-            <div className="absolute inset-x-0 top-full z-20 mt-2 rounded-md border border-border bg-background shadow-lg">
+            <div className="absolute inset-x-0 top-full z-20 mt-2 rounded-md border border-border bg-background shadow-lg"
+              onFocusCapture={() => {
+                if (blurTimeoutRef.current !== null) window.clearTimeout(blurTimeoutRef.current);
+                setIsFocused(true);
+              }}
+              onBlurCapture={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                  blurTimeoutRef.current = window.setTimeout(() => setIsFocused(false), 120);
+                }
+              }}>
               {isLoading ? (
                 <div className="px-3 py-2 text-sm text-muted-foreground">Searching participants...</div>
               ) : null}
               {!isLoading && searchError ? (
                 <div role="alert" className="px-3 py-2 text-sm text-destructive">
-                  Search failed: {searchError}. Try again.
+                  <p>Search failed: {searchError}.</p>
+                  <button type="button" className="mt-1 min-h-11 underline underline-offset-4" onMouseDown={(event) => event.preventDefault()} onClick={() => setRetryAttempt((attempt) => attempt + 1)}>Try again</button>
                 </div>
               ) : null}
               {!isLoading && !searchError && hasSearched && suggestions.length === 0 ? (
@@ -549,10 +601,11 @@ function ParticipantAutocompleteField({
                   {suggestions.map((suggestion) => (
                     <button
                       key={`${suggestion.participantType}:${suggestion.participantId}`}
-                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
+                      className="flex min-h-11 w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-muted focus-visible:bg-muted"
                       type="button"
-                      onMouseDown={(event) => {
-                        event.preventDefault();
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        if (searchType === 'player' && teamId && suggestion.teamId !== teamId) return;
                         form.setValue(name, suggestion.displayName, {
                           shouldDirty: true,
                           shouldTouch: true,
@@ -760,13 +813,14 @@ function SportsbookPillField({
       control={form.control}
       name="sportsbook"
       render={({ field }) => (
-        <FormItem data-testid="smart-form-book-select">
+        <FormItem className="sportsbook-field" data-testid="smart-form-book-select">
           <FormLabel>Sportsbook</FormLabel>
           <div className="flex flex-wrap gap-1.5">
             {primaryBooks.map((sb) => (
               <button
                 key={sb.id}
                 type="button"
+                aria-pressed={field.value === sb.id}
                 onClick={() => {
                   field.onChange(sb.id);
                   setShowOther(false);
@@ -845,6 +899,7 @@ export function BetForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successResult, setSuccessResult] = useState<SubmitPickResult | null>(null);
   const [submittedValues, setSubmittedValues] = useState<BetFormValues | null>(null);
+  const [submittedPlayerProvenance, setSubmittedPlayerProvenance] = useState<typeof MANUAL_PLAYER_PROVENANCE | null>(null);
   const [matchups, setMatchups] = useState<MatchupBrowseResult[]>([]);
   const [matchupsError, setMatchupsError] = useState<string | null>(null);
   const [isLoadingMatchups, setIsLoadingMatchups] = useState(false);
@@ -864,6 +919,16 @@ export function BetForm({
   const [identityMode, setIdentityMode] = useState<SmartFormIdentityMode>('canonical');
   const [awaySearchResolution, setAwaySearchResolution] = useState<ParticipantSearchResolution>('idle');
   const [homeSearchResolution, setHomeSearchResolution] = useState<ParticipantSearchResolution>('idle');
+  // WORK-2026110802: the player field's own search state, and whether the operator chose to
+  // enter a player the reference search did not match (identity unverified, not proved absent).
+  const [playerSearchResolution, setPlayerSearchResolution] = useState<ParticipantSearchResolution>('idle');
+  const [manualPlayerRequested, setManualPlayerRequested] = useState(false);
+  // WORK-2026110802: catalog players the API says this manual name is similar to (its 409),
+  // shown as "Is this one of these players?" until the operator picks one or rules them out.
+  const [manualPlayerCandidates, setManualPlayerCandidates] = useState<ManualPlayerCandidate[] | null>(null);
+  // The candidates the operator ruled out, sent once with the next submission and then cleared.
+  const manualPlayerConfirmationRef = useRef<ManualPlayerCandidate[] | null>(null);
+  const [submittedRejectedCandidateCount, setSubmittedRejectedCandidateCount] = useState(0);
   const [selectedOffer, setSelectedOffer] = useState<SelectedOfferState | null>(null);
   const [selectedOfferParticipantId, setSelectedOfferParticipantId] = useState<string | null>(null);
   const [suspendMarketReset, setSuspendMarketReset] = useState(false);
@@ -895,12 +960,17 @@ export function BetForm({
       units: 1.0,
       odds: undefined,
       line: undefined,
-      gameDate: TODAY,
+      gameDate: easternDateIso(new Date()),
       trackOnly: true,
     },
   });
 
   const watchedValues = form.watch();
+  const selectionScopeRef = useRef('');
+  selectionScopeRef.current = JSON.stringify([watchedValues.sport, watchedValues.gameDate, watchedValues.marketType, selectedMatchupId, selectedTeamId]);
+  const selectionRequestRef = useRef(0);
+  const selectedMatchupRef = useRef(selectedMatchupId);
+  selectedMatchupRef.current = selectedMatchupId;
 
   const legSummaries = useMemo(() => summarizeSlip(slipLegs), [slipLegs]);
   // Why a multi-leg slip cannot be submitted today, or null when it can. Held
@@ -998,6 +1068,25 @@ export function BetForm({
     identityMode === 'structured-fallback' &&
     awaySearchResolution === 'not-found' &&
     homeSearchResolution === 'not-found';
+  // WORK-2026110802: manual player beside canonical teams, offered only after a definitive
+  // not-found. `manualPlayerActive` is what the payload is built from; it lapses on its own as
+  // soon as a player is selected or the search state stops being a definitive not-found.
+  const manualPlayerOffered = canOfferManualPlayer({
+    identityMode,
+    isPlayerProp: selectedMarketType === 'player-prop',
+    selectedPlayerId,
+    playerSearchResolution,
+  });
+  const manualPlayerActive = manualPlayerRequested && manualPlayerOffered;
+  // The two structured sides a suggested candidate may belong to (WORK-2026110802).
+  const manualPlayerCandidateSides = [
+    { participantId: awayParticipantId, label: watchedValues.awayParticipantName?.trim() ?? '' },
+    { participantId: homeParticipantId, label: watchedValues.homeParticipantName?.trim() ?? '' },
+  ];
+  useEffect(() => {
+    setManualPlayerRequested(false);
+    setManualPlayerCandidates(null);
+  }, [identityMode, selectedSport, selectedMarketType, selectedTeamId]);
   const availableOfferFamilies = useMemo(() => {
     if (!eventBrowse) {
       return [] as MarketTypeId[];
@@ -1169,6 +1258,7 @@ export function BetForm({
     ];
   }, [availableStatTypes, eventBrowse, selectedMarketType, selectedOfferParticipantId]);
   const offerStatus = buildOfferStatus(eventBrowse, filteredOffers.length);
+  const offersStateNotice = describeOffersState(eventBrowse?.offersState);
   const latestOfferSnapshotAt = getLatestOfferSnapshotAt(eventBrowse);
   const isLatestOfferSnapshotStale = isOfferSnapshotStale(latestOfferSnapshotAt);
   const selectedMarketLabel = selectedMarketType ? getMarketTypeLabel(selectedMarketType) : null;
@@ -1635,9 +1725,7 @@ export function BetForm({
         return false;
       }
 
-      if (participantId && result.participantId === participantId) {
-        return true;
-      }
+      if (participantId) return result.participantId === participantId;
 
       return normalizeParticipantKey(result.displayName) === normalizeParticipantKey(displayName);
     });
@@ -1651,6 +1739,9 @@ export function BetForm({
   }
 
   async function handlePlayerSuggestionSelection(suggestion: ParticipantSuggestion) {
+    if (selectedTeamId && suggestion.teamId !== mediaTeamParticipantId(selectedTeamId, selectedMatchup?.teams ?? [])) return;
+    const request = ++selectionRequestRef.current;
+    const scope = selectionScopeRef.current;
     setSelectedPlayerId(suggestion.participantId);
     setSelectedOfferParticipantId(suggestion.participantId);
 
@@ -1658,9 +1749,11 @@ export function BetForm({
       suggestion.displayName,
       'player',
       suggestion.participantId,
-    );
+    ).catch(() => null);
 
-    if (!browseResult) {
+    if (request !== selectionRequestRef.current || scope !== selectionScopeRef.current || form.getValues('playerName') !== suggestion.displayName) return;
+    if (!browseResult || (suggestion.teamId &&
+      mediaTeamParticipantId(browseResult.teamId, browseResult.matchup.teams) !== suggestion.teamId)) {
       return;
     }
 
@@ -1683,6 +1776,11 @@ export function BetForm({
   }
 
   async function handleTeamSuggestionSelection(suggestion: ParticipantSuggestion) {
+    const request = ++selectionRequestRef.current;
+    const selectionSport = selectedSport;
+    const selectionDate = watchedValues.gameDate;
+    const selectionMarket = selectedMarketType;
+    const selectionEvent = selectedMatchupId;
     if (selectedTeamId !== suggestion.participantId) {
       setSelectedPlayerId(null);
       setSelectedOfferParticipantId(null);
@@ -1709,8 +1807,17 @@ export function BetForm({
       suggestion.displayName,
       'team',
       suggestion.participantId,
-    );
+    ).catch(() => null);
 
+    const currentValues = form.getValues();
+    if (
+      request !== selectionRequestRef.current ||
+      currentValues.sport !== selectionSport ||
+      currentValues.gameDate !== selectionDate ||
+      currentValues.marketType !== selectionMarket ||
+      selectedMatchupRef.current !== selectionEvent ||
+      currentValues.team !== suggestion.displayName
+    ) return;
     if (!browseResult) {
       return;
     }
@@ -2050,7 +2157,7 @@ export function BetForm({
       (participant.participantId === selectedPlayerId || participant.canonicalId === selectedPlayerId),
     ) ?? null;
 
-    return {
+    const canonicalResolution: CanonicalParticipantResolution = {
       resolution: 'canonical',
       sportId: values.sport,
       eventId: identityMode === 'canonical' ? (selectedMatchup?.eventId ?? null) : null,
@@ -2077,6 +2184,45 @@ export function BetForm({
         selectedPlayerParticipant?.teamId ?? selectedTeamId,
       ),
     };
+    // WORK-2026110802: canonical teams stay; the player is a manual entry with unverified identity.
+    return manualPlayerActive
+      ? withManualPlayer(
+          canonicalResolution,
+          values.playerName ?? '',
+          manualPlayerConfirmationRef.current?.map((candidate) => candidate.participantId) ?? null,
+        )
+      : canonicalResolution;
+  }
+
+  // WORK-2026110802: the operator picked one of the suggested catalog players -- the leg
+  // switches to that canonical player and the manual entry is withdrawn. Nothing is submitted
+  // until the operator saves again.
+  function selectManualPlayerCandidate(candidate: ManualPlayerCandidate) {
+    const side = manualPlayerCandidateSide(candidate, manualPlayerCandidateSides);
+    // Fail closed: a player on neither matchup team cannot become this leg (the button is
+    // disabled; this guards any other caller).
+    if (!side) return;
+    if (side.participantId !== selectedTeamId) {
+      setSelectedTeamId(side.participantId);
+      form.setValue('team', side.label, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+    }
+    setManualPlayerCandidates(null);
+    setManualPlayerRequested(false);
+    setSelectedPlayerId(candidate.participantId);
+    setSelectedOfferParticipantId(candidate.participantId);
+    form.setValue('playerName', candidate.displayName, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+  }
+
+  // "None of these": resubmit once with the operator's confirmation; the API re-derives the
+  // candidates and records the player as unverified only when they still match exactly.
+  function confirmNoneOfManualPlayerCandidates() {
+    manualPlayerConfirmationRef.current = manualPlayerCandidates ?? [];
+    setManualPlayerCandidates(null);
+    void form.handleSubmit(onSubmit)();
   }
 
   async function onSubmit(values: BetFormValues) {
@@ -2108,10 +2254,6 @@ export function BetForm({
       toast({ title: 'Invalid matchup', description: 'Event sides must be different.', variant: 'destructive' });
       return;
     }
-    if (identityMode !== 'manual' && selectedMarketType === 'player-prop' && !selectedPlayerId) {
-      toast({ title: 'Select a player from the results', description: 'Typing a name is not enough; select a search result.', variant: 'destructive' });
-      return;
-    }
 
     // UTV2-1786: refuse the payload shapes the API's Smart Form contract
     // rejects, before submitting rather than after a 400. Each rule is stated
@@ -2125,6 +2267,10 @@ export function BetForm({
       playerName: values.playerName,
       canonicalEventId: identityMode === 'canonical' ? (selectedMatchup?.eventId ?? null) : null,
       selectedPlayerId,
+      isPlayerProp: selectedMarketType === 'player-prop',
+      manualPlayerRequested,
+      playerSearchResolution,
+      distributionMode: values.trackOnly ? 'track-only' : 'delivery-eligible',
     });
     if (guardFailure) {
       toast({
@@ -2177,18 +2323,30 @@ export function BetForm({
         selectedOffer: selectedOffer?.offer ?? null,
         distributionMode: values.trackOnly ? 'track-only' : 'delivery-eligible',
         participantResolution: buildParticipantResolution(values),
+        playerProvenance: manualPlayerActive ? MANUAL_PLAYER_PROVENANCE : null,
       });
       const result = await submitPick(payload);
       dismiss();
       setSubmittedValues(submissionValues);
+      setSubmittedPlayerProvenance(manualPlayerActive ? MANUAL_PLAYER_PROVENANCE : null);
+      setSubmittedRejectedCandidateCount(
+        manualPlayerActive ? (manualPlayerConfirmationRef.current?.length ?? 0) : 0,
+      );
       setSuccessResult(result);
     } catch (err) {
-      toast({
-        title: 'Submission failed',
-        description: err instanceof Error ? err.message : 'Unknown error',
-        variant: 'destructive',
-      });
+      const candidates = manualPlayerActive ? readManualPlayerCandidates(err) : null;
+      if (candidates) {
+        // Not a failure: the API wants the operator to rule out similar catalog players first.
+        setManualPlayerCandidates(candidates);
+      } else {
+        toast({
+          title: 'Submission failed',
+          description: err instanceof Error ? err.message : 'Unknown error',
+          variant: 'destructive',
+        });
+      }
     } finally {
+      manualPlayerConfirmationRef.current = null;
       submissionGuard.release();
       setIsSubmitting(false);
     }
@@ -2196,10 +2354,12 @@ export function BetForm({
 
   if (successResult && submittedValues) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-6">
+      <main className="receipt-shell min-h-screen flex items-center justify-center p-6">
         <SuccessReceipt
           result={successResult}
           submittedValues={submittedValues}
+          playerProvenance={submittedPlayerProvenance}
+          rejectedCandidateCount={submittedRejectedCandidateCount}
           onSubmitAnother={() => {
             setSuccessResult(null);
             setSubmittedValues(null);
@@ -2213,6 +2373,11 @@ export function BetForm({
             setHomeParticipantId(null);
             setAwaySearchResolution('idle');
             setHomeSearchResolution('idle');
+            setPlayerSearchResolution('idle');
+            setManualPlayerRequested(false);
+            setManualPlayerCandidates(null);
+            setSubmittedRejectedCandidateCount(0);
+            setSubmittedPlayerProvenance(null);
             setIdentityMode('canonical');
             setBrowseMode('manual');
             setLiveEntryMode('browse');
@@ -2231,7 +2396,7 @@ export function BetForm({
               team: '',
               sportsbook: savedBook ?? DEFAULT_OPERATOR_SPORTSBOOK_ID,
               capperConviction: undefined,
-              gameDate: TODAY,
+              gameDate: easternDateIso(new Date()),
               units: 1.0,
               odds: undefined,
               line: undefined,
@@ -2247,17 +2412,28 @@ export function BetForm({
 
   if (catalogError) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="text-destructive text-sm">{catalogError}</div>
+      <main className="workspace-state">
+        <BrandLogo />
+        <div className="workspace-state-card" role="alert">
+          <h1>We couldn’t load your workspace.</h1>
+          <p>{catalogError}</p>
+          <p>Check your connection and try again.</p>
+          <Button type="button" onClick={() => window.location.reload()}>Try again</Button>
+        </div>
       </main>
     );
   }
 
   if (!catalog) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6" role="status" aria-live="polite">
-        <div className="text-muted-foreground text-sm">Loading...</div>
-      </div>
+      <main className="workspace-state" role="status" aria-live="polite">
+        <BrandLogo />
+        <div className="workspace-state-card">
+          <h1>Loading your workspace…</h1>
+          <p>Getting your sports, markets, and books ready.</p>
+          <div className="loading-bars" aria-hidden="true"><span /><span /><span /></div>
+        </div>
+      </main>
     );
   }
 
@@ -2291,7 +2467,7 @@ export function BetForm({
           </div>
         </div>
 
-        <div className="inline-flex rounded-full border border-border bg-background p-1">
+        <div className="entry-mode inline-flex rounded-full border border-border bg-background p-1">
           <button
             type="button"
             className={cn(
@@ -2473,6 +2649,15 @@ export function BetForm({
 
             {eventBrowseError ? <p className="text-sm text-destructive">{eventBrowseError}</p> : null}
 
+            {offersStateNotice && offersStateNotice.tone === 'stale' ? (
+              <div
+                role="status"
+                className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-200"
+              >
+                {offersStateNotice.label}
+              </div>
+            ) : null}
+
             {isLatestOfferSnapshotStale && latestOfferSnapshotAt ? (
               <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-200">
                 Odds as of {formatOfferSnapshotTime(latestOfferSnapshotAt)}
@@ -2539,6 +2724,7 @@ export function BetForm({
                         placeholder="Type a player name"
                         searchType="player"
                         eventId={selectedMatchupId}
+                        teamId={mediaTeamParticipantId(selectedTeamId, selectedMatchup?.teams ?? [])}
                         sport={selectedSport}
                         allowedParticipantIds={allowedPlayerIds}
                         onSuggestionSelected={handlePlayerSuggestionSelection}
@@ -3009,7 +3195,7 @@ export function BetForm({
                                 <FormControl>
                                   <SignedNumberInput
                                     step="0.5"
-                                    placeholder="e.g. 24.5"
+                                    placeholder={lineInputExample(selectedSport, 'player-prop', watchedValues.statType)}
                                     name={field.name}
                                     ref={field.ref}
                                     onBlur={field.onBlur}
@@ -3133,6 +3319,7 @@ export function BetForm({
             </div>
           ) : (
             <>
+              {manualMatchupTeamChoices.length === 2 ? matchupTeamField('Team') : (
               <ParticipantAutocompleteField
                 form={form}
                 name="team"
@@ -3157,6 +3344,7 @@ export function BetForm({
                 }}
                 disabledOverride={identityMode === 'structured-fallback' && structuredSideIds.size < 2}
               />
+              )}
               <ParticipantAutocompleteField
                 form={form}
                 name="playerName"
@@ -3164,17 +3352,114 @@ export function BetForm({
                 placeholder="Type a player name"
                 searchType="player"
                 eventId={selectedMatchupId}
-                teamId={selectedTeamId}
+                teamId={mediaTeamParticipantId(selectedTeamId, selectedMatchup?.teams ?? [])}
                 sport={selectedSport}
                 datasetAvailable={referenceAvailability?.playersAvailable ?? null}
                 allowedParticipantIds={allowedPlayerIds}
                 onSuggestionSelected={handlePlayerSuggestionSelection}
-                onManualChange={() => setSelectedPlayerId(null)}
+                onManualChange={() => {
+                  setSelectedPlayerId(null);
+                  // A manual entry is a choice about one typed name; editing the name withdraws it.
+                  setManualPlayerRequested(false);
+                  setManualPlayerCandidates(null);
+                }}
+                onResolutionStateChange={setPlayerSearchResolution}
                 disabledOverride={!selectedTeamId}
               />
+              {identityMode === 'structured-fallback' && (manualPlayerOffered || manualPlayerRequested) ? (
+                <div
+                  className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs leading-relaxed text-muted-foreground space-y-2"
+                  data-testid="manual-player-fallback"
+                  data-manual-player-active={manualPlayerActive ? 'true' : 'false'}
+                >
+                  {manualPlayerActive && manualPlayerCandidates ? (
+                    <div data-testid="manual-player-candidates" className="space-y-2">
+                      <p className="font-semibold text-foreground">
+                        {manualPlayerCandidates.length > 0
+                          ? 'Is this one of these players?'
+                          : 'The suggested players changed and none is similar now.'}
+                      </p>
+                      {manualPlayerCandidates.map((candidate) => {
+                        const inMatchup = manualPlayerCandidateSide(candidate, manualPlayerCandidateSides) !== null;
+                        return (
+                          <Button
+                            key={candidate.participantId}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="mr-2"
+                            data-testid="manual-player-candidate"
+                            data-participant-id={candidate.participantId}
+                            data-in-matchup={inMatchup ? 'true' : 'false'}
+                            disabled={!inMatchup}
+                            title={inMatchup ? undefined : 'On another team, not in this matchup: cannot be picked for this leg'}
+                            onClick={() => selectManualPlayerCandidate(candidate)}
+                          >
+                            {candidate.displayName}
+                            {candidate.teamName ? ` (${candidate.teamName})` : inMatchup ? '' : ' (another team, not in this matchup)'}
+                          </Button>
+                        );
+                      })}
+                      <div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          data-testid="manual-player-none-of-these"
+                          disabled={isSubmitting}
+                          onClick={confirmNoneOfManualPlayerCandidates}
+                        >
+                          {manualPlayerCandidates.length > 0
+                            ? 'None of these: record as unverified player'
+                            : 'Record as unverified player'}
+                        </Button>
+                      </div>
+                      <p>An unverified player is saved without provider verification and with no CLV, as Track Only.</p>
+                    </div>
+                  ) : manualPlayerActive ? (
+                    <>
+                      <p>
+                        <span className="font-semibold text-foreground">Manual entry:</span>{' '}
+                        {watchedValues.playerName?.trim()} is saved as an unverified, manually entered player,
+                        without provider verification and with no CLV, as Track Only.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setManualPlayerRequested(false);
+                          setManualPlayerCandidates(null);
+                        }}
+                      >
+                        Cancel manual entry
+                      </Button>
+                    </>
+                  ) : manualPlayerOffered ? (
+                    <>
+                      <p>The reference player search found no match for this name. That does not prove the player is missing from the reference data.</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        data-testid="manual-player-enter"
+                        onClick={() => {
+                          setManualPlayerRequested(true);
+                          form.setValue('trackOnly', true, { shouldDirty: true });
+                        }}
+                      >
+                        Player not found: enter manually
+                      </Button>
+                      <p>Saved as a manual entry with an unverified identity, without provider verification. Track Only.</p>
+                    </>
+                  ) : (
+                    <p>Waiting for the player search to finish before manual entry is available.</p>
+                  )}
+                </div>
+              ) : null}
             </>
           )}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <FormField
               control={form.control}
               name="eventName"
@@ -3182,11 +3467,11 @@ export function BetForm({
                 <FormItem>
                   <FormLabel>Matchup</FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="e.g. Knicks vs Heat"
-                      readOnly={Boolean(selectedMatchup) || identityMode === 'structured-fallback'}
-                      {...field}
-                    />
+                    {selectedMatchup || identityMode === 'structured-fallback' ? (
+                      <textarea {...field} readOnly rows={4} data-testid="readable-matchup" className="readonly-matchup flex w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm leading-relaxed text-foreground" />
+                    ) : (
+                      <Input placeholder={matchupInputExample(selectedSport)} {...field} />
+                    )}
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -3252,7 +3537,7 @@ export function BetForm({
                   <FormControl>
                     <SignedNumberInput
                       step="0.5"
-                      placeholder="e.g. 24.5"
+                      placeholder={lineInputExample(selectedSport, 'player-prop', watchedValues.statType)}
                       name={field.name}
                       ref={field.ref}
                       onBlur={field.onBlur}
@@ -3631,7 +3916,7 @@ export function BetForm({
                         <FormControl>
                           <SignedNumberInput
                             step="0.5"
-                            placeholder="e.g. 220.5"
+                            placeholder={lineInputExample(selectedSport, 'total')}
                             name={field.name}
                             ref={field.ref}
                             onBlur={field.onBlur}
@@ -3696,7 +3981,7 @@ export function BetForm({
                       <FormControl>
                         <SignedNumberInput
                           step="0.5"
-                          placeholder="e.g. 220.5"
+                          placeholder={lineInputExample(selectedSport, 'total')}
                           name={field.name}
                           ref={field.ref}
                           onBlur={field.onBlur}
@@ -3845,7 +4130,7 @@ export function BetForm({
                         <FormControl>
                           <SignedNumberInput
                             step="0.5"
-                            placeholder="e.g. 112.5"
+                            placeholder={lineInputExample(selectedSport, 'team-total')}
                             name={field.name}
                             ref={field.ref}
                             onBlur={field.onBlur}
@@ -3926,7 +4211,7 @@ export function BetForm({
                     <FormControl>
                       <SignedNumberInput
                         step="0.5"
-                        placeholder="e.g. 112.5"
+                        placeholder={lineInputExample(selectedSport, 'team-total')}
                         name={field.name}
                         ref={field.ref}
                         onBlur={field.onBlur}
@@ -3948,26 +4233,27 @@ export function BetForm({
   }
 
   return (
-    <main className="smart-form-shell min-h-screen px-4 pt-5 pb-36 sm:px-6 sm:pt-8 lg:px-8 lg:pb-12">
-      <header className="smart-form-brand mx-auto mb-8 flex max-w-7xl items-center justify-between gap-4 pb-4">
+    <main id="main-content" className="smart-form-shell min-h-screen px-4 pb-36 sm:px-6 lg:px-8 lg:pb-12">
+      <header className="smart-form-brand mx-auto flex max-w-7xl items-center justify-between gap-4">
         <BrandLogo />
-        <span className="track-only-pill rounded-full px-3 py-1.5 text-xs font-semibold">{watchedValues.trackOnly ? 'Track Only requested' : 'Delivery eligible requested'}</span>
+        <div className="workspace-status"><span className="workspace-edition">SMART FORM <span aria-hidden="true">/</span> PICK INTAKE</span><span className="track-only-pill rounded-full px-3 py-1.5 text-xs font-semibold"><span className="status-dot" aria-hidden="true" />{watchedValues.trackOnly ? 'Track Only requested' : 'Delivery eligible requested'}</span></div>
       </header>
       {missingQaIdentity && (
-        <div role="note" data-testid="missing-qa-identity" className="mx-auto mb-6 max-w-7xl rounded-xl border border-amber-400/40 bg-amber-400/10 p-4 text-sm">
-          <p className="font-semibold">Local QA — no test capper selected</p>
+        <div role="note" data-testid="missing-qa-identity" className="qa-preview-note mx-auto max-w-7xl rounded-xl border border-border px-4 py-3 text-sm">
+          <p className="font-semibold">Preview workspace</p>
           <p className="mt-1 text-muted-foreground">You can explore the form. Saving is disabled until an explicit test identity is available. This preview does not verify real sign-in.</p>
         </div>
       )}
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 lg:flex-row lg:items-start">
-        <div className="w-full space-y-6 lg:max-w-3xl">
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              CAPPER WORKSPACE
-            </p>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-              Build your pick
-            </h1>
+      <div className="workspace-layout mx-auto flex w-full max-w-7xl flex-col gap-8 lg:flex-row">
+        <div className="entry-column w-full space-y-6">
+          <div className="workspace-intro">
+            <p className="eyebrow"><span aria-hidden="true" /> EVERY DETAIL. EVERY EDGE.</p>
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">Build your pick<span className="title-period">.</span></h1>
+            <p className="intro-description">Your read on the game. A clear record of the call.</p>
+            <nav className="workflow-nav" aria-label="Pick entry sections">
+              <a href="#pick-setup"><span>01</span> Setup</a>
+              {selectedSport && <>{shouldRenderPickDetailsSection && <a href="#pick-selection"><span>02</span> Selection</a>}<a href="#pick-review"><span>03</span> Review</a></>}
+            </nav>
           </div>
 
           <Form {...form}>
@@ -3975,12 +4261,12 @@ export function BetForm({
               className="space-y-6"
               onSubmit={form.handleSubmit(onSubmit)}
             >
-              <section className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <section id="pick-setup" className="setup-section space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <div className="section-heading flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <h2 className="text-lg font-semibold text-foreground">1. Sport and date</h2>
+                    <h2 className="text-lg font-semibold text-foreground"><span className="step-number">01</span> Set the stage</h2><p className="section-description">Choose your sport, date, and book.</p>
                   </div>
-                  <div className="inline-flex rounded-full border border-border bg-background p-1">
+                  <div className="entry-mode inline-flex rounded-full border border-border bg-background p-1">
                     <button
                       type="button"
                       className={cn(
@@ -4010,15 +4296,15 @@ export function BetForm({
                   </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="setup-fields grid">
                   <FormField
                     control={form.control}
                     name="sport"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="sport-field">
                         <FormLabel>Sport</FormLabel>
                         <FormControl>
-                          <div data-testid="smart-form-sport-select" className="grid grid-cols-3 gap-2">
+                          <div data-testid="smart-form-sport-select" className="sport-grid grid grid-cols-3 gap-2">
                             {catalog.sports.map((sport: SportDefinition) => {
                               const isSelected = field.value === sport.id;
                               return (
@@ -4031,6 +4317,7 @@ export function BetForm({
                                       ? 'border-primary bg-primary text-primary-foreground shadow-sm'
                                       : 'border-border bg-background text-foreground hover:border-foreground/30 hover:bg-muted',
                                   )}
+                                  aria-pressed={isSelected}
                                   onClick={() => field.onChange(sport.id)}
                                 >
                                   {sport.name}
@@ -4051,7 +4338,7 @@ export function BetForm({
                       <FormItem>
                         <FormLabel>Date</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} value={field.value ?? TODAY} />
+                          <Input type="date" {...field} value={field.value ?? easternDateIso(new Date())} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -4065,11 +4352,11 @@ export function BetForm({
               {renderLiveOfferSection()}
 
               {selectedSport && shouldRenderPickDetailsSection ? (
-                <section ref={marketSectionRef} className="space-y-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <section id="pick-selection" ref={marketSectionRef} className="selection-section space-y-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <h2 className="text-lg font-semibold text-foreground">
-                      {selectedMatchup ? '2. Market and selection' : isTeamSport ? '2. Matchup and selection' : '2. Event and selection'}
+                      <span className="step-number">02</span>{selectedMatchup ? 'Market and selection' : isTeamSport ? 'Matchup and selection' : 'Event and selection'}
                     </h2>
                     <span className="text-xs text-muted-foreground">
                       {shouldShowManualFallback ? 'Manual entry' : 'Selected offer'}
@@ -4242,8 +4529,8 @@ export function BetForm({
                 </section>
               ) : null}
 
-              {selectedSport && <section className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
-                <h2 className="text-lg font-semibold text-foreground">3. Odds and review</h2>
+              {selectedSport && <section id="pick-review" className="review-section space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <h2 className="text-lg font-semibold text-foreground"><span className="step-number">03</span> Price your conviction</h2><p className="section-description">Set your odds, stake, and confidence in the pick.</p>
                 <div className="grid gap-4 md:grid-cols-2">
                   <FormField
                     control={form.control}
@@ -4283,6 +4570,7 @@ export function BetForm({
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
+                              aria-label="Decrease units"
                               onClick={() => field.onChange(clampUnits(((field.value as number | undefined) ?? 1) - UNITS_STEP))}
                               className="rounded-md border border-border px-3 py-1 text-sm font-bold leading-none hover:bg-muted"
                             >
@@ -4293,6 +4581,7 @@ export function BetForm({
                             </span>
                             <button
                               type="button"
+                              aria-label="Increase units"
                               onClick={() => field.onChange(clampUnits(((field.value as number | undefined) ?? 1) + UNITS_STEP))}
                               className="rounded-md border border-border px-3 py-1 text-sm font-bold leading-none hover:bg-muted"
                             >
@@ -4360,7 +4649,7 @@ export function BetForm({
                             Delivery choice
                           </legend>
                           <p className="text-xs leading-relaxed text-muted-foreground">
-                            Track Only is the default. Request official pick delivery only when you deliberately choose it.
+                            Keep this pick in your record, or request delivery to members.
                           </p>
                           <div className="grid gap-3 sm:grid-cols-2">
                             <label className={cn(
@@ -4397,7 +4686,7 @@ export function BetForm({
                               />
                               <span>
                                 <span className="block text-sm font-semibold text-foreground">Request Official Pick Delivery</span>
-                                <span className="block text-xs text-muted-foreground">Delivery eligible requested; the server decides the receipt.</span>
+                                <span className="block text-xs text-muted-foreground">Subject to your permissions. Check the receipt for the delivery outcome.</span>
                               </span>
                             </label>
                           </div>
@@ -4438,7 +4727,7 @@ export function BetForm({
                     Add leg to slip
                   </Button>
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    Build a multi-leg slip to review it. Ticket submission arrives with the parlay ticket API.
+                    Review multiple legs together. Multi-leg submission is not available yet.
                   </p>
                 </div>
               </section>}
@@ -4446,8 +4735,25 @@ export function BetForm({
           </Form>
         </div>
 
-        <div className="w-full lg:max-w-sm">
+        <aside className="slip-column w-full lg:max-w-sm" aria-label="Pick review">
           <BetSlipPanel
+            artwork={identityMode === 'manual' ? undefined : {
+              sport: selectedSport,
+              playerParticipantId: selectedMarketType === 'player-prop'
+                ? eventBrowse?.participants.find(participant => participant.participantType === 'player' &&
+                  (participant.participantId === selectedPlayerId || participant.canonicalId === selectedPlayerId))?.participantId ?? selectedPlayerId
+                : null,
+              teamParticipantId: selectedTeamId
+                ? mediaTeamParticipantId(selectedTeamId, matchupTeams)
+                : selectedMarketType !== 'player-prop' ? matchupTeams[0]?.participantId ?? awayParticipantId : null,
+              secondaryTeamParticipantId: !selectedTeamId && selectedMarketType !== 'player-prop'
+                ? matchupTeams[1]?.participantId ?? homeParticipantId : null,
+              playerName: watchedValues.playerName,
+              teamName: selectedTeamId
+                ? matchupTeams.find(team => team.participantId === selectedTeamId || team.teamId === selectedTeamId)?.displayName ?? watchedValues.team
+                : matchupTeams[0]?.displayName ?? watchedValues.awayParticipantName,
+              secondaryTeamName: matchupTeams[1]?.displayName ?? watchedValues.homeParticipantName,
+            }}
             submissionBlocked={missingQaIdentity}
             values={watchedValues}
             isSubmitting={isSubmitting}
@@ -4458,10 +4764,12 @@ export function BetForm({
             slipRefusal={slipRefusal}
             legRefusals={legRefusals}
             multiLegRefusal={multiLegRefusal}
+            manualPlayerName={manualPlayerActive ? watchedValues.playerName?.trim() || null : null}
           />
-        </div>
+        </aside>
       </div>
 
+      <footer className="workspace-footer mx-auto max-w-7xl"><span>UNIT TALK</span><span>Every pick has a point of view.</span></footer>
       <div className="h-20 lg:hidden" />
       <Separator className="sr-only" />
     </main>

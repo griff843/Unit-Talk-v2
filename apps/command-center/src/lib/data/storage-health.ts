@@ -74,9 +74,13 @@ interface ResolvedManagementEnv {
   projectRef: string;
 }
 
+// WORK-2026110705: `provider_offers` is a view over the frozen quarantine table
+// (size is always 0 and its rows are not current). Storage health tracks the
+// canonical tables the ingestor actually writes.
 const INGESTION_RELATIONS = new Set([
-  'provider_offers',
+  'provider_offer_current',
   'provider_offer_history',
+  'provider_offer_history_compact',
   'provider_cycle_status',
   'system_runs',
 ]);
@@ -194,8 +198,9 @@ async function fetchManagementJson<T>(route: string): Promise<T> {
 const RELATION_SIZES_SQL = `
       with table_sizes as (
         select * from (values
-          ('provider_offers','ingestion'),
+          ('provider_offer_current','ingestion'),
           ('provider_offer_history','ingestion'),
+          ('provider_offer_history_compact','ingestion'),
           ('provider_cycle_status','ingestion'),
           ('system_runs','ingestion'),
           ('picks','app'),
@@ -216,9 +221,11 @@ const RELATION_SIZES_SQL = `
 `;
 
 const RELATION_GROWTH_SQL = `
-      select 'provider_offers' as table_name, count(*)::bigint as rows_last_day from provider_offers where created_at >= now() - interval '1 day'
+      select 'provider_offer_current' as table_name, count(*)::bigint as rows_last_day from provider_offer_current where snapshot_at >= now() - interval '1 day'
       union all
-      select 'provider_offer_history', 0::bigint
+      select 'provider_offer_history', count(*)::bigint from provider_offer_history where snapshot_at >= now() - interval '1 day'
+      union all
+      select 'provider_offer_history_compact', count(*)::bigint from provider_offer_history_compact where snapshot_at >= now() - interval '1 day'
       union all
       select 'provider_cycle_status', count(*)::bigint from provider_cycle_status where updated_at >= now() - interval '1 day'
       union all

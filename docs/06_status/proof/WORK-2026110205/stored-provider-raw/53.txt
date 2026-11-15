@@ -1,0 +1,1 @@
+[{"playerId":"8471685","name":"Anze Kopitar","positionCode":"C","teamId":null,"teamAbbrev":null,"lastTeamId":"26","lastTeamAbbrev":"LAK","lastSeasonId":"20252026","sweaterNumber":11,"active":false,"height":"6'3\"","heightInInches":75,"heightInCentimeters":191,"weightInPounds":225,"weightInKilograms":101,"birthCity":"Jesenice","birthStateProvince":null,"birthCountry":"SVN"}]

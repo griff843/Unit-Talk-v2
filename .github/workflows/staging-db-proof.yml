@@ -44,7 +44,7 @@ concurrency:
 jobs:
   staging-db-proof:
     name: Writable DB proof (staging only)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Binding the environment is what releases CI_SUPABASE_*. No other job in
     # this repository may read them.
     environment: staging-ci

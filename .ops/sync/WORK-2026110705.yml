@@ -1,0 +1,388 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026110705
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026110705
+  objective: Every active app consumer reads correct canonical current, history or
+    snapshot data, and none silently treats frozen quarantine data as current.
+  acceptance_criteria:
+    - "AC1: Active current-offer reads use the canonical current projection."
+    - "AC2: Historical and closing reads preserve history and immutable snapshot
+      semantics."
+    - "AC3: No active customer or operator surface silently treats frozen
+      quarantine data as current."
+    - "AC4: Read permissions and schema compatibility verified against the real
+      schema (types plus read-only catalog check; service-role path)."
+    - "AC5: Tests demonstrate correct behavior using recorded provider data
+      (none exists yet in the repo; build a small recorded fixture from real,
+      non-secret rows; never fabricate provider evidence)."
+    - "AC6: Missing or stale provider data fails safely and stays visible
+      (explicit empty/stale state, never a silent zero or silent fallback to
+      quarantine)."
+    - "AC7: The legacy quarantine table and view are untouched."
+    - "AC8: No ingestion write changes unless a separately confirmed defect
+      requires it."
+    - "AC9: No production DDL, no paid SGO activation, no unrelated refactoring."
+    - "Criteria source: PM correction 2026-11-07, items 1-9. Plus: correct
+      SGO_REACTIVATION_GATE.md section G in the same lane."
+  guardrails:
+    - No production DDL or data change. No provider or SGO activation. No
+      kill-switch, containment or delivery change. No new provider-offer tables.
+    - Normal PR, exact-head CI, independent review. Mission Control SGO view is
+      updated separately, read-only, with explicit timestamps.
+  non_goals: []
+  required_evidence:
+    - "`pnpm type-check`, `pnpm test`, and the issue-specific reader tests;
+      mutation proof that a reader pointed back at the quarantine view fails its
+      test."
+    - "If T1: `pnpm test:db` plus an evidence bundle tied to the merge SHA."
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026110705 — Canonical provider-offer reader correction
+
+      Tier: T1 (PM provisional; confirmed against canonical policy, see Tier
+      rationale)
+
+      Lane type: runtime
+
+      Executor: codex-cli (profile codex-sol-medium)
+
+      Status: PREPARED, NOT STARTED. Admission waits for the grading runtime
+      lane (WORK-2026110704, PR #1837) to release its scope: runtime+runtime is
+      a forbidden concurrency pair.
+
+
+      Source: PM correction of 2026-11-07. Production inspection supersedes the
+      earlier claim that the ingestor writes into the `provider_offers`
+      quarantine view.
+
+
+      ## Tier rationale
+
+
+      `docs/05_operations/DELEGATION_POLICY.md` line 138 classes
+      `packages/db/src/{lifecycle,repositories,runtime-repositories}.ts` as Tier
+      C (T1) and line 30 states the tier label overrides file-scope eligibility.
+      The scope edits `runtime-repositories.ts` and the Smart Form offer read
+      path (customer-facing odds data), so T1 is mechanical, not discretionary.
+      Merge needs `t1-approved` plus a `pm-verdict/v1` APPROVED comment from
+      CODEOWNERS; Tier C plan approval applies. No new Tier C boundary is
+      crossed (no migration, no write path, no delivery routing).
+
+
+      ## Production observations (read-only, dated; re-measure before relying)
+
+
+      - `public.provider_offers` is a plain updatable/insertable VIEW over
+      `provider_offers_legacy_quarantine` (under prune hold). It is frozen
+      quarantine-era data.
+
+      - The ingestor repository writes the canonical tables:
+      `provider_offer_staging`, `provider_offer_current` (PK `identity_key`,
+      current projection), `provider_offer_history` (daily partitioned),
+      `provider_offer_history_compact`, `provider_offer_line_snapshots`. Write
+      path inspected, no current defect established.
+
+      - RLS is enabled with no policies on these tables (service_role only).
+      Reader changes must stay on the server-side service-role path.
+
+
+      ## Code findings (not production observations)
+
+
+      | Reader | Location | Reads today | Intended semantics |
+
+      |---|---|---|---|
+
+      | Smart Form event offers | `loadEventOffers`,
+      `packages/db/src/runtime-repositories.ts` (~7978) | `provider_offers` view
+      | CURRENT offers: read `provider_offer_current`; distinct stale/empty
+      state |
+
+      | Execution-quality summaries | `DatabaseExecutionQualityRepository`
+      (~8846) | `provider_offers` view | HISTORICAL: read
+      `provider_offer_history_compact`; surface sample size and latest observed
+      time |
+
+      | Command Center storage health |
+      `apps/command-center/src/lib/data/storage-health.ts`,
+      `ApiHealthMonitoring.tsx` | view / hardcoded 0 history growth | Query live
+      canonical tables; show last-write age |
+
+      | Closing-data availability | `apps/api/src/routes/config.ts` |
+      `listRecentOffers` -> `provider_offer_history`, but `catch -> 0` and a
+      10k-row cap | History is correct; make failure and truncation visible, not
+      silent zero |
+
+      | SGO gate doc | `docs/05_operations/SGO_REACTIVATION_GATE.md` section G |
+      states the stale write-path claim | Correct only that statement; preserve
+      all other activation requirements |
+
+
+      Not every legacy reference is replaced: each reader's intended semantics
+      (current vs history vs immutable snapshot) is established first, and a
+      reader already on the right canonical table is left alone.
+
+
+      Separate narrow defect (not a quarantine-view read): the `config.ts`
+      closing-data availability handler reads `provider_offer_history` correctly
+      but converts any read error into `0`, which is indistinguishable from "no
+      closing data". It is evaluated and fixed on its own terms (failure becomes
+      visible; the 10k-row cap becomes visible), with its own test and its own
+      line in the PR and proof, not folded into the quarantine-reader story.
+
+
+      Wiring of the execution-quality repository must be confirmed before
+      changing it (it appeared unwired). Do not change a reader whose data
+      semantics are not first established.
+
+
+      ## Allowed file scope (to be tightened by `ops:scope-suggest` at lane
+      start)
+
+
+      - `packages/db/src/runtime-repositories.ts` reader methods only, plus
+      their tests
+
+      - `apps/command-center/src/lib/data/storage-health.ts`,
+      `apps/command-center/src/components/ApiHealthMonitoring.tsx` and tests
+
+      - `apps/api/src/routes/config.ts` (closing-data availability only) and
+      tests
+
+      - `docs/05_operations/SGO_REACTIVATION_GATE.md` (section G only)
+
+      - `.ops/work/WORK-2026110705.md`, `docs/06_status/proof/WORK-2026110705/`
+
+
+      ## Required regression proof (named tests)
+
+
+      1. Current-offer read: Smart Form event-offer load returns rows from the
+      canonical current projection for recorded provider data, and a frozen
+      quarantine row for the same event is NOT returned.
+
+      2. Historical closing data: closing/history reads still return history and
+      immutable snapshot rows (unchanged semantics) for recorded data.
+
+      3. Stale-data refusal: when the newest canonical observation is older than
+      the freshness bound, readers return an explicit stale state, never stale
+      offers presented as current and never a fallback to quarantine.
+
+      4. Failure visibility: a repository read error surfaces as an error or
+      explicit unavailable state (config route included), never a silent zero or
+      empty list.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026110705.md
+    title: WORK-2026110705 — Canonical provider-offer reader correction
+    description: >-
+      # WORK-2026110705 — Canonical provider-offer reader correction
+
+
+      Tier: T1 (PM provisional; confirmed against canonical policy, see Tier
+      rationale)
+
+      Lane type: runtime
+
+      Executor: codex-cli (profile codex-sol-medium)
+
+      Status: PREPARED, NOT STARTED. Admission waits for the grading runtime
+      lane (WORK-2026110704, PR #1837) to release its scope: runtime+runtime is
+      a forbidden concurrency pair.
+
+
+      Source: PM correction of 2026-11-07. Production inspection supersedes the
+      earlier claim that the ingestor writes into the `provider_offers`
+      quarantine view.
+
+
+      ## Tier rationale
+
+
+      `docs/05_operations/DELEGATION_POLICY.md` line 138 classes
+      `packages/db/src/{lifecycle,repositories,runtime-repositories}.ts` as Tier
+      C (T1) and line 30 states the tier label overrides file-scope eligibility.
+      The scope edits `runtime-repositories.ts` and the Smart Form offer read
+      path (customer-facing odds data), so T1 is mechanical, not discretionary.
+      Merge needs `t1-approved` plus a `pm-verdict/v1` APPROVED comment from
+      CODEOWNERS; Tier C plan approval applies. No new Tier C boundary is
+      crossed (no migration, no write path, no delivery routing).
+
+
+      ## Production observations (read-only, dated; re-measure before relying)
+
+
+      - `public.provider_offers` is a plain updatable/insertable VIEW over
+      `provider_offers_legacy_quarantine` (under prune hold). It is frozen
+      quarantine-era data.
+
+      - The ingestor repository writes the canonical tables:
+      `provider_offer_staging`, `provider_offer_current` (PK `identity_key`,
+      current projection), `provider_offer_history` (daily partitioned),
+      `provider_offer_history_compact`, `provider_offer_line_snapshots`. Write
+      path inspected, no current defect established.
+
+      - RLS is enabled with no policies on these tables (service_role only).
+      Reader changes must stay on the server-side service-role path.
+
+
+      ## Code findings (not production observations)
+
+
+      | Reader | Location | Reads today | Intended semantics |
+
+      |---|---|---|---|
+
+      | Smart Form event offers | `loadEventOffers`,
+      `packages/db/src/runtime-repositories.ts` (~7978) | `provider_offers` view
+      | CURRENT offers: read `provider_offer_current`; distinct stale/empty
+      state |
+
+      | Execution-quality summaries | `DatabaseExecutionQualityRepository`
+      (~8846) | `provider_offers` view | HISTORICAL: read
+      `provider_offer_history_compact`; surface sample size and latest observed
+      time |
+
+      | Command Center storage health |
+      `apps/command-center/src/lib/data/storage-health.ts`,
+      `ApiHealthMonitoring.tsx` | view / hardcoded 0 history growth | Query live
+      canonical tables; show last-write age |
+
+      | Closing-data availability | `apps/api/src/routes/config.ts` |
+      `listRecentOffers` -> `provider_offer_history`, but `catch -> 0` and a
+      10k-row cap | History is correct; make failure and truncation visible, not
+      silent zero |
+
+      | SGO gate doc | `docs/05_operations/SGO_REACTIVATION_GATE.md` section G |
+      states the stale write-path claim | Correct only that statement; preserve
+      all other activation requirements |
+
+
+      Not every legacy reference is replaced: each reader's intended semantics
+      (current vs history vs immutable snapshot) is established first, and a
+      reader already on the right canonical table is left alone.
+
+
+      Separate narrow defect (not a quarantine-view read): the `config.ts`
+      closing-data availability handler reads `provider_offer_history` correctly
+      but converts any read error into `0`, which is indistinguishable from "no
+      closing data". It is evaluated and fixed on its own terms (failure becomes
+      visible; the 10k-row cap becomes visible), with its own test and its own
+      line in the PR and proof, not folded into the quarantine-reader story.
+
+
+      Wiring of the execution-quality repository must be confirmed before
+      changing it (it appeared unwired). Do not change a reader whose data
+      semantics are not first established.
+
+
+      ## Objective
+
+
+      Every active app consumer reads correct canonical current, history or
+      snapshot data, and none silently treats frozen quarantine data as current.
+
+
+      ## Allowed file scope (to be tightened by `ops:scope-suggest` at lane
+      start)
+
+
+      - `packages/db/src/runtime-repositories.ts` reader methods only, plus
+      their tests
+
+      - `apps/command-center/src/lib/data/storage-health.ts`,
+      `apps/command-center/src/components/ApiHealthMonitoring.tsx` and tests
+
+      - `apps/api/src/routes/config.ts` (closing-data availability only) and
+      tests
+
+      - `docs/05_operations/SGO_REACTIVATION_GATE.md` (section G only)
+
+      - `.ops/work/WORK-2026110705.md`, `docs/06_status/proof/WORK-2026110705/`
+
+
+      ## Acceptance Criteria
+
+
+      - AC1: Active current-offer reads use the canonical current projection.
+
+      - AC2: Historical and closing reads preserve history and immutable
+      snapshot semantics.
+
+      - AC3: No active customer or operator surface silently treats frozen
+      quarantine data as current.
+
+      - AC4: Read permissions and schema compatibility verified against the real
+      schema (types plus read-only catalog check; service-role path).
+
+      - AC5: Tests demonstrate correct behavior using recorded provider data
+      (none exists yet in the repo; build a small recorded fixture from real,
+      non-secret rows; never fabricate provider evidence).
+
+      - AC6: Missing or stale provider data fails safely and stays visible
+      (explicit empty/stale state, never a silent zero or silent fallback to
+      quarantine).
+
+      - AC7: The legacy quarantine table and view are untouched.
+
+      - AC8: No ingestion write changes unless a separately confirmed defect
+      requires it.
+
+      - AC9: No production DDL, no paid SGO activation, no unrelated
+      refactoring.
+
+
+      Criteria source: PM correction 2026-11-07, items 1-9. Plus: correct
+      SGO_REACTIVATION_GATE.md section G in the same lane.
+
+
+      ## Required regression proof (named tests)
+
+
+      1. Current-offer read: Smart Form event-offer load returns rows from the
+      canonical current projection for recorded provider data, and a frozen
+      quarantine row for the same event is NOT returned.
+
+      2. Historical closing data: closing/history reads still return history and
+      immutable snapshot rows (unchanged semantics) for recorded data.
+
+      3. Stale-data refusal: when the newest canonical observation is older than
+      the freshness bound, readers return an explicit stale state, never stale
+      offers presented as current and never a fallback to quarantine.
+
+      4. Failure visibility: a repository read error surfaces as an error or
+      explicit unavailable state (config route included), never a silent zero or
+      empty list.
+
+
+      ## Guardrails
+
+
+      - No production DDL or data change. No provider or SGO activation. No
+      kill-switch, containment or delivery change. No new provider-offer tables.
+
+      - Normal PR, exact-head CI, independent review. Mission Control SGO view
+      is updated separately, read-only, with explicit timestamps.
+
+
+      ## Required Evidence
+
+
+      - `pnpm type-check`, `pnpm test`, and the issue-specific reader tests;
+      mutation proof that a reader pointed back at the quarantine view fails its
+      test.
+
+      - If T1: `pnpm test:db` plus an evidence bundle tied to the merge SHA.
+    captured_at: 2026-11-08T18:40:32.746Z
+    description_sha256: 7c4b6362fb50bc6b5c39f56847e7e16540e5d1ca57ae3aee819279e64e3ac9fa
+  contract_hash: bde4e55e176fb44aae7af1eb4b5ad421e59994d9977c34a148fd65c23d80ea82

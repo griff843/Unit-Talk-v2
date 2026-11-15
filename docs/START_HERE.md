@@ -158,7 +158,7 @@ PR title, body, and commit messages must not mention other `UTV2-###` IDs. Write
 | `docs/05_operations/docs_authority_map.md` | Ranked doc authority; conflict resolution rules |
 | `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md` | SGO / odds provider integration knowledge |
 | `docs/05_operations/r1-r5-rules.json` | R-level verification rule definitions |
-| `docs/06_status/PROGRAM_STATUS.md` | High-level program status at its stated update time |
+| `docs/06_status/CURRENT_STATE.md` | Dated program-status snapshot: read its "Last verified" line; live evidence and `docs/mission/plan.md` override it. `PROGRAM_STATUS.md` is superseded audit history, not a status source |
 | `docs/06_status/KNOWN_DEBT.md` | Known-debt pointer index |
 | `docs/06_status/proof/PROOF-TEMPLATE.md` | Simple proof template (T2/T3) |
 | `docs/05_operations/schemas/executor-result-v1.md` | Executor result schema |

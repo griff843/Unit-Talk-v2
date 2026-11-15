@@ -54,7 +54,7 @@ export async function handleSubmitPick(
     );
   } catch (error) {
     const apiError = normalizeApiError(error);
-    return errorResponse(apiError.status, apiError.code, apiError.message);
+    return errorResponse(apiError.status, apiError.code, apiError.message, apiError.details);
   }
 }
 

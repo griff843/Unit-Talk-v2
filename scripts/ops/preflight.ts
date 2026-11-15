@@ -49,6 +49,7 @@ import {
   DEFAULT_VERIFY_SEMAPHORE_DIR,
   acquireVerifySlot,
 } from './verify-semaphore.js';
+import { assertSingleIssueArgs } from './cli-args-guard.js';
 
 type PreflightVerdict = PreflightResult['verdict'];
 type LinearIssueRecord = {
@@ -203,6 +204,16 @@ async function main(): Promise<number> {
         status: 'fail',
         detail: !tierFlag ? 'Missing required --tier' : 'Missing required --branch',
       },
+    ]);
+    writeOutput(result, json);
+    return 1;
+  }
+
+  try {
+    assertSingleIssueArgs(positionals, flags);
+  } catch (error) {
+    const result = minimalFailureResult(issueId, branch, tierFlag, 'FAIL', [
+      { id: 'ARGS', status: 'fail', detail: error instanceof Error ? error.message : String(error) },
     ]);
     writeOutput(result, json);
     return 1;

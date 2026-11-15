@@ -1,0 +1,216 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026103006
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026103006
+  objective: "WORK-2026103006 — Worker: a missing kill-switch repository fails closed"
+  acceptance_criteria:
+    - "`pnpm verify` green in CI at the exact head."
+    - The mutation is recorded.
+    - No existing worker test is deleted or loosened.
+  guardrails: []
+  non_goals:
+    - Destination audience checks (WORK-2026103008), the API, production data,
+      kill-switch rows, deploys.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026103006 — Worker: a missing kill-switch repository fails closed
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). Tier
+      raised to T1 at admission: preflight PE2 derives a T1 floor from the
+      worker runtime scope. Part of Griff's 2026-10-30 private-canary
+      preparation. No production mutation is authorized.
+
+
+      ## Defect
+
+
+      `apps/worker/src/runner.ts:294-311` (UTV2-1427) checks the delivery kill
+      switch only `if (killSwitchTarget !== null &&
+      options.repositories.killSwitch)`. A repository bundle without
+      `killSwitch` **skips** the check and delivers. The comment calls this
+      deliberate for partial test fakes.
+
+
+      Both real bundles provide `killSwitch` today, so production is not
+      exposed. The rule is still fail-open, and the delivery-to-recap canary
+      relies on the kill switch as its release control.
+
+
+      ## Required behavior
+
+
+      1. A governed `discord:` target (every `discord:` target except the
+      documented `discord:canary` exemption) with **no** kill-switch repository
+      is treated as **killed**.
+         - Log it with `logDeliberateDeliverySkip` and a distinct event name, e.g. `worker.delivery-skipped-kill-switch-unwired`.
+         - Return a result that is distinguishable from an engaged switch.
+         - Nothing is claimed or posted.
+      2. A kill-switch read that throws or rejects is treated as killed. Confirm
+      whether `isKilled` already guarantees this. If the runner can still
+      observe a throw, contain it fail-closed.
+
+      3. `discord:canary` stays exempt, as documented at `runner.ts:272-274`. Do
+      not widen or narrow the exemption.
+
+      4. Update the partial test fakes that relied on the skip so they provide
+      an explicit kill-switch stub. Do not weaken any existing assertion.
+
+
+      ## Adversarial tests (node:test)
+
+
+      - A bundle without `killSwitch`, with a pending `discord:official-picks`
+      row: not delivered, adapter never called, the row stays claimable/pending,
+      and the distinct skip result is returned.
+
+      - The same for `best-bets`, `trader-insights`, `exclusive-insights`, and
+      an unrecognized `discord:foo`.
+
+      - `isKilled` throws or rejects: not delivered.
+
+      - `discord:canary` with no kill-switch repository: behavior unchanged (the
+      exemption is preserved), asserted explicitly.
+
+      - A released switch (`isKilled` → false) still delivers, so the fix
+      doesn't brick delivery.
+
+      - **Mutation:** restoring the `&& options.repositories.killSwitch` skip
+      makes the unwired-bundle test fail. Record this in the proof.
+
+
+      ## File Scope
+
+
+      - apps/worker/src/runner.ts
+
+      - the worker test file(s) covering the runner cycle (e.g.
+      apps/worker/src/worker-runtime.test.ts) and any fake-bundle helper they
+      use
+
+      - package.json only if a new test file must be registered
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026103006.md
+    title: "WORK-2026103006 — Worker: a missing kill-switch repository fails closed"
+    description: >-
+      # WORK-2026103006 — Worker: a missing kill-switch repository fails closed
+
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). Tier
+      raised to T1 at admission: preflight PE2 derives a T1 floor from the
+      worker runtime scope. Part of Griff's 2026-10-30 private-canary
+      preparation. No production mutation is authorized.
+
+
+      ## Defect
+
+
+      `apps/worker/src/runner.ts:294-311` (UTV2-1427) checks the delivery kill
+      switch only `if (killSwitchTarget !== null &&
+      options.repositories.killSwitch)`. A repository bundle without
+      `killSwitch` **skips** the check and delivers. The comment calls this
+      deliberate for partial test fakes.
+
+
+      Both real bundles provide `killSwitch` today, so production is not
+      exposed. The rule is still fail-open, and the delivery-to-recap canary
+      relies on the kill switch as its release control.
+
+
+      ## Required behavior
+
+
+      1. A governed `discord:` target (every `discord:` target except the
+      documented `discord:canary` exemption) with **no** kill-switch repository
+      is treated as **killed**.
+         - Log it with `logDeliberateDeliverySkip` and a distinct event name, e.g. `worker.delivery-skipped-kill-switch-unwired`.
+         - Return a result that is distinguishable from an engaged switch.
+         - Nothing is claimed or posted.
+      2. A kill-switch read that throws or rejects is treated as killed. Confirm
+      whether `isKilled` already guarantees this. If the runner can still
+      observe a throw, contain it fail-closed.
+
+      3. `discord:canary` stays exempt, as documented at `runner.ts:272-274`. Do
+      not widen or narrow the exemption.
+
+      4. Update the partial test fakes that relied on the skip so they provide
+      an explicit kill-switch stub. Do not weaken any existing assertion.
+
+
+      ## Adversarial tests (node:test)
+
+
+      - A bundle without `killSwitch`, with a pending `discord:official-picks`
+      row: not delivered, adapter never called, the row stays claimable/pending,
+      and the distinct skip result is returned.
+
+      - The same for `best-bets`, `trader-insights`, `exclusive-insights`, and
+      an unrecognized `discord:foo`.
+
+      - `isKilled` throws or rejects: not delivered.
+
+      - `discord:canary` with no kill-switch repository: behavior unchanged (the
+      exemption is preserved), asserted explicitly.
+
+      - A released switch (`isKilled` → false) still delivers, so the fix
+      doesn't brick delivery.
+
+      - **Mutation:** restoring the `&& options.repositories.killSwitch` skip
+      makes the unwired-bundle test fail. Record this in the proof.
+
+
+      ## Out of scope
+
+
+      Destination audience checks (WORK-2026103008), the API, production data,
+      kill-switch rows, deploys.
+
+
+      ## Acceptance Criteria
+
+
+      - `pnpm verify` green in CI at the exact head.
+
+      - The mutation is recorded.
+
+      - No existing worker test is deleted or loosened.
+
+
+      ## File Scope
+
+
+      - apps/worker/src/runner.ts
+
+      - the worker test file(s) covering the runner cycle (e.g.
+      apps/worker/src/worker-runtime.test.ts) and any fake-bundle helper they
+      use
+
+      - package.json only if a new test file must be registered
+    captured_at: 2026-11-01T15:27:39.108Z
+    description_sha256: 3d38e57a3fed48263db894466f51a0a433446cac83d3ee5892aeb7318ed9f1b4
+  contract_hash: 807ea0609392913a36331dcae00ed71e8e579385169cff4d54d2ec9ef873997a

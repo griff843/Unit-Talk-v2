@@ -1,0 +1,283 @@
+{
+  "schema": "experience-qa/v1",
+  "runId": "2026-10-27T14-16-19-ys2e14",
+  "product": "unit-talk",
+  "surface": "smart_form",
+  "persona": "operator",
+  "flow": "canonical_media_preview",
+  "environment": "local",
+  "headSha": "f03d9be42",
+  "timestamp": "2026-10-27T14:16:19.372Z",
+  "mode": "fast",
+  "status": "PASS",
+  "verdictReason": "Browser steps passed and required expectations passed.",
+  "preflightResults": [
+    {
+      "id": "local_form_reachable",
+      "status": "passed",
+      "required": true,
+      "message": "local Smart Form returned HTTP 200.",
+      "evidence": {
+        "url": "http://127.0.0.1:4107/submit",
+        "status": 200,
+        "location": null
+      }
+    }
+  ],
+  "steps": [
+    {
+      "step": "Actual Smart Form media at 1440px",
+      "status": "pass",
+      "detail": "Exact fixture identity; authentic unchanged NBA source image and team crest; readable select contrast; no horizontal overflow; no submission attempted.",
+      "screenshotPath": "/home/griff843/code/Unit-Talk-v2/.out/local-drafts/WORK-2026102703/apps/qa-agent/artifacts/work-2026102703/2026-10-27T14-16-19-ys2e14/actual-media-1440.png",
+      "timestamp": "2026-10-27T14:16:25.148Z",
+      "durationMs": 531
+    },
+    {
+      "step": "Actual Smart Form media at 390px",
+      "status": "pass",
+      "detail": "Exact fixture identity; authentic unchanged NBA source image and team crest; readable select contrast; no horizontal overflow; no submission attempted.",
+      "screenshotPath": "/home/griff843/code/Unit-Talk-v2/.out/local-drafts/WORK-2026102703/apps/qa-agent/artifacts/work-2026102703/2026-10-27T14-16-19-ys2e14/actual-media-390.png",
+      "timestamp": "2026-10-27T14:16:25.483Z",
+      "durationMs": 335
+    },
+    {
+      "step": "Actual Smart Form media at 320px",
+      "status": "pass",
+      "detail": "Exact fixture identity; authentic unchanged NBA source image and team crest; readable select contrast; no horizontal overflow; no submission attempted.",
+      "screenshotPath": "/home/griff843/code/Unit-Talk-v2/.out/local-drafts/WORK-2026102703/apps/qa-agent/artifacts/work-2026102703/2026-10-27T14-16-19-ys2e14/actual-media-320.png",
+      "timestamp": "2026-10-27T14:16:25.742Z",
+      "durationMs": 259
+    }
+  ],
+  "expectationResults": [],
+  "observations": [
+    "Local fixture-backed visual evidence against the actual React form, not a production-data or real-authentication claim.",
+    "NBA preview images are unchanged public-source assets already used in the approved media-direction preview.",
+    "Submission behavior, stale identity, retry, wrong-team and broken-image checks are separately exercised by the node:test browser suite.",
+    "No production picks, backfills or Discord sends occurred."
+  ],
+  "selectorResults": [],
+  "screenshots": [
+    "/home/griff843/code/Unit-Talk-v2/.out/local-drafts/WORK-2026102703/apps/qa-agent/artifacts/work-2026102703/2026-10-27T14-16-19-ys2e14/actual-media-1440.png",
+    "/home/griff843/code/Unit-Talk-v2/.out/local-drafts/WORK-2026102703/apps/qa-agent/artifacts/work-2026102703/2026-10-27T14-16-19-ys2e14/actual-media-390.png",
+    "/home/griff843/code/Unit-Talk-v2/.out/local-drafts/WORK-2026102703/apps/qa-agent/artifacts/work-2026102703/2026-10-27T14-16-19-ys2e14/actual-media-320.png",
+    "/home/griff843/code/Unit-Talk-v2/.out/local-drafts/WORK-2026102703/apps/qa-agent/artifacts/work-2026102703/2026-10-27T14-16-19-ys2e14/actual-media-1440.png",
+    "/home/griff843/code/Unit-Talk-v2/.out/local-drafts/WORK-2026102703/apps/qa-agent/artifacts/work-2026102703/2026-10-27T14-16-19-ys2e14/actual-media-390.png",
+    "/home/griff843/code/Unit-Talk-v2/.out/local-drafts/WORK-2026102703/apps/qa-agent/artifacts/work-2026102703/2026-10-27T14-16-19-ys2e14/actual-media-320.png"
+  ],
+  "consoleErrors": [
+    "Pattern attribute value [+-]?[0-9]+ is not a valid regular expression: Uncaught SyntaxError: Invalid regular expression: /[+-]?[0-9]+/v: Invalid character in character class"
+  ],
+  "networkErrors": [],
+  "networkObservations": [
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/submit",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/media/0e96d314a90a6138-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/media/1f54c84255ccf44e-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/media/1ba0a863e6af8aeb-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/media/3667c091265cf81b-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/media/437e5f23c97e320c-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/media/5fb5c05ff73c0616-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/css/vendors-_app-pages-browser_node_modules_pnpm_lucide-react_0_331_0_react_18_3_1_node_modules_l-60408e.css?v=1793110579808",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/css/app/layout.css?v=1793110579808",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/media/61d96c4884191721-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/media/b0bb26939bb40fdb-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/media/b7ea2ab4a8ad1f81-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/media/60c9b95e8d9e49be-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/media/d7df244fe7b07b95-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/chunks/next-router-shared.js?v=1793110579808",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/chunks/webpack.js?v=1793110579808",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/chunks/main-app.js?v=1793110579808",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/chunks/app-pages-internals.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/chunks/vendors-_app-pages-browser_node_modules_pnpm_next_15_5_21__babel_core_7_29_6__playwright_test-843873.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/chunks/_app-pages-browser_components_ui_use-toast_ts-_app-pages-browser_lib_utils_ts.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/chunks/app/layout.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/chunks/vendors-_app-pages-browser_node_modules_pnpm_lucide-react_0_331_0_react_18_3_1_node_modules_l-60408e.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/chunks/vendors-_app-pages-browser_node_modules_pnpm_lucide-react_0_331_0_react_18_3_1_node_modules_l-4c33b1.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/chunks/vendors-_app-pages-browser_node_modules_pnpm_lucide-react_0_331_0_react_18_3_1_node_modules_l-d8b241.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/chunks/app/submit/page.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/_next/static/chunks/vendors-_app-pages-browser_node_modules_pnpm_next_15_5_21__babel_core_7_29_6__playwright_test-70890b.js?v=1793110579808",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/api/auth/session",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4000/api/reference-data/catalog",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4000/api/reference-data/catalog",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4107/api/auth/session",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4000/api/reference-data/availability?sport=NBA",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4000/api/reference-data/search/teams?q=Minnesota+Timberwolves&sport=NBA",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4000/api/reference-data/search/teams?q=Phoenix+Suns&sport=NBA",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4000/api/reference-data/participants/fixture-nba-team-0/media",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "https://cdn.nba.com/unit-talk-fixture/fixture-nba-team-0.png",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4000/api/reference-data/search/players?q=Anthony+Edwards&sport=NBA&teamId=fixture-nba-team-0",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4000/api/reference-data/search?sport=NBA&date=2026-10-27&q=Anthony+Edwards",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4000/api/reference-data/participants/fixture-nba-player-0/media",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4000/api/reference-data/participants/fixture-nba-team-0/media",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "https://cdn.nba.com/unit-talk-fixture/fixture-nba-team-0.png",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "https://cdn.nba.com/unit-talk-fixture/fixture-nba-player-0.png",
+      "status": 200
+    }
+  ],
+  "uxFriction": [],
+  "regressionRecommendations": [],
+  "durationMs": 6415
+}

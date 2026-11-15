@@ -1,3 +1,4 @@
+import { isManualPlayerProvenance } from '@unit-talk/contracts';
 import { americanToImplied, applyDevig } from '@unit-talk/domain';
 import type {
   EventParticipantRepository,
@@ -115,7 +116,12 @@ export type CLVComputationStatus =
   | 'missing_event_context'
   | 'missing_closing_line'
   | 'missing_priced_side'
-  | 'devig_failed';
+  | 'devig_failed'
+  // WORK-2026110802: the pick's player was entered by hand with an unverified identity (current
+  // or legacy provenance). No reference data backs that player, so no closing line can be
+  // attributed to it and CLV is never computed -- not even when the typed name happens to
+  // equal a catalog name.
+  | 'manual_player_unverified_identity';
   // 'opening_line_fallback' removed by INIT-4.3.2 — CLV quarantines on missing close
 
 export interface CLVComputationOutcome {
@@ -225,6 +231,20 @@ export async function computeCLVOutcome(
   },
   options: ComputeAndAttachClvOptions = {},
 ): Promise<CLVComputationOutcome> {
+  // WORK-2026110802 MANUAL_PLAYER_CLV_EXCLUSION_START
+  // First, before every resolution path (market-universe provenance, a caller's
+  // pre-resolved context, and the metadata.player name fallback): a manual, unverified
+  // player makes no provider-verified or CLV claim (docs/mission/intent.md, manual
+  // fallback "claims neither provider verification nor CLV").
+  if (isManualPlayerUnverifiedIdentityPick(pick)) {
+    return {
+      result: null,
+      status: 'manual_player_unverified_identity',
+      resolvedMarketKey: null,
+      availableMarkets: [],
+    };
+  }
+  // WORK-2026110802 MANUAL_PLAYER_CLV_EXCLUSION_END
   if (!Number.isFinite(pick.odds ?? null)) {
     return {
       result: null,
@@ -899,13 +919,22 @@ function isClvComparableOffer(offer: ProviderOfferRecord): offer is ClvComparabl
  * Resolve participant_id for a pick.
  * Priority: pick.participant_id → fuzzy name match from metadata.player + metadata.sport.
  * Returns null if no unambiguous match is found (fail-open: CLV stays null).
+ * Exported for the WORK-2026110802 test that pins its manual-player guard directly: through
+ * computeCLVOutcome that guard is shadowed by the earlier exclusion.
  */
-async function resolveParticipantId(
+export async function resolveParticipantId(
   pick: PickRecord,
   participants: ParticipantRepository,
 ): Promise<string | null> {
   if (pick.participant_id) {
     return pick.participant_id;
+  }
+
+  // WORK-2026110802: never launder a manual, unverified player into a canonical
+  // participant by name. computeCLVOutcome already refuses these picks; this keeps the
+  // fallback itself closed for any future caller.
+  if (isManualPlayerUnverifiedIdentityPick(pick)) {
+    return null;
   }
 
   const metadata = asRecord(pick.metadata);
@@ -922,6 +951,23 @@ async function resolveParticipantId(
 
   // Require exactly one match to avoid ambiguity (same logic as grading service)
   return matches.length === 1 ? (matches[0]?.id ?? null) : null;
+}
+
+/**
+ * True when the pick's player was entered by hand with an unverified identity: the
+ * server-stamped `metadata.playerProvenance` (the current `manual-unverified-identity` OR the
+ * legacy `manual-coverage-gap`, which stored rows keep), or a
+ * `participantResolution.manualPlayer` of any reason. Any one marker is sufficient, so a pick
+ * carrying only one of them still gets no CLV, no automatic grading and no name resolution.
+ */
+export function isManualPlayerUnverifiedIdentityPick(pick: Pick<PickRecord, 'metadata'>): boolean {
+  const metadata = asRecord(pick.metadata);
+  if (isManualPlayerProvenance(metadata['playerProvenance'])) {
+    return true;
+  }
+  const resolution = asRecord(metadata['participantResolution']);
+  const manualPlayer = resolution['manualPlayer'];
+  return manualPlayer !== undefined && manualPlayer !== null;
 }
 
 function normalizeName(value: string): string {

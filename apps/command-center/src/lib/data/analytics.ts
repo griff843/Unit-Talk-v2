@@ -40,6 +40,7 @@ export interface Stats {
   unpriced: number;
   avgScore: number | null;
   avgClvPct: number | null;
+  clvSampleSize?: number;
   avgStakeUnits: number | null;
 }
 
@@ -310,6 +311,7 @@ export function computeStats(rows: Row[]): Stats {
     unpriced,
     avgScore,
     avgClvPct,
+    clvSampleSize: clvCount,
     avgStakeUnits,
   };
 }

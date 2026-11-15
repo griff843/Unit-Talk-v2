@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026103009",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "21d4b26fd60bd6991d3e1e8c8b6fccfab83587e9",
+    "verified_source_sha": "a0d37b760db24646c36bea6515001150d4ce7292",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-11-01T15:28:26.277Z"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm test",
+    "conclusion": "success",
+    "verified_source_sha": "a0d37b760db24646c36bea6515001150d4ce7292",
+    "full_suite": {
+      "command": "pnpm test",
+      "tests": 7749,
+      "pass": 7736,
+      "fail": 0,
+      "skipped": 13
+    },
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ci/staging-path-enforcement.test.ts",
+      "tests": 51,
+      "pass": 51,
+      "fail": 0,
+      "skipped": 0
+    },
+    "type_check": "pass (direct tsc of the two changed scripts/ci files; pnpm type-check does not cover scripts/)",
+    "r_level": "PASS",
+    "mutation_checks": "12 of 12 caught on a0d37b760",
+    "note": "Measured on a0d37b760db24646c36bea6515001150d4ce7292. Corrected after the PM T1 review of #1813 (CHANGES REQUIRED at 1013741c2). Protected exact-head CI and the staging DB receipt remain pending."
+  },
+  "db_verification": {
+    "command": "pnpm test:db",
+    "status": "blocked_deferred_to_protected_ci",
+    "required_staging_ref": "xskgrzbteyqdufktjrjx",
+    "production_accessed": false,
+    "write_attempted": false
+  }
+}

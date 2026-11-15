@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import http from 'node:http';
 import net from 'node:net';
@@ -6,6 +7,7 @@ import { PassThrough, Transform } from 'node:stream';
 import { test } from 'node:test';
 import {
   BridgeArgumentError,
+  buildRemoteCommand,
   buildSshArgs,
   createBridgeServer,
   evaluateHealthResponse,
@@ -100,9 +102,12 @@ test('unknown arguments are refused rather than ignored', () => {
   assert.throws(() => parseBridgeArgs(['--insecure']), BridgeArgumentError);
 });
 
-test('ssh runs a shell-exec nc to the host loopback and asks for no forwarding', () => {
+test('ssh runs a shell relay to the host loopback and asks for no forwarding', () => {
   const args = buildSshArgs('unit-talk-prod', 4300);
-  assert.equal(args.at(-1), 'nc 127.0.0.1 4300');
+  assert.equal(
+    args.at(-1),
+    "exec bash -c 'exec 3<>/dev/tcp/127.0.0.1/4300 || exit 1; cat <&0 >&3 & w=$!; cat <&3; kill $w 2>/dev/null'",
+  );
   assert.equal(args.at(-2), 'unit-talk-prod');
   // '--' ends ssh option parsing, so neither the host nor the command can be read as an option.
   assert.equal(args.at(-3), '--');
@@ -120,8 +125,12 @@ test('buildSshArgs re-validates its own inputs rather than trusting the caller',
   for (const port of [0, -1, 65536, 43.5, Number.NaN]) {
     assert.throws(() => buildSshArgs('unit-talk-prod', port), BridgeArgumentError, String(port));
   }
+  for (const port of [0, -1, 65536, 43.5, Number.NaN]) {
+    assert.throws(() => buildRemoteCommand(port), BridgeArgumentError, String(port));
+  }
   // The only shell-interpreted argument is a literal plus an integer.
-  assert.match(buildSshArgs('deploy@10.0.0.5', 65535).at(-1) ?? '', /^nc 127\.0\.0\.1 \d{1,5}$/);
+  assert.equal(buildSshArgs('deploy@10.0.0.5', 65535).at(-1), buildRemoteCommand(65535));
+  assert.equal(buildRemoteCommand(65535).replace('65535', '4300'), buildRemoteCommand(4300));
 });
 
 test('bytes are piped both ways, one ssh child per connection', async () => {
@@ -378,4 +387,131 @@ test('--check exits 0 through the bridge when the far side is healthy, 1 when it
       },
     );
   }
+});
+
+// WORK-2026102904: the relay itself, run locally in place of ssh, against a server that closes
+// idle keep-alive connections the way Next.js does (after 5 s in production, 200 ms here).
+
+/** Runs the host command locally, so the test exercises the real relay rather than a fake. */
+const spawnRelayLocally: SpawnChild = (args) =>
+  spawn('sh', ['-c', args[args.length - 1]], { stdio: ['pipe', 'pipe', 'ignore'] });
+
+async function withRelayedServer(
+  handler: http.RequestListener,
+  body: (bridgePort: number, agent: http.Agent) => Promise<void>,
+): Promise<void> {
+  const upstream = http.createServer(handler);
+  upstream.keepAliveTimeout = 200;
+  const upstreamPort = await listening(upstream);
+  const bridge = createBridgeServer('unit-talk-prod', upstreamPort, spawnRelayLocally);
+  const bridgePort = await listening(bridge);
+  // One pooled socket, as a browser reuses the connection that loaded the sign-in page.
+  const agent = new http.Agent({ keepAlive: true, maxSockets: 1 });
+  try {
+    await body(bridgePort, agent);
+  } finally {
+    agent.destroy();
+    bridge.close();
+    upstream.closeAllConnections();
+    upstream.close();
+  }
+}
+
+interface Outcome {
+  status?: number;
+  body?: string;
+  error?: string;
+  reused: boolean;
+}
+
+function send(port: number, agent: http.Agent, method: string, headers: http.OutgoingHttpHeaders = {}): Promise<Outcome> {
+  return new Promise((resolve) => {
+    const request = http.request(
+      { host: '127.0.0.1', port, path: '/api/session', method, agent, headers, timeout: 4000 },
+      (response) => {
+        let body = '';
+        response.setEncoding('utf8');
+        response.on('data', (chunk: string) => {
+          body += chunk;
+        });
+        response.on('end', () => resolve({ status: response.statusCode, body, reused: request.reusedSocket }));
+      },
+    );
+    request.on('timeout', () => request.destroy(new Error('stalled')));
+    request.on('error', (error) => resolve({ error: error.message, reused: request.reusedSocket }));
+    request.end();
+  });
+}
+
+const sessionHandler: http.RequestListener = (request, response) => {
+  request.resume();
+  request.on('end', () => {
+    const ok = request.headers.authorization === 'Bearer operator-test-token';
+    response.writeHead(ok ? 200 : 401, { 'content-type': 'application/json' });
+    response.end(JSON.stringify(ok ? { ok: true, actor: 'operator' } : { ok: false }));
+  });
+};
+
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test('the relay exits when the server closes, while the client still holds its side open', async () => {
+  const upstream = http.createServer(sessionHandler);
+  upstream.keepAliveTimeout = 200;
+  const upstreamPort = await listening(upstream);
+  const relay = spawnRelayLocally(buildSshArgs('unit-talk-prod', upstreamPort));
+  try {
+    const exited = new Promise<boolean>((resolve) => {
+      relay.once('close', () => resolve(true));
+      setTimeout(() => resolve(false), 3000).unref();
+    });
+    relay.stdout?.resume();
+    // A keep-alive request, and stdin left open: exactly what an idle browser connection looks like.
+    relay.stdin?.write('GET /api/session HTTP/1.1\r\nHost: x\r\nConnection: keep-alive\r\n\r\n');
+    assert.equal(await exited, true, 'the host command must end with the server connection, or the bridge keeps a dead socket open');
+  } finally {
+    relay.kill();
+    upstream.closeAllConnections();
+    upstream.close();
+  }
+});
+
+test('a sign-in sent after the server closed an idle connection is answered, not stalled', async () => {
+  await withRelayedServer(sessionHandler, async (port, agent) => {
+    const pageLoad = await send(port, agent, 'GET');
+    assert.equal(pageLoad.status, 401);
+    // The operator types credentials for longer than the server keeps the connection open.
+    await pause(700);
+    const signIn = await send(port, agent, 'POST', { authorization: 'Bearer operator-test-token' });
+    assert.equal(signIn.error, undefined, 'the POST must not stall on a connection the server already closed');
+    assert.equal(signIn.status, 200);
+    assert.equal(signIn.reused, false, 'the bridge must have closed the dead connection so the client opened a new one');
+  });
+});
+
+test('credentials pass through unchanged: accepted, refused and absent', async () => {
+  await withRelayedServer(sessionHandler, async (port, agent) => {
+    const accepted = await send(port, agent, 'POST', { authorization: 'Bearer operator-test-token' });
+    assert.equal(accepted.status, 200);
+    assert.deepEqual(JSON.parse(accepted.body ?? ''), { ok: true, actor: 'operator' });
+    const refused = await send(port, agent, 'POST', { authorization: 'Bearer wrong' });
+    assert.equal(refused.status, 401);
+    const absent = await send(port, agent, 'POST');
+    assert.equal(absent.status, 401);
+  });
+});
+
+test('a connection the server drops mid-request fails promptly instead of hanging', async () => {
+  await withRelayedServer(
+    (request) => {
+      request.socket.destroy();
+    },
+    async (port, agent) => {
+      const started = Date.now();
+      const outcome = await send(port, agent, 'POST', { authorization: 'Bearer operator-test-token' });
+      assert.equal(outcome.status, undefined);
+      assert.ok(outcome.error, 'the client must see the interrupted connection');
+      assert.notEqual(outcome.error, 'stalled');
+      assert.ok(Date.now() - started < 3000);
+    },
+  );
 });

@@ -1,0 +1,1 @@
+[{"playerId":"8483425","name":"Lian Bichsel","positionCode":"D","teamId":"25","teamAbbrev":"DAL","lastTeamId":"25","lastTeamAbbrev":"DAL","lastSeasonId":"20262027","sweaterNumber":6,"active":true,"height":"6'7\"","heightInInches":79,"heightInCentimeters":201,"weightInPounds":237,"weightInKilograms":107,"birthCity":"Olten","birthStateProvince":null,"birthCountry":"CHE"}]

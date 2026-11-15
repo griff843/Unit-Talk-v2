@@ -1,0 +1,32 @@
+{
+  "provenance": "doc-derived",
+  "vendorBehaviour": "documented-shape",
+  "workOrder": "WORK-2026111102",
+  "source": "https://the-odds-api.com/liveapi/guides/v4/ (GET /v4/sports/{sport}/scores response example: fields id, sport_key, sport_title, commence_time, completed, home_team, away_team, scores[{name, score}] | null, last_update | null)",
+  "note": "NFL regular-season tie. Equal scores are accepted only for NFL.",
+  "league": "NFL",
+  "expectedParse": "final",
+  "evaluateAt": "2026-11-09T12:00:00Z",
+  "response": [
+    {
+      "id": "62dc46fe8a8687a34d1a15829e5dd3d5",
+      "sport_key": "americanfootball_nfl",
+      "sport_title": "NFL",
+      "commence_time": "2026-11-08T18:00:00Z",
+      "completed": true,
+      "home_team": "Pittsburgh Steelers",
+      "away_team": "Detroit Lions",
+      "scores": [
+        {
+          "name": "Pittsburgh Steelers",
+          "score": "20"
+        },
+        {
+          "name": "Detroit Lions",
+          "score": "20"
+        }
+      ],
+      "last_update": "2026-11-08T21:45:00Z"
+    }
+  ]
+}

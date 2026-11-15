@@ -5,12 +5,20 @@ import {
   buildSelectionString,
   buildSubmissionPayload,
   calcPayout,
+  canOfferManualPlayer,
+  describeOffersState,
+  easternDateIso,
   evaluateSubmissionGuards,
   getMarketTypesForSport,
   inferStatTypeFromMarketTypeId,
   mapOfferToFormMarketType,
+  resolvePlayerPropMarketKey,
   resolveSportsbookId,
+  withManualPlayer,
+  manualPlayerCandidateSide,
+  type PlayerSearchResolution,
 } from '../lib/form-utils.ts';
+import type { CanonicalParticipantResolution } from '@unit-talk/contracts';
 import type { BetFormValues } from '../lib/form-schema.ts';
 import type { CatalogData } from '../lib/catalog.ts';
 
@@ -32,6 +40,19 @@ function buildBaseValues(overrides: Partial<BetFormValues> = {}): BetFormValues 
     ...overrides,
   };
 }
+
+test('easternDateIso returns the Eastern calendar date across standard-time boundaries', () => {
+  assert.equal(easternDateIso(new Date('2026-10-29T01:30:00Z')), '2026-10-28');
+  assert.equal(easternDateIso(new Date('2026-12-01T04:59:00Z')), '2026-11-30');
+  assert.equal(easternDateIso(new Date('2026-12-01T05:00:00Z')), '2026-12-01');
+});
+
+test('easternDateIso handles spring-forward and fall-back boundary instants', () => {
+  assert.equal(easternDateIso(new Date('2026-03-08T06:59:00Z')), '2026-03-08');
+  assert.equal(easternDateIso(new Date('2026-03-08T07:00:00Z')), '2026-03-08');
+  assert.equal(easternDateIso(new Date('2026-11-01T05:59:00Z')), '2026-11-01');
+  assert.equal(easternDateIso(new Date('2026-11-01T06:00:00Z')), '2026-11-01');
+});
 
 const catalog: CatalogData = {
   sports: [
@@ -533,6 +554,84 @@ test('buildSubmissionPayload resolves NHL stat types to canonical player prop ma
   assert.equal(pimPayload.market, 'player.pim');
 });
 
+// Every stat_types row seeded for the sports the form offers (reference-data
+// foundation plus the 391/392/393 taxonomy migrations). Each must resolve.
+const CATALOG_STAT_TYPES: Record<string, string[]> = {
+  NBA: [
+    'Points', 'Rebounds', 'Assists', 'Threes', 'Steals', 'Blocks', 'Turnovers',
+    'Points + Assists', 'Field Goals Made', 'Free Throws Made', 'Minutes Played',
+    'Plus Minus', 'Plus/Minus',
+  ],
+  NHL: [
+    'Shots on Goal', 'Saves', 'Goals', 'Assists', 'Points', 'Blocked Shots',
+    'Goals Against', 'Save Percentage', 'Plus/Minus',
+  ],
+  MLB: [
+    'Strikeouts', 'Hits', 'Home Runs', 'RBI', 'Walks', 'Total Bases',
+    'Singles', 'Doubles', 'Triples', 'Earned Runs', 'Hits Allowed', 'Pitcher Outs',
+  ],
+  NFL: [
+    'Passing Yards', 'Rushing Yards', 'Receiving Yards', 'Touchdowns', 'Receptions',
+    'Interceptions', 'Rushing Attempts', 'Passing Attempts', 'Passing Touchdowns',
+    'Rush + Rec Yards', 'Tackles', 'Sacks',
+  ],
+};
+
+test('every catalog stat type for NHL, NBA, MLB and NFL resolves a market key without throwing', () => {
+  for (const [sport, statTypes] of Object.entries(CATALOG_STAT_TYPES)) {
+    for (const statType of statTypes) {
+      const payload = buildSubmissionPayload(
+        buildBaseValues({ sport, statType, playerName: 'Test Player' }),
+      );
+      assert.ok(payload.market, `${sport} ${statType} must resolve a market`);
+      assert.equal(payload.market, resolvePlayerPropMarketKey(sport, statType));
+    }
+  }
+});
+
+test('player prop market keys are sport-aware: NHL Points is hockey, NBA Points is basketball', () => {
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Points'), 'player_hockey_points_ou');
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Points'), 'player.points');
+  assert.notEqual(
+    buildSubmissionPayload(buildBaseValues({ sport: 'NHL', statType: 'Points' })).market,
+    buildSubmissionPayload(buildBaseValues({ sport: 'NBA', statType: 'Points' })).market,
+  );
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Assists'), 'player.assists');
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Assists'), 'player.assists');
+});
+
+test('previously unmapped catalog stat types resolve to production market ids', () => {
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Goals Against'), 'player_goals_against_ou');
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Save Percentage'), 'player_save_pct_ou');
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Plus/Minus'), 'player_plus_minus_ou');
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Field Goals Made'), 'player_fgm_ou');
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Free Throws Made'), 'player_ftm_ou');
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Minutes Played'), 'player_minutes_ou');
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Plus Minus'), 'player_plus_minus_ou');
+  assert.equal(resolvePlayerPropMarketKey('NFL', 'Sacks'), 'player_sacks_ou');
+});
+
+test('an unknown stat type is refused explicitly and never falls back to another sport', () => {
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Hat Tricks'), null);
+  // No canonical market_types id exists for MLB Runs, so it is refused, not invented.
+  assert.equal(resolvePlayerPropMarketKey('MLB', 'Runs'), null);
+  // sport_market_type_availability lists FGM/FTM/Minutes/Plus-Minus for NBA and WNBA only.
+  assert.equal(resolvePlayerPropMarketKey('NCAAB', 'Field Goals Made'), null);
+  assert.equal(resolvePlayerPropMarketKey('WNBA', 'Field Goals Made'), 'player_fgm_ou');
+  assert.equal(resolvePlayerPropMarketKey('NCAAF', 'Sacks'), null);
+  assert.equal(resolvePlayerPropMarketKey('NHL', 'Rebounds'), null);
+  assert.equal(resolvePlayerPropMarketKey('NBA', 'Goals'), null);
+  assert.equal(resolvePlayerPropMarketKey('NHL', ''), null);
+  assert.throws(
+    () => buildSubmissionPayload(buildBaseValues({ sport: 'NHL', statType: 'Hat Tricks' })),
+    /Cannot resolve canonical market key/,
+  );
+  assert.throws(
+    () => buildSubmissionPayload(buildBaseValues({ sport: 'NHL', statType: 'Rebounds' })),
+    /Cannot resolve canonical market key/,
+  );
+});
+
 test('buildSubmissionPayload resolves MLB batting strikeouts to player.strikeouts', () => {
   const payload = buildSubmissionPayload(
     buildBaseValues({ sport: 'MLB', statType: 'strikeouts', playerName: 'Aaron Judge' }),
@@ -656,6 +755,374 @@ test('no client guard refuses a structured-fallback player prop that has no even
       canonicalEventId: null,
       selectedPlayerId: 'player-123',
     }),
+    null,
+  );
+});
+
+test('WORK-2026110705: stale offers state surfaces the last-observed timestamp, distinct from the generic empty message', () => {
+  const stale = describeOffersState({
+    status: 'stale',
+    newestObservedAt: '2026-06-30T12:41:02.424Z',
+    freshSince: '2026-11-08T14:00:00.000Z',
+    truncated: false,
+  });
+  assert.ok(stale);
+  assert.equal(stale.tone, 'stale');
+  assert.match(stale.label, /Stale offers/);
+  assert.match(stale.label, /2026-06-30 12:41 UTC/);
+  assert.equal(stale.lastObservedAt, '2026-06-30T12:41:02.424Z');
+  assert.doesNotMatch(stale.label, /No live offers/);
+
+  const empty = describeOffersState({ status: 'empty', newestObservedAt: null, freshSince: 'x', truncated: false });
+  assert.equal(empty?.tone, 'none');
+  assert.notEqual(empty?.label, stale.label);
+});
+
+test('WORK-2026110705: truncated fresh offers are flagged partial; complete fresh and missing state are silent', () => {
+  const partial = describeOffersState({
+    status: 'fresh',
+    newestObservedAt: '2026-11-08T13:59:00.000Z',
+    freshSince: '2026-11-08T12:00:00.000Z',
+    truncated: true,
+  });
+  assert.match(partial?.label ?? '', /Partial offers/);
+  assert.equal(
+    describeOffersState({ status: 'fresh', newestObservedAt: '2026-11-08T13:59:00.000Z', freshSince: 'x', truncated: false }),
+    null,
+  );
+  assert.equal(describeOffersState(undefined), null);
+});
+
+test('WORK-2026110705: BetForm routes an empty offers list through the offers state before falling back to "No live offers"', () => {
+  const source = readFileSync(new URL('../app/submit/components/BetForm.tsx', import.meta.url), 'utf8');
+  assert.match(source, /describeOffersState\(eventBrowse\?\.offersState\)/);
+  assert.match(source, /offersStateNotice\.label/);
+});
+
+// ---------------------------------------------------------------------------
+// WORK-2026110802: canonical teams + one manually entered player
+// ---------------------------------------------------------------------------
+
+const ALL_SEARCH_STATES: PlayerSearchResolution[] = ['idle', 'searching', 'results', 'not-found', 'error', 'resolved'];
+
+test('WORK-2026110802: manual player entry is offered only after a definitive not-found in the structured team fallback', () => {
+  for (const state of ALL_SEARCH_STATES) {
+    assert.equal(
+      canOfferManualPlayer({
+        identityMode: 'structured-fallback',
+        isPlayerProp: true,
+        selectedPlayerId: null,
+        playerSearchResolution: state,
+      }),
+      state === 'not-found',
+      `search state ${state}`,
+    );
+  }
+  // Not offered once a canonical player is selected, outside player props, or outside the
+  // structured team fallback (canonical+event has the event's players; all-manual has its own path).
+  assert.equal(canOfferManualPlayer({ identityMode: 'structured-fallback', isPlayerProp: true, selectedPlayerId: 'player-1', playerSearchResolution: 'not-found' }), false);
+  assert.equal(canOfferManualPlayer({ identityMode: 'structured-fallback', isPlayerProp: false, selectedPlayerId: null, playerSearchResolution: 'not-found' }), false);
+  assert.equal(canOfferManualPlayer({ identityMode: 'canonical', isPlayerProp: true, selectedPlayerId: null, playerSearchResolution: 'not-found' }), false);
+  assert.equal(canOfferManualPlayer({ identityMode: 'manual', isPlayerProp: true, selectedPlayerId: null, playerSearchResolution: 'not-found' }), false);
+});
+
+const manualPlayerGuardBase = {
+  sportId: 'NBA',
+  identityMode: 'structured-fallback' as const,
+  awayParticipantName: 'Boston Celtics',
+  homeParticipantName: 'Milwaukee Bucks',
+  team: 'Milwaukee Bucks',
+  playerName: 'Tyler Herro',
+  canonicalEventId: null,
+  selectedPlayerId: null,
+  isPlayerProp: true,
+  manualPlayerRequested: true,
+  playerSearchResolution: 'not-found' as PlayerSearchResolution,
+  distributionMode: 'track-only' as const,
+};
+
+test('WORK-2026110802: the client guard accepts a typed player only after a definitive not-found, never after an errored or unrun search', () => {
+  assert.equal(evaluateSubmissionGuards(manualPlayerGuardBase), null);
+  for (const state of ['error', 'idle', 'searching', 'results', 'resolved'] as const) {
+    const failure = evaluateSubmissionGuards({ ...manualPlayerGuardBase, playerSearchResolution: state });
+    assert.equal(failure?.code, 'manual-player-requires-definitive-not-found', `search state ${state}`);
+  }
+  assert.match(
+    evaluateSubmissionGuards({ ...manualPlayerGuardBase, playerSearchResolution: 'error' })?.description ?? '',
+    /failed search is never saved as an unverified manual player/,
+  );
+});
+
+test('WORK-2026110802: without the manual choice, a typed player name is still refused in every search state', () => {
+  for (const state of ALL_SEARCH_STATES) {
+    const failure = evaluateSubmissionGuards({ ...manualPlayerGuardBase, manualPlayerRequested: false, playerSearchResolution: state });
+    assert.equal(failure?.code, 'player-requires-selection', `search state ${state}`);
+  }
+  // The refusal points at the manual path only when that path is actually available.
+  assert.match(
+    evaluateSubmissionGuards({ ...manualPlayerGuardBase, manualPlayerRequested: false })?.description ?? '',
+    /Player not found: enter manually/,
+  );
+  assert.match(
+    evaluateSubmissionGuards({ ...manualPlayerGuardBase, manualPlayerRequested: false, playerSearchResolution: 'error' })?.description ?? '',
+    /Typing a name is not enough/,
+  );
+});
+
+test('WORK-2026110802: the client guard keeps a manual player Track Only and out of every other identity shape', () => {
+  assert.equal(
+    evaluateSubmissionGuards({ ...manualPlayerGuardBase, distributionMode: 'delivery-eligible' })?.code,
+    'manual-player-requires-track-only',
+  );
+  assert.equal(
+    evaluateSubmissionGuards({ ...manualPlayerGuardBase, selectedPlayerId: 'player-tatum' })?.code,
+    'manual-player-with-canonical-player',
+  );
+  assert.equal(
+    evaluateSubmissionGuards({ ...manualPlayerGuardBase, identityMode: 'canonical', canonicalEventId: 'event-1' })?.code,
+    'manual-player-requires-structured-teams',
+  );
+  assert.equal(
+    evaluateSubmissionGuards({ ...manualPlayerGuardBase, canonicalEventId: 'event-1' })?.code,
+    'manual-player-requires-structured-teams',
+  );
+  assert.equal(
+    evaluateSubmissionGuards({ ...manualPlayerGuardBase, playerName: '   ' })?.code,
+    'manual-player-requires-name',
+  );
+});
+
+const structuredResolution = (
+  sportId: string,
+  away: [string, string],
+  home: [string, string],
+  team: [string, string],
+): CanonicalParticipantResolution => ({
+  resolution: 'canonical',
+  sportId,
+  eventId: null,
+  eventName: `${away[1]} @ ${home[1]}`,
+  away: { participantId: away[0], displayName: away[1], participantType: 'team', teamId: null },
+  home: { participantId: home[0], displayName: home[1], participantType: 'team', teamId: null },
+  team: { participantId: team[0], displayName: team[1], participantType: 'team', teamId: null },
+  player: null,
+});
+
+for (const shape of [
+  { label: 'Herro', sport: 'NBA', statType: 'Threes', line: 2.5, market: 'player.threes', player: 'Tyler Herro', away: ['team-bos', 'Boston Celtics'], home: ['team-mil', 'Milwaukee Bucks'], team: ['team-mil', 'Milwaukee Bucks'] },
+  { label: 'Burries', sport: 'NBA', statType: 'Rebounds', line: 4.5, market: 'player.rebounds', player: 'Burries', away: ['team-bos', 'Boston Celtics'], home: ['team-mil', 'Milwaukee Bucks'], team: ['team-bos', 'Boston Celtics'] },
+  { label: 'Dulcich', sport: 'NFL', statType: 'Receptions', line: 3.5, market: 'player.receptions', player: 'Greg Dulcich', away: ['team-det', 'Detroit Lions'], home: ['team-mia', 'Miami Dolphins'], team: ['team-det', 'Detroit Lions'] },
+] as const) {
+  test(`WORK-2026110802: the ${shape.label} payload carries canonical teams, a manual player, Track Only and manual provenance`, () => {
+    const eventName = `${shape.away[1]} @ ${shape.home[1]}`;
+    const resolution = withManualPlayer(
+      structuredResolution(shape.sport, [...shape.away], [...shape.home], [...shape.team]),
+      `  ${shape.player} `,
+    );
+    const payload = buildSubmissionPayload(
+      buildBaseValues({
+        sport: shape.sport,
+        marketType: 'player-prop',
+        eventName,
+        playerName: shape.player,
+        statType: shape.statType,
+        direction: 'over',
+        line: shape.line,
+        odds: -110,
+        team: shape.team[1],
+        trackOnly: true,
+      }),
+      {
+        submissionMode: 'manual',
+        eventId: null,
+        teamId: shape.team[0],
+        playerId: null,
+        distributionMode: 'track-only',
+        participantResolution: resolution,
+        playerProvenance: 'manual-unverified-identity',
+      },
+    );
+
+    assert.equal(payload.market, shape.market);
+    assert.deepEqual(payload.metadata?.participantResolution, {
+      resolution: 'canonical',
+      sportId: shape.sport,
+      eventId: null,
+      eventName,
+      away: { participantId: shape.away[0], displayName: shape.away[1], participantType: 'team', teamId: null },
+      home: { participantId: shape.home[0], displayName: shape.home[1], participantType: 'team', teamId: null },
+      team: { participantId: shape.team[0], displayName: shape.team[1], participantType: 'team', teamId: null },
+      player: null,
+      manualPlayer: { displayName: shape.player, canonicalParticipantId: null, reason: 'unverified-identity' },
+    });
+    assert.equal(payload.metadata?.distributionMode, 'track-only');
+    assert.equal(payload.metadata?.playerProvenance, 'manual-unverified-identity');
+    // PM F3: the manual labels agree with the provenance -- never manualEntry:false beside it.
+    assert.equal(payload.metadata?.manualEntry, true);
+    assert.deepEqual(payload.metadata?.manualOverrideFields, ['player']);
+    assert.equal(payload.metadata?.playerId, null);
+    assert.equal(payload.metadata?.participantId, null);
+    assert.equal(payload.metadata?.player, shape.player);
+    assert.equal(payload.metadata?.teamId, shape.team[0]);
+    assert.equal(payload.metadata?.eventId, null);
+    assert.equal(payload.metadata?.selectedOffer, null);
+  });
+}
+
+test('WORK-2026110802: withManualPlayer drops any canonical player and event id', () => {
+  const resolution = withManualPlayer(
+    {
+      ...structuredResolution('NBA', ['team-bos', 'Boston Celtics'], ['team-mil', 'Milwaukee Bucks'], ['team-bos', 'Boston Celtics']),
+      eventId: 'event-should-not-survive',
+      player: { participantId: 'player-tatum', displayName: 'Jayson Tatum', participantType: 'player', teamId: 'team-bos' },
+    },
+    'Burries',
+  );
+  assert.equal(resolution.player, null);
+  assert.equal(resolution.eventId, null);
+  assert.deepEqual(resolution.manualPlayer, { displayName: 'Burries', canonicalParticipantId: null, reason: 'unverified-identity' });
+});
+
+test('WORK-2026110802: a payload without a manual player carries no player provenance claim', () => {
+  const payload = buildSubmissionPayload(buildBaseValues(), { playerId: 'player-1' });
+  assert.equal('playerProvenance' in (payload.metadata ?? {}), false);
+});
+
+test('WORK-2026110802 F3: the client provenance constant is the contract constant', async () => {
+  const contracts = await import('@unit-talk/contracts');
+  const { MANUAL_PLAYER_PROVENANCE } = await import('../lib/form-utils');
+  assert.equal(MANUAL_PLAYER_PROVENANCE, contracts.manualPlayerProvenance);
+});
+
+test('WORK-2026110802: the form sends the unverified-identity stamp and reason, never the legacy ones', async () => {
+  const contracts = await import('@unit-talk/contracts');
+  const { MANUAL_PLAYER_PROVENANCE, MANUAL_PLAYER_REASON } = await import('../lib/form-utils');
+  assert.equal(MANUAL_PLAYER_PROVENANCE, 'manual-unverified-identity');
+  assert.equal(MANUAL_PLAYER_REASON, contracts.manualPlayerReason);
+  assert.equal(MANUAL_PLAYER_REASON, 'unverified-identity');
+  assert.notEqual(MANUAL_PLAYER_PROVENANCE, contracts.legacyManualPlayerProvenance);
+  assert.notEqual(MANUAL_PLAYER_REASON, contracts.legacyManualPlayerReason);
+  // The legacy stamp is still recognized as a manual, unverified player.
+  assert.equal(contracts.isManualPlayerProvenance('manual-coverage-gap'), true);
+  assert.equal(contracts.isManualPlayerProvenance('manual-unverified-identity'), true);
+  assert.equal(contracts.isManualPlayerProvenance('canonical'), false);
+});
+
+test('WORK-2026110802 F3: a manual player keeps other manual fields and adds player once', () => {
+  const payload = buildSubmissionPayload(buildBaseValues({ sportsbook: 'PrizePicks' }), {
+    manualOverrideFields: ['sportsbook', 'player'],
+    playerProvenance: 'manual-unverified-identity',
+  });
+  assert.equal(payload.metadata?.manualEntry, true);
+  assert.deepEqual(payload.metadata?.manualOverrideFields, ['sportsbook', 'player']);
+});
+
+test('WORK-2026110802 F3: without a manual player no player label is added', () => {
+  const payload = buildSubmissionPayload(buildBaseValues(), { manualOverrideFields: [], playerProvenance: null });
+  assert.equal(payload.metadata?.manualEntry, false);
+  assert.deepEqual(payload.metadata?.manualOverrideFields, []);
+  assert.equal(payload.metadata?.playerProvenance, undefined);
+});
+
+test('WORK-2026110802 P3: the client player-prop market keys match the contract copy the API enforces', async () => {
+  // The API binds a manual player to EXACTLY the market the form builds
+  // (resolveSmartFormPlayerPropMarketKey). The client cannot import contract runtime values
+  // (next build), so the tables are copied; this test keeps them identical.
+  const contracts = await import('@unit-talk/contracts');
+  const source = readFileSync(new URL('../lib/form-utils.ts', import.meta.url), 'utf8');
+  const clientStats = [...source.matchAll(/^\s*(?:'([^']+)'|([a-z0-9]+)):\s*'player[._][a-z0-9_.]*',?$/gmu)].map(
+    (match) => match[1] ?? match[2],
+  );
+  assert.ok(clientStats.length > 20, `parsed ${clientStats.length} client stat keys`);
+  const stats = new Set([...clientStats, ...contracts.smartFormPlayerPropStatTypes()]);
+  const sports = new Set([...contracts.smartFormPlayerPropSports, 'SOCCER', 'MMA', 'TENNIS', 'nba', ' NFL ', '']);
+  let compared = 0;
+  for (const sport of sports) {
+    for (const stat of stats) {
+      for (const spelling of [stat, stat.toUpperCase(), ` ${stat} `]) {
+        assert.equal(
+          resolvePlayerPropMarketKey(sport, spelling),
+          contracts.resolveSmartFormPlayerPropMarketKey(sport, spelling),
+          `${JSON.stringify(sport)} / ${JSON.stringify(spelling)}`,
+        );
+        compared += 1;
+      }
+    }
+  }
+  assert.ok(compared > 500, `${compared} comparisons`);
+});
+
+test('WORK-2026110802 confirm: the client 409 code is the contract constant', async () => {
+  const contracts = await import('@unit-talk/contracts');
+  const { MANUAL_PLAYER_CONFIRMATION_REQUIRED_CODE } = await import('../lib/form-utils');
+  assert.equal(MANUAL_PLAYER_CONFIRMATION_REQUIRED_CODE, contracts.manualPlayerConfirmationRequiredCode);
+});
+
+test('WORK-2026110802 confirm: only a well-formed 409 yields candidates to show', async () => {
+  const { readManualPlayerCandidates } = await import('../lib/form-utils');
+  const code = 'SMART_FORM_MANUAL_PLAYER_CONFIRMATION_REQUIRED';
+  const candidate = { participantId: 'p-1', displayName: 'Tyler Adams', teamId: 'team-bos', teamName: 'Boston Celtics' };
+  assert.deepEqual(readManualPlayerCandidates({ code, details: { candidates: [candidate] } }), [candidate]);
+  assert.deepEqual(readManualPlayerCandidates({ code, details: { candidates: [] } }), []);
+  assert.deepEqual(
+    readManualPlayerCandidates({ code, details: { candidates: [{ participantId: 'p-2', displayName: 'X', teamId: 7 }] } }),
+    [{ participantId: 'p-2', displayName: 'X', teamId: null, teamName: null }],
+  );
+  for (const error of [
+    null,
+    new Error('confirm'),
+    { code: 'SMART_FORM_RELATIONSHIP_INVALID', details: { candidates: [candidate] } },
+    { code, details: null },
+    { code, details: { candidates: 'p-1' } },
+    { code, details: { candidates: [candidate, { displayName: 'no id' }] } },
+    { code, details: { candidates: [null] } },
+  ]) {
+    assert.equal(readManualPlayerCandidates(error), null, JSON.stringify(error));
+  }
+});
+
+test('WORK-2026110802 confirm: the confirmation rides on manualPlayer only when given', async () => {
+  const { withManualPlayer } = await import('../lib/form-utils');
+  const resolution = {
+    resolution: 'canonical',
+    sportId: 'NBA',
+    eventId: null,
+    eventName: 'A @ B',
+    away: null,
+    home: null,
+    team: null,
+    player: null,
+  } as unknown as CanonicalParticipantResolution;
+  assert.deepEqual(withManualPlayer(resolution, ' Tyler Herro ').manualPlayer, {
+    displayName: 'Tyler Herro',
+    canonicalParticipantId: null,
+    reason: 'unverified-identity',
+  });
+  assert.deepEqual(withManualPlayer(resolution, 'Tyler Herro', ['p-1', 'p-2']).manualPlayer, {
+    displayName: 'Tyler Herro',
+    canonicalParticipantId: null,
+    reason: 'unverified-identity',
+    confirmedNotCandidates: ['p-1', 'p-2'],
+  });
+  // An empty confirmation (the "suggestions changed" case) is still sent, as [].
+  assert.deepEqual(withManualPlayer(resolution, 'Tyler Herro', []).manualPlayer?.confirmedNotCandidates, []);
+});
+
+test('WORK-2026110802 (Codex P2): a picked candidate maps to its own matchup side, or to none', () => {
+  const sides = [
+    { participantId: 'team-celtics', label: 'Boston Celtics' },
+    { participantId: 'team-knicks', label: 'New York Knicks' },
+  ];
+  // Same side as the selected team: that side (the form keeps it).
+  assert.equal(manualPlayerCandidateSide({ teamId: 'team-knicks' }, sides), sides[1]);
+  // The other matchup side: that side, so the form switches the leg's team to it.
+  assert.equal(manualPlayerCandidateSide({ teamId: 'team-celtics' }, sides), sides[0]);
+  // Neither matchup team, or no team: null, so the candidate cannot be picked.
+  assert.equal(manualPlayerCandidateSide({ teamId: 'team-lakers' }, sides), null);
+  assert.equal(manualPlayerCandidateSide({ teamId: null }, sides), null);
+  // A side without a canonical id never matches, even a candidate without a team.
+  assert.equal(
+    manualPlayerCandidateSide({ teamId: null }, [{ participantId: null, label: 'Unresolved' }, sides[1]!]),
     null,
   );
 });

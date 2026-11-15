@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
@@ -1199,4 +1200,95 @@ test('pull request workflow binds and revalidates lane PRs automatically', () =>
   assert.match(workflow, /for attempt in 1 2 3/);
   assert.match(workflow, /git rebase "origin\/\$BRANCH"/);
   assert.doesNotMatch(workflow, /working-directory: lane[\s\S]*?pnpm install/);
+});
+
+// The workflow's "Resolve lane from branch" step, executed as the runner would
+// execute it: a WORK-### lane used to fall through `utv2-[0-9]+`, so its PR was
+// never bound and its post-merge closeout failed on a missing pr_url.
+function runResolveLaneStep(branch: string, manifests: Record<string, { branch: string }>) {
+  const workflow = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'lane-pr-binding.yml'), 'utf8');
+  const step = workflow.slice(
+    workflow.indexOf('- name: Resolve lane from branch'),
+    workflow.indexOf('- name: Setup pnpm'),
+  );
+  const runBlock = step.slice(step.indexOf('run: |') + 'run: |'.length);
+  const script = runBlock
+    .split('\n')
+    .filter((line) => line.trim().length > 0)
+    .map((line) => line.replace(/^ {10}/, ''))
+    .join('\n');
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'lane-pr-binding-'));
+  try {
+    const lanesDir = path.join(workspace, 'lane', 'docs', '06_status', 'lanes');
+    fs.mkdirSync(lanesDir, { recursive: true });
+    for (const [issueId, manifest] of Object.entries(manifests)) {
+      fs.writeFileSync(path.join(lanesDir, `${issueId}.json`), JSON.stringify(manifest));
+    }
+    const outputPath = path.join(workspace, 'github-output');
+    fs.writeFileSync(outputPath, '');
+    const result = spawnSync('bash', ['-e', '-c', script], {
+      encoding: 'utf8',
+      env: { ...process.env, BRANCH: branch, GITHUB_WORKSPACE: workspace, GITHUB_OUTPUT: outputPath },
+    });
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+    return Object.fromEntries(
+      fs
+        .readFileSync(outputPath, 'utf8')
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => line.split('=') as [string, string]),
+    );
+  } finally {
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
+}
+
+test('lane PR binding resolves WORK-### lanes as well as UTV2-### lanes from the branch', () => {
+  const workBranch = 'claude/work-2026102903-work-lane-pr-binding';
+  assert.deepStrictEqual(runResolveLaneStep(workBranch, { 'WORK-2026102903': { branch: workBranch } }), {
+    bind: 'true',
+    issue_id: 'WORK-2026102903',
+  });
+  const utv2Branch = 'codex/utv2-1977-delivery-ui-supporting-paths';
+  assert.deepStrictEqual(runResolveLaneStep(utv2Branch, { 'UTV2-1977': { branch: utv2Branch } }), {
+    bind: 'true',
+    issue_id: 'UTV2-1977',
+  });
+  assert.deepStrictEqual(runResolveLaneStep('codex/website-primary-logo-owner-source', {}), { bind: 'false' });
+  assert.deepStrictEqual(runResolveLaneStep(workBranch, {}), { bind: 'false', issue_id: 'WORK-2026102903' });
+  assert.deepStrictEqual(
+    runResolveLaneStep(workBranch, { 'WORK-2026102903': { branch: 'claude/work-2026102903-other-slug' } }),
+    { bind: 'false', issue_id: 'WORK-2026102903' },
+  );
+});
+
+test('the binding workflow hands the resolved issue id to the trusted binder', () => {
+  const workflow = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'lane-pr-binding.yml'), 'utf8');
+  assert.match(workflow, /ISSUE_ID: \$\{\{ steps\.lane\.outputs\.issue_id \}\}/);
+  assert.match(workflow, /lane-link-pr\.ts"\s*\n\s*--issue "\$ISSUE_ID"/);
+});
+
+test('GitHub event binding links a WORK-### lane named by --issue', () => {
+  const issueId = 'WORK-99990001';
+  const branch = `claude/${issueId.toLowerCase()}-event-binding`;
+  try {
+    withManifest(issueId, 'started', 'claude', (manifest) => {
+      manifest['branch'] = branch;
+    });
+    const result = runLaneLinkPr(
+      ['--issue', issueId, '--branch', branch, '--base', 'main', '--pr', 'https://github.com/example/unit-talk/pull/134', '--github-event'],
+      { ...process.env, GITHUB_ACTIONS: 'true', GITHUB_EVENT_NAME: 'pull_request_target' },
+    );
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+    const payload = JSON.parse(result.stdout) as { ok: boolean; code: string; status: string; pr_url: string };
+    assert.strictEqual(payload.ok, true);
+    assert.strictEqual(payload.code, 'lane_linked');
+    assert.strictEqual(payload.status, 'in_review');
+    assert.strictEqual(payload.pr_url, 'https://github.com/example/unit-talk/pull/134');
+    const written = JSON.parse(fs.readFileSync(issueToManifestPath(issueId), 'utf8')) as LaneManifest;
+    assert.strictEqual(written.pr_url, 'https://github.com/example/unit-talk/pull/134');
+    assert.strictEqual(written.status, 'in_review');
+  } finally {
+    cleanup(issueId);
+  }
 });

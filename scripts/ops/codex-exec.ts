@@ -8,8 +8,8 @@
  *   npx tsx scripts/ops/codex-exec.ts --issue UTV2-### [--dry-run]
  *
  * Exit codes:
- *   0 = Codex completed and PR opened
- *   1 = Codex failed or CLI unavailable
+ *   0 = Codex completed; the result's `pr` field reports the lane PR if one exists
+ *   1 = Codex failed, CLI unavailable, or the observed model routing differs from the declared one
  *   2 = Precondition failed (no manifest, wrong CWD, health check failed, invalid/disabled
  *       model routing, policy-version mismatch, missing manual-override authority,
  *       delegation suspended -- UTV2-1546, see delegation-state.ts)
@@ -23,6 +23,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parse as parseYaml } from 'yaml';
@@ -56,6 +57,7 @@ import {
   beginAttempt,
   buildResumeBrief,
   buildResumePlan,
+  buildReworkBrief,
   checkpointPath,
   classifyCheckpointLiveness,
   failVisiblyAndRelease,
@@ -89,6 +91,7 @@ interface CodexExecResult {
     | 'INCOMPLETE_PHASE_PROGRESSION'
     | 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE'
     | 'REWORK_NO_SOURCE_CHANGE'
+    | 'ROUTING_MISMATCH'
     | 'DRY_RUN';
   issue_id: string;
   branch?: string;
@@ -107,6 +110,8 @@ interface CodexExecResult {
   evidence_artifacts_changed?: number;
   checkpoint_provenance?: string;
   wrapper_exit_code?: 0 | 1 | 2;
+  observation_status?: ObservationStatus;
+  pr?: PullRequestObservation;
 }
 
 type PacketResultLoader = (manifest: LaneManifest) => ExecutionPacketResult;
@@ -599,6 +604,215 @@ export function resolveExecModelRouting(
   };
 }
 
+// WORK-2026110203: observed model routing. `codex exec` writes one rollout file per
+// session under $CODEX_HOME/sessions/YYYY/MM/DD/. Its session_meta names the working
+// directory and originator, and every turn_context records the model and effort the
+// turn actually ran with. Those observed values sit beside the declared ones; nothing
+// declared is ever copied into an observed field.
+export type ObservationStatus = 'observed' | 'unavailable' | 'mismatch';
+
+export interface ModelRoutingObservation {
+  status: ObservationStatus;
+  reason: string | null;
+  session_id: string | null;
+  model: string | null;
+  reasoning_effort: string | null;
+  cli_version: string | null;
+  turns: number | null;
+  /** Codex's cumulative `total_token_usage`, verbatim. Its total_tokens includes cached input. */
+  token_usage: Record<string, number> | null;
+  unavailable_fields: string[];
+  mismatched_fields: string[];
+}
+
+const OBSERVED_FIELDS = ['session_id', 'model', 'reasoning_effort', 'cli_version', 'turns', 'token_usage'] as const;
+
+export function unavailableObservation(reason: string): ModelRoutingObservation {
+  return {
+    status: 'unavailable',
+    reason,
+    session_id: null,
+    model: null,
+    reasoning_effort: null,
+    cli_version: null,
+    turns: null,
+    token_usage: null,
+    unavailable_fields: [...OBSERVED_FIELDS],
+    mismatched_fields: [],
+  };
+}
+
+export function codexSessionsRoot(env: NodeJS.ProcessEnv = process.env): string {
+  return path.join(env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'sessions');
+}
+
+function readJsonLines(filePath: string): Array<Record<string, unknown>> {
+  return fs
+    .readFileSync(filePath, 'utf8')
+    .split('\n')
+    .filter((line) => line.trim() !== '')
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+function sessionMeta(filePath: string): Record<string, unknown> | null {
+  const fd = fs.openSync(filePath, 'r');
+  try {
+    // session_meta is the first record; it can carry long base instructions, so read generously.
+    const buffer = Buffer.alloc(1 << 20);
+    const bytes = fs.readSync(fd, buffer, 0, buffer.length, 0);
+    const firstLine = buffer.subarray(0, bytes).toString('utf8').split('\n', 1)[0] ?? '';
+    const record = asRecord(JSON.parse(firstLine));
+    return record?.['type'] === 'session_meta' ? asRecord(record['payload']) : null;
+  } catch {
+    return null;
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/**
+ * Rollout files a `codex exec` run in `cwd` started between `startedAtMs` and
+ * `endedAtMs`. Day directories are local dates, so the scan covers one day either side.
+ */
+export function findCodexRollouts(input: {
+  sessionsRoot: string;
+  cwd: string;
+  startedAtMs: number;
+  endedAtMs: number;
+}): string[] {
+  const wantedCwd = path.resolve(input.cwd);
+  const dayMs = 86_400_000;
+  const dayDirs = new Set<string>();
+  for (let t = input.startedAtMs - dayMs; t <= input.endedAtMs + dayMs; t += dayMs) {
+    const d = new Date(t);
+    dayDirs.add(
+      path.join(
+        input.sessionsRoot,
+        String(d.getFullYear()),
+        String(d.getMonth() + 1).padStart(2, '0'),
+        String(d.getDate()).padStart(2, '0'),
+      ),
+    );
+  }
+  const matches: string[] = [];
+  for (const dir of dayDirs) {
+    if (!fs.existsSync(dir)) continue;
+    for (const name of fs.readdirSync(dir)) {
+      if (!name.startsWith('rollout-') || !name.endsWith('.jsonl')) continue;
+      const filePath = path.join(dir, name);
+      const meta = sessionMeta(filePath);
+      if (!meta) continue;
+      const startedAt = Date.parse(asString(meta['timestamp']) ?? '');
+      if (
+        asString(meta['originator']) === 'codex_exec' &&
+        typeof meta['cwd'] === 'string' &&
+        path.resolve(meta['cwd']) === wantedCwd &&
+        Number.isFinite(startedAt) &&
+        startedAt >= input.startedAtMs &&
+        startedAt <= input.endedAtMs
+      ) {
+        matches.push(filePath);
+      }
+    }
+  }
+  return matches.sort();
+}
+
+export function observeModelRouting(input: {
+  declared: Pick<ModelRoutingBlock, 'model' | 'reasoning_effort'>;
+  rollouts: readonly string[];
+}): ModelRoutingObservation {
+  if (input.rollouts.length === 0) return unavailableObservation('no Codex rollout found for this worktree and attempt window');
+  if (input.rollouts.length > 1) {
+    return unavailableObservation(`${input.rollouts.length} Codex rollouts match this worktree and attempt window`);
+  }
+  let records: Array<Record<string, unknown>>;
+  try {
+    records = readJsonLines(input.rollouts[0]!);
+  } catch (err) {
+    return unavailableObservation(`Codex rollout unreadable: ${(err as Error).message}`);
+  }
+
+  const payloads = (type: string) =>
+    records.filter((r) => r['type'] === type).map((r) => asRecord(r['payload']) ?? {});
+  const meta = payloads('session_meta')[0] ?? {};
+  const turns = payloads('turn_context');
+  const turnModels = turns.map((t) => asString(t['model']));
+  const turnEfforts = turns.map((t) => asString(t['effort']));
+  const lastUsage = payloads('event_msg')
+    .filter((p) => p['type'] === 'token_count')
+    .map((p) => asRecord(asRecord(p['info'])?.['total_token_usage']))
+    .filter((usage): usage is Record<string, unknown> => usage !== null)
+    .at(-1);
+  const tokenUsage = lastUsage
+    ? Object.fromEntries(Object.entries(lastUsage).filter((entry): entry is [string, number] => typeof entry[1] === 'number'))
+    : null;
+
+  const observed = {
+    session_id: asString(meta['id']),
+    model: turnModels.find((m) => m !== null) ?? null,
+    reasoning_effort: turnEfforts.find((e) => e !== null) ?? null,
+    cli_version: asString(meta['cli_version']),
+    turns: turns.length > 0 ? turns.length : null,
+    token_usage: tokenUsage && Object.keys(tokenUsage).length > 0 ? tokenUsage : null,
+  };
+  const mismatched: string[] = [];
+  if (turnModels.some((m) => m !== null && m !== input.declared.model)) mismatched.push('model');
+  if (turnEfforts.some((e) => e !== null && e !== input.declared.reasoning_effort)) mismatched.push('reasoning_effort');
+
+  return {
+    status: mismatched.length > 0 ? 'mismatch' : 'observed',
+    reason: mismatched.length > 0 ? `observed ${mismatched.join(' and ')} differ from the declared routing` : null,
+    ...observed,
+    unavailable_fields: OBSERVED_FIELDS.filter((field) => observed[field] === null),
+    mismatched_fields: mismatched,
+  };
+}
+
+export interface PullRequestObservation {
+  number: number | null;
+  head_sha: string | null;
+  head_matches_local: boolean | null;
+  reason: string | null;
+}
+
+type Runner = (cmd: string, args: string[], cwd: string) => { status: number | null; stdout: string };
+
+const defaultRunner: Runner = (cmd, args, cwd) => {
+  const r = spawnSync(cmd, args, { cwd, stdio: 'pipe', encoding: 'utf8', timeout: 30_000 });
+  return { status: r.status, stdout: r.stdout ?? '' };
+};
+
+/** Reports the lane's PR for the orchestrator. Read-only: it posts nothing. */
+export function observePullRequest(cwd: string, branch: string, run: Runner = defaultRunner): PullRequestObservation {
+  const pr = run('gh', ['pr', 'view', branch, '--json', 'number,headRefOid'], cwd);
+  if (pr.status !== 0) return { number: null, head_sha: null, head_matches_local: null, reason: 'no PR found for the lane branch, or gh unavailable' };
+  let parsed: Record<string, unknown> | null;
+  try {
+    parsed = asRecord(JSON.parse(pr.stdout));
+  } catch {
+    parsed = null;
+  }
+  const number = typeof parsed?.['number'] === 'number' ? parsed['number'] : null;
+  const headSha = asString(parsed?.['headRefOid']);
+  if (number === null || headSha === null) return { number: null, head_sha: null, head_matches_local: null, reason: 'gh pr view returned no number or head SHA' };
+  const local = run('git', ['rev-parse', 'HEAD'], cwd);
+  return {
+    number,
+    head_sha: headSha,
+    head_matches_local: local.status === 0 ? local.stdout.trim() === headSha : null,
+    reason: local.status === 0 ? null : 'local HEAD unreadable',
+  };
+}
+
 export interface ModelRoutingEvidence {
   issue_id: string;
   manifest_schema_version: number;
@@ -615,6 +829,9 @@ export interface ModelRoutingEvidence {
   estimated_prompt_tokens: number | null;
   wall_time_ms: number | null;
   generated_at: string;
+  /** The routing fields above are the declared routing passed to `codex exec`. */
+  routing_source: 'declared';
+  observation: ModelRoutingObservation;
 }
 
 export function buildModelRoutingEvidence(input: {
@@ -627,6 +844,7 @@ export function buildModelRoutingEvidence(input: {
   promptBytes?: number;
   wallTimeMs?: number;
   now?: string;
+  observation?: ModelRoutingObservation;
 }): ModelRoutingEvidence {
   return {
     issue_id: input.issueId,
@@ -645,6 +863,8 @@ export function buildModelRoutingEvidence(input: {
       input.promptBytes === undefined ? null : Math.ceil(input.promptBytes / 4),
     wall_time_ms: input.wallTimeMs ?? null,
     generated_at: input.now ?? new Date().toISOString(),
+    routing_source: 'declared',
+    observation: input.observation ?? unavailableObservation('observation not attempted'),
   };
 }
 
@@ -713,7 +933,11 @@ export function commitAndPushEvidence(cwd: string, relativeEvidencePath: string,
   return { ok: true, step: 'push', detail: 'committed and pushed' };
 }
 
-export function buildCodexChildEnv(cwd: string, stateIdentity: ExecutionStateIdentity): NodeJS.ProcessEnv {
+export function buildCodexChildEnv(
+  cwd: string,
+  stateIdentity: ExecutionStateIdentity,
+  checkpointDir: string,
+): NodeJS.ProcessEnv {
   const stateRoot = path.join(cwd, '.out', 'codex-pnpm-state');
   const dirs = {
     home: path.join(stateRoot, 'home'),
@@ -740,6 +964,7 @@ export function buildCodexChildEnv(cwd: string, stateIdentity: ExecutionStateIde
     UNIT_TALK_EXECUTION_EPOCH_ID: stateIdentity.epoch_id,
     UNIT_TALK_EXECUTION_ATTEMPT: String(stateIdentity.attempt),
     UNIT_TALK_EXECUTION_MINIMUM_REVISION: String(stateIdentity.minimum_revision),
+    UNIT_TALK_EXECUTION_CHECKPOINT_DIR: path.resolve(checkpointDir),
   };
 }
 
@@ -934,6 +1159,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     ? {
         ...buildResumePlan(null),
         carried_findings: existingCheckpoint!.findings,
+        carried_rulings: existingCheckpoint!.orchestrator_rulings ?? [],
         pending_actions: existingCheckpoint!.pending_actions,
       }
     : buildResumePlan(existingCheckpoint);
@@ -943,14 +1169,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     phase: resumePlan.resume_from_phase,
   });
 
-  const resumeBrief = rework
-    ? [
-        '## Execution checkpoint — REWORK EPOCH',
-        '',
-        'A new rework epoch will bind the current reviewed head as its immutable baseline.',
-        'No phase validity from the rejected epoch is inherited. Its findings remain as rework inputs.',
-      ].join('\n')
-    : buildResumeBrief(existingCheckpoint);
+  const resumeBrief = rework ? buildReworkBrief(existingCheckpoint) : buildResumeBrief(existingCheckpoint);
   // A preview must not mutate. Resolving the packet persists the sync record in
   // both roots and, for a pre-contract lane, makes a live Linear call — all
   // before the dry-run branch below, while the emitted message says "without
@@ -1128,7 +1347,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     cwd: resolvedCwd,
     stdio: 'inherit',
     shell: process.platform === 'win32',
-    env: buildCodexChildEnv(resolvedCwd, attemptStart.identity),
+    env: buildCodexChildEnv(resolvedCwd, attemptStart.identity, path.dirname(attemptStart.path)),
     timeout: timeoutPolicy.timeout_ms,
   });
 
@@ -1141,6 +1360,15 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   const postSpawnState = readCheckpointState(issueId, undefined, attemptStart.identity);
   const liveness = classifyCheckpointLiveness(postSpawnState.checkpoint);
   const exitCode = child.status ?? 1;
+  const observation = observeModelRouting({
+    declared: modelRouting,
+    rollouts: findCodexRollouts({
+      sessionsRoot: codexSessionsRoot(),
+      cwd: resolvedCwd,
+      startedAtMs: executionStartedAt,
+      endedAtMs: Date.now(),
+    }),
+  });
   const evidence = buildModelRoutingEvidence({
     issueId,
     manifestSchemaVersion: manifest.schema_version,
@@ -1150,6 +1378,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     codexExitCode: child.error ? null : exitCode,
     promptBytes: Buffer.byteLength(prompt, 'utf8'),
     wallTimeMs: Date.now() - executionStartedAt,
+    observation,
   });
   const evidencePath = writeModelRoutingEvidence(resolvedCwd, issueId, evidence);
   const evidenceRelativePath = path.relative(resolvedCwd, evidencePath).split(path.sep).join('/');
@@ -1220,6 +1449,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       policy_version: modelRouting.policy_version,
       legacy_compatibility_used: routing.legacy_compatibility_used,
       codex_cli_version: health.version,
+      observation_status: observation.status,
       execution: {
         ...executionSummary,
         phase: closed.checkpoint?.phase ?? executionSummary.phase,
@@ -1257,6 +1487,45 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       codex_cli_version: health.version,
       execution: {
         ...executionSummary,
+        outcome: 'failed',
+        heartbeat_state: liveness.state,
+        released_resources: closed.released.map((record) => `verify-slot-${record.slot}:${record.state}`),
+      },
+    } satisfies CodexExecResult);
+    process.exit(1);
+  }
+
+  if (observation.status === 'mismatch') {
+    // The evidence above already records the mismatch; a run that did not use its
+    // declared routing is never reported as SUCCESS.
+    const closed = failVisiblyAndRelease({
+      issueId,
+      outcome: 'failed',
+      reason: `model routing mismatch: ${observation.reason}`,
+      identity: attemptStart.identity,
+    });
+    emitJson({
+      ok: false,
+      code: 'ROUTING_MISMATCH',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message:
+        `Codex ran with routing that differs from the declared routing (${observation.mismatched_fields.join(', ')}): ` +
+        `declared ${modelRouting.model}/${modelRouting.reasoning_effort}, observed ` +
+        `${observation.model ?? 'unknown'}/${observation.reasoning_effort ?? 'unknown'} in session ${observation.session_id ?? 'unknown'}. ` +
+        `Evidence: ${evidencePath}`,
+      codex_exit_code: exitCode,
+      wrapper_exit_code: 1,
+      model_profile: modelRouting.profile,
+      model: modelRouting.model,
+      reasoning_effort: modelRouting.reasoning_effort,
+      policy_version: modelRouting.policy_version,
+      legacy_compatibility_used: routing.legacy_compatibility_used,
+      codex_cli_version: health.version,
+      observation_status: observation.status,
+      execution: {
+        ...executionSummary,
+        phase: closed.checkpoint?.phase ?? executionSummary.phase,
         outcome: 'failed',
         heartbeat_state: liveness.state,
         released_resources: closed.released.map((record) => `verify-slot-${record.slot}:${record.state}`),
@@ -1328,6 +1597,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     source_files_changed: truth.source_files_changed,
     evidence_artifacts_changed: truth.evidence_artifacts_changed,
     checkpoint_provenance: truth.checkpoint_provenance,
+    observation_status: observation.status,
+    pr: observePullRequest(resolvedCwd, manifest.branch),
     execution: {
       ...executionSummary,
       phase: completed?.phase ?? executionSummary.phase,

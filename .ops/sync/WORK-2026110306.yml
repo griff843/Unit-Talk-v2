@@ -1,0 +1,117 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026110306
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026110306
+  objective: >-
+    WORK-2026110301 merged as PR #1824 (merge
+    bb1947e317679d573e00f3b1d2fcd350873b4345), and main CI on that SHA passed.
+    Its post-merge closeout (run 41672372626) refused with
+    `unbindable_proof_artifact`:
+    `docs/06_status/proof/WORK-2026110301/diff-summary.md` ends with `Merge SHA:
+    pending governed merge; post-merge binding remains for the authorized
+    closeout path.`, which is not a placeholder the rebinder recognizes. Its
+    `verification.md` already uses the recognized `Merge SHA: pending merge`
+    placeholder.
+
+    Replace only that line with `Merge SHA: pending merge`, so the closeout
+    rebinder binds the real merge SHA itself. Then re-dispatch
+    `post-merge-lane-close.yml` for WORK-2026110301 without the `pr` input.
+  acceptance_criteria:
+    - Exactly one line changes in
+      `docs/06_status/proof/WORK-2026110301/diff-summary.md`. No proof
+      assertion, evidence, result or other file of that bundle is changed.
+    - No merge SHA is hand-written into the proof. The rebinder binds it during
+      closeout.
+    - WORK-2026110301 then passes `ops:truth-check` through
+      `post-merge-lane-close.yml`, or the exact remaining blocker is named.
+  guardrails:
+    - No bypass of direct-main, review, CI, proof or merge controls. No lane
+      identity or evidence field is edited.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026110306 — Make the WORK-2026110301 diff summary bindable so its
+      merged lane can close
+
+      Tier: T3
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026110306.md
+    title: WORK-2026110306 — Make the WORK-2026110301 diff summary bindable so its
+      merged lane can close
+    description: >-
+      # WORK-2026110306 — Make the WORK-2026110301 diff summary bindable so its
+      merged lane can close
+
+
+      Tier: T3
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Objective
+
+
+      WORK-2026110301 merged as PR #1824 (merge
+      bb1947e317679d573e00f3b1d2fcd350873b4345), and main CI on that SHA passed.
+      Its post-merge closeout (run 41672372626) refused with
+      `unbindable_proof_artifact`:
+      `docs/06_status/proof/WORK-2026110301/diff-summary.md` ends with `Merge
+      SHA: pending governed merge; post-merge binding remains for the authorized
+      closeout path.`, which is not a placeholder the rebinder recognizes. Its
+      `verification.md` already uses the recognized `Merge SHA: pending merge`
+      placeholder.
+
+
+      Replace only that line with `Merge SHA: pending merge`, so the closeout
+      rebinder binds the real merge SHA itself. Then re-dispatch
+      `post-merge-lane-close.yml` for WORK-2026110301 without the `pr` input.
+
+
+      ## Acceptance Criteria
+
+
+      - Exactly one line changes in
+      `docs/06_status/proof/WORK-2026110301/diff-summary.md`. No proof
+      assertion, evidence, result or other file of that bundle is changed.
+
+      - No merge SHA is hand-written into the proof. The rebinder binds it
+      during closeout.
+
+      - WORK-2026110301 then passes `ops:truth-check` through
+      `post-merge-lane-close.yml`, or the exact remaining blocker is named.
+
+
+      ## Guardrails
+
+
+      - No bypass of direct-main, review, CI, proof or merge controls. No lane
+      identity or evidence field is edited.
+    captured_at: 2026-11-03T17:12:51.543Z
+    description_sha256: c650041be13a9ff7ef2754cf98d3fce2224e3ee6e113e923fe218e36c3b7b4b0
+  contract_hash: afca986c5e0b1e7ba37e0a1f90bb87d0f3580eb9b4f323d45f66c9d2e033ae64

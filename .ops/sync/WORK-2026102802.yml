@@ -1,0 +1,301 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102802
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102802
+  objective: "WORK-2026102802 — Command Center Wave 1: find a pick, confirm what
+    you are settling, read truthful cohorts"
+  acceptance_criteria:
+    - "**Emblem.** `LogoMark` in `WorkspaceSidebar.tsx` uses the approved Smart
+      Form emblem geometry: viewBox `0 0 740 500` and the two paths in
+      `apps/smart-form/app/submit/components/BrandLogo.tsx`, at an explicit
+      40x40. There is no app-to-app import and no other sidebar change."
+    - '**Settlement target checkpoint.** When `/settlement?pickId=…` loads a
+      pick, the workbench shows a human-readable identity summary above the
+      controls instead of only "Authoritative target: <UUID>":'
+    - capper, sport, matchup/event, market, selection, line, odds, stake (units)
+      and submitted time;
+    - lifecycle status, current effective settlement result (if any) and its
+      source.
+    - For a correction, it shows the current result → proposed result before
+      confirmation.
+    - The UUID stays visible as secondary text.
+    - Identity is loaded by a new server-side read in
+      `lib/data/pick-identity.ts`, called from `SettlementWorkbench` (or a child
+      server component). `app/settlement/page.tsx` is NOT edited; it belongs to
+      WORK-2026102801.
+    - The existing confirmation, immutable append semantics and server action
+      are unchanged.
+    - "**Global pick lookup.** The command palette (`Jump to…`) returns governed
+      picks by full ID or by ID fragment (≥ 6 hex characters)."
+    - Each result shows its capper, matchup, selection and status, and opens
+      `/picks/<id>`.
+    - Surface navigation entries are preserved.
+    - The lookup is a server action in `app/actions/pick-lookup.ts`, guarded
+      like the existing actions there (`server-action-guard.test.ts` must stay
+      green), and honours the governed operator-pick population
+      (`applyOperatorPickPopulation` or the existing equivalent).
+    - Fixtures are excluded, matching the existing default.
+    - "**Capper / sport / date discovery on Picks.** The Picks explorer gains
+      explicit capper, sport, date-range and result controls."
+    - Free-text search also matches capper name and pick-ID prefix. Today,
+      filtering by `kingro623` returns zero rows although that capper's pick is
+      listed.
+    - Filter state is kept in the URL. The governed population predicates are
+      unchanged.
+    - "**Truthful cohort labels.** The ROI page (`intelligence/roi/page.tsx`)
+      says plainly that it shows the **published** cohort, names its time
+      window, and explains that internal Track Only picks are excluded. It also
+      links to Performance, where those picks are shown."
+    - Track Only must NOT be added to published metrics, and `analytics.ts` is
+      not changed.
+    - '"No settled picks yet" must not appear without that cohort qualification.'
+    - "**Tests.** Unit tests cover:"
+    - the palette model mapping for ID and fragment results;
+    - the pick-identity mapping, including a pick with no settlement and one
+      with a correction;
+    - the picks-explorer query's capper/sport/date/result/ID-prefix parsing.
+    - New test files live under `src/lib/` or `src/lib/data/`, so the existing
+      `test` glob runs them.
+    - "**Visual check.** Codex runs CC locally and checks each changed surface
+      at desktop and at 390x844, with screenshots in the PR body or the lane
+      proof. Production data is read only. No pick, settlement, correction,
+      delivery or provider state is written during testing."
+  guardrails:
+    - "Do not touch WORK-2026102801's files: `lib/data/results-ops.ts`,
+      `results-ops.test.ts`, `app/settlement/page.tsx` and `lib/types.ts`. Do
+      not touch the files reserved for the follow-on score-check lane:
+      `SettlementForm.tsx` and `app/picks/[id]/page.tsx`."
+    - Do not change `settle.ts`, the API settle contract, authentication,
+      operator identity or `settled_by` attribution. Corrections semantics,
+      schema, delivery, kill switches and containment are also out of scope.
+    - "No second pick composer: Smart Form remains the only submission surface."
+    - No new dependency. No app-to-app import.
+    - No production writes during development or visual testing.
+    - Wave 2 items (pick-detail hierarchy, active/history split, mobile drawer
+      focus, the Open alerts button) are out of scope.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - "`pnpm verify:quick` and `pnpm test:command-center` are green on the
+      branch, and visual check evidence is attached."
+    - PR merged through `ops:merge-wrapper pr-merge` on green required checks.
+      Deployment is a separate, owner-authorized release.
+  unmapped_sections:
+    - >-
+      WORK-2026102802 — Command Center Wave 1: find a pick, confirm what you are
+      settling, read truthful cohorts
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). This is
+      Wave 1 of the Command Center operator review of 2026-10-28 (sequence item
+      1), and was admitted by PM on 2026-10-28. The goal is that Griff can
+      discover a real pick, settle it with clear wager context, and reconcile
+      accurate performance. Product authority:
+      `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md` §3.3, §4.1, §4.2,
+      §5.5.
+
+
+      The Track Only awaiting-settlement queue is a separate lane,
+      WORK-2026102801. This lane must not implement it, duplicate it or touch
+      its files.
+
+
+      ## File Scope
+
+
+      - apps/command-center/src/components/WorkspaceSidebar.tsx
+
+      - apps/command-center/src/components/SettlementWorkbench.tsx
+
+      - apps/command-center/src/components/SettlementTargetSummary.tsx
+
+      - apps/command-center/src/components/CorrectionForm.tsx
+
+      - apps/command-center/src/components/CommandPalette.tsx
+
+      - apps/command-center/src/lib/command-palette-model.ts
+
+      - apps/command-center/src/lib/command-palette-model.test.ts
+
+      - apps/command-center/src/lib/data/pick-identity.ts
+
+      - apps/command-center/src/lib/data/pick-identity.test.ts
+
+      - apps/command-center/src/app/actions/pick-lookup.ts
+
+      - apps/command-center/src/app/picks/page.tsx
+
+      - apps/command-center/src/components/PicksExplorerClient.tsx
+
+      - apps/command-center/src/lib/picks-explorer-query.ts
+
+      - apps/command-center/src/lib/picks-explorer-query.test.ts
+
+      - apps/command-center/src/lib/data/queues.ts
+
+      - apps/command-center/src/app/intelligence/roi/page.tsx
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102802.md
+    title: "WORK-2026102802 — Command Center Wave 1: find a pick, confirm what you
+      are settling, read truthful cohorts"
+    description: >-
+      # WORK-2026102802 — Command Center Wave 1: find a pick, confirm what you
+      are settling, read truthful cohorts
+
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). This is
+      Wave 1 of the Command Center operator review of 2026-10-28 (sequence item
+      1), and was admitted by PM on 2026-10-28. The goal is that Griff can
+      discover a real pick, settle it with clear wager context, and reconcile
+      accurate performance. Product authority:
+      `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md` §3.3, §4.1, §4.2,
+      §5.5.
+
+
+      The Track Only awaiting-settlement queue is a separate lane,
+      WORK-2026102801. This lane must not implement it, duplicate it or touch
+      its files.
+
+
+      ## Acceptance Criteria
+
+
+      1. **Emblem.** `LogoMark` in `WorkspaceSidebar.tsx` uses the approved
+      Smart Form emblem geometry: viewBox `0 0 740 500` and the two paths in
+      `apps/smart-form/app/submit/components/BrandLogo.tsx`, at an explicit
+      40x40. There is no app-to-app import and no other sidebar change.
+
+
+      2. **Settlement target checkpoint.** When `/settlement?pickId=…` loads a
+      pick, the workbench shows a human-readable identity summary above the
+      controls instead of only "Authoritative target: <UUID>":
+         - capper, sport, matchup/event, market, selection, line, odds, stake (units) and submitted time;
+         - lifecycle status, current effective settlement result (if any) and its source.
+         - For a correction, it shows the current result → proposed result before confirmation.
+         - The UUID stays visible as secondary text.
+         - Identity is loaded by a new server-side read in `lib/data/pick-identity.ts`, called from `SettlementWorkbench` (or a child server component). `app/settlement/page.tsx` is NOT edited; it belongs to WORK-2026102801.
+         - The existing confirmation, immutable append semantics and server action are unchanged.
+
+      3. **Global pick lookup.** The command palette (`Jump to…`) returns
+      governed picks by full ID or by ID fragment (≥ 6 hex characters).
+         - Each result shows its capper, matchup, selection and status, and opens `/picks/<id>`.
+         - Surface navigation entries are preserved.
+         - The lookup is a server action in `app/actions/pick-lookup.ts`, guarded like the existing actions there (`server-action-guard.test.ts` must stay green), and honours the governed operator-pick population (`applyOperatorPickPopulation` or the existing equivalent).
+         - Fixtures are excluded, matching the existing default.
+
+      4. **Capper / sport / date discovery on Picks.** The Picks explorer gains
+      explicit capper, sport, date-range and result controls.
+         - Free-text search also matches capper name and pick-ID prefix. Today, filtering by `kingro623` returns zero rows although that capper's pick is listed.
+         - Filter state is kept in the URL. The governed population predicates are unchanged.
+
+      5. **Truthful cohort labels.** The ROI page (`intelligence/roi/page.tsx`)
+      says plainly that it shows the **published** cohort, names its time
+      window, and explains that internal Track Only picks are excluded. It also
+      links to Performance, where those picks are shown.
+         - Track Only must NOT be added to published metrics, and `analytics.ts` is not changed.
+         - "No settled picks yet" must not appear without that cohort qualification.
+
+      6. **Tests.** Unit tests cover:
+         - the palette model mapping for ID and fragment results;
+         - the pick-identity mapping, including a pick with no settlement and one with a correction;
+         - the picks-explorer query's capper/sport/date/result/ID-prefix parsing.
+         New test files live under `src/lib/` or `src/lib/data/`, so the existing `test` glob runs them.
+
+      7. **Visual check.** Codex runs CC locally and checks each changed surface
+      at desktop and at 390x844, with screenshots in the PR body or the lane
+      proof. Production data is read only. No pick, settlement, correction,
+      delivery or provider state is written during testing.
+
+
+      ## File Scope
+
+
+      - apps/command-center/src/components/WorkspaceSidebar.tsx
+
+      - apps/command-center/src/components/SettlementWorkbench.tsx
+
+      - apps/command-center/src/components/SettlementTargetSummary.tsx
+
+      - apps/command-center/src/components/CorrectionForm.tsx
+
+      - apps/command-center/src/components/CommandPalette.tsx
+
+      - apps/command-center/src/lib/command-palette-model.ts
+
+      - apps/command-center/src/lib/command-palette-model.test.ts
+
+      - apps/command-center/src/lib/data/pick-identity.ts
+
+      - apps/command-center/src/lib/data/pick-identity.test.ts
+
+      - apps/command-center/src/app/actions/pick-lookup.ts
+
+      - apps/command-center/src/app/picks/page.tsx
+
+      - apps/command-center/src/components/PicksExplorerClient.tsx
+
+      - apps/command-center/src/lib/picks-explorer-query.ts
+
+      - apps/command-center/src/lib/picks-explorer-query.test.ts
+
+      - apps/command-center/src/lib/data/queues.ts
+
+      - apps/command-center/src/app/intelligence/roi/page.tsx
+
+
+      ## Guardrails
+
+
+      - Do not touch WORK-2026102801's files: `lib/data/results-ops.ts`,
+      `results-ops.test.ts`, `app/settlement/page.tsx` and `lib/types.ts`. Do
+      not touch the files reserved for the follow-on score-check lane:
+      `SettlementForm.tsx` and `app/picks/[id]/page.tsx`.
+
+      - Do not change `settle.ts`, the API settle contract, authentication,
+      operator identity or `settled_by` attribution. Corrections semantics,
+      schema, delivery, kill switches and containment are also out of scope.
+
+      - No second pick composer: Smart Form remains the only submission surface.
+
+      - No new dependency. No app-to-app import.
+
+      - No production writes during development or visual testing.
+
+      - Wave 2 items (pick-detail hierarchy, active/history split, mobile drawer
+      focus, the Open alerts button) are out of scope.
+
+
+      ## Exit Criteria
+
+
+      - `pnpm verify:quick` and `pnpm test:command-center` are green on the
+      branch, and visual check evidence is attached.
+
+      - PR merged through `ops:merge-wrapper pr-merge` on green required checks.
+      Deployment is a separate, owner-authorized release.
+    captured_at: 2026-10-28T13:10:46.149Z
+    description_sha256: 05a5742748996c70a80952a687d802fa4d3de879be016e731f0cb70d3d20fcd0
+  contract_hash: 995f2a2f4c0528445b373a3ac861050c9e4c142198cd043483f6effdaa0fb723

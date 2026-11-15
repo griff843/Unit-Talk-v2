@@ -54,6 +54,8 @@ const ODDS_API_PATTERNS: RegExp[] = [
  *   8. EVENT_IDENTITY_CONTRACT — describes ingestor architecture history
  *   9. UTV2-prefixed scripts — issue-scoped artifacts, not active operational scripts
  *   10. PROGRAM_STATUS.md historical entries — sprint retrospective text is not active work
+ *   11. PROVIDER_AUTHORITY_LOCK Amendment A1 (ratified 2026-11-11) — game-score evaluation files
+ *       only, named `odds-api-scores`. Engineering and staging only; not a general exemption.
  */
 const ALLOWED_HISTORICAL_PATTERNS: RegExp[] = [
   /historical/i,
@@ -73,6 +75,8 @@ const ALLOWED_HISTORICAL_PATTERNS: RegExp[] = [
   /scripts\/utv2-/i,
   // PROGRAM_STATUS.md sprint retrospective entries reference historical state
   /PROGRAM_STATUS/i,
+  // PROVIDER_AUTHORITY_LOCK Amendment A1: game-score evaluation files only (WORK-2026111101)
+  /odds-api-scores/,
 ];
 
 // ── Types ────────────────────────────────────────────────────────────────────

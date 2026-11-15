@@ -1,0 +1,43 @@
+{
+  "status": "PASS",
+  "results": [
+    {
+      "file": "apps/smart-form/app/submit/components/BetForm.tsx",
+      "originalEventHandlers": 106,
+      "preserved": true
+    },
+    {
+      "file": "apps/smart-form/app/submit/components/BetSlipPanel.tsx",
+      "originalEventHandlers": 7,
+      "preserved": true
+    },
+    {
+      "file": "apps/smart-form/lib/form-utils.ts",
+      "byteIdentical": true
+    },
+    {
+      "file": "apps/smart-form/test/form-utils.test.ts",
+      "byteIdentical": true
+    },
+    {
+      "file": "apps/smart-form/e2e/phase-one.spec.ts",
+      "byteIdentical": true
+    },
+    {
+      "file": "apps/smart-form/lib/form-schema.ts",
+      "byteIdentical": true
+    },
+    {
+      "file": "apps/smart-form/lib/api-client.ts",
+      "byteIdentical": true
+    },
+    {
+      "file": "apps/smart-form/lib/delivery-disposition.ts",
+      "byteIdentical": true
+    },
+    {
+      "file": "apps/smart-form/app/submit/components/SuccessReceipt.tsx",
+      "byteIdentical": true
+    }
+  ]
+}

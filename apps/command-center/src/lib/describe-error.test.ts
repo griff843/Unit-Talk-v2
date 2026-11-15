@@ -30,12 +30,44 @@ test('primitives pass through', () => {
   assert.equal(describeThrown(undefined), 'undefined');
 });
 
-test('operator failure text omits verbose transport details and is bounded', () => {
-  const out = describeOperatorFailure({
-    message: 'TypeError: fetch failed',
-    code: '',
-    details: `stack ${'frame '.repeat(100)}`,
+const failures: Array<[unknown, string]> = [
+  [{ code: '42501' }, 'Access to this data was refused. Ask an administrator to check your access.'],
+  [{ status: 403 }, 'Access to this data was refused. Ask an administrator to check your access.'],
+  [{ status: 401 }, 'Your session could not be verified. Sign in again, then retry.'],
+  [{ code: 'PGRST301' }, 'Your session could not be verified. Sign in again, then retry.'],
+  [{ code: '57014' }, 'This data took too long to load. Retry; if it continues, contact support.'],
+  [new Error('statement timeout'), 'This data took too long to load. Retry; if it continues, contact support.'],
+  ['request timed out', 'This data took too long to load. Retry; if it continues, contact support.'],
+  [new TypeError('fetch failed'), 'The data service could not be reached. Retry; if it continues, contact support.'],
+  ['Failed to fetch', 'The data service could not be reached. Retry; if it continues, contact support.'],
+  ['Network request failed', 'The data service could not be reached. Retry; if it continues, contact support.'],
+  [null, 'Data source unavailable. Retry; if it continues, contact support.'],
+];
+for (const [error, expected] of failures) {
+  test(`operator failure provides an action: ${JSON.stringify(error)} ${expected}`, () => {
+    assert.equal(describeOperatorFailure(error), expected);
   });
-  assert.equal(out, 'TypeError: fetch failed');
-  assert.ok(describeOperatorFailure({ weird: 'x'.repeat(300) }).length <= 180);
+}
+
+test('operator failure never returns raw message, code, details or stack', () => {
+  for (const code of ['42501', 'PGRST301', '57014', 'XX999']) {
+    const error = { code, message: 'secret database relation internal_table', details: 'secret details', stack: 'at secret stack frame' };
+    const text = describeOperatorFailure(error);
+    for (const raw of Object.values(error)) assert.ok(!text.includes(raw));
+    assert.match(text, /administrator|Sign in|Retry/);
+    assert.ok(describeThrown(error).includes(error.message));
+    assert.ok(describeThrown(error).includes(code));
+  }
+  assert.equal(describeOperatorFailure({}, 'Canonical pick state could not be loaded.'),
+    'Canonical pick state could not be loaded. Retry; if it continues, contact support.');
+});
+
+test('ordinary errors cannot pass through text that resembles operator input guidance', () => {
+  const message = 'Use a valid calendar date for pick filters.';
+  for (const error of [new Error(message), { message, code: 'XX999' }, message]) {
+    assert.equal(
+      describeOperatorFailure(error, 'Canonical pick state could not be loaded.'),
+      'Canonical pick state could not be loaded. Retry; if it continues, contact support.',
+    );
+  }
 });

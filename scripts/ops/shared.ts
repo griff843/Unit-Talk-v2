@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { loadLaneManifest, matchesAny } from '../lane-contract.js';
 import type { ModelRoutingBlock } from './model-routing.js';
 
 export type LaneTier = 'T1' | 'T2' | 'T3';
@@ -939,26 +940,36 @@ export const DELIVERY_UI_APP_ROOTS: Readonly<Record<string, string>> = {
 };
 
 /**
- * Deterministically derives which Delivery/UI app a lane's file_scope_lock
- * belongs to (UTV2-1533 P2 fix). Deliberately does NOT infer from free-form
- * text (issue title, branch name, commit message) -- only from file_scope_lock,
- * which is validated, canonical, and immutable for lane life. Fails closed
- * (returns null) when the scope is empty, touches zero canonical app roots, or
- * spans more than one app -- callers must treat null as "cannot admit this
- * lane" rather than falling back to a guess.
+ * Derives exactly one canonical Delivery/UI app from the immutable file scope.
+ * Supporting paths do not identify an app: they must independently satisfy the
+ * delivery-ui lane's allowlist and denylist. Unknown paths, multiple apps, and
+ * supporting-only scopes fail closed, as does unavailable supporting-path policy.
  */
 export function deriveDeliveryUiApp(fileScopeLock: string[]): string | null {
   if (fileScopeLock.length === 0) return null;
-  const apps = new Set<string>();
-  for (const entry of fileScopeLock) {
-    const normalized = entry.replace(/^\.\//, '');
-    const match = Object.entries(DELIVERY_UI_APP_ROOTS).find(([, prefix]) =>
-      normalized.startsWith(prefix),
-    );
-    if (!match) return null;
-    apps.add(match[0]);
+  try {
+    const policy = loadLaneManifest('delivery-ui', ROOT);
+    const apps = new Set<string>();
+    const supportingPaths: string[] = [];
+    for (const entry of fileScopeLock) {
+      const normalized = normalizeRepoRelativePath(entry);
+      const match = Object.entries(DELIVERY_UI_APP_ROOTS).find(([, prefix]) =>
+        normalized.startsWith(prefix),
+      );
+      if (match) apps.add(match[0]);
+      else supportingPaths.push(normalized);
+    }
+    if (apps.size !== 1) return null;
+    if (supportingPaths.length > 0) {
+      if (supportingPaths.some((entry) =>
+        !matchesAny(entry, policy.allowed_path_globs) ||
+        matchesAny(entry, policy.forbidden_path_globs),
+      )) return null;
+    }
+    return [...apps][0]!;
+  } catch {
+    return null;
   }
-  return apps.size === 1 ? [...apps][0]! : null;
 }
 
 /**
@@ -1436,11 +1447,22 @@ export interface ActiveLaneDiscoveryDeps {
 
 /**
  * Extracts the canonical issue id from a lane branch name
- * (`claude/utv2-1634-slug` -> `UTV2-1634`). Returns null for branches that are
- * not lane branches, which are skipped rather than treated as failures.
+ * (`claude/utv2-1634-slug` -> `UTV2-1634`, `claude/work-2026110804-slug` ->
+ * `WORK-2026110804`). Returns null for branches that are not lane branches,
+ * which are skipped rather than treated as failures.
+ *
+ * WORK-2026111104: the namespaces come from ISSUE_ID_NAMESPACES. This used to
+ * hard-code `utv2|uni`, so every open `WORK-###` lane PR was skipped by
+ * open-PR lock discovery and its file locks were invisible to `ops:lane-start`
+ * from any checkout other than the one that started it.
  */
+const BRANCH_ISSUE_ID_PATTERN = new RegExp(
+  `^(?:[a-z][a-z0-9-]*)\\/(${ISSUE_NAMESPACE_ALTERNATION})-(\\d+)(?:-|$)`,
+  'i',
+);
+
 export function issueIdFromBranchName(branch: string): string | null {
-  const match = /^(?:[a-z][a-z0-9-]*)\/(utv2|uni)-(\d+)(?:-|$)/i.exec(branch);
+  const match = BRANCH_ISSUE_ID_PATTERN.exec(branch);
   return match ? `${match[1]!.toUpperCase()}-${match[2]}` : null;
 }
 
@@ -1861,7 +1883,7 @@ export function resolveActiveLaneManifests(
       skippedPullRequests.push({
         number: pullRequest.number,
         headRefName: pullRequest.headRefName ?? '',
-        reason: 'branch name carries no UTV2-/UNI- issue id',
+        reason: `branch name carries no ${ISSUE_ID_NAMESPACES.map((ns) => `${ns}-`).join('/')} issue id`,
       });
       continue;
     }

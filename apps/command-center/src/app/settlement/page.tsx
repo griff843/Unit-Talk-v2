@@ -1,6 +1,6 @@
 import Link from '@/components/OperatorLink';
 import { StatCard, InternalLabelBadge, Table, TableHead, TableBody, Th, Td, EmptyState, SeverityBadge } from '@/components/ui';
-import { getResultsOpsSnapshot, type ResultsOpsSnapshot, type SettlementOpsRow, type DeliveredAwaitingSettlementRow, type SettlementPage } from '@/lib/data/results-ops';
+import { getResultsOpsSnapshot, type ResultsOpsSnapshot, type SettlementOpsRow, type DeliveredAwaitingSettlementRow, type TrackOnlyAwaitingSettlementRow, type SettlementPage } from '@/lib/data/results-ops';
 import { formatRelativeAge } from '@/lib/fire-board-model';
 import { renderClvSummary, isClvUnresolved } from '@/lib/clv-summary';
 import { SettlementWorkbench } from '@/components/SettlementWorkbench';
@@ -167,6 +167,48 @@ function DeliveredAwaitingTable({ rows, nowMs }: { rows: DeliveredAwaitingSettle
   );
 }
 
+function TrackOnlyAwaitingTable({ rows, nowMs }: { rows: TrackOnlyAwaitingSettlementRow[]; nowMs: number }) {
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHead>
+          <Th>Pick</Th>
+          <Th>Capper</Th>
+          <Th>Event</Th>
+          <Th>Sport</Th>
+          <Th>Market / Selection</Th>
+          <Th>Line</Th>
+          <Th>Odds</Th>
+          <Th>Units</Th>
+          <Th>Submitted</Th>
+        </TableHead>
+        <TableBody>
+          {rows.map((row) => (
+            <tr key={row.id} className="border-b border-gray-800/60">
+              <Td>
+                <Link href={`/picks/${row.id}`} className="font-mono text-xs text-blue-400 hover:underline">
+                  {row.id.slice(0, 8)}…
+                </Link>
+              </Td>
+              <Td>{row.capperDisplayName ?? row.capperId ?? '—'}</Td>
+              <Td>{row.eventName ?? '—'}</Td>
+              <Td>{row.sportDisplayName ?? '—'}</Td>
+              <Td>
+                {row.market ?? '—'}
+                {row.selection ? <span className="cc-text-muted"> · {row.selection}</span> : null}
+              </Td>
+              <Td><span className="cc-num">{row.line ?? '—'}</span></Td>
+              <Td><span className="cc-num">{row.odds ?? '—'}</span></Td>
+              <Td><span className="cc-num">{row.stakeUnits ?? '—'}</span></Td>
+              <Td>{formatRelativeAge(row.submittedAt, nowMs) ?? '—'}</Td>
+            </tr>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 export default async function SettlementPage({
   searchParams: searchParamsPromise,
 }: {
@@ -248,7 +290,7 @@ export default async function SettlementPage({
             isAlreadySettled={isAlreadySettled}
             pickLoadError={pickLoadError}
           />
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <StatCard label="Settlement Records (24h)" value={snapshot.counts.settled24h} />
             <StatCard label="Manual Review Open" value={snapshot.counts.manualReviewOpen} />
             <StatCard label="Corrections" value={snapshot.counts.corrections} />
@@ -256,6 +298,10 @@ export default async function SettlementPage({
             <StatCard
               label="Delivered — Awaiting Settlement"
               value={snapshot.counts.deliveredAwaitingSettlement}
+            />
+            <StatCard
+              label="Track Only — Awaiting Settlement"
+              value={snapshot.counts.trackOnlyAwaitingSettlement}
             />
             <div className="cc-surface p-5">
               <p className="text-xs font-semibold uppercase tracking-wide cc-text-secondary">Game Results Freshness</p>
@@ -266,6 +312,20 @@ export default async function SettlementPage({
                 {snapshot.gameResults.unavailable ? 'Results-feed evidence could not be read. Settlement history is still available.' : `${snapshot.gameResults.count24h} results received in the last 24 hours`}
               </p>
             </div>
+          </div>
+
+          <div className="cc-surface p-5">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
+              Track Only — Awaiting Settlement ({snapshot.counts.trackOnlyAwaitingSettlement})
+            </h2>
+            <p className="mb-3 text-xs cc-text-muted">
+              Track-only picks are not delivered, but remain available here for manual settlement. Each row is shown across all cappers and links to its canonical pick detail.
+            </p>
+            {snapshot.trackOnlyAwaitingSettlement.length === 0 ? (
+              <EmptyState message="No track-only picks are awaiting settlement." />
+            ) : (
+              <TrackOnlyAwaitingTable rows={snapshot.trackOnlyAwaitingSettlement} nowMs={nowMs} />
+            )}
           </div>
 
           <div className="cc-surface p-5">

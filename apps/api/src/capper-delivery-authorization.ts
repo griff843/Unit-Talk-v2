@@ -34,6 +34,7 @@
  */
 
 import {
+  isMemberVisibleDeliveryAudience,
   capperDiscordRoutingRefusalReasons,
   humanCapperDeliveryAuthorizationVersion,
   readCapperDiscordRouting,
@@ -41,15 +42,50 @@ import {
   type HumanCapperDeliveryRefusalReason,
 } from '@unit-talk/contracts';
 
+/** Shared bounded pin reads for member projections; never changes pick rows. */
+export async function filterMemberVisibleDeliveryPicks<
+  T extends { id: string; metadata: unknown },
+>(
+  picks: readonly T[],
+  outbox: {
+    listByPickId(
+      pickId: string,
+    ): Promise<readonly { pick_id: string; payload: unknown }[]>;
+  },
+): Promise<T[]> {
+  const visible: T[] = [];
+  for (let start = 0; start < picks.length; start += 8) {
+    const batch = await Promise.all(
+      picks.slice(start, start + 8).map(async (pick) => {
+        if (!isMemberVisibleDeliveryAudience(pick.metadata)) return false;
+        const rows = await outbox.listByPickId(pick.id);
+        if (rows.some((row) => row.pick_id !== pick.id))
+          throw new Error('Audience delivery history is inconsistent');
+        return isMemberVisibleDeliveryAudience(
+          pick.metadata,
+          rows.map((row) => row.payload),
+        );
+      }),
+    );
+    batch.forEach((memberVisible, index) => {
+      const pick = picks[start + index];
+      if (memberVisible && pick) visible.push(pick);
+    });
+  }
+  return visible;
+}
+
 /** The env var carrying the allow-list. Its NAME is recorded; its contents never are. */
-export const CAPPER_DELIVERY_ALLOWLIST_ENV = 'UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST';
+export const CAPPER_DELIVERY_ALLOWLIST_ENV =
+  'UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST';
 
 /**
  * The deployment posture switch. Human capper delivery is off unless the
  * deployment says otherwise, independently of who is on the allow-list — so a
  * stale allow-list in a config file cannot by itself open the path.
  */
-export const CAPPER_DELIVERY_POSTURE_ENV = 'UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED';
+export const CAPPER_DELIVERY_POSTURE_ENV =
+  'UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED';
 
 export interface CapperDeliveryAuthorizationEnv {
   UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST?: string | undefined;
@@ -60,7 +96,9 @@ export interface CapperDeliveryAuthorizationEnv {
  * Parse the allow-list. Case-insensitive on capper identity, whitespace
  * tolerant, and empty for every falsy or blank input.
  */
-export function parseCapperDeliveryAllowlist(raw: string | undefined | null): string[] {
+export function parseCapperDeliveryAllowlist(
+  raw: string | undefined | null,
+): string[] {
   if (typeof raw !== 'string') return [];
   return [
     ...new Set(
@@ -105,7 +143,9 @@ export function evaluateCapperDeliveryAuthorization(
       ? input.capperId.trim()
       : null;
 
-  const refuse = (reason: HumanCapperDeliveryRefusalReason): HumanCapperDeliveryAuthorization => ({
+  const refuse = (
+    reason: HumanCapperDeliveryRefusalReason,
+  ): HumanCapperDeliveryAuthorization => ({
     version: humanCapperDeliveryAuthorizationVersion,
     decision: 'refused',
     capperId,
@@ -188,6 +228,7 @@ export type CapperDeliveryDestinationRefusalReason =
   (typeof capperDeliveryDestinationRefusalReasons)[number];
 
 export interface CapperDeliveryDestination {
+  audience: import('@unit-talk/contracts').DeliveryAudience;
   capperId: string;
   guildId: string;
   /** The capper's own picks-only destination. */
@@ -251,14 +292,21 @@ export function resolveCapperDeliveryDestination(
   }
 
   const reservedChannelId = env.DISCORD_CAPPER_CHANNEL_ID?.trim();
-  if (reservedChannelId && parsed.routing.picksChannelId === reservedChannelId) {
-    return { decision: 'refused', reason: 'picks-channel-is-reserved-global-channel' };
+  if (
+    reservedChannelId &&
+    parsed.routing.picksChannelId === reservedChannelId
+  ) {
+    return {
+      decision: 'refused',
+      reason: 'picks-channel-is-reserved-global-channel',
+    };
   }
 
   return {
     decision: 'routed',
     destination: {
       capperId: input.capperId,
+      audience: parsed.routing.audience,
       guildId: parsed.routing.guildId,
       channelId: parsed.routing.picksChannelId,
       source: 'cappers.metadata.discord.picksChannelId',

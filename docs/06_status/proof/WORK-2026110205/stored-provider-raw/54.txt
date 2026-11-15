@@ -1,0 +1,1 @@
+[{"playerId":"8476878","name":"Zemgus Girgensons","positionCode":"C","teamId":"14","teamAbbrev":"TBL","lastTeamId":"14","lastTeamAbbrev":"TBL","lastSeasonId":"20262027","sweaterNumber":28,"active":true,"height":"6'3\"","heightInInches":75,"heightInCentimeters":191,"weightInPounds":200,"weightInKilograms":90,"birthCity":"Riga","birthStateProvince":null,"birthCountry":"LVA"}]

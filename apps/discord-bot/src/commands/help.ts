@@ -12,54 +12,9 @@ import type { CommandHandler } from '../command-registry.js';
  * has no runtime dependency on the other command modules.
  */
 const COMMAND_ENTRIES: ReadonlyArray<{ name: string; description: string }> = [
-  {
-    name: 'alerts-setup',
-    description: 'Show alert agent status (operator only)',
-  },
-  { name: 'heat-signal', description: 'Line-movement alerts (not live yet)' },
-  {
-    name: 'live',
-    description: 'Show active picks that are still live on the board',
-  },
-  { name: 'today', description: "Show picks created in today's board window" },
-  {
-    name: 'my-picks',
-    description: 'Show picks that match your Discord identity',
-  },
-  {
-    name: 'results',
-    description: 'Show recent settled results with outcome visibility',
-  },
-  {
-    name: 'trial-status',
-    description: 'Show your current access tier and what it includes',
-  },
-  {
-    name: 'upgrade',
-    description: 'See your upgrade path and what higher tiers unlock',
-  },
-  {
-    name: 'pick',
-    description: 'Submit a capper pick through the canonical API path',
-  },
-  {
-    name: 'stats',
-    description:
-      'Show settled pick performance for a capper or the full server',
-  },
-  {
-    name: 'leaderboard',
-    description: 'Show the top cappers in the selected settled-pick window',
-  },
-  {
-    name: 'help',
-    description: 'Show all available commands and their descriptions',
-  },
-  { name: 'recap', description: 'Show your last settled picks' },
-  {
-    name: 'ops-restart',
-    description: 'Restart a named service — operator only, cooldown enforced',
-  },
+  { name: 'stats', description: 'View settled server results.' },
+  { name: 'leaderboard', description: 'Compare capper results.' },
+  { name: 'trial-status', description: 'Check your server access.' },
 ];
 
 export function createHelpCommand(): CommandHandler {
@@ -75,9 +30,10 @@ export function createHelpCommand(): CommandHandler {
       );
 
       const embed = createMemberEmbed()
-        .setTitle('Unit Talk — Available Commands')
-
-        .setDescription(lines.join('\n'));
+        .setTitle('Unit Talk — Member Tools')
+        .setDescription(
+          `${lines.join('\n')}\n\nNeed a hand? Visit <#1559933414281322586> or open a private ticket in <#1285609124050108436>.`,
+        );
 
       await interaction.editReply({ embeds: [embed] });
     },

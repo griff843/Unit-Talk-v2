@@ -377,7 +377,7 @@ Optional field `model_routing` (schema: `docs/05_operations/schemas/lane_manifes
 
 Canonical policy (concrete model IDs, reasoning efforts, enabled/disabled, permitted tiers, PM-authorization requirement): `docs/05_operations/policies/codex-model-routing.json`. This spec never duplicates that mapping.
 
-**Who writes it:** `ops:lane-start` only, at manifest creation, via `scripts/ops/model-routing.ts#resolveModelProfile` — never a later `update`. Required (creation fails without it) for any lane whose `executor` is `codex-cli` or `codex-cloud`. Forbidden (creation fails if present) for `executor: claude`. `validateManifest` independently rejects `model_routing` on a non-Codex `executor` on every write, defending against a hand-edited manifest, not just the creation-time guard.
+**Who writes it:** `ops:lane-start` at manifest creation, via `scripts/ops/model-routing.ts#resolveModelProfile` — never a later `update`. The one later writer is `reconcile-routing`, described below. Required (creation fails without it) for any lane whose `executor` is `codex-cli` or `codex-cloud`. Forbidden (creation fails if present) for `executor: claude`. `validateManifest` independently rejects `model_routing` on a non-Codex `executor` on every write, defending against a hand-edited manifest, not just the creation-time guard.
 
 **Compatibility cutoff:** there is no `schema_version` bump for this field — `schema_version` stays `1`. The cutoff is the field's *presence*. Manifests created by `ops:lane-start` after this field shipped always carry `model_routing`. Manifests created before it simply lack the field, and are never retroactively rewritten to add it — `writeManifest`/`updateManifest` never synthesize a missing `model_routing` for an existing manifest.
 
@@ -386,6 +386,55 @@ Canonical policy (concrete model IDs, reasoning efforts, enabled/disabled, permi
 **Fail-closed conditions** (creation or execution refuses to proceed): unknown profile, disabled profile, profile not permitted for the lane's tier, missing/invalid manual-override authority+reason on a profile that requires one, manifest's `model`/`reasoning_effort` no longer matching what current policy defines for that profile (drift/tamper), and manifest `model_routing.policy_version` not matching the currently loaded policy's version.
 
 A `model_routing` decision — including any manual override — never implies merge, scope, or tier authority. It only selects which Codex model and reasoning effort execute a lane whose tier, scope, and merge gates were already satisfied independently.
+
+### 15.1 Reconciling to the model a session reported running (WORK-2026102902)
+
+An independent Codex session, such as the browser-enabled Codex terminal, picks its model outside this repository. That model can differ from the routing declared at lane-start. Closeout (`rebindModelRoutingJsonSha`) and the pre-merge contract (`validatePreMergeModelRoutingEvidence`) both require the proof's `model-routing.json` to match the manifest. An honest sidecar would therefore leave the lane unable to close.
+
+```bash
+pnpm ops:lane-manifest -- reconcile-routing <ID> --profile <p> --model <m> \
+  (--reasoning-effort <e> | --reasoning-effort-unavailable) \
+  --source <where it was observed> --approval-comment <comment id or URL> [--json]
+```
+
+**Authorization.** There is no caller-supplied authorizer. The command fetches the approval comment from GitHub and accepts it only if all of these hold:
+- It is a `pm-verdict/v1` `APPROVED` verdict on the lane's own PR, which is read from `pr_url`. Placement is checked against the GitHub-supplied `issue_url` and the comment URL (repository and PR number), never against the comment's text.
+- Its author is a CODEOWNERS reviewer and is not a bot.
+- Its `Issue:`, `PR:` and `Head SHA:` match the lane and the PR's current head.
+- It contains the exact line `Routing reconciliation: <model> / <reasoning effort or unavailable>`.
+
+`override.authorized_by` is the comment author that GitHub reports. `override.approval` records the comment URL, the PR number and the head SHA.
+
+**Observed versus unavailable.** A reasoning effort the session did not expose is recorded as `unavailable`, never as a guessed value. `unavailable` cannot be passed through `--reasoning-effort`. Every reconciliation records the following in `override.observation`:
+- `verification: "unverified-external-session"`: the only level available, because this repository cannot attest an external session's model;
+- `source`;
+- `unavailable_fields`.
+
+The original routing is kept in `override.declared`, and a second reconciliation keeps the first one. The command refuses a non-Codex lane, a lane without `pr_url` or `model_routing`, a `done` lane, a no-op and missing flags. All missing flags are named in one error.
+
+**Sidecar.** On a reconciled lane, `validatePreMergeModelRoutingEvidence` requires the sidecar to carry:
+- the reported `model`, `reasoning_effort` and `model_profile`;
+- `override_used: true`, with `override_authorized_by` equal to the reviewer;
+- `execution_verification: "unverified-external-session"`;
+- the same `unavailable_fields`.
+
+So a sidecar cannot present the report as verified execution or claim an exact reasoning effort the manifest records as unavailable.
+
+**Writing the sidecar (WORK-2026110803).** `reconcile-routing` records the observation in the manifest only; the sidecar is produced by:
+
+```bash
+pnpm ops:lane-manifest write-reconciled-sidecar <ID> [--json]
+```
+
+It writes `docs/06_status/proof/<ID>/model-routing.json` from the reconciled manifest `model_routing` and nothing else, so no Codex execution is claimed: `codex_cli_version`, exit code, token usage, wall time, prompt bytes, `closeout_binding` and `merge_sha` are absent. The file carries the observed routing (`model`, `reasoning_effort`, `model_profile`, `policy_version`), `override_used: true`, `override_authorized_by`, `execution_verification: "unverified-external-session"`, the manifest's `unavailable_fields`, `routing_source: "reconciled-observation"`, the original routing under `declared_routing`, `observation_source` and the `approval` identity.
+
+- **Approval.** The command re-fetches the comment recorded in `override.approval` and re-verifies it as `reconcile-routing` did, against the head SHA the manifest stored at reconciliation. It does not require that head to be the PR's current head: an ordinary later push keeps the reconciliation valid, provided the stored head is still a commit in the PR's history. The approval GitHub returns must equal the stored comment URL, reviewer, PR and head.
+- **Refused:** a lane that was not reconciled, a non-Codex executor, a `done` lane, a missing approval record, an approval for a different PR or reviewer, an approval that no longer verifies, a stored head that is not in the PR history, and an existing sidecar whose content differs. An identical existing sidecar is left untouched.
+- **Validation.** The sidecar is checked with `validatePreMergeModelRoutingEvidence` (manifest routing and issue id) before an atomic write. Proof generation, closeout binding and merge controls are unchanged.
+
+**Limits:**
+- Reconciliation authorizes no execution. `validatePersistedModelRouting` returns `RECONCILED_OBSERVATION`, so `codex-exec` refuses a reconciled lane.
+- The approval is verified when the command runs. A later hand edit of the manifest shows up in the PR diff and can be re-checked against `override.approval.comment_url`.
 
 ## 16. Verification-lane target (UTV2-1533)
 

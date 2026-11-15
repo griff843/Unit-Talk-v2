@@ -1,0 +1,148 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026103004
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026103004
+  objective: "WORK-2026103004 — Intent amendment: one bounded private
+    delivery-to-recap canary"
+  acceptance_criteria:
+    - Only `docs/mission/intent.md` changes, plus lane, proof and sync artifacts.
+    - The text adds no readiness threshold and changes no reserved decision.
+    - Griff's pm-verdict/v1 APPROVED at the exact head.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026103004 — Intent amendment: one bounded private delivery-to-recap
+      canary
+
+      Tier: T2
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05).
+
+
+      Griff's PM canary decision (2026-10-30) approved one private human-capper
+      delivery-to-recap canary as the next bounded product acceptance objective.
+      He asked for "a narrow canonical intent amendment permitting exactly one
+      controlled, private E2E canary while preserving Track Only as the default
+      and keeping broad member delivery disabled."
+
+
+      `docs/mission/intent.md` is Griff-owned, so this PR merges only with
+      Griff's pm-verdict/v1 APPROVED. The amendment grants nothing by itself:
+      every production mutation still waits for his explicit authorization of
+      the final canary packet.
+
+
+      ## Change
+
+
+      Add a subsection to `docs/mission/intent.md` § "Current intent", after
+      item 8, recording the bounded exception:
+
+      - exactly one canary;
+
+      - private, staff-only audience;
+
+      - Track Only stays the default;
+
+      - broad member delivery stays disabled and reserved;
+
+      - every mutation is gated on a separately authorized packet;
+
+      - the canary is excluded from member reads;
+
+      - what does **not** change.
+
+
+      ## File Scope
+
+
+      - docs/mission/intent.md
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026103004.md
+    title: "WORK-2026103004 — Intent amendment: one bounded private
+      delivery-to-recap canary"
+    description: >-
+      # WORK-2026103004 — Intent amendment: one bounded private
+      delivery-to-recap canary
+
+
+      Tier: T2
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05).
+
+
+      Griff's PM canary decision (2026-10-30) approved one private human-capper
+      delivery-to-recap canary as the next bounded product acceptance objective.
+      He asked for "a narrow canonical intent amendment permitting exactly one
+      controlled, private E2E canary while preserving Track Only as the default
+      and keeping broad member delivery disabled."
+
+
+      `docs/mission/intent.md` is Griff-owned, so this PR merges only with
+      Griff's pm-verdict/v1 APPROVED. The amendment grants nothing by itself:
+      every production mutation still waits for his explicit authorization of
+      the final canary packet.
+
+
+      ## Change
+
+
+      Add a subsection to `docs/mission/intent.md` § "Current intent", after
+      item 8, recording the bounded exception:
+
+      - exactly one canary;
+
+      - private, staff-only audience;
+
+      - Track Only stays the default;
+
+      - broad member delivery stays disabled and reserved;
+
+      - every mutation is gated on a separately authorized packet;
+
+      - the canary is excluded from member reads;
+
+      - what does **not** change.
+
+
+      ## Acceptance Criteria
+
+
+      - Only `docs/mission/intent.md` changes, plus lane, proof and sync
+      artifacts.
+
+      - The text adds no readiness threshold and changes no reserved decision.
+
+      - Griff's pm-verdict/v1 APPROVED at the exact head.
+
+
+      ## File Scope
+
+
+      - docs/mission/intent.md
+    captured_at: 2026-10-30T14:17:50.962Z
+    description_sha256: 7527fcd09bbd15f4807876d819ebefccece6b7b7c7604eb5cfc4dac8c7b0ed8b
+  contract_hash: 8ba60aae165b6b2db3d4209637640d35f63f33a938d2d14e29a24fdcf22d7ee0

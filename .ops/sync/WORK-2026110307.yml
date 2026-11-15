@@ -1,0 +1,264 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026110307
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026110307
+  objective: >-
+    `readAllOrderedPages` (packages/db/src/runtime-repositories.ts:525) reads
+    every row by offset ranges. Each deep page makes Postgres sort and skip all
+    earlier rows. On staging, `listByLifecycleStates(['settled','voided'])`
+    across 48,225 rows timed out a deep page (13.8 s cold, 2.0 s warm, against
+    an 8 s statement_timeout) and failed CI. Production has 33,679 such rows and
+    a deep page takes 272 ms today; the cost grows with row count. Production
+    DDL is out of scope.
+
+    Replace offset paging with keyset paging on the existing total order
+    (created_at, id) for the six callers (runtime-repositories.ts ~3508, 3545,
+    3642, 3653, 4449, 5173). Each page filters `(created_at, id) >
+    (last.created_at, last.id)` and keeps the same order and page-size cap.
+  acceptance_criteria:
+    - "Each of the six readers returns exactly the same row set and order as
+      before: no row skipped or duplicated, including rows that share a
+      created_at."
+    - A page that comes back short still ends the read. A page-size cap above
+      POSTGREST_MAX_ROWS is still refused, and page errors still surface.
+    - Tests cover duplicate created_at values across a page boundary and a
+      mutation that drops the id tiebreak fails them.
+    - A live staging proof shows the settled/voided read completes under the
+      statement timeout and matches an exact PostgREST count.
+    - "The live proof also covers `listTrackOnlyByLifecycleState('validated')`
+      (~:3508). On 2026-11-03 it timed out a staging suite's before() hook
+      (#1828 run 41692902998): 26,822 Track Only validated rows, deep offset
+      page 2.9 s warm, over 8 s cold under load. It must complete under the
+      timeout and match an exact count."
+    - The live proof also covers `listByLifecycleStates(['validated'])`. On
+      2026-11-04 its deepest offset page took 6.94 s against the 8 s
+      statement_timeout at about 69,000 staging validated rows (69,297 on
+      2026-11-05), growing about 1,000 a day. It must complete under the timeout
+      and match an exact count.
+    - '**Population-drift guard stays fail-closed.** `listByLifecycleStates`
+      (WORK-2026101401) throws "population count changed while paging" when the
+      exact count moves mid-read. Main CI 41692084731 (2026-11-03) failed on
+      exactly this after the staging index removed the timeout, because staging
+      rows changed state during the read. Keep the guard. On drift, restart the
+      whole read from the first page up to a small fixed number of attempts
+      (e.g. 3), then fail closed with the same error. Never return rows
+      assembled from two different populations. Tests: a fake whose count
+      changes once succeeds on the retry with a single coherent population; a
+      fake whose count changes on every attempt throws after the bound; a
+      mutation that removes the count comparison fails a test.'
+    - No schema change, no index, no production DDL or data mutation.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026110307 — Performance readers page by keyset instead of offset
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex-cli
+
+
+      ## Implementation constraints
+
+
+      - PostgREST has no row-value comparison. The cursor must be
+      `.or('created_at.gt.<ts>,and(created_at.eq.<ts>,id.gt.<id>)')`.
+
+      - `<ts>` must be the exact created_at string the database returned for the
+      last row (full microsecond precision), encoded so a `+00:00` offset
+      survives the URL (a raw `+` decodes to a space). Do not reparse it through
+      JS Date, which drops microseconds.
+
+      - The duplicate-created_at boundary test must run against real staging
+      rows (seeded, run-namespaced fixtures sharing one created_at across a page
+      boundary with a small page size), not only an in-memory fake. Add a
+      mutation in which the cursor timestamp is re-serialized through Date, and
+      show that it fails the live test.
+
+
+      ## File scope
+
+
+      - `packages/db/src/runtime-repositories.ts`: `readAllOrderedPages` and its
+      six callers.
+
+      - `packages/db/src/member-performance-read-completeness.test.ts`: existing
+      paging tests; add the duplicate-created_at boundary and the
+      cursor-encoding cases.
+
+      - `apps/api/src/server.test.ts`: only if it depends on the old `(from,
+      to)` callback shape.
+
+      - `apps/api/src/t1-proof-work-2026110307-keyset-paging-live.test.ts`: new
+      live staging suite (skips without staging credentials, like the other
+      `t1-proof-*` live suites).
+
+      - `package.json`: register the new live suite in `test:t1-proof:live`.
+
+      - `docs/05_operations/db-writer-classification.json`: classify the new
+      live suite as a staging writer, only if the db-writer inventory check
+      requires it.
+
+
+      Any other file is out of scope. If one is needed, stop and report.
+
+
+      ## Proof
+
+
+      `docs/06_status/proof/WORK-2026110307/`: `verification.md` (with `#
+      PROOF:`, `MERGE_SHA: pending merge`, `## Verification`, `ASSERTIONS:`,
+      `EVIDENCE:` and a `## Verification boundary` table), `diff-summary.md`
+      ending `Merge SHA: pending merge`, and `evidence.json`. Record the
+      regression-first result (new boundary test failing on the old offset
+      reader, or explain why offset paging passes it and what fails instead) and
+      the mutation result. Do not open a PR or post READY_FOR_REVIEW; Production
+      Claude does that.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026110307.md
+    title: WORK-2026110307 — Performance readers page by keyset instead of offset
+    description: >-
+      # WORK-2026110307 — Performance readers page by keyset instead of offset
+
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex-cli
+
+
+      ## Objective
+
+
+      `readAllOrderedPages` (packages/db/src/runtime-repositories.ts:525) reads
+      every row by offset ranges. Each deep page makes Postgres sort and skip
+      all earlier rows. On staging,
+      `listByLifecycleStates(['settled','voided'])` across 48,225 rows timed out
+      a deep page (13.8 s cold, 2.0 s warm, against an 8 s statement_timeout)
+      and failed CI. Production has 33,679 such rows and a deep page takes 272
+      ms today; the cost grows with row count. Production DDL is out of scope.
+
+
+      Replace offset paging with keyset paging on the existing total order
+      (created_at, id) for the six callers (runtime-repositories.ts ~3508, 3545,
+      3642, 3653, 4449, 5173). Each page filters `(created_at, id) >
+      (last.created_at, last.id)` and keeps the same order and page-size cap.
+
+
+      ## Acceptance Criteria
+
+
+      - Each of the six readers returns exactly the same row set and order as
+      before: no row skipped or duplicated, including rows that share a
+      created_at.
+
+      - A page that comes back short still ends the read. A page-size cap above
+      POSTGREST_MAX_ROWS is still refused, and page errors still surface.
+
+      - Tests cover duplicate created_at values across a page boundary and a
+      mutation that drops the id tiebreak fails them.
+
+      - A live staging proof shows the settled/voided read completes under the
+      statement timeout and matches an exact PostgREST count.
+
+      - The live proof also covers `listTrackOnlyByLifecycleState('validated')`
+      (~:3508). On 2026-11-03 it timed out a staging suite's before() hook
+      (#1828 run 41692902998): 26,822 Track Only validated rows, deep offset
+      page 2.9 s warm, over 8 s cold under load. It must complete under the
+      timeout and match an exact count.
+
+      - The live proof also covers `listByLifecycleStates(['validated'])`. On
+      2026-11-04 its deepest offset page took 6.94 s against the 8 s
+      statement_timeout at about 69,000 staging validated rows (69,297 on
+      2026-11-05), growing about 1,000 a day. It must complete under the timeout
+      and match an exact count.
+
+      - **Population-drift guard stays fail-closed.** `listByLifecycleStates`
+      (WORK-2026101401) throws "population count changed while paging" when the
+      exact count moves mid-read. Main CI 41692084731 (2026-11-03) failed on
+      exactly this after the staging index removed the timeout, because staging
+      rows changed state during the read. Keep the guard. On drift, restart the
+      whole read from the first page up to a small fixed number of attempts
+      (e.g. 3), then fail closed with the same error. Never return rows
+      assembled from two different populations. Tests: a fake whose count
+      changes once succeeds on the retry with a single coherent population; a
+      fake whose count changes on every attempt throws after the bound; a
+      mutation that removes the count comparison fails a test.
+
+      - No schema change, no index, no production DDL or data mutation.
+
+
+      ## Implementation constraints
+
+
+      - PostgREST has no row-value comparison. The cursor must be
+      `.or('created_at.gt.<ts>,and(created_at.eq.<ts>,id.gt.<id>)')`.
+
+      - `<ts>` must be the exact created_at string the database returned for the
+      last row (full microsecond precision), encoded so a `+00:00` offset
+      survives the URL (a raw `+` decodes to a space). Do not reparse it through
+      JS Date, which drops microseconds.
+
+      - The duplicate-created_at boundary test must run against real staging
+      rows (seeded, run-namespaced fixtures sharing one created_at across a page
+      boundary with a small page size), not only an in-memory fake. Add a
+      mutation in which the cursor timestamp is re-serialized through Date, and
+      show that it fails the live test.
+
+
+      ## File scope
+
+
+      - `packages/db/src/runtime-repositories.ts`: `readAllOrderedPages` and its
+      six callers.
+
+      - `packages/db/src/member-performance-read-completeness.test.ts`: existing
+      paging tests; add the duplicate-created_at boundary and the
+      cursor-encoding cases.
+
+      - `apps/api/src/server.test.ts`: only if it depends on the old `(from,
+      to)` callback shape.
+
+      - `apps/api/src/t1-proof-work-2026110307-keyset-paging-live.test.ts`: new
+      live staging suite (skips without staging credentials, like the other
+      `t1-proof-*` live suites).
+
+      - `package.json`: register the new live suite in `test:t1-proof:live`.
+
+      - `docs/05_operations/db-writer-classification.json`: classify the new
+      live suite as a staging writer, only if the db-writer inventory check
+      requires it.
+
+
+      Any other file is out of scope. If one is needed, stop and report.
+
+
+      ## Proof
+
+
+      `docs/06_status/proof/WORK-2026110307/`: `verification.md` (with `#
+      PROOF:`, `MERGE_SHA: pending merge`, `## Verification`, `ASSERTIONS:`,
+      `EVIDENCE:` and a `## Verification boundary` table), `diff-summary.md`
+      ending `Merge SHA: pending merge`, and `evidence.json`. Record the
+      regression-first result (new boundary test failing on the old offset
+      reader, or explain why offset paging passes it and what fails instead) and
+      the mutation result. Do not open a PR or post READY_FOR_REVIEW; Production
+      Claude does that.
+    captured_at: 2026-11-05T13:13:24.251Z
+    description_sha256: c4fa1e916c8ff0889bfa6bba22ebf4d0e2e9ffff31c98a6cbe43b7c141f38900
+  contract_hash: b8a5c31aca5576313cba56d9dd44f820e13cf123e35df070b3076e34e48a38ec

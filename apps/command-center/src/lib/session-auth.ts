@@ -66,12 +66,17 @@ export async function authenticateSessionOrHeader(
     const value = data as Record<string, unknown>;
     const current = Math.floor(now / 1000);
     const config = assertCommandCenterAuthConfig(env);
-    if (value.version !== 1 || value.actor !== config.operatorIdentity ||
+    // Only an actor the configured credentials can themselves produce is
+    // accepted: the token's identity, or the identity a Basic login yields.
+    const issuable = new Set<string>();
+    if (config.token) issuable.add(config.operatorIdentity);
+    if (config.basicUsername && config.basicPassword) issuable.add(config.basicActor);
+    if (value.version !== 1 || typeof value.actor !== 'string' || !issuable.has(value.actor) ||
       typeof value.issued !== 'number' || !Number.isInteger(value.issued) ||
       typeof value.expires !== 'number' || !Number.isInteger(value.expires) ||
       value.issued > current || value.expires <= current ||
       value.expires - value.issued !== SESSION_SECONDS || typeof value.nonce !== 'string') return direct;
-    return { ok: true, auth: { actor: config.operatorIdentity, role: 'operator', method: 'session' } };
+    return { ok: true, auth: { actor: value.actor, role: 'operator', method: 'session' } };
   } catch {
     return direct;
   }

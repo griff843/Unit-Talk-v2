@@ -1,0 +1,75 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110801",
+  "tier": "T2",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "source_sha": "a48dccf93a3db3d618c4bb688843689d24df0188",
+  "status": "pre_merge_static_proof_passed",
+  "sha_binding": {
+    "merge_sha": "71ddbd0de05b7059a4797e0eb636e2bd296796fc",
+    "verified_source_sha": "a48dccf93a3db3d618c4bb688843689d24df0188",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-11-09T00:56:08.027Z"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm type-check; pnpm test; tsx --test apps/api/src/grading-cron.test.ts; pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "type_check": "pass",
+    "test": "pass; pnpm test exit 0 (7886 pass, 0 fail, 13 skipped of 7899); focused apps/api/src/grading-cron.test.ts 31/31",
+    "mutation": "pass; removing the cycle-start liveness refresh fails 9 of 31 tests",
+    "r_level": "PASS"
+  },
+  "post_merge_pending": [
+    "executor-result/v1 comment and exact-head CI",
+    "governed T2 merge",
+    "merge-SHA binding",
+    "Griff-dispatched deploy (reserved) before the change is live in production"
+  ],
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1838",
+  "runtime_proof": {
+    "status": "pass",
+    "command": "pnpm test:db (CI Writable DB proof (staging only))",
+    "ci_exact_head": {
+      "workflow": "ci.yml",
+      "run_id": 42509637508,
+      "attempt": 1,
+      "head_sha": "b8d9c5bd8350b270650e07eea7f172c4ed45ee53",
+      "staging_db_job_id": 128819773300,
+      "staging_db_job": "success",
+      "staging_project": "xskgrzbteyqdufktjrjx",
+      "receipt_artifact": "utv2-1630-db-proof-receipt-42509637508-1",
+      "note": "b8d9c5bd8 differs from the code commit a48dccf93 only by the lane-binding bot commit (lane manifest); no code or proof change."
+    },
+    "failure_injection": "31/31 focused tests incl. real-marker timeline tests with an injected clock; synthetic, no production restart or data writes",
+    "queries": [
+      {
+        "table": "picks,settlement_records,pick_lifecycle,audit_log",
+        "description": "ok 6 - UTV2-920 invalid atomic settlement writes no settlement, lifecycle event, or audit row"
+      },
+      {
+        "table": "settlement_records",
+        "description": "ok 8 - UTV2-996 re-settling a settled pick creates a correction, no true duplicate base rows"
+      },
+      {
+        "table": "provider_offers",
+        "description": "ok 1 - ingestor health check canonical freshness SELECT executes against staging"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "settlement_records",
+        "count": 0,
+        "status": "asserted by test 6: invalid atomic settlement writes zero rows"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 0,
+        "status": "asserted by test 4: invalid atomic enqueue writes zero rows"
+      }
+    ],
+    "scope_note": "The staging suite is the generic pnpm test:db smoke suite. It does not execute the grading cron loop or the liveness marker; those are proven by the synthetic unit suite only. No database is involved in this change."
+  }
+}

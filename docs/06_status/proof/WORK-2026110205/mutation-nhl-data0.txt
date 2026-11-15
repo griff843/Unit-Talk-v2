@@ -1,0 +1,365 @@
+TAP version 13
+# Subtest: resolveHeadshotUrl returns null for null sport
+ok 1 - resolveHeadshotUrl returns null for null sport
+  ---
+  duration_ms: 1.729565
+  type: 'test'
+  ...
+# Subtest: resolveHeadshotUrl returns null for unknown sport
+ok 2 - resolveHeadshotUrl returns null for unknown sport
+  ---
+  duration_ms: 0.188081
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass skips players with existing headshot_url
+ok 3 - runPlayerEnrichmentPass skips players with existing headshot_url
+  ---
+  duration_ms: 0.587359
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass reports skipped for players with null sport
+ok 4 - runPlayerEnrichmentPass reports skipped for players with null sport
+  ---
+  duration_ms: 0.224151
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass handles empty participant list
+ok 5 - runPlayerEnrichmentPass handles empty participant list
+  ---
+  duration_ms: 0.180783
+  type: 'test'
+  ...
+# Subtest: runPlayerEnrichmentPass writes system_runs record with correct details
+ok 6 - runPlayerEnrichmentPass writes system_runs record with correct details
+  ---
+  duration_ms: 0.227352
+  type: 'test'
+  ...
+# Subtest: NHL unrelated player is refused
+not ok 7 - NHL unrelated player is refused
+  ---
+  duration_ms: 46.550678
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:5078'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8484554.jpg'
+    - null
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8484554.jpg'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:163:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: NHL ambiguous name is refused
+not ok 8 - NHL ambiguous name is refused
+  ---
+  duration_ms: 1.051141
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:5408'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/1.jpg'
+    - null
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/1.jpg'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:171:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: NFL unrelated first result is refused
+ok 9 - NFL unrelated first result is refused
+  ---
+  duration_ms: 1.951542
+  type: 'test'
+  ...
+# Subtest: all sports require a unique normalized full identity, including symmetric suffixes
+not ok 10 - all sports require a unique normalized full identity, including symmetric suffixes
+  ---
+  duration_ms: 30.947887
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:6139'
+  failureType: 'testCodeFailure'
+  error: 'NHL'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:203:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: NFL selects the unique identity after an unrelated first hit and refuses duplicate exact hits
+ok 11 - NFL selects the unique identity after an unrelated first hit and refuses duplicate exact hits
+  ---
+  duration_ms: 1.982145
+  type: 'test'
+  ...
+# Subtest: NHL checks candidate league and team and does not resolve ambiguity using an image
+not ok 12 - NHL checks candidate league and team and does not resolve ambiguity using an image
+  ---
+  duration_ms: 1.129701
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:9928'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/1.jpg'
+    - null
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/1.jpg'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:228:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: enrichment records refusal reasons and leaves stored images untouched
+not ok 13 - enrichment records refusal reasons and leaves stored images untouched
+  ---
+  duration_ms: 4.207292
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:10683'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+
+    + {}
+    - {
+    -   'identity-mismatch': 1,
+    -   ambiguous: 1
+    - }
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    ambiguous: 1
+    identity-mismatch: 1
+  actual:
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:248:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: NFL checks real ESPN teamRelationships and leagueRelationships identities
+ok 14 - NFL checks real ESPN teamRelationships and leagueRelationships identities
+  ---
+  duration_ms: 1.362716
+  type: 'test'
+  ...
+# Subtest: canonical team keys correlate by full team name and preserve Red Sox versus White Sox
+ok 15 - canonical team keys correlate by full team name and preserve Red Sox versus White Sox
+  ---
+  duration_ms: 3.966075
+  type: 'test'
+  ...
+# Subtest: NBA resolves provider columns by headers and correlates LA Clippers with canonical Los Angeles
+ok 16 - NBA resolves provider columns by headers and correlates LA Clippers with canonical Los Angeles
+  ---
+  duration_ms: 2.110047
+  type: 'test'
+  ...
+# Subtest: NHL six Jakes sharing a stored URL never confirms an unrelated Jake
+not ok 17 - NHL six Jakes sharing a stored URL never confirms an unrelated Jake
+  ---
+  duration_ms: 1.585658
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:15032'
+  failureType: 'testCodeFailure'
+  error: |-
+    Jake Walman
+    + actual - expected
+
+    + 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8484554.jpg'
+    - null
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8484554.jpg'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:307:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: NHL production catalog key refuses conflicting provider abbreviation
+not ok 18 - NHL production catalog key refuses conflicting provider abbreviation
+  ---
+  duration_ms: 2.388484
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:15935'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + 'confirmed'
+    - 'identity-mismatch'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'identity-mismatch'
+  actual: 'confirmed'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:319:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: NHL production catalog key accepts matching provider abbreviation
+ok 19 - NHL production catalog key accepts matching provider abbreviation
+  ---
+  duration_ms: 1.580532
+  type: 'test'
+  ...
+# Subtest: MLB production catalog key refuses conflicting numeric provider team
+ok 20 - MLB production catalog key refuses conflicting numeric provider team
+  ---
+  duration_ms: 2.370868
+  type: 'test'
+  ...
+# Subtest: MLB production catalog key accepts matching numeric provider team
+ok 21 - MLB production catalog key accepts matching numeric provider team
+  ---
+  duration_ms: 2.367575
+  type: 'test'
+  ...
+# Subtest: non-catalog caller team refuses incomparable provider team
+not ok 22 - non-catalog caller team refuses incomparable provider team
+  ---
+  duration_ms: 2.85592
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:18094'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + 'confirmed'
+    - 'identity-mismatch'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'identity-mismatch'
+  actual: 'confirmed'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:341:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: NHL namesake outside old top five is ambiguous
+not ok 23 - NHL namesake outside old top five is ambiguous
+  ---
+  duration_ms: 4.368311
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:18627'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + 'confirmed'
+    - 'ambiguous'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'ambiguous'
+  actual: 'confirmed'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:352:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: NFL namesake outside old top five is ambiguous
+ok 24 - NFL namesake outside old top five is ambiguous
+  ---
+  duration_ms: 2.556216
+  type: 'test'
+  ...
+# Subtest: MLB refuses an unknown provider team ID for a catalog team
+ok 25 - MLB refuses an unknown provider team ID for a catalog team
+  ---
+  duration_ms: 2.587361
+  type: 'test'
+  ...
+# Subtest: NHL refuses an unknown provider team abbreviation for a catalog team
+not ok 26 - NHL refuses an unknown provider team abbreviation for a catalog team
+  ---
+  duration_ms: 2.612722
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:2:20036'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+
+      {
+    +   reason: 'confirmed',
+    +   url: 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/1.jpg'
+    -   reason: 'identity-mismatch',
+    -   url: null
+      }
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    url: ~
+    reason: 'identity-mismatch'
+  actual:
+    url: 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/1.jpg'
+    reason: 'confirmed'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110205/.out/worktrees/codex__work-2026110205-participant-artwork-matching/.out/media-0205/mutation-rework/player-enrichment-service.test.ts:372:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: NHL refuses a full search window even with one matching identity
+ok 27 - NHL refuses a full search window even with one matching identity
+  ---
+  duration_ms: 2.32593
+  type: 'test'
+  ...
+# Subtest: NFL refuses a full search window even with one matching identity
+ok 28 - NFL refuses a full search window even with one matching identity
+  ---
+  duration_ms: 1.228793
+  type: 'test'
+  ...
+1..28
+# tests 28
+# suites 0
+# pass 18
+# fail 10
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 714.747844

@@ -1,5 +1,10 @@
 import React from 'react';
-import { parseGovernedTargetFromDeliveryTarget, readHumanCapperDeliveryAuthorization } from '@unit-talk/contracts';
+import {
+  isManualPlayerProvenance,
+  parseGovernedTargetFromDeliveryTarget,
+  readHumanCapperDeliveryAuthorization,
+} from '@unit-talk/contracts';
+import { deliveryAudienceLabel } from '@/lib/delivery-audience-label';
 import { Card } from '@/components/ui/Card';
 
 function KV({ label, value }: { label: string; value: React.ReactNode }) {
@@ -33,7 +38,12 @@ function readRequestedDistributionMode(metadata: Record<string, unknown>): strin
     : null;
 }
 
-function participantResolutionSummary(metadata: Record<string, unknown>): React.ReactNode {
+// WORK-2026110802: a structured pick can carry canonical teams beside a manual player whose
+// identity is unverified (no canonical match was found by a bounded name search; that is not
+// proof the player is absent from the catalog). The summary must never present such a pick as
+// wholly canonical, and it must show the unverified player. Legacy rows stamped
+// 'manual-coverage-gap' are recognized the same way and are not reinterpreted as proven gaps.
+export function participantResolutionSummary(metadata: Record<string, unknown>): string {
   const resolution = readObject(metadata['participantResolution']);
   if (!resolution) return 'No participant resolution recorded.';
 
@@ -43,6 +53,12 @@ function participantResolutionSummary(metadata: Record<string, unknown>): React.
       const name = typeof participant?.['displayName'] === 'string' ? participant['displayName'] : null;
       return name ? [`${role}: ${name}`] : [];
     });
+    const manualPlayer = readObject(resolution['manualPlayer']);
+    const manualName = typeof manualPlayer?.['displayName'] === 'string' ? manualPlayer['displayName'] : null;
+    if (manualPlayer || isManualPlayerProvenance(metadata['playerProvenance'])) {
+      const teams = participants.length > 0 ? `Canonical teams: ${participants.join(' • ')}` : 'Canonical teams recorded.';
+      return `${teams} — player: ${manualName ?? 'not recorded'} (unverified identity: no canonical match found by name search; not proof of catalog absence)`;
+    }
     return participants.length > 0
       ? `Canonical: ${participants.join(' • ')}`
       : 'Canonical participant resolution recorded.';
@@ -101,13 +117,15 @@ export function resolvePickDeliveryStage(input: {
     : { stage: 'awaiting-delivery' };
 }
 
-export function GovernedPickTruth({ metadata, hasEventLink, voided, deliveryStage, deliveryKillSwitch }: {
+export function GovernedPickTruth({ metadata, hasEventLink, voided, deliveryStage, deliveryKillSwitch, outboxPayloads = [] }: {
   metadata: Record<string, unknown>;
+  outboxPayloads?: readonly unknown[];
   hasEventLink: boolean;
   voided: boolean;
   deliveryStage?: PickDeliveryStage;
   deliveryKillSwitch?: DeliveryKillSwitchTruth;
 }) {
+  const audienceLabel = deliveryAudienceLabel(metadata, outboxPayloads);
   const authorization = readHumanCapperDeliveryAuthorization(metadata);
   const persistedMode = distributionModeLabel(metadata['distributionMode']);
   const requestedMode = readRequestedDistributionMode(metadata);
@@ -124,6 +142,9 @@ export function GovernedPickTruth({ metadata, hasEventLink, voided, deliveryStag
         <div role="alert" className="rounded-lg border border-rose-500/50 bg-rose-950/40 px-4 py-3 text-sm text-rose-100">
           <strong>Voided pick.</strong> This pick has been voided and is not active.
         </div>
+      ) : null}
+      {audienceLabel ? (
+        <p className="rounded border border-amber-500/40 bg-amber-950/20 p-3 text-sm text-amber-100">{audienceLabel}</p>
       ) : null}
       <Card title="Governed submission truth">
         <div className="flex flex-col gap-1">

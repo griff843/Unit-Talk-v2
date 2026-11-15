@@ -85,6 +85,39 @@ section is more specific about the *current* goal, it governs.
    demonstrated need. Work here verifies the Whop product→role grant/revoke lifecycle first and
    addresses only a proved guard or mirror gap. The membership contract is unchanged.
 
+### Bounded exception — one private delivery-to-recap canary
+
+Approved by Griff on 2026-10-30 as the next bounded product acceptance objective; recorded here at
+his direction (WORK-2026103004). It narrows nothing above and widens only what it names.
+
+1. **Exactly one canary.** One genuine pick by an authenticated, allow-listed human capper,
+   submitted through the deployed Smart Form as `delivery-eligible`, is delivered to a **staff-only
+   private destination**, settled by an operator with source evidence, recapped to the same
+   destination, and reconciled in that capper's statistics.
+2. **Track Only stays the default.** Every other pick remains Track Only. The canary never changes
+   what Track Only means, and Track Only never creates delivery.
+3. **Broad member delivery stays disabled.** All four delivery targets (`official-picks`,
+   `best-bets`, `trader-insights`, `exclusive-insights`) and `human-capper-recaps` stay
+   kill-switched outside the canary's own release windows. Member-delivery activation remains a
+   reserved decision.
+4. **Nothing here is an authorization to mutate production.** Changing a capper's delivery
+   destination, releasing any kill switch, delivering a pick or recap, and changing any Discord
+   audience or permission each require Griff's explicit authorization of **one consolidated final
+   packet** naming the exact destination, capper, pick scope, release windows, rollback and proof
+   criteria. Preparation, implementation, staging proof and governed merges proceed without it.
+5. **The canary is never ordinary member data.** Before the packet is presented, the deployed
+   release must exclude a canary-audience pick from every member-reachable read — member pick lists,
+   Discord member commands, member statistics, leaderboards and aggregate recaps — failing closed
+   for any unrecognized audience marker, while operator surfaces still show it, labelled.
+6. **Proof is real or labelled.** Acceptance requires correlated production records (pick, outbox,
+   receipt with Discord message id, settlement with evidence, recap run with message id, statistics
+   delta, kill-switch audit, zero unrelated delivery). Anything synthetic or mocked is labelled as
+   such and never claimed as the real delivery gate.
+
+This exception adds no readiness threshold, changes no reserved decision and leaves
+`docs/05_operations/T1_PRODUCTION_READINESS_CONTRACT.md` unchanged. A second canary, or any
+member-facing delivery, needs a new decision.
+
 ## Source of truth
 
 Current live `griff843/Unit-Talk-v2` only: current `main`, live PRs, actual runtime and database

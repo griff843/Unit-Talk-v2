@@ -91,3 +91,47 @@ test('the held queue partitions governed rows in the query', async () => {
   assertGovernedPartitionInQuery(url, 'getHeldQueue');
   assert.equal(url.searchParams.get('review_decision'), 'eq.hold', 'the held queue must stay scoped to held picks');
 });
+
+test('pick detail selects the pinned outbox payload and preserves it for audience labeling', async () => {
+  const restoreDefaults = withWorkspaceEnvDefaults();
+  const restoreTarget = withLoopbackSupabaseTarget();
+  const previousToken = process.env.COMMAND_CENTER_AUTH_TOKEN;
+  process.env.COMMAND_CENTER_AUTH_TOKEN = 'queues-governed-population-test';
+  const originalFetch = globalThis.fetch;
+  const seen: URL[] = [];
+  const payload = { deliveryDestination: { audience: 'staff-canary' } };
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    assert.equal(request.method, 'GET');
+    const url = new URL(request.url);
+    seen.push(url);
+    const table = url.pathname.split('/').at(-1);
+    const data = table === 'picks_current_state'
+      ? { id: 'synthetic-pick', status: 'posted', metadata: {} }
+      : table === 'distribution_outbox'
+        ? [{ id: 'synthetic-outbox', target: 'discord:official-picks', payload }]
+        : [];
+    return new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const detail = await withRequestContext(
+      { authorization: 'Bearer queues-governed-population-test' },
+      async () => (await import('./queues')).getPickDetail('synthetic-pick'),
+    );
+    assert.ok(detail);
+    assert.deepEqual(detail.outboxRows[0]?.payload, payload);
+    const outboxReads = seen.filter((url) => url.pathname.endsWith('/distribution_outbox'));
+    assert.equal(outboxReads.length, 1);
+    assert.deepEqual(Object.fromEntries(outboxReads[0].searchParams), {
+      select: 'id,pick_id,target,status,attempt_count,last_error,claimed_at,created_at,updated_at,payload',
+      pick_id: 'eq.synthetic-pick',
+      order: 'created_at.desc',
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousToken === undefined) delete process.env.COMMAND_CENTER_AUTH_TOKEN;
+    else process.env.COMMAND_CENTER_AUTH_TOKEN = previousToken;
+    restoreTarget();
+    restoreDefaults();
+  }
+});

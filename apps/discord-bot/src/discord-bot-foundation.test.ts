@@ -973,7 +973,31 @@ test('buildTrialStatusEmbed includes capper guidance when the member is also a c
 
   assert.equal(embed.title, 'Your Unit Talk Access - VIP');
   assert.equal(embed.color, 0xc7a34b);
-  assert.equal(embed.fields?.[0]?.name, 'Capper Role');
+  assert.equal(embed.fields?.[0]?.name, 'Submitting picks');
+  assert.equal(
+    embed.fields?.[0]?.value,
+    'Use the [Unit Talk pick form](https://picks.unit-talk.com/submit).',
+  );
+  assert.doesNotMatch(String(embed.fields?.[0]?.value), /\/pick\b/);
+});
+
+test('/trial-status uses the prepared description for every resolved tier', () => {
+  const expected = {
+    free: 'Welcome to Unit Talk. Join the conversation in our public channels. For help with your access, open a private ticket in <#1285609124050108436>.',
+    trial: 'Your trial includes access to the VIP channels. For help with your trial or access, open a private ticket in <#1285609124050108436>.',
+    vip: 'Your access includes the VIP channels. For help finding your way around, visit <#1559933414281322586>.',
+    'vip-plus': 'Your access includes the VIP and VIP+ channels. For help finding your way around, visit <#1559933414281322586>.',
+    'black-label': 'For help with your access, open a private ticket in <#1285609124050108436>.',
+  } as const;
+
+  for (const [tier, description] of Object.entries(expected)) {
+    assert.equal(
+      buildTrialStatusEmbed(tierContext(tier as keyof typeof expected))
+        .toJSON().description,
+      description,
+      `${tier} description`,
+    );
+  }
 });
 
 test('/trial-status command replies privately with the resolved tier embed', async () => {
@@ -2517,7 +2541,7 @@ test('/help command registers with name "help" and no role gate or public visibi
   assert.notEqual(command.responseVisibility, 'public');
 });
 
-test('/help command execute calls editReply with a single embed containing all command names', async () => {
+test('/help command execute shows only the prepared member entries and support links', async () => {
   const command = createHelpCommand();
 
   let repliedWith: unknown = null;
@@ -2534,32 +2558,19 @@ test('/help command execute calls editReply with a single embed containing all c
 
   assert.ok(repliedWith !== null, 'editReply was not called');
   const payload = repliedWith as {
-    embeds: Array<{ toJSON(): { description?: string } }>;
+    embeds: Array<{ toJSON(): { title?: string; description?: string } }>;
   };
   assert.ok(Array.isArray(payload.embeds), 'embeds must be an array');
   assert.equal(payload.embeds.length, 1, 'exactly one embed expected');
 
-  const description = payload.embeds[0]?.toJSON().description ?? '';
-  for (const name of [
-    'alerts-setup',
-    'heat-signal',
-    'live',
-    'today',
-    'my-picks',
-    'results',
-    'pick',
-    'stats',
-    'leaderboard',
-    'trial-status',
-    'upgrade',
-    'help',
-    'recap',
-  ]) {
-    assert.ok(
-      description.includes(`/${name}`),
-      `embed description missing /${name}`,
-    );
-  }
+  const embed = payload.embeds[0]?.toJSON();
+  assert.equal(embed?.title, 'Unit Talk — Member Tools');
+  assert.equal(
+    embed?.description,
+    '**/stats** — View settled server results.\n**/leaderboard** — Compare capper results.\n**/trial-status** — Check your server access.\n\nNeed a hand? Visit <#1559933414281322586> or open a private ticket in <#1285609124050108436>.',
+  );
+  assert.doesNotMatch(embed?.description ?? '', /\/pick\b/i);
+  assert.doesNotMatch(embed?.description ?? '', /alerts-setup|ops-restart|heat-signal|recap|upgrade/i);
 });
 
 test('buildHeatSignalEmbed preserves the dormant capability renderer', () => {
@@ -3120,7 +3131,9 @@ test('createMemberTierSyncHandler never crashes, logs a failed sync visibly, and
 
 const NOT_LIVE_CLAIMS = [/Best Bets/, /Trader Insights/, /permanently/];
 
-function tierContext(tier: 'free' | 'trial' | 'vip' | 'vip-plus') {
+function tierContext(
+  tier: 'free' | 'trial' | 'vip' | 'vip-plus' | 'black-label',
+) {
   return {
     discordUserId: 'user-123',
     tier,
@@ -3146,12 +3159,6 @@ test('UTV2-1960: /trial-status and /upgrade name no surface that is not live', (
       }
     }
   }
-  assert.match(
-    String(
-      buildTrialStatusEmbed(tierContext('vip-plus')).toJSON().description ?? '',
-    ),
-    /not live yet/,
-  );
   assert.match(
     String(buildUpgradeEmbed(tierContext('free')).toJSON().description ?? ''),
     /Settled results and recaps are available to all members/,

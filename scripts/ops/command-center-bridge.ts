@@ -13,9 +13,9 @@
  * That is a production security control and this tool does not ask anyone to relax it.
  *
  * Shell exec is not disabled. This bridge listens on the operator's own loopback and,
- * for each connection, runs `nc 127.0.0.1 4300` on the host over an ordinary SSH
- * session, piping bytes both ways. The Command Center sees a loopback client exactly as
- * it would through a forward.
+ * for each connection, opens 127.0.0.1:4300 on the host from a shell relay over an
+ * ordinary SSH session, piping bytes both ways. The Command Center sees a loopback client
+ * exactly as it would through a forward.
  *
  * ## What it deliberately does NOT do
  *
@@ -113,18 +113,36 @@ export function parseBridgeArgs(argv: readonly string[]): BridgeOptions {
 }
 
 /**
+ * The command run on the host for one bridged connection.
+ *
+ * It must exit when the Command Center closes the connection. Next.js closes an idle
+ * keep-alive connection after 5 s, and `nc` does not exit when that happens: it waits for its
+ * stdin, which is the operator's socket. The browser then reuses the apparently live socket
+ * for its sign-in POST, and nothing ever answers it (WORK-2026102904). Here the upstream reader
+ * runs in the foreground, so the server's close ends the session; the writer is killed and the
+ * bridge's drain closes the client, which then opens a fresh connection.
+ *
+ * `<&0` is explicit because a background job in a non-interactive shell otherwise reads
+ * /dev/null.
+ */
+export function buildRemoteCommand(remotePort: number): string {
+  if (!Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65535) {
+    throw new BridgeArgumentError(`remote port must be an integer between 1 and 65535, got ${String(remotePort)}`);
+  }
+  return `exec bash -c 'exec 3<>/dev/tcp/127.0.0.1/${remotePort} || exit 1; cat <&0 >&3 & w=$!; cat <&3; kill $w 2>/dev/null'`;
+}
+
+/**
  * The ssh invocation for one bridged connection.
  *
  * It is handed to `spawn` as an argv array, never through a local shell. The remote command
  * does pass through the host's shell, so it is built only from a literal and a port that is
- * re-validated here as an integer, whatever the caller did. The host is re-validated too, and
+ * re-validated as an integer, whatever the caller did. The host is re-validated too, and
  * `--` stops ssh from reading it, or anything after it, as an option.
  */
 export function buildSshArgs(host: string, remotePort: number): string[] {
   assertSshHost(host);
-  if (!Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65535) {
-    throw new BridgeArgumentError(`remote port must be an integer between 1 and 65535, got ${String(remotePort)}`);
-  }
+  const remoteCommand = buildRemoteCommand(remotePort);
   return [
     '-T', // never a pty: the stream is raw bytes
     '-e', 'none', // no escape character, so no byte sequence in the stream is interpreted by ssh
@@ -133,7 +151,7 @@ export function buildSshArgs(host: string, remotePort: number): string[] {
     '-o', 'ClearAllForwardings=yes',
     '--',
     host,
-    `nc 127.0.0.1 ${remotePort}`,
+    remoteCommand,
   ];
 }
 

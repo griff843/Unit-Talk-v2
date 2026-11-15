@@ -305,7 +305,7 @@ async function withGuardRemoved<T>(
   const mutantPath = sourcePath.replace(/\.ts$/u, `${suffix}.ts`);
   const source = await readFile(sourcePath, 'utf8');
   const guardPattern = new RegExp(
-    `[ ]*// UTV2-1672 ${guardName}_START[\\s\\S]*?// UTV2-1672 ${guardName}_END\\n`,
+    `[ ]*// UTV2-\\d+ ${guardName}_START[\\s\\S]*?// UTV2-\\d+ ${guardName}_END\\n`,
     'u',
   );
   const mutantSource = source.replace(guardPattern, '');
@@ -382,6 +382,18 @@ test('mutation control: removing SMART_FORM_RELATIONSHIP_GUARD admits an unverif
 // answered with a pick that every downstream guard reads as delivery-eligible.
 // ---------------------------------------------------------------------------
 
+/**
+ * Make every idempotency lookup resolve to the given pick, so the next
+ * submission takes the idempotent-duplicate path regardless of its key.
+ */
+function forceIdempotencyCollision(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  pickId: string,
+): void {
+  repositories.picks.findPickByIdempotencyKey = async () =>
+    repositories.picks.findPickById(pickId);
+}
+
 function makeCollidingPayload(distributionMode: string): SubmissionPayload {
   return makePayload('smart-form', {
     market: 'NBA moneyline',
@@ -408,8 +420,10 @@ function makeCollidingPayload(distributionMode: string): SubmissionPayload {
 }
 
 test('mutation control: removing TRACK_ONLY_REQUEST_INTEGRITY_GUARD answers a Track Only request with a delivery-eligible pick', async () => {
-  // The two payloads differ only in metadata, which the idempotency key
-  // deliberately excludes -- so the second submission resolves to the first pick.
+  // The idempotency key is scoped by distribution mode, so these two payloads no
+  // longer collide on their own. The guard is defense in depth for a stored row
+  // whose key matches a Track Only request but whose metadata does not say Track
+  // Only; the collision is injected at the repository lookup to reach it.
   async function seed() {
     const repositories = createInMemoryRepositoryBundle();
     const first = await submitPickController(
@@ -417,6 +431,8 @@ test('mutation control: removing TRACK_ONLY_REQUEST_INTEGRITY_GUARD answers a Tr
       repositories,
     );
     assert.equal(first.status, 201, 'seed submission must be accepted');
+    if (!first.body.ok) throw new Error('expected ok seed response');
+    forceIdempotencyCollision(repositories, first.body.data.pickId);
     return repositories;
   }
 
@@ -446,6 +462,8 @@ test('mutation control: removing TRACK_ONLY_REQUEST_INTEGRITY_GUARD answers a Tr
       const repositories = createInMemoryRepositoryBundle();
       const seeded = await mutantController(makeCollidingPayload('delivery-eligible'), repositories);
       assert.equal(seeded.status, 201);
+      if (!seeded.body.ok) throw new Error('expected ok seed response');
+      forceIdempotencyCollision(repositories, seeded.body.data.pickId);
 
       const response = await mutantController(makeCollidingPayload('track-only'), repositories);
       assert.equal(response.status, 201, 'mutant must accept the colliding Track Only request');
@@ -455,6 +473,75 @@ test('mutation control: removing TRACK_ONLY_REQUEST_INTEGRITY_GUARD answers a Tr
         (pick?.metadata as Record<string, unknown> | undefined)?.['distributionMode'],
         'track-only',
         'mutant must hand back a pick that is not Track Only',
+      );
+    },
+  );
+});
+
+test('mutation control: removing HUMAN_DELIVERY_REQUEST_INTEGRITY_GUARD answers an unauthorized request with a delivery-authorized pick', async () => {
+  // A stored pick whose key matches the request but whose delivery
+  // authorization differs from the one decided for this request. The collision
+  // is injected at the repository lookup, as in the Track Only control above.
+  async function seedAuthorizedCollision(
+    controller: typeof submitPickController,
+  ): Promise<ReturnType<typeof createInMemoryRepositoryBundle>> {
+    const repositories = createInMemoryRepositoryBundle();
+    const first = await controller(makeCollidingPayload('delivery-eligible'), repositories);
+    assert.equal(first.status, 201, 'seed submission must be accepted');
+    if (!first.body.ok) throw new Error('expected ok seed response');
+    const stored = await repositories.picks.findPickById(first.body.data.pickId);
+    assert.ok(stored, 'seed pick must be stored');
+    const authorized = {
+      ...stored,
+      metadata: {
+        ...(stored.metadata as Record<string, unknown>),
+        deliveryAuthorization: {
+          version: 'human-capper-delivery/v1',
+          decision: 'authorized',
+          authority: 'server-allowlist',
+          decidedAt: '2026-11-04T00:00:00.000Z',
+        },
+      },
+    };
+    repositories.picks.findPickByIdempotencyKey = async () => authorized;
+    return repositories;
+  }
+
+  // Baseline: the request is not delivery-authorized, the stored pick is, and
+  // the guard refuses rather than reusing it.
+  const guarded = await seedAuthorizedCollision(submitPickController);
+  const guardedResult = await submitPickController(
+    makeCollidingPayload('delivery-eligible'),
+    guarded,
+  ).then(
+    (response) => ({ kind: 'response' as const, response }),
+    (error: unknown) => ({ kind: 'error' as const, error }),
+  );
+  assert.equal(guardedResult.kind, 'error', 'baseline must refuse the mismatched authorization');
+  if (guardedResult.kind === 'error') {
+    const error = guardedResult.error as { status?: number; code?: string };
+    assert.equal(error.status, 409);
+    assert.equal(error.code, 'DELIVERY_AUTHORIZATION_CONFLICT');
+  }
+
+  // Mutant: with the marked block deleted, the mismatched request is no longer
+  // refused here. It runs on into the delivery path (where the release check,
+  // reading the stored row, stops it separately), so this guard alone is what
+  // produced the 409 above.
+  await withGuardRemoved(
+    './submit-pick-controller.ts',
+    'HUMAN_DELIVERY_REQUEST_INTEGRITY_GUARD',
+    async (mutant) => {
+      const mutantController = mutant['submitPickController'] as typeof submitPickController;
+      const repositories = await seedAuthorizedCollision(mutantController);
+      const outcome = await mutantController(makeCollidingPayload('delivery-eligible'), repositories).then(
+        () => null,
+        (error: unknown) => (error as { code?: string }).code ?? null,
+      );
+      assert.notEqual(
+        outcome,
+        'DELIVERY_AUTHORIZATION_CONFLICT',
+        'mutant must not refuse with the removed guard',
       );
     },
   );

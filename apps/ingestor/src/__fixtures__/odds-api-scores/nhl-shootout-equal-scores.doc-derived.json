@@ -1,0 +1,32 @@
+{
+  "provenance": "doc-derived",
+  "vendorBehaviour": "behaviour unconfirmed by vendor",
+  "workOrder": "WORK-2026111102",
+  "source": "https://the-odds-api.com/liveapi/guides/v4/ (GET /v4/sports/{sport}/scores response example: fields id, sport_key, sport_title, commence_time, completed, home_team, away_team, scores[{name, score}] | null, last_update | null)",
+  "note": "behaviour unconfirmed by vendor. FEARED shape: shootout goal omitted, equal scores with completed true. Must be rejected tie_not_possible and write nothing.",
+  "league": "NHL",
+  "expectedParse": "rejected:tie_not_possible",
+  "evaluateAt": "2026-11-09T12:00:00Z",
+  "response": [
+    {
+      "id": "a499ba4a444629c36c767960e203b65b",
+      "sport_key": "icehockey_nhl",
+      "sport_title": "NHL",
+      "commence_time": "2026-11-08T00:10:00Z",
+      "completed": true,
+      "home_team": "Winnipeg Jets",
+      "away_team": "Florida Panthers",
+      "scores": [
+        {
+          "name": "Winnipeg Jets",
+          "score": "2"
+        },
+        {
+          "name": "Florida Panthers",
+          "score": "2"
+        }
+      ],
+      "last_update": "2026-11-08T02:40:00Z"
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110803",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110803/.out/worktrees/claude__work-2026110803-write-reconciled-sidecar",
+  "branch": "claude/work-2026110803-write-reconciled-sidecar",
+  "base_branch": "main",
+  "commit_sha": "a699780eff056e48ad9641d00fd4915677d2b53a",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1840",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/work/WORK-2026110803.md",
+    "docs/05_operations/LANE_MANIFEST_SPEC.md",
+    "scripts/ops/lane-manifest.test.ts",
+    "scripts/ops/lane-manifest.ts",
+    "scripts/ops/model-routing.test.ts",
+    "scripts/ops/model-routing.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026110803/diff-summary.md",
+    "docs/06_status/proof/WORK-2026110803/evidence.json",
+    "docs/06_status/proof/WORK-2026110803/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-11-09T04:45:26.171Z",
+  "heartbeat_at": "2026-11-09T15:12:43.726Z",
+  "closed_at": "2026-11-09T15:12:43.726Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/work-2026110803-write-reconciled-sidecar.json",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-11-09T14:51:53.838Z",
+      "verdict": "fail",
+      "merge_sha": "a699780eff056e48ad9641d00fd4915677d2b53a",
+      "failures": [
+        "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1840 merged while manifest status was \"in_review\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-11-09T15:12:40.259Z",
+      "verdict": "pass",
+      "merge_sha": "a699780eff056e48ad9641d00fd4915677d2b53a",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110803/.out/worktrees/claude__work-2026110803-write-reconciled-sidecar",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

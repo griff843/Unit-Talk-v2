@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomUUID } from 'node:crypto';
+import { once } from 'node:events';
+import type { AddressInfo } from 'node:net';
+import { createApiRuntimeDependencies, createApiServer } from './server.js';
 import {
   capperDiscordRoutingVersion,
   humanCapperDeliveryAuthorizationVersion,
@@ -203,6 +206,134 @@ test('public performance uses canonical attribution and real prices, projecting 
     assert.ok(!serialized.includes(secret), secret);
   }
 });
+
+for (const reader of ['service', 'stats', 'leaderboard']) {
+  test(`WORK-2026103005: ${reader} excludes private, unknown and mismatched audience pins alongside a normal pick`, async () => {
+    for (const audience of ['staff-canary', 'unknown', null]) {
+      const { repositories, pick, outbox, receipt } = await fixture();
+      const outboxPayload = outbox.payload as Record<string, unknown>;
+      const receiptPayload = receipt.payload as Record<string, unknown>;
+      assert.ok(receipt.channel);
+      assert.ok(receipt.external_id);
+      // Keep the original real sent/receipt fixture as the normal public result;
+      // a second complete copy carries private pins and must not change totals.
+      const hiddenId = randomUUID();
+      const hidden = await repositories.picks.savePick({
+        id: hiddenId,
+        submissionId: randomUUID(),
+        market: 'moneyline',
+        selection: 'CANARY',
+        odds: 150,
+        stakeUnits: 2,
+        source: 'smart-form',
+        approvalStatus: 'approved',
+        promotionStatus: 'not_eligible',
+        lifecycleState: 'settled',
+        createdAt: at,
+        metadata: {
+          ...(pick.metadata as Record<string, unknown>),
+          deliveryAuthorization: {
+            ...((pick.metadata as Record<string, unknown>)[
+              'deliveryAuthorization'
+            ] as Record<string, unknown>),
+            audience,
+          },
+        },
+      });
+      hidden.posted_at = at;
+      const hiddenOutbox = await repositories.outbox.enqueue({
+        pickId: hiddenId,
+        target: outbox.target,
+        idempotencyKey: hiddenId,
+        payload: {
+          ...outboxPayload,
+          deliveryDestination: {
+            ...(outboxPayload['deliveryDestination'] as Record<
+              string,
+              unknown
+            >),
+            audience,
+          },
+        },
+      });
+      await repositories.receipts.record({
+        outboxId: hiddenOutbox.id,
+        receiptType: 'discord.message',
+        status: 'sent',
+        channel: receipt.channel,
+        externalId: receipt.external_id,
+        payload: { ...receiptPayload, outboxId: hiddenOutbox.id },
+      });
+      await repositories.settlements.record({
+        pickId: hiddenId,
+        status: 'settled',
+        result: 'loss',
+        source: 'operator',
+        confidence: 'confirmed',
+        evidenceRef: 'test://canary-score',
+        settledBy: 'operator',
+        settledAt: at,
+        payload: {},
+      });
+      if (reader === 'service') {
+        const result = await getMemberPerformance(repositories, options);
+        assert.equal(result.stats.picks, 1);
+        assert.equal(result.stats.wins, 1);
+      } else {
+        const runtime = createApiRuntimeDependencies({ repositories });
+        runtime.now = () => Date.parse(options.observedAt);
+        runtime.authConfig = {
+          enabled: true,
+          failClosed: true,
+          jwtSecret: 'audience-test-secret',
+          keys: new Map([
+            [
+              'audience-bot',
+              {
+                role: 'submitter',
+                identity: 'submitter:discord-bot:audience-test',
+              },
+            ],
+          ]),
+        };
+        const server = createApiServer({ runtime });
+        server.listen(0, '127.0.0.1');
+        await once(server, 'listening');
+        try {
+          for (const route of [`/api/operator/${reader}?last=30&minPicks=1`]) {
+            const response = await fetch(
+              `http://127.0.0.1:${(server.address() as AddressInfo).port}${route}`,
+              {
+                headers: { authorization: 'Bearer audience-bot' },
+              },
+            );
+            assert.equal(response.status, 200, route);
+            const body = (await response.json()) as {
+              data: { picks?: number; entries?: Array<{ picks: number }> };
+            };
+            assert.equal(
+              body.data.picks ?? body.data.entries?.[0]?.picks,
+              1,
+              route,
+            );
+          }
+        } finally {
+          server.closeAllConnections();
+          await new Promise<void>((resolve) => server.close(() => resolve()));
+        }
+      }
+      // A members pick paired with a private outbox pin must also be omitted,
+      // without making the unrelated normal result unavailable.
+      (hidden.metadata as Record<string, unknown>)['deliveryAuthorization'] = (
+        pick.metadata as Record<string, unknown>
+      )['deliveryAuthorization'];
+      assert.equal(
+        (await getMemberPerformance(repositories, options)).stats.picks,
+        1,
+      );
+    }
+  });
+}
 
 test('the service has matching complete behavior through actual Database reader implementations', async () => {
   const { repositories, pick, outbox, receipt, settlement } = await fixture();

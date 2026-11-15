@@ -262,7 +262,7 @@ export function ApiHealthMonitoring({
     const channel = client
       .channel('api-health-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'system_runs' }, queueRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'provider_offers' }, queueRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'provider_offer_current' }, queueRefresh)
       .subscribe();
 
     return () => {

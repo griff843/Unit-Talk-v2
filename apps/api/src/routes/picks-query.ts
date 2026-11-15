@@ -2,9 +2,16 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ApiRuntimeDependencies } from '../server.js';
 import { writeJson, readOptionalInteger } from '../http-utils.js';
 import type { CanonicalPick } from '@unit-talk/contracts';
+import { filterMemberVisibleDeliveryPicks } from '../capper-delivery-authorization.js';
 
 const VALID_STATUSES: Set<CanonicalPick['lifecycleState']> = new Set([
-  'draft', 'validated', 'awaiting_approval', 'queued', 'posted', 'settled', 'voided',
+  'draft',
+  'validated',
+  'awaiting_approval',
+  'queued',
+  'posted',
+  'settled',
+  'voided',
 ]);
 
 const DEFAULT_LIMIT = 50;
@@ -14,7 +21,7 @@ const MAX_LIMIT = 200;
  * GET /api/picks?status=validated,queued,posted&limit=50
  *
  * Read-only query endpoint for pick lists filtered by lifecycle status.
- * Used by discord-bot for /live, /today, /my-picks commands.
+ * Used by discord-bot for /results. Operator trace remains a separate reader.
  */
 export async function handlePicksQuery(
   request: IncomingMessage,
@@ -27,26 +34,39 @@ export async function handlePicksQuery(
   if (!statusParam) {
     return writeJson(response, 400, {
       ok: false,
-      error: { code: 'MISSING_STATUS', message: 'Query parameter "status" is required (comma-separated lifecycle states)' },
+      error: {
+        code: 'MISSING_STATUS',
+        message:
+          'Query parameter "status" is required (comma-separated lifecycle states)',
+      },
     });
   }
 
   const requestedStatuses = statusParam.split(',').map((s) => s.trim());
-  const invalid = requestedStatuses.filter((s) => !VALID_STATUSES.has(s as CanonicalPick['lifecycleState']));
+  const invalid = requestedStatuses.filter(
+    (s) => !VALID_STATUSES.has(s as CanonicalPick['lifecycleState']),
+  );
   if (invalid.length > 0) {
     return writeJson(response, 400, {
       ok: false,
-      error: { code: 'INVALID_STATUS', message: `Invalid status values: ${invalid.join(', ')}. Valid: ${[...VALID_STATUSES].join(', ')}` },
+      error: {
+        code: 'INVALID_STATUS',
+        message: `Invalid status values: ${invalid.join(', ')}. Valid: ${[...VALID_STATUSES].join(', ')}`,
+      },
     });
   }
 
   const rawLimit = readOptionalInteger(url.searchParams.get('limit'));
   const limit = Math.min(rawLimit ?? DEFAULT_LIMIT, MAX_LIMIT);
 
-  const picks = await runtime.repositories.picks.listByLifecycleStates(
+  const rows = await runtime.repositories.picks.listByLifecycleStates(
     requestedStatuses as CanonicalPick['lifecycleState'][],
     limit,
   );
 
+  const picks = await filterMemberVisibleDeliveryPicks(
+    rows,
+    runtime.repositories.outbox,
+  );
   writeJson(response, 200, { ok: true, picks, count: picks.length });
 }

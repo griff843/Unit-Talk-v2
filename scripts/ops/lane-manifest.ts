@@ -1,4 +1,6 @@
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   type LaneManifest,
@@ -12,6 +14,7 @@ import {
   normalizeFileScope,
   normalizeRepoRelativePaths,
   parseArgs,
+  ROOT,
   readManifest,
   relativeToRoot,
   validateBranchName,
@@ -22,7 +25,17 @@ import {
   type LaneExecutor,
 } from './shared.js';
 import { buildLaneExecutionLocation } from './lane-execution.js';
-import { resolveModelProfile, type ModelRoutingBlock } from './model-routing.js';
+import {
+  UNAVAILABLE_ROUTING_VALUE,
+  buildReconciledModelRoutingSidecar,
+  reconcileObservedModelRouting,
+  reResolveModelRouting,
+  resolveModelProfile,
+  verifyRoutingApproval,
+  verifyStoredRoutingApproval,
+  type ModelRoutingBlock,
+  type RoutingApprovalComment,
+} from './model-routing.js';
 import { runScopeRelease } from './scope-release.js';
 
 interface PullRequestMergeInfo {
@@ -62,6 +75,15 @@ export function main(argv = process.argv.slice(2)): number {
         return 0;
       case 'scope-release':
         return scopeReleaseCommand(positionals[1], flags, bools.has('json'));
+      case 'reconcile-routing':
+        reconcileRoutingCommand(positionals[1], flags, bools, bools.has('json'));
+        return 0;
+      case 'write-reconciled-sidecar':
+        writeReconciledSidecarCommand(positionals[1], bools.has('json'));
+        return 0;
+      case 're-resolve-routing':
+        reResolveRoutingCommand(positionals[1], bools.has('json'));
+        return 0;
       case 'record-merge':
         recordMergeCommand(positionals[1], flags, bools.has('json'));
         return 0;
@@ -221,6 +243,283 @@ function updateCommand(
  * release can never be applied to a lane state the operator did not actually
  * inspect.
  */
+const RECONCILE_ROUTING_FLAGS = ['profile', 'model', 'source', 'approval-comment'] as const;
+
+export interface ReconcileRoutingGitHub {
+  repository(): string;
+  fetchComment(commentId: string): RoutingApprovalComment;
+  fetchPrHeadSha(prNumber: number): string;
+}
+
+const ghReconcileRouting: ReconcileRoutingGitHub = {
+  repository() {
+    return runGh(['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner']).trim();
+  },
+  fetchComment(commentId) {
+    return JSON.parse(runGh(['api', `repos/{owner}/{repo}/issues/comments/${commentId}`])) as RoutingApprovalComment;
+  },
+  fetchPrHeadSha(prNumber) {
+    return runGh(['pr', 'view', String(prNumber), '--json', 'headRefOid', '-q', '.headRefOid']).trim();
+  },
+};
+
+function runGh(args: string[]): string {
+  const result = spawnSync('gh', args, { encoding: 'utf8' });
+  if (result.status !== 0) {
+    throw new Error(`gh ${args.join(' ')} failed: ${(result.stderr || result.stdout).trim()}`);
+  }
+  return result.stdout;
+}
+
+/**
+ * Re-record a started Codex lane's model_routing to what its session reported running
+ * (WORK-2026102902). Authority comes only from a pm-verdict/v1 APPROVED comment that GitHub
+ * places on the lane's own PR (issue_url), verified against GitHub; there is no caller-supplied authorizer. Every
+ * missing flag is named in one error. A done lane is refused: its proof is already bound.
+ */
+export function reconcileRoutingCommand(
+  issueId: string | undefined,
+  flags: Map<string, string[]>,
+  bools: Set<string>,
+  json: boolean,
+  github: ReconcileRoutingGitHub = ghReconcileRouting,
+  now = new Date().toISOString(),
+): LaneManifest {
+  const effortUnavailable = bools.has('reasoning-effort-unavailable');
+  const effort = getFlag(flags, 'reasoning-effort')?.trim();
+  const missing = [
+    ...(issueId ? [] : ['<issue id>']),
+    ...RECONCILE_ROUTING_FLAGS.filter((flag) => !getFlag(flags, flag)?.trim()).map((flag) => `--${flag}`),
+    ...(effort || effortUnavailable ? [] : ['--reasoning-effort or --reasoning-effort-unavailable']),
+  ];
+  if (missing.length > 0) {
+    throw new Error(
+      `reconcile-routing is missing ${missing.join(', ')}. Usage: reconcile-routing <ID> --profile <p> --model <m> ` +
+        '(--reasoning-effort <e> | --reasoning-effort-unavailable) --source <where it was observed> --approval-comment <id-or-url>',
+    );
+  }
+  if (effort && effortUnavailable) {
+    throw new Error('reconcile-routing refused: pass --reasoning-effort or --reasoning-effort-unavailable, not both');
+  }
+  const id = issueId!.toUpperCase();
+  if (!manifestExists(id)) {
+    throw new Error(`Manifest not found for ${id}`);
+  }
+  const manifest = readManifest(id);
+  if (manifest.executor !== 'codex-cli' && manifest.executor !== 'codex-cloud') {
+    throw new Error(`reconcile-routing refused: ${id} executor is "${manifest.executor ?? 'unset'}"; model_routing is Codex-only`);
+  }
+  if (!manifest.model_routing) {
+    throw new Error(`reconcile-routing refused: ${id} has no model_routing to reconcile`);
+  }
+  if (manifest.status === 'done') {
+    throw new Error(`reconcile-routing refused: ${id} is done; its proof is already bound`);
+  }
+  const prNumber = Number(/\/pull\/(\d+)$/.exec(manifest.pr_url ?? '')?.[1]);
+  if (!Number.isInteger(prNumber) || prNumber <= 0) {
+    throw new Error(`reconcile-routing refused: ${id} has no pr_url; the approval must be on the lane's own PR`);
+  }
+
+  const commentId = /(\d+)$/.exec(getFlag(flags, 'approval-comment')!.trim())?.[1];
+  if (!commentId) {
+    throw new Error('reconcile-routing refused: --approval-comment must be a comment id or a URL ending in one');
+  }
+  const model = getFlag(flags, 'model')!.trim();
+  const approval = verifyRoutingApproval(github.fetchComment(commentId), {
+    repository: github.repository(),
+    issueId: id,
+    prNumber,
+    headSha: github.fetchPrHeadSha(prNumber),
+    model,
+    reasoningEffort: effort ?? UNAVAILABLE_ROUTING_VALUE,
+  });
+
+  const next: LaneManifest = {
+    ...manifest,
+    model_routing: reconcileObservedModelRouting(
+      manifest.model_routing,
+      {
+        profile: getFlag(flags, 'profile')!,
+        model,
+        reasoning_effort: effortUnavailable ? null : effort!,
+        source: getFlag(flags, 'source')!,
+      },
+      approval,
+      now,
+    ),
+    heartbeat_at: now,
+  };
+  writeManifest(next);
+
+  if (json) {
+    emitJson({ ok: true, code: 'model_routing_reconciled', issue_id: id, model_routing: next.model_routing });
+  } else {
+    console.log(`${id}: model_routing reconciled to ${next.model_routing!.model} (unverified external session)`);
+  }
+  return next;
+}
+
+export interface WriteReconciledSidecarGitHub extends ReconcileRoutingGitHub {
+  /** True when `sha` is a commit in the PR's history (its current head included). */
+  prHasCommit(prNumber: number, sha: string): boolean;
+}
+
+const ghWriteReconciledSidecar: WriteReconciledSidecarGitHub = {
+  ...ghReconcileRouting,
+  prHasCommit(prNumber, sha) {
+    if (ghReconcileRouting.fetchPrHeadSha(prNumber) === sha) return true;
+    return runGh(['api', `repos/{owner}/{repo}/pulls/${prNumber}/commits`, '--paginate', '-q', '.[].sha'])
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .includes(sha);
+  },
+};
+
+/**
+ * Write the model-routing.json sidecar a reconciled lane needs (WORK-2026110803).
+ * The sidecar is derived from the reconciled manifest only. The recorded approval is
+ * re-fetched and re-verified against the head it named at reconciliation; the PR may
+ * have moved on since, but that head must still be in the PR's history. Nothing about
+ * Codex execution is written because none occurred.
+ */
+export function writeReconciledSidecarCommand(
+  issueId: string | undefined,
+  json: boolean,
+  github: WriteReconciledSidecarGitHub = ghWriteReconciledSidecar,
+  now = new Date().toISOString(),
+  root = ROOT,
+): string {
+  if (!issueId) {
+    throw new Error('write-reconciled-sidecar is missing <issue id>. Usage: write-reconciled-sidecar <ID> [--json]');
+  }
+  const id = issueId.toUpperCase();
+  if (!manifestExists(id)) {
+    throw new Error(`Manifest not found for ${id}`);
+  }
+  const manifest = readManifest(id);
+  if (manifest.executor !== 'codex-cli' && manifest.executor !== 'codex-cloud') {
+    throw new Error(`write-reconciled-sidecar refused: ${id} executor is "${manifest.executor ?? 'unset'}"; model_routing is Codex-only`);
+  }
+  if (!manifest.model_routing) {
+    throw new Error(`write-reconciled-sidecar refused: ${id} has no model_routing`);
+  }
+  if (manifest.status === 'done') {
+    throw new Error(`write-reconciled-sidecar refused: ${id} is done; its proof is already bound`);
+  }
+  const routing = manifest.model_routing;
+  if (!routing.override?.declared) {
+    throw new Error(`write-reconciled-sidecar refused: ${id} was not reconciled (run reconcile-routing first)`);
+  }
+  const prNumber = Number(/\/pull\/(\d+)$/.exec(manifest.pr_url ?? '')?.[1]);
+  if (!Number.isInteger(prNumber) || prNumber <= 0) {
+    throw new Error(`write-reconciled-sidecar refused: ${id} has no pr_url; the approval must be on the lane's own PR`);
+  }
+  const stored = routing.override.approval;
+  if (!stored) {
+    throw new Error(`write-reconciled-sidecar refused: ${id} records no routing approval to re-verify`);
+  }
+  const commentId = /(\d+)$/.exec(stored.comment_url)?.[1];
+  if (!commentId) {
+    throw new Error('write-reconciled-sidecar refused: the stored approval comment_url does not end in a comment id');
+  }
+  verifyStoredRoutingApproval(github.fetchComment(commentId), {
+    repository: github.repository(),
+    issueId: id,
+    prNumber,
+    routing,
+  });
+  if (!github.prHasCommit(prNumber, stored.head_sha)) {
+    throw new Error(
+      `write-reconciled-sidecar refused: approval head ${stored.head_sha} is not in the history of PR #${prNumber}`,
+    );
+  }
+
+  const sidecar = buildReconciledModelRoutingSidecar({
+    issueId: id,
+    manifestSchemaVersion: manifest.schema_version,
+    routing,
+    now,
+  });
+  const dir = path.join(root, 'docs', '06_status', 'proof', id);
+  const target = path.join(dir, 'model-routing.json');
+  let outcome: 'written' | 'unchanged' = 'written';
+  if (fs.existsSync(target)) {
+    let existing: Record<string, unknown>;
+    try {
+      existing = JSON.parse(fs.readFileSync(target, 'utf8')) as Record<string, unknown>;
+    } catch {
+      throw new Error(`write-reconciled-sidecar refused: existing ${relativeToRoot(target)} is not valid JSON`);
+    }
+    const strip = (value: Record<string, unknown>) => {
+      const { generated_at: _generatedAt, ...rest } = value;
+      return JSON.stringify(rest);
+    };
+    if (strip(existing) !== strip(sidecar as unknown as Record<string, unknown>)) {
+      throw new Error(
+        `write-reconciled-sidecar refused: ${relativeToRoot(target)} already exists with different content; it will not be overwritten`,
+      );
+    }
+    outcome = 'unchanged';
+  } else {
+    fs.mkdirSync(dir, { recursive: true });
+    const tmp = `${target}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, `${JSON.stringify(sidecar, null, 2)}\n`, 'utf8');
+    fs.renameSync(tmp, target);
+  }
+
+  if (json) {
+    emitJson({ ok: true, code: `reconciled_sidecar_${outcome}`, issue_id: id, path: relativeToRoot(target), sidecar });
+  } else {
+    console.log(`${id}: ${relativeToRoot(target)} ${outcome} (unverified external session)`);
+  }
+  return target;
+}
+
+/**
+ * Move a Codex lane's model_routing to the current policy version, keeping its profile
+ * (WORK-2026102906). The authority is the policy change itself, which lands on main by
+ * PR; this adds no capability the profile does not already have under that policy. See
+ * reResolveModelRouting for what is refused.
+ */
+export function reResolveRoutingCommand(
+  issueId: string | undefined,
+  json: boolean,
+  now = new Date().toISOString(),
+): LaneManifest {
+  if (!issueId) {
+    throw new Error('re-resolve-routing is missing <issue id>. Usage: re-resolve-routing <ID> [--json]');
+  }
+  const id = issueId.toUpperCase();
+  if (!manifestExists(id)) {
+    throw new Error(`Manifest not found for ${id}`);
+  }
+  const manifest = readManifest(id);
+  if (manifest.executor !== 'codex-cli' && manifest.executor !== 'codex-cloud') {
+    throw new Error(`re-resolve-routing refused: ${id} executor is "${manifest.executor ?? 'unset'}"; model_routing is Codex-only`);
+  }
+  if (!manifest.model_routing) {
+    throw new Error(`re-resolve-routing refused: ${id} has no model_routing to re-resolve`);
+  }
+  if (manifest.status === 'done') {
+    throw new Error(`re-resolve-routing refused: ${id} is done; its proof is already bound`);
+  }
+
+  const next: LaneManifest = {
+    ...manifest,
+    model_routing: reResolveModelRouting(manifest.model_routing, manifest.tier, now),
+    heartbeat_at: now,
+  };
+  writeManifest(next);
+
+  const routing = next.model_routing!;
+  if (json) {
+    emitJson({ ok: true, code: 'model_routing_re_resolved', issue_id: id, model_routing: routing });
+  } else {
+    console.log(`${id}: model_routing re-resolved to ${routing.model} / ${routing.reasoning_effort} (policy ${routing.policy_version})`);
+  }
+  return next;
+}
+
 function scopeReleaseCommand(
   issueId: string | undefined,
   flags: Map<string, string[]>,
@@ -463,6 +762,9 @@ function usage(): void {
   console.error('  pnpm ops:lane-manifest -- create --issue UTV2-123 --tier T2 --branch codex/utv2-123-foo --files path --preflight-token .out/ops/preflight/...json');
   console.error('  pnpm ops:lane-manifest -- read UTV2-123 [--json]');
   console.error('  pnpm ops:lane-manifest -- update UTV2-123 [--status merged] [--pr-url ...] [--commit-sha ...] [--files-changed path]');
+  console.error('  pnpm ops:lane-manifest -- re-resolve-routing UTV2-123 [--json]');
+  console.error('  pnpm ops:lane-manifest -- write-reconciled-sidecar UTV2-123 [--json]');
+  console.error('  pnpm ops:lane-manifest -- reconcile-routing UTV2-123 --profile <p> --model <m> (--reasoning-effort <e> | --reasoning-effort-unavailable) --source <where observed> --approval-comment <id-or-url> [--json]');
   console.error('  pnpm ops:lane-manifest -- record-merge UTV2-123 --pr <url-or-number> [--json]');
   console.error('  pnpm ops:lane-manifest -- scope-release UTV2-123 --pr 456 --expected-head-sha <sha> --expected-lock-hash <sha256> --release-path <path> [--release-path <path>] --actor <who> --reason <why> [--json]');
   console.error('  pnpm ops:lane-manifest -- validate UTV2-123 [--json]');

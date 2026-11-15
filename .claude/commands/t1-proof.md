@@ -52,7 +52,7 @@ Confirm at least one T1 trigger applies — if none, flag for re-classification 
 - [ ] `supabase/migrations/` file created or modified
 - [ ] Live routing target changed (`discord:best-bets`, `discord:trader-insights`)
 - [ ] Settlement write path changed (`recordInitialSettlement`, `recordSettlementCorrection`, `recordManualReview`)
-- [ ] `PROGRAM_STATUS.md` routing-state table changed
+- [ ] Delivery kill-switch, containment mode (`syndicate_machine_mode`) or delivery target registry configuration changed
 
 ---
 

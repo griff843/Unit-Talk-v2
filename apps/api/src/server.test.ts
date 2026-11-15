@@ -3292,9 +3292,9 @@ test('zombie detection reads past the first 1,000 candidates when the repository
 });
 
 test('readAllOrderedPages returns every row across capped pages and stops on a short page', async () => {
-  const rows = Array.from({ length: 2500 }, (_, index) => ({ index }));
+  const rows = Array.from({ length: 2500 }, (_, index) => ({ index, id: String(index), created_at: "2026-01-01T00:00:00Z" }));
   const ranges: Array<[number, number]> = [];
-  const read = await readAllOrderedPages<{ index: number }>(async (from, to) => {
+  const read = await readAllOrderedPages<{ index: number; id: string; created_at: string }>(async (from, to) => {
     ranges.push([from, to]);
     return { data: rows.slice(from, Math.min(to + 1, from + POSTGREST_MAX_ROWS)), error: null };
   });
@@ -3303,7 +3303,7 @@ test('readAllOrderedPages returns every row across capped pages and stops on a s
   assert.deepEqual(ranges, [[0, 999], [1000, 1999], [2000, 2999]]);
 
   // An exact multiple of the page size needs one empty page to prove the end.
-  const exact = await readAllOrderedPages<{ index: number }>(async (from, to) => ({
+  const exact = await readAllOrderedPages<{ index: number; id: string; created_at: string }>(async (from, to) => ({
     data: rows.slice(0, 2000).slice(from, to + 1),
     error: null,
   }));
@@ -3318,7 +3318,7 @@ test('readAllOrderedPages refuses a page size above the server cap, and surfaces
   await assert.rejects(
     readAllOrderedPages(async (from) =>
       from === 0
-        ? { data: Array.from({ length: POSTGREST_MAX_ROWS }, () => ({})), error: null }
+        ? { data: Array.from({ length: POSTGREST_MAX_ROWS }, () => ({ id: "test", created_at: "2026-01-01T00:00:00Z" })), error: null }
         : { data: null, error: { message: 'boom on page 2' } },
     ),
     /boom on page 2/u,

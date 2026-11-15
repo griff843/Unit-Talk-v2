@@ -32,6 +32,9 @@ test('operations home counts real operator states and reads bounded lifecycle ac
       });
     }
     if (settlements) {
+      if (params.get('pick_id') === 'in.(pick-1)') {
+        return Response.json([], { headers: { 'content-range': '*/0' } });
+      }
       assert.equal(params.get('pick.metadata->distributionMode'), 'not.is.null');
       assert.equal(params.get('order'), 'created_at.asc,id.asc');
       assert.equal(params.get('pick_id'), 'in.(review-pick)');

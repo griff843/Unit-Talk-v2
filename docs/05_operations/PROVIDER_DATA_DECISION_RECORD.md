@@ -1,6 +1,6 @@
 # Provider & Data Decision Record
 
-**Status:** UPDATED — 2026-04-04 (see Amendment A)
+**Status:** UPDATED — 2026-11-11 (see Amendment A1; Amendment A dated 2026-04-04)
 **Originally ratified:** 2026-04-01
 **Authority:** T1 strategic decision record. Owned by PM (A Griffin).
 **Cross-references:** `CONTROLLED_VALIDATION_PACKET.md`, `production_readiness_checklist.md` §7–§8, `T1_PROVIDER_INGESTION_CONTRACT.md`, `MODEL_REGISTRY_CONTRACT.md`
@@ -595,3 +595,34 @@ The switch from Odds API primary → SGO Pro primary requires ALL of the followi
 4. Real edge source distribution confirming `pinnacle` (not `confidence-delta`) as dominant edge source
 5. CLV populated rate ≥80% on settled picks using SGO Pro as source
 6. At least 7-day parallel run period with both providers active to validate parity
+
+---
+
+## Amendment A1 — The Odds API: game-score evaluation, engineering and staging only (2026-11-11)
+
+**Status:** RATIFIED 2026-11-11. Recorded under the Provider Change Protocol (`PROVIDER_AUTHORITY_LOCK.md`), lane WORK-2026111101.
+**Authority:** `PROVIDER_AUTHORITY_LOCK.md` § "Amendment A1" is the operative text. This entry records the decision and its reasons; where they differ, the lock file wins.
+
+### A1.1 Decision
+
+The Odds API is authorized for one function only: full-game final scores for NFL, NBA, NHL and MLB game-line settlement evaluation (moneyline, spread, game total, team total), from its `/scores` endpoint, with the free `/events` endpoint for event matching. It applies to engineering (recorded fixtures) and the staging project only, through an operator-run CLI that is dry-run by default, and settles Track Only picks only. SGO Pro keeps every provider function it holds today. Nothing in Amendment A or the rest of this record is changed.
+
+### A1.2 Ratification
+
+- **PM directive, 2026-11-10:** The Odds API is the preferred candidate for bounded game-score ingestion; ESPN is excluded.
+- **PM recommendation, 2026-11-11:** ratify "strictly for final-game-score engineering and staging use. ... No purchase, production key, production ingestion or deployment is authorized."
+- **Griff, 2026-11-11 (reserved paid-provider and provider-authority decision):** ratified Amendment A1 as written ("Approve D2 and D3", where D2 = "Ratify PROVIDER_AUTHORITY_LOCK Amendment A1 ... engineering and staging only?").
+
+### A1.3 Rationale (PM)
+
+- SGO results have been stale since 2026-06-30, so game-line settlement evaluation has no current results source.
+- ESPN is commercially excluded.
+- The Odds API terms dated 31 Aug 2026 permit commercial display, derived values and storage, and forbid standalone redistribution. Game-score evaluation for internal settlement stays inside those terms.
+
+### A1.4 Cost envelope
+
+About 248 credits a month at one run a day across the 4 leagues. That fits the free 500-credit tier. No plan purchase, paid key or production key is authorized; free-tier or test keys are used in staging only and are configured by Griff.
+
+### A1.5 What A1 does not authorize
+
+Purchase, subscription, production key, production apply, deployment, scheduled ingestion, SGO change or unparking, containment change, member delivery, NHL shootout settlement, or any Odds API function other than full-game final scores. Production activation needs a separate amendment ratified by Griff.

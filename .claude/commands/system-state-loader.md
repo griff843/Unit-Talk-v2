@@ -22,7 +22,7 @@ Load current system state before acting. Run at session start and after `/clear`
    pnpm github:current
    ```
 
-4. **Read program status** — `docs/06_status/PROGRAM_STATUS.md`. Identify active milestone, open risks, live routing.
+4. **Read program status** — `docs/mission/plan.md` (live, reconciled against GitHub and runtime) and `docs/06_status/CURRENT_STATE.md` (a dated snapshot; check its "Last verified" line, and let live evidence override it). Identify active milestone, open risks, live routing. `PROGRAM_STATUS.md` is superseded audit history, not a status source.
 
 5. **Answer three questions before touching code:**
    - What milestone is active?

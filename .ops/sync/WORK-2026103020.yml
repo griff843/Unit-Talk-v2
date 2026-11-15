@@ -1,0 +1,186 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026103020
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026103020
+  objective: "WORK-2026103020 — Command Center: show the effective settlement's timestamp"
+  acceptance_criteria:
+    - "`pnpm verify` green in CI at the exact head."
+    - Proof includes the mutation.
+    - Read-only acceptance on the real pick waits for a separately authorized
+      deploy and is not claimed in this lane.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026103020 — Command Center: show the effective settlement's
+      timestamp
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli (the browser-enabled Codex chat; Command Center UI
+      ownership)
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). This is
+      the bounded successor requested in
+      `.out/work-orders/CODEX-CANARY-SETTLEMENT-TIMESTAMP-REQUEST.md`. The
+      canary lifecycle ends in Command Center settlement and recap, so the
+      operator surface must show settlement truth accurately. No production
+      mutation is authorized.
+
+
+      ## Defect (observed on a real pick, read-only)
+
+
+      Pick `afcfaba5-…` (Track Only, settled win) has settlement record
+      `cba151e9-…` with `settledAt 2026-10-30T00:18:51Z`, but its detail page
+      shows **Settled At —**.
+
+
+      The cause: `apps/command-center/src/lib/data/queues.ts:960` maps
+      `detail.pick.settledAt` from the pick row's `settled_at`, which is null
+      for a Track Only pick whose lifecycle stays `validated`. The page renders
+      that value (`apps/command-center/src/app/picks/[id]/page.tsx:464`), while
+      the effective settlement the page already reads carries the real
+      timestamp.
+
+
+      ## Required behavior
+
+
+      1. The visible Settled At value comes from the **effective** settlement,
+      the one the page already resolves through the canonical correction-chain
+      reader.
+
+      2. A correction shows its effective record's timestamp, even when that
+      record is older than its parent.
+
+      3. Pending, manual-review or no effective settlement shows
+      unknown/pending, and never an obsolete record's time.
+
+      4. A missing effective timestamp stays explicitly unknown. Never invent or
+      substitute a value.
+
+      5. Make no extra per-row or history request.
+
+      6. Change no lifecycle, auth, settlement policy or API write. The pick's
+      `validated` lifecycle must not be changed to fix the display.
+
+
+      ## Tests
+
+
+      - Focused node:test behavior tests for the projection helper, covering
+      cases 1–4.
+
+      - A mutation: mapping back to the pick row's `settled_at` fails a test.
+
+
+      ## File Scope
+
+
+      - apps/command-center/**
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026103020.md
+    title: "WORK-2026103020 — Command Center: show the effective settlement's
+      timestamp"
+    description: >-
+      # WORK-2026103020 — Command Center: show the effective settlement's
+      timestamp
+
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli (the browser-enabled Codex chat; Command Center UI
+      ownership)
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). This is
+      the bounded successor requested in
+      `.out/work-orders/CODEX-CANARY-SETTLEMENT-TIMESTAMP-REQUEST.md`. The
+      canary lifecycle ends in Command Center settlement and recap, so the
+      operator surface must show settlement truth accurately. No production
+      mutation is authorized.
+
+
+      ## Defect (observed on a real pick, read-only)
+
+
+      Pick `afcfaba5-…` (Track Only, settled win) has settlement record
+      `cba151e9-…` with `settledAt 2026-10-30T00:18:51Z`, but its detail page
+      shows **Settled At —**.
+
+
+      The cause: `apps/command-center/src/lib/data/queues.ts:960` maps
+      `detail.pick.settledAt` from the pick row's `settled_at`, which is null
+      for a Track Only pick whose lifecycle stays `validated`. The page renders
+      that value (`apps/command-center/src/app/picks/[id]/page.tsx:464`), while
+      the effective settlement the page already reads carries the real
+      timestamp.
+
+
+      ## Required behavior
+
+
+      1. The visible Settled At value comes from the **effective** settlement,
+      the one the page already resolves through the canonical correction-chain
+      reader.
+
+      2. A correction shows its effective record's timestamp, even when that
+      record is older than its parent.
+
+      3. Pending, manual-review or no effective settlement shows
+      unknown/pending, and never an obsolete record's time.
+
+      4. A missing effective timestamp stays explicitly unknown. Never invent or
+      substitute a value.
+
+      5. Make no extra per-row or history request.
+
+      6. Change no lifecycle, auth, settlement policy or API write. The pick's
+      `validated` lifecycle must not be changed to fix the display.
+
+
+      ## Tests
+
+
+      - Focused node:test behavior tests for the projection helper, covering
+      cases 1–4.
+
+      - A mutation: mapping back to the pick row's `settled_at` fails a test.
+
+
+      ## Acceptance Criteria
+
+
+      - `pnpm verify` green in CI at the exact head.
+
+      - Proof includes the mutation.
+
+      - Read-only acceptance on the real pick waits for a separately authorized
+      deploy and is not claimed in this lane.
+
+
+      ## File Scope
+
+
+      - apps/command-center/**
+    captured_at: 2026-10-30T18:37:42.210Z
+    description_sha256: f4561016ee37b2b88a216b74ab078822a1df85e5be0476d9cfc87ce2dadde9dc
+  contract_hash: d75bedea0fd63ba6c3dc9db41fc95394d5d4524d23febea1b3a925f52bc6eba1

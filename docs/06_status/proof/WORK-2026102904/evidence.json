@@ -1,0 +1,41 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102904",
+  "pr_number": 1803,
+  "source_sha": "2f15363f273eefcdae6d67b3ca3108fd49f4d5c5",
+  "reviewed_head_sha": "2f15363f273eefcdae6d67b3ca3108fd49f4d5c5",
+  "generated_at": "2026-10-30T01:14:03Z",
+  "tier": "T2",
+  "lane_type": "hygiene",
+  "proof_profile": "static",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "487d129a34c4d033caa8c5ae1413f1b649b673f6",
+    "verified_source_sha": "2f15363f273eefcdae6d67b3ca3108fd49f4d5c5",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-30T01:39:40.594Z"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm test:ops",
+    "conclusion": "success",
+    "verified_source_sha": "2f15363f273eefcdae6d67b3ca3108fd49f4d5c5",
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/command-center-bridge.test.ts",
+      "tests": 24,
+      "pass": 24,
+      "fail": 0,
+      "skipped": 0
+    },
+    "note": "Local static verification passed; exact-head CI pending."
+  },
+  "verification": {
+    "focused_tests": "24 pass, 0 fail",
+    "test_ops": "3699 pass, 0 fail, 10 skipped",
+    "mutation_checks": "3 of 3 caught",
+    "production_repro": "POST /api/session after 7 s and 70 s idle stalled 30 s before; 401 in 1585 ms and 1895 ms after (no credentials sent)",
+    "scope": "both changed files are within the WORK-2026102904 file scope lock"
+  }
+}

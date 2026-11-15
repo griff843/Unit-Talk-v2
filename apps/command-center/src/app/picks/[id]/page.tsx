@@ -1,9 +1,11 @@
 import { Suspense } from 'react';
+import { isMemberVisibleDeliveryAudience } from '@unit-talk/contracts';
 import { RecapStatusPanel } from '@/components/RecapStatusPanel';
 import { Card } from '@/components/ui/Card';
 import { DegradedState } from '@/components/ui';
 import { Table, TableHead, TableBody, Th, Td } from '@/components/ui/Table';
 import { CorrectionForm } from '@/components/CorrectionForm';
+import { effectiveSettlementLabel, effectiveSettlementTimestamp, getPickIdentity } from '@/lib/data/pick-identity';
 import { InterventionAction } from '@/components/InterventionAction';
 import { PickIdentityPanel } from '@/components/PickIdentityPanel';
 import { SettlementForm } from '@/components/SettlementForm';
@@ -46,6 +48,7 @@ interface PromotionHistoryRow {
 }
 
 interface OutboxRow {
+  payload?: unknown;
   id: string;
   target: string;
   status: string;
@@ -206,23 +209,6 @@ function summarizeScoreMeaning(pick: PickDetail) {
   return `Routing score ${formatRoutingScore(pick.promotionScore)} is the weighted model/board policy fit. This pick holds no board target; the score is not a win probability.`;
 }
 
-function summarizeSettlementContext(detail: PickDetailViewResponse) {
-  const latest = detail.settlements[0] ?? null;
-  if (!latest) {
-    return 'Pending settlement';
-  }
-
-  if (latest.outcomeExplanation) {
-    return latest.outcomeExplanation;
-  }
-
-  if (latest.gameResult?.eventName) {
-    return `${latest.result ?? latest.status} • ${latest.gameResult.eventName}`;
-  }
-
-  return latest.result ?? latest.status;
-}
-
 function distributionModeLabel(value: unknown): string | null {
   if (value === 'track-only') return 'Track Only';
   if (value === 'delivery-eligible') return 'Delivery eligible';
@@ -257,6 +243,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
   }
 
   const { pick } = detail;
+  const correctionTarget = await getPickIdentity(pickId).catch(() => null);
   const allowedActions = getAllowedActions(pick.status);
   const corrections = detail.settlements.filter((settlement) => settlement.correctsId != null);
   // Read from the settlement plane, not from the lifecycle status. A Track Only
@@ -270,7 +257,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
   const deviggingResult = readObject(pick.metadata['deviggingResult']);
   const kellySizing = readObject(pick.metadata['kellySizing']);
   const realEdgePresence = readRealEdgePresence(pick.metadata);
-  const latestSettlementSummary = summarizeSettlementContext(detail);
+  const latestSettlementSummary = effectiveSettlementLabel(correctionTarget?.settlement ?? null, detail.settlements.length > 0);
   const scoreMeaning = summarizeScoreMeaning(pick);
   const scoreInsight = buildScoreInsight(pick.metadata);
   const promotion = buildPromotionPresentation({
@@ -325,6 +312,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
     <div className="flex flex-col gap-6">
       <GovernedPickTruth
         metadata={pick.metadata}
+        outboxPayloads={detail.outboxRows.map((row) => row.payload)}
         hasEventLink={rawEventId !== null}
         voided={pick.status === 'voided'}
         deliveryStage={deliveryStage}
@@ -348,7 +336,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
               submittedBy: pick.submittedBy,
               capperName: pick.capperName ?? null,
               marketTypeLabel: pick.marketTypeLabel ?? null,
-              settlementResult: detail.settlements[0]?.result ?? null,
+              settlementResult: correctionTarget?.settlement?.status === 'settled' ? correctionTarget.settlement.result : null,
             }}
           />
           <div className="grid gap-3 md:grid-cols-4">
@@ -403,9 +391,18 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         {allowedActions.length === 0 ? (
           <p className="text-sm text-gray-400">Pick is {pick.status}; no further action available.</p>
         ) : allowedActions.includes('correct') || (alreadySettled && allowedActions.includes('settle')) ? (
-          <CorrectionForm pickId={pickId} />
+          <CorrectionForm pickId={pickId} currentResult={correctionTarget?.settlement?.result ?? null} />
         ) : allowedActions.includes('settle') ? (
-          <SettlementForm pickId={pickId} isAlreadySettled={alreadySettled} />
+          <SettlementForm
+            pickId={pickId}
+            isAlreadySettled={alreadySettled}
+            memberVisible={isMemberVisibleDeliveryAudience(pick.metadata, detail.outboxRows.map((row) => row.payload))}
+            eventName={pick.matchup}
+            market={pick.market}
+            selection={pick.selection}
+            line={pick.line}
+            odds={pick.odds}
+          />
         ) : (
           <p className="text-sm text-gray-400">No actions available for this pick.</p>
         )}
@@ -468,7 +465,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           <KV label="Submission ID" value={pick.submissionId} />
           <KV label="Created At" value={pick.createdAt} />
           <KV label="Posted At" value={pick.postedAt} />
-          <KV label="Settled At" value={pick.settledAt} />
+          <KV label="Settled At" value={effectiveSettlementTimestamp(correctionTarget?.settlement ?? null)} />
         </div>
       </Card>
 

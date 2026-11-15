@@ -19,6 +19,7 @@ import {
 import { readMergeLock } from './merge-mutex.js';
 import { evaluateSubstrate, gatherSubstrateFacts } from './substrate-guard.js';
 import { requireDelegationActive } from './delegation-state.js';
+import { assertSingleIssueArgs } from './cli-args-guard.js';
 import {
   activeManifestOverlap,
   branchExists,
@@ -1008,6 +1009,10 @@ function main(): void {
       });
       process.exit(1);
     }
+
+    // WORK-2026103010: refuse leftover positionals and comma-joined --files before
+    // any lease or worktree, so a malformed scope is never pinned into the lock.
+    assertSingleIssueArgs(positionals, flags);
 
     const missing: string[] = [];
     if (!tierInput) {

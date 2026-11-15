@@ -1,0 +1,347 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026110201
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026110201
+  objective: A member reading `/help` or `/trial-status` sees only what their
+    access level can actually do today.
+  acceptance_criteria:
+    - "`/help` no longer advertises `/pick`, operator controls or deferred tools
+      to members. It lists only commands that are registered and usable at the
+      member's tier."
+    - Capper access copy describes form-based submission (Smart Form) and does
+      not mention `/pick`.
+    - Free-tier copy does not promise recaps or active picks.
+    - "`/trial-status` wording is accurate for each resolved tier, using the
+      prepared support links."
+    - Tier resolution, role guards, command registration and private (ephemeral)
+      visibility are unchanged; the diff is static response text plus tests.
+    - "`apps/discord-bot/src/discord-bot-foundation.test.ts` asserts the exact
+      prepared member entries, the support links and every tier/Capper
+      description, and fails if `/pick` reappears in member help."
+    - "`pnpm verify` green in CI at the exact head."
+  guardrails:
+    - No handler, tier-resolver, router, registration or guard logic change.
+    - "`/upgrade` domain wording, stats/leaderboard latency and the pinned
+      Member Tools message are out of scope."
+    - No new test file, so no `package.json` change.
+  non_goals:
+    - Performance or latency work (separate measurement task).
+    - Selected-user stats identity (#1761).
+  required_evidence:
+    - Focused test output for the foundation suite, before/after excerpt of the
+      member-visible text.
+    - "Standard WORK proof: `diff-summary.md`, `evidence.json`,
+      `verification.md`, observed `model-routing.json` (model and effort as
+      observed; never inferred)."
+  exit_criteria:
+    - "Exact-head CI green, `EXECUTOR_RESULT: READY_FOR_REVIEW` /
+      `executor-result/v1` posted for that head, independent Claude diff review
+      confirms no logic path changed. Deploy and live readback are separately
+      authorized."
+  unmapped_sections:
+    - >-
+      WORK-2026110201 — Discord member copy: truthful /help and /trial-status
+      wording
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05).
+      Admitted by Production Claude under Griff's 2026-11-02 PM product-repair
+      admission decision ("Discord member wording: admit the narrow three-file
+      correction"). Findings:
+      `.out/discord-member-acceptance-20261101/acceptance-packet.md` item 3. The
+      binding target copy is reproduced below from Repair A of
+      `.out/discord-acceptance-repairs-20261102/repair-plan.md`. No production
+      mutation, deploy, Discord permission, role, Whop or kill-switch change is
+      authorized.
+
+
+      ## Target copy (binding)
+
+
+      `/help`:
+
+
+      > **Unit Talk — Member Tools**
+
+      >
+
+      > **/stats** — View settled server results.
+
+      > **/leaderboard** — Compare capper results.
+
+      > **/trial-status** — Check your server access.
+
+      >
+
+      > Need a hand? Visit <#1559933414281322586> or open a private ticket in
+      <#1285609124050108436>.
+
+
+      It makes no selected-user identity claim (that is #1761). It omits
+      `/pick`, operator controls, deferred tools and `/upgrade`. The `/upgrade`
+      command stays registered and unchanged.
+
+
+      `/trial-status`: keep the existing access title and tier labels.
+      Descriptions by resolved tier:
+
+
+      | Resolved tier | Description |
+
+      |---|---|
+
+      | Free | Welcome to Unit Talk. Join the conversation in our public
+      channels. For help with your access, open a private ticket in
+      <#1285609124050108436>. |
+
+      | Trial | Your trial includes access to the VIP channels. For help with
+      your trial or access, open a private ticket in <#1285609124050108436>. |
+
+      | VIP | Your access includes the VIP channels. For help finding your way
+      around, visit <#1559933414281322586>. |
+
+      | VIP+ | Your access includes the VIP and VIP+ channels. For help finding
+      your way around, visit <#1559933414281322586>. |
+
+      | Existing reserved tier | For help with your access, open a private
+      ticket in <#1285609124050108436>. |
+
+
+      Only the existing `isCapper` flag adds **Submitting picks**: "Use the
+      [Unit Talk pick form](https://picks.unit-talk.com/submit)." Roles never
+      imply expiry, renewal, payment, role grants, alert availability or
+      delivery.
+
+
+      ## File Scope
+
+
+      - apps/discord-bot/src/commands/help.ts
+
+      - apps/discord-bot/src/commands/trial-status.ts
+
+      - apps/discord-bot/src/discord-bot-foundation.test.ts
+
+
+      ## PR opening is sequenced (overrides any generic "open a draft PR" step)
+
+
+      Every pull request, including a draft, runs the shared `staging-ci-db`
+      job. That job holds one running and one pending slot, and a third arrival
+      cancels the pending proof of another lane. So:
+
+
+      - Commit and push the lane branch as normal.
+
+      - **Do not open a pull request.** When implementation and local
+      verification are complete, write `.out/ops/ready-for-pr/<this issue
+      id>.md` in the lane worktree. List the head SHA, the focused test commands
+      and their results, and the observed model and effort.
+
+      - Production Claude opens the PR when the staging slot is free, then
+      reports the PR number back. After that, ask Production Claude before every
+      push to the open PR.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026110201.md
+    title: "WORK-2026110201 — Discord member copy: truthful /help and /trial-status
+      wording"
+    description: >-
+      # WORK-2026110201 — Discord member copy: truthful /help and /trial-status
+      wording
+
+
+      Tier: T2
+
+      Lane type: delivery-ui
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05).
+      Admitted by Production Claude under Griff's 2026-11-02 PM product-repair
+      admission decision ("Discord member wording: admit the narrow three-file
+      correction"). Findings:
+      `.out/discord-member-acceptance-20261101/acceptance-packet.md` item 3. The
+      binding target copy is reproduced below from Repair A of
+      `.out/discord-acceptance-repairs-20261102/repair-plan.md`. No production
+      mutation, deploy, Discord permission, role, Whop or kill-switch change is
+      authorized.
+
+
+      ## Objective
+
+
+      A member reading `/help` or `/trial-status` sees only what their access
+      level can actually do today.
+
+
+      ## Target copy (binding)
+
+
+      `/help`:
+
+
+      > **Unit Talk — Member Tools**
+
+      >
+
+      > **/stats** — View settled server results.
+
+      > **/leaderboard** — Compare capper results.
+
+      > **/trial-status** — Check your server access.
+
+      >
+
+      > Need a hand? Visit <#1559933414281322586> or open a private ticket in
+      <#1285609124050108436>.
+
+
+      It makes no selected-user identity claim (that is #1761). It omits
+      `/pick`, operator controls, deferred tools and `/upgrade`. The `/upgrade`
+      command stays registered and unchanged.
+
+
+      `/trial-status`: keep the existing access title and tier labels.
+      Descriptions by resolved tier:
+
+
+      | Resolved tier | Description |
+
+      |---|---|
+
+      | Free | Welcome to Unit Talk. Join the conversation in our public
+      channels. For help with your access, open a private ticket in
+      <#1285609124050108436>. |
+
+      | Trial | Your trial includes access to the VIP channels. For help with
+      your trial or access, open a private ticket in <#1285609124050108436>. |
+
+      | VIP | Your access includes the VIP channels. For help finding your way
+      around, visit <#1559933414281322586>. |
+
+      | VIP+ | Your access includes the VIP and VIP+ channels. For help finding
+      your way around, visit <#1559933414281322586>. |
+
+      | Existing reserved tier | For help with your access, open a private
+      ticket in <#1285609124050108436>. |
+
+
+      Only the existing `isCapper` flag adds **Submitting picks**: "Use the
+      [Unit Talk pick form](https://picks.unit-talk.com/submit)." Roles never
+      imply expiry, renewal, payment, role grants, alert availability or
+      delivery.
+
+
+      ## Acceptance Criteria
+
+
+      - `/help` no longer advertises `/pick`, operator controls or deferred
+      tools to members. It lists only commands that are registered and usable at
+      the member's tier.
+
+      - Capper access copy describes form-based submission (Smart Form) and does
+      not mention `/pick`.
+
+      - Free-tier copy does not promise recaps or active picks.
+
+      - `/trial-status` wording is accurate for each resolved tier, using the
+      prepared support links.
+
+      - Tier resolution, role guards, command registration and private
+      (ephemeral) visibility are unchanged; the diff is static response text
+      plus tests.
+
+      - `apps/discord-bot/src/discord-bot-foundation.test.ts` asserts the exact
+      prepared member entries, the support links and every tier/Capper
+      description, and fails if `/pick` reappears in member help.
+
+      - `pnpm verify` green in CI at the exact head.
+
+
+      ## Guardrails
+
+
+      - No handler, tier-resolver, router, registration or guard logic change.
+
+      - `/upgrade` domain wording, stats/leaderboard latency and the pinned
+      Member Tools message are out of scope.
+
+      - No new test file, so no `package.json` change.
+
+
+      ## Non-goals
+
+
+      - Performance or latency work (separate measurement task).
+
+      - Selected-user stats identity (#1761).
+
+
+      ## Required Evidence
+
+
+      - Focused test output for the foundation suite, before/after excerpt of
+      the member-visible text.
+
+      - Standard WORK proof: `diff-summary.md`, `evidence.json`,
+      `verification.md`, observed `model-routing.json` (model and effort as
+      observed; never inferred).
+
+
+      ## Exit Criteria
+
+
+      - Exact-head CI green, `EXECUTOR_RESULT: READY_FOR_REVIEW` /
+      `executor-result/v1` posted for that head, independent Claude diff review
+      confirms no logic path changed. Deploy and live readback are separately
+      authorized.
+
+
+      ## File Scope
+
+
+      - apps/discord-bot/src/commands/help.ts
+
+      - apps/discord-bot/src/commands/trial-status.ts
+
+      - apps/discord-bot/src/discord-bot-foundation.test.ts
+
+
+      ## PR opening is sequenced (overrides any generic "open a draft PR" step)
+
+
+      Every pull request, including a draft, runs the shared `staging-ci-db`
+      job. That job holds one running and one pending slot, and a third arrival
+      cancels the pending proof of another lane. So:
+
+
+      - Commit and push the lane branch as normal.
+
+      - **Do not open a pull request.** When implementation and local
+      verification are complete, write `.out/ops/ready-for-pr/<this issue
+      id>.md` in the lane worktree. List the head SHA, the focused test commands
+      and their results, and the observed model and effort.
+
+      - Production Claude opens the PR when the staging slot is free, then
+      reports the PR number back. After that, ask Production Claude before every
+      push to the open PR.
+    captured_at: 2026-11-02T09:41:42.060Z
+    description_sha256: 47ae175c290d27c15bd9a58674f686fce76e314eadbd1c2ce63f66adc349bc14
+  contract_hash: a7df4bff7cda3930956a3ca785756dd9ad8c95fdb509c31bf9fe13d13c495736

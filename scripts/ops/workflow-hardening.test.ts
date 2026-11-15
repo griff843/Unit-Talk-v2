@@ -2905,7 +2905,8 @@ test('UTV2-1713: linear-auto-close is not queued behind the closeout mutex', () 
   // no replacement run. Observed on UTV2-1690's closeout: run 31900689921 on
   // 52b4878b was cancelled while queued, the manifest reached `done`, and the
   // Linear issue stayed open until a human moved it.
-  const closeout = objectField(readWorkflowYaml('post-merge-lane-close.yml'), 'concurrency');
+  const closeoutDoc = readWorkflowYaml('post-merge-lane-close.yml');
+  const closeout = objectField(objectField(objectField(closeoutDoc, 'jobs'), 'lane-close'), 'concurrency');
   const linear = objectField(readWorkflowYaml('linear-auto-close.yml'), 'concurrency');
 
   assert.strictEqual(
@@ -3044,4 +3045,188 @@ test('every job that runs the staging seed reset, and only those, is serialized 
   }
   assert.ok(resetters.length >= 2, `expected at least 2 jobs running the staging seed reset, found ${resetters.length}: ${resetters.join(', ')}`);
   assert.deepEqual(grouped, resetters, 'only jobs that run the staging seed reset may join staging-ci-db');
+});
+
+// A lane gate that resolves its lane from the PR branch must recognise every
+// ISSUE_ID_NAMESPACES entry. These gates used to match only UTV2 (or UTV2/UNI),
+// so on a WORK-### branch each one logged a skip and reported success: proof-gate's
+// T1 Proof Gate and Runtime Verifier Gate jobs and the close-eligibility preflight
+// never evaluated the lane.
+function runBranchResolveStep(
+  workflow: string,
+  stepName: string,
+  branch: string,
+): { stdout: string; outputs: Record<string, string> } {
+  const doc = readWorkflowYaml(workflow);
+  const jobs = Object.values(objectField(doc, 'jobs')) as WorkflowDocument[];
+  const step = jobs
+    .flatMap((job) => (job.steps as WorkflowDocument[] | undefined) ?? [])
+    .find((s) => s.name === stepName);
+  assert.ok(step && typeof step.run === 'string', `${workflow} must have a "${stepName}" run step`);
+  assert.doesNotMatch(step.run as string, /\$\{\{/, `${workflow} "${stepName}" must read the branch from env, not template substitution`);
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'branch-resolve-'));
+  try {
+    const outputFile = path.join(dir, 'github-output');
+    fs.writeFileSync(outputFile, '');
+    const result = spawnSync('bash', ['-e', '-c', step.run as string], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: {
+        PATH: process.env.PATH ?? '',
+        BRANCH: branch,
+        HEAD_REF: branch,
+        GITHUB_OUTPUT: outputFile,
+        GITHUB_STEP_SUMMARY: path.join(dir, 'step-summary'),
+      },
+    });
+    assert.equal(result.status, 0, `${workflow} "${stepName}" exited ${result.status}: ${result.stderr}`);
+    const outputs = Object.fromEntries(
+      fs.readFileSync(outputFile, 'utf8').split('\n').filter(Boolean).map((line) => {
+        const at = line.indexOf('=');
+        return [line.slice(0, at), line.slice(at + 1)];
+      }),
+    );
+    return { stdout: result.stdout, outputs };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('branch-resolved lane gates recognise UTV2, UNI and WORK lanes', () => {
+  const cases = [
+    { branch: 'claude/work-2026102903-work-lane-pr-binding', id: 'WORK-2026102903' },
+    { branch: 'codex/utv2-1977-results-fix', id: 'UTV2-1977' },
+    { branch: 'claude/uni-42-thing', id: 'UNI-42' },
+  ];
+  for (const { branch, id } of cases) {
+    const t1 = runBranchResolveStep('proof-gate.yml', 'Extract issue ID', branch);
+    assert.equal(t1.outputs.issue_id, id, `proof-gate T1 on ${branch}`);
+    assert.equal(t1.outputs.skip, 'false', `proof-gate T1 on ${branch}`);
+
+    const runtime = runBranchResolveStep('proof-gate.yml', 'Detect issue ID', branch);
+    assert.equal(runtime.outputs.id, id, `proof-gate runtime-verifier on ${branch}`);
+
+    // Run in an empty directory, so the step resolves the lane and then stops at
+    // the missing manifest; the path it names proves which lane it resolved.
+    const close = runBranchResolveStep('close-eligibility-preflight.yml', 'Evaluate close eligibility', branch);
+    assert.match(close.stdout, new RegExp(`no lane manifest at docs/06_status/lanes/${id}\\.json`), `close-eligibility on ${branch}`);
+  }
+
+  const none = 'claude/cc-middleware-dotted-path-bypass';
+  assert.equal(runBranchResolveStep('proof-gate.yml', 'Extract issue ID', none).outputs.skip, 'true');
+  assert.equal(runBranchResolveStep('proof-gate.yml', 'Detect issue ID', none).outputs.id, '');
+  assert.match(
+    runBranchResolveStep('close-eligibility-preflight.yml', 'Evaluate close eligibility', none).stdout,
+    /resolves to no lane issue id/,
+  );
+});
+
+// A push-triggered closeout started ~30s after the merge, while ci.yml on the merge SHA
+// was still running, so every lane whose closeout reads that run failed G6 (or found no
+// DB proof receipt) and needed a manual replay: runs 41004630969, 40994374430,
+// 40987061159, 40434549605 and 40431037853. The wait job only delays the closeout.
+function closeoutWaitStep(): string {
+  const jobs = objectField(readWorkflowYaml('post-merge-lane-close.yml'), 'jobs');
+  const steps = objectField(jobs, 'wait-for-merge-ci').steps as WorkflowDocument[];
+  const step = steps.find((s) => s.name === 'Wait for ci.yml on the merge SHA to finish');
+  assert.ok(step && typeof step.run === 'string', 'wait-for-merge-ci must have its wait step');
+  return step.run as string;
+}
+
+function runCloseoutWait(
+  responses: Array<string | null>,
+  env: Record<string, string> = {},
+): { status: number | null; stdout: string; calls: number } {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'closeout-wait-'));
+  try {
+    const bin = path.join(dir, 'bin');
+    fs.mkdirSync(bin);
+    // Fake gh: answers the Nth call with the Nth canned API response (the last one
+    // repeats) through the step's own --jq expression; null makes the call fail.
+    responses.forEach((body, i) => fs.writeFileSync(path.join(dir, `r${i}`), body ?? 'FAIL'));
+    fs.writeFileSync(
+      path.join(bin, 'gh'),
+      [
+        '#!/usr/bin/env bash',
+        `dir=${JSON.stringify(dir)}`,
+        'n=$(cat "$dir/calls" 2>/dev/null || echo 0); echo $((n + 1)) > "$dir/calls"',
+        `last=${responses.length - 1}; [ "$n" -gt "$last" ] && n=$last`,
+        'body=$(cat "$dir/r$n"); [ "$body" = FAIL ] && exit 1',
+        'while [ $# -gt 0 ]; do [ "$1" = --jq ] && expr=$2; shift; done',
+        'printf %s "$body" | jq -r "$expr"',
+      ].join('\n'),
+      { mode: 0o755 },
+    );
+    const result = spawnSync('bash', ['-e', '-c', closeoutWaitStep()], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        REPO: 'o/r',
+        MERGE_SHA: 'abc',
+        WAIT_MINUTES: '50',
+        ABSENT_GRACE_SECONDS: '300',
+        POLL_SECONDS: '0',
+        ...env,
+      },
+    });
+    const calls = Number(fs.readFileSync(path.join(dir, 'calls'), 'utf8'));
+    return { status: result.status, stdout: result.stdout, calls };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const runs = (...statuses: string[]) => JSON.stringify({ workflow_runs: statuses.map((status) => ({ status })) });
+
+test('closeout waits for merge-SHA CI to complete before the closeout gates run', () => {
+  const done = runCloseoutWait([runs('queued'), runs('in_progress'), runs('completed', 'in_progress'), runs('completed', 'completed')]);
+  assert.equal(done.status, 0);
+  assert.equal(done.calls, 4, 'it keeps polling while any ci.yml run on the merge SHA is unfinished');
+  assert.match(done.stdout, /has completed/);
+
+  const absentThenRunning = runCloseoutWait([runs(), runs('in_progress'), runs('completed')]);
+  assert.equal(absentThenRunning.calls, 3, 'a run not yet created inside the grace period is waited for');
+});
+
+test('closeout wait never blocks forever: it proceeds and leaves the decision to the gates', () => {
+  const absent = runCloseoutWait([runs()], { ABSENT_GRACE_SECONDS: '0' });
+  assert.equal(absent.status, 0);
+  assert.match(absent.stdout, /no ci\.yml run for abc .*closeout gates decide/);
+
+  const stuck = runCloseoutWait([runs('in_progress')], { WAIT_MINUTES: '0' });
+  assert.equal(stuck.status, 0);
+  assert.match(stuck.stdout, /still running .*closeout gates decide/);
+
+  const unreadable = runCloseoutWait([null], { WAIT_MINUTES: '0' });
+  assert.equal(unreadable.status, 0);
+  assert.match(unreadable.stdout, /still unreadable .*closeout gates decide/);
+});
+
+test('closeout wait is push-only, holds no mutex and cannot skip the closeout', () => {
+  const doc = readWorkflowYaml('post-merge-lane-close.yml');
+  const jobs = objectField(doc, 'jobs');
+  const wait = objectField(jobs, 'wait-for-merge-ci');
+  const close = objectField(jobs, 'lane-close');
+
+  assert.equal(doc.concurrency, undefined, 'a workflow-level mutex would hold the closeout lock for the whole wait');
+  assert.equal(wait.concurrency, undefined, 'the wait must not occupy the closeout mutex or its single pending slot');
+  assert.equal(String(objectField(close, 'concurrency').group), 'merge-closeout-mutex');
+  assert.match(String(wait.if), /github\.event_name == 'push'/, 'workflow_dispatch replays run immediately');
+  assert.equal(close.needs, 'wait-for-merge-ci');
+  assert.match(String(close.if), /!cancelled\(\)/, 'a skipped or failed wait must not skip the closeout');
+  assert.doesNotMatch(closeoutWaitStep(), /\$\{\{/, 'the wait step reads its inputs from env');
+});
+
+test('closeout checks out the branch tip after the wait, not the merge SHA', () => {
+  const close = objectField(objectField(readWorkflowYaml('post-merge-lane-close.yml'), 'jobs'), 'lane-close');
+  const steps = close.steps as Array<Record<string, unknown>>;
+  const checkouts = steps.filter((step) => String(step.uses ?? '').startsWith('actions/checkout@'));
+  assert.equal(checkouts.length, 1);
+  assert.equal(
+    String(objectField(checkouts[0], 'with').ref),
+    '${{ github.ref }}',
+    'checking out github.sha leaves the guarded push stale whenever main advances during the wait',
+  );
 });

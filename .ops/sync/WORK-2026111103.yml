@@ -1,0 +1,166 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026111103
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026111103
+  objective: Update the stale Smart Form e2e specs so they assert what the
+    intended UI actually renders, and bring `pnpm test:e2e:fixture` to all
+    non-skipped tests passing, without weakening any assertion about
+    persistence, Track Only, no delivery or provenance.
+  acceptance_criteria:
+    - "`offline-offer-slip.spec.ts` and `real-reference.spec.ts` assert the
+      current `Track Only requested` header."
+    - "`phase-one.spec.ts` asserts the participant-search error paragraph and
+      the separate `Try again` button individually."
+    - Specs that filled the old Team text field select the team through the
+      manual-matchup team button group instead.
+    - No assertion about persistence, Track Only, no delivery or provenance is
+      removed or weakened.
+    - "`pnpm test:e2e:fixture` in `apps/smart-form` passes every non-skipped
+      test, or any remaining failure is a documented suspected product defect
+      against `docs/03_product/smart-form/intent.md`, left failing and
+      reported."
+    - "`pnpm lint` and `pnpm type-check` exit 0."
+    - No product code changes.
+      `apps/smart-form/e2e/manual-player-fallback.spec.ts`, `BetForm.tsx` and
+      `.github/workflows/` are untouched.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR open with exact-head CI green and an `executor-result/v1` comment.
+      Merge is not part of this lane's executor scope.
+  unmapped_sections:
+    - >-
+      WORK-2026111103 — Smart Form Playwright suite: update stale specs to the
+      current UI
+
+      Tier: T3 · Lane type: hygiene · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Authority
+
+
+      - PM dispatch, 2026-11-11: make the Smart Form Playwright suite green
+      again by updating stale specs to the current, intended UI. Test-only; no
+      product code changes.
+
+      - Evidence: on `main` `0033d3a1e`, `pnpm test:e2e:fixture` in
+      `apps/smart-form` reports 32 passed, 9 failed. Every failure traces to a
+      spec that predates an intended UI change:
+        - `Track Only · Internal` header became `Track Only requested` (UTV2-1969, `b316cd138`).
+        - The participant-search error became a paragraph plus a separate `Try again` button (`e095bb926`).
+        - The manual-matchup Team field became a button group of the two matchup teams (UTV2-1895, `852167060`).
+
+      ## File scope
+
+
+      - `apps/smart-form/e2e/offline-offer-slip.spec.ts`
+
+      - `apps/smart-form/e2e/phase-one.spec.ts`
+
+      - `apps/smart-form/e2e/smart-form-submission.spec.ts`
+
+      - `apps/smart-form/e2e/real-reference.spec.ts`
+
+      - `.ops/work/WORK-2026111103.md`
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026111103.md
+    title: "WORK-2026111103 — Smart Form Playwright suite: update stale specs to the
+      current UI"
+    description: >-
+      # WORK-2026111103 — Smart Form Playwright suite: update stale specs to the
+      current UI
+
+
+      Tier: T3 · Lane type: hygiene · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Authority
+
+
+      - PM dispatch, 2026-11-11: make the Smart Form Playwright suite green
+      again by updating stale specs to the current, intended UI. Test-only; no
+      product code changes.
+
+      - Evidence: on `main` `0033d3a1e`, `pnpm test:e2e:fixture` in
+      `apps/smart-form` reports 32 passed, 9 failed. Every failure traces to a
+      spec that predates an intended UI change:
+        - `Track Only · Internal` header became `Track Only requested` (UTV2-1969, `b316cd138`).
+        - The participant-search error became a paragraph plus a separate `Try again` button (`e095bb926`).
+        - The manual-matchup Team field became a button group of the two matchup teams (UTV2-1895, `852167060`).
+
+      ## Objective
+
+
+      Update the stale Smart Form e2e specs so they assert what the intended UI
+      actually renders, and bring `pnpm test:e2e:fixture` to all non-skipped
+      tests passing, without weakening any assertion about persistence, Track
+      Only, no delivery or provenance.
+
+
+      ## Acceptance Criteria
+
+
+      - `offline-offer-slip.spec.ts` and `real-reference.spec.ts` assert the
+      current `Track Only requested` header.
+
+      - `phase-one.spec.ts` asserts the participant-search error paragraph and
+      the separate `Try again` button individually.
+
+      - Specs that filled the old Team text field select the team through the
+      manual-matchup team button group instead.
+
+      - No assertion about persistence, Track Only, no delivery or provenance is
+      removed or weakened.
+
+      - `pnpm test:e2e:fixture` in `apps/smart-form` passes every non-skipped
+      test, or any remaining failure is a documented suspected product defect
+      against `docs/03_product/smart-form/intent.md`, left failing and reported.
+
+      - `pnpm lint` and `pnpm type-check` exit 0.
+
+      - No product code changes.
+      `apps/smart-form/e2e/manual-player-fallback.spec.ts`, `BetForm.tsx` and
+      `.github/workflows/` are untouched.
+
+
+      ## File scope
+
+
+      - `apps/smart-form/e2e/offline-offer-slip.spec.ts`
+
+      - `apps/smart-form/e2e/phase-one.spec.ts`
+
+      - `apps/smart-form/e2e/smart-form-submission.spec.ts`
+
+      - `apps/smart-form/e2e/real-reference.spec.ts`
+
+      - `.ops/work/WORK-2026111103.md`
+
+
+      ## Exit Criteria
+
+
+      - PR open with exact-head CI green and an `executor-result/v1` comment.
+      Merge is not part of this lane's executor scope.
+    captured_at: 2026-11-11T13:06:09.695Z
+    description_sha256: 33fb76bec5d6af8e3a6e598003663f9b0f371680af9d4d8ef300bd60d1891f4f
+  contract_hash: 3f0a09eb00c40fc141c1d61aff0d8295d7c83f869cad13bdf477cafdb7e369c6

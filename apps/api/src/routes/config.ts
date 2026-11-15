@@ -83,7 +83,18 @@ export async function handleHealthConfig(
   writeJson(response, 200, body);
 }
 
-async function computeFeatureAvailability(
+/** Row cap passed to listRecentOffers; reaching it means the sample is truncated. */
+export const FEATURE_AVAILABILITY_ROW_CAP = 10_000;
+
+/**
+ * Feature availability from the canonical offer history (`provider_offer_history`).
+ *
+ * WORK-2026110705: a read failure is reported as UNKNOWN ("provider offer read
+ * failed"), never as a zero count that reads like "no closing data". When the
+ * row cap is reached the counts are lower bounds and the reason says so; a
+ * zero inside a capped sample does not establish absence.
+ */
+export async function computeFeatureAvailability(
   runtime: ApiRuntimeDependencies,
 ): Promise<ApiConfigResponse['featureAvailability']> {
   if (runtime.persistenceMode !== 'database') {
@@ -96,60 +107,60 @@ async function computeFeatureAvailability(
 
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [closingLinesCount, sharpCount] = await Promise.all([
-    countClosingLines(runtime, since),
-    countSharpReferenceOffers(runtime, since),
-  ]);
+  let rows: Awaited<
+    ReturnType<ApiRuntimeDependencies['repositories']['providerOffers']['listRecentOffers']>
+  >;
+  try {
+    rows = await runtime.repositories.providerOffers.listRecentOffers(
+      since,
+      FEATURE_AVAILABILITY_ROW_CAP,
+    );
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    const unknown: FeatureAvailabilitySignal = {
+      available: false,
+      reason: `UNKNOWN: provider offer read failed (${detail}) — availability not established, not zero`,
+    };
+    return { closingLines: unknown, clv: unknown, sharpConsensus: unknown, edge: unknown };
+  }
+
+  const capped = rows.length >= FEATURE_AVAILABILITY_ROW_CAP;
+  const capNote = capped
+    ? ` (sample capped at the ${FEATURE_AVAILABILITY_ROW_CAP} most recent rows; count is a lower bound)`
+    : '';
+  const absenceNote = capped
+    ? ` in the ${FEATURE_AVAILABILITY_ROW_CAP}-row capped sample — absence not established`
+    : '';
+  const closingLinesCount = rows.filter((r) => r.is_closing === true).length;
+  const sharpCount = rows.filter(
+    (r) => r.bookmaker_key === 'pinnacle' || r.bookmaker_key === 'circa',
+  ).length;
 
   const closingLines: FeatureAvailabilitySignal =
     closingLinesCount > 0
-      ? { available: true, reason: `${closingLinesCount} closing-line offer(s) present` }
-      : { available: false, reason: 'zero is_closing rows in provider_offers' };
+      ? { available: true, reason: `${closingLinesCount} closing-line offer(s) present${capNote}` }
+      : { available: false, reason: `zero is_closing rows in provider_offer_history${absenceNote}` };
 
   const clv: FeatureAvailabilitySignal =
     closingLinesCount > 0
       ? { available: true, reason: 'closing lines present — CLV computable' }
-      : { available: false, reason: 'CLV requires closing lines — none found' };
+      : { available: false, reason: `CLV requires closing lines — none found${absenceNote}` };
 
   const sharpConsensus: FeatureAvailabilitySignal =
     sharpCount > 0
       ? {
           available: true,
-          reason: `${sharpCount} sharp-reference offer(s) available (Pinnacle/Circa)`,
+          reason: `${sharpCount} sharp-reference offer(s) available (Pinnacle/Circa)${capNote}`,
         }
-      : { available: false, reason: 'no Pinnacle or Circa offers found — sharp consensus unavailable' };
+      : {
+          available: false,
+          reason: `no Pinnacle or Circa offers found${absenceNote} — sharp consensus unavailable`,
+        };
 
   const edge: FeatureAvailabilitySignal =
     closingLinesCount > 0
       ? { available: true, reason: 'closing lines present — edge computable' }
-      : { available: false, reason: 'edge requires closing lines — none found' };
+      : { available: false, reason: `edge requires closing lines — none found${absenceNote}` };
 
   return { closingLines, clv, sharpConsensus, edge };
-}
-
-async function countClosingLines(
-  runtime: ApiRuntimeDependencies,
-  since: string,
-): Promise<number> {
-  try {
-    const rows = await runtime.repositories.providerOffers.listRecentOffers(since);
-    return rows.filter((r) => r.is_closing === true).length;
-  } catch {
-    return 0;
-  }
-}
-
-/** Sharp reference = Pinnacle or Circa offers. Keyed by bookmaker_key on each row. */
-async function countSharpReferenceOffers(
-  runtime: ApiRuntimeDependencies,
-  since: string,
-): Promise<number> {
-  try {
-    const rows = await runtime.repositories.providerOffers.listRecentOffers(since);
-    return rows.filter(
-      (r) => r.bookmaker_key === 'pinnacle' || r.bookmaker_key === 'circa',
-    ).length;
-  } catch {
-    return 0;
-  }
 }

@@ -6,6 +6,7 @@ import {
   isMemberVisibleOfficialPickStatus,
   type MemberVisibleOfficialPickStatus,
 } from '@unit-talk/contracts';
+import { filterMemberVisibleDeliveryPicks } from '../capper-delivery-authorization.js';
 
 /**
  * The Discord bot's service key authenticates as `submitter` with this
@@ -93,7 +94,8 @@ export async function handleMemberPicksQuery(
     limit,
   );
 
-  const picks = rows.map((pick) => ({
+  const visible = await filterMemberVisibleDeliveryPicks(rows, runtime.repositories.outbox);
+  const picks = visible.map((pick) => ({
     id: pick.id,
     market: pick.market,
     selection: pick.selection,

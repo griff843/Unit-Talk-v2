@@ -260,3 +260,23 @@ test(
     assert.match(source, new RegExp('MANAGEMENT_PLANE_GATE_ENV'));
   }),
 );
+
+/**
+ * WORK-2026110705: storage health must query the canonical offer tables, not
+ * the `provider_offers` view over the frozen quarantine table, and must not
+ * hardcode history growth to 0.
+ */
+test('WORK-2026110705: storage-health reads canonical provider-offer tables, not the quarantine view', () => {
+  const source = readFileSync(join(SRC, 'lib', 'data', 'storage-health.ts'), 'utf8');
+  assert.doesNotMatch(source, /'provider_offers'/);
+  assert.doesNotMatch(source, /from provider_offers\b/);
+  assert.match(source, /from provider_offer_current where snapshot_at/);
+  assert.match(source, /from provider_offer_history where snapshot_at/);
+  assert.doesNotMatch(source, /select 'provider_offer_history', 0::bigint/);
+});
+
+test('WORK-2026110705: the realtime health subscription listens to the canonical current projection', () => {
+  const source = readFileSync(join(SRC, 'components', 'ApiHealthMonitoring.tsx'), 'utf8');
+  assert.match(source, /table: 'provider_offer_current'/);
+  assert.doesNotMatch(source, /table: 'provider_offers'/);
+});

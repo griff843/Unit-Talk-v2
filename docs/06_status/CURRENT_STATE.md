@@ -5,6 +5,8 @@
 > docs in this repo are either authoritative on their specific sub-topic (see §Source of Truth
 > Hierarchy) or have been marked SUPERSEDED / HISTORICAL.
 >
+> **Snapshot status:** a dated snapshot, true as of the "Last verified" time below and not re-measured since. The readiness verdict recorded here (GREEN, 2026-06-25) is historical, not current readiness. Current readiness is `docs/06_status/readiness/readiness-score.json` and the runtime commands; the current plan is `docs/mission/plan.md`. Live evidence overrides this document.
+>
 > **Last verified:** 2026-06-25T17:08:00Z (UTC) — UTV2-1315 markClosingLines fix deployed; ingestor clean cycle confirmed; readiness verdict **GREEN** (0 blocking failures). No program certification state advanced.
 >
 > **Constitutional authority:** `docs/00_constitution/UNIT_TALK_CONSTITUTION_V1.md` §18.3 ·

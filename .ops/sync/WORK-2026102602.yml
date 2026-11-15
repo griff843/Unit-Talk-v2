@@ -1,0 +1,137 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102602
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102602
+  objective: >-
+    Two open Smart Form lanes cannot finish. A delivery-ui lane may not declare
+    its own contract (`deriveDeliveryUiApp` refuses any scope path outside an
+    app root) and the file-scope guard does not exempt `.ops/work/<ID>.md`, so a
+    lane carrying its own contract fails `File scope lock`. Readmission (`PL1`)
+    also reads the contract from `main`. Landing both contracts here, as a
+    documentation-only governance change, removes the contract from each lane
+    PR's diff and makes supported readmission possible. Each contract is added
+    exactly as the lane uses it, plus one appended "Executor note" that records
+    the provenance correction. Scope, acceptance criteria and tiers are
+    unchanged.
+
+    The proof also records the two staging-only indexes created on
+    `xskgrzbteyqdufktjrjx` under the same PM direction, with before and after
+    plans and the rollback statements. No repo migration, no production change.
+  acceptance_criteria:
+    - "`.ops/work/WORK-2026102501.md` and `.ops/work/WORK-2026102506.md` exist
+      on `main`, each carrying its original text plus the appended Executor
+      note."
+    - The proof records the exact index definitions, EXPLAIN (ANALYZE, BUFFERS)
+      before and after, and the rollback statements, and states that this is
+      staging-only drift.
+    - No change to any script, workflow, gate, hook, CLAUDE.md, migration,
+      containment, kill switch, delivery setting or reserved decision.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026102602 — Land the WORK-2026102501 and WORK-2026102506 contracts
+      on main and record the staging picks indexes
+
+      Tier: T2
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: PM direction (2026-10-26): "Land the necessary WORK-2026102506 and
+      WORK-2026102501 contracts through one properly scoped governance PR with
+      normal controls", and the staging-only DDL authorization for
+      `xskgrzbteyqdufktjrjx`.
+
+
+      ## File Scope
+
+
+      - .ops/work/WORK-2026102501.md
+
+      - .ops/work/WORK-2026102506.md
+
+      - .ops/work/WORK-2026102602.md
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102602.md
+    title: WORK-2026102602 — Land the WORK-2026102501 and WORK-2026102506 contracts
+      on main and record the staging picks indexes
+    description: >-
+      # WORK-2026102602 — Land the WORK-2026102501 and WORK-2026102506 contracts
+      on main and record the staging picks indexes
+
+
+      Tier: T2
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Source: PM direction (2026-10-26): "Land the necessary WORK-2026102506 and
+      WORK-2026102501 contracts through one properly scoped governance PR with
+      normal controls", and the staging-only DDL authorization for
+      `xskgrzbteyqdufktjrjx`.
+
+
+      ## Objective
+
+
+      Two open Smart Form lanes cannot finish. A delivery-ui lane may not
+      declare its own contract (`deriveDeliveryUiApp` refuses any scope path
+      outside an app root) and the file-scope guard does not exempt
+      `.ops/work/<ID>.md`, so a lane carrying its own contract fails `File scope
+      lock`. Readmission (`PL1`) also reads the contract from `main`. Landing
+      both contracts here, as a documentation-only governance change, removes
+      the contract from each lane PR's diff and makes supported readmission
+      possible. Each contract is added exactly as the lane uses it, plus one
+      appended "Executor note" that records the provenance correction. Scope,
+      acceptance criteria and tiers are unchanged.
+
+
+      The proof also records the two staging-only indexes created on
+      `xskgrzbteyqdufktjrjx` under the same PM direction, with before and after
+      plans and the rollback statements. No repo migration, no production
+      change.
+
+
+      ## Acceptance Criteria
+
+
+      - `.ops/work/WORK-2026102501.md` and `.ops/work/WORK-2026102506.md` exist
+      on `main`, each carrying its original text plus the appended Executor
+      note.
+
+      - The proof records the exact index definitions, EXPLAIN (ANALYZE,
+      BUFFERS) before and after, and the rollback statements, and states that
+      this is staging-only drift.
+
+      - No change to any script, workflow, gate, hook, CLAUDE.md, migration,
+      containment, kill switch, delivery setting or reserved decision.
+
+
+      ## File Scope
+
+
+      - .ops/work/WORK-2026102501.md
+
+      - .ops/work/WORK-2026102506.md
+
+      - .ops/work/WORK-2026102602.md
+    captured_at: 2026-10-26T23:01:08.614Z
+    description_sha256: 99b2eeecc248d574a2ebe57cbc355cf80fd5d14060eac98823448877ffb8605d
+  contract_hash: 997ab5a6b55ec3eb7080175bb532b0dae6357ddd619c6ba1889bfe67f4279bf3

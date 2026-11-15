@@ -77,8 +77,9 @@ function nextSubmissionId() {
 
 /**
  * Compute a deterministic idempotency key from the submission payload.
- * Hash of (source + market + selection + line + odds + eventDate/eventName).
- * Two identical submissions produce the same key, preventing duplicate picks.
+ * Preserve the legacy wager hash for unscoped automated submissions. Human retries
+ * are scoped to canonical capper attribution and the requested distribution mode.
+ * Historical keys are never rewritten or consulted as a fallback for scoped requests.
  */
 export function computeSubmissionIdempotencyKey(payload: SubmissionPayload): string {
   const parts = [
@@ -89,6 +90,25 @@ export function computeSubmissionIdempotencyKey(payload: SubmissionPayload): str
     String(payload.odds ?? ''),
     payload.eventName ?? '',
   ];
+  // Mirror derivePickForeignKeyCandidates in packages/db/src/pick-foreign-keys.ts:
+  // metadata string values win verbatim; only payload.submittedBy is trimmed.
+  // Account for the existing capper pin applied during pick materialization below.
+  const metadata: Record<string, unknown> = {
+    ...payload.metadata,
+    ...(payload.submittedBy ? { capper: payload.submittedBy } : {}),
+  };
+  const submitter =
+    (typeof metadata.capper === 'string' ? metadata.capper : null) ??
+    (typeof metadata.submittedBy === 'string' ? metadata.submittedBy : null) ??
+    (payload.submittedBy?.trim() || null);
+  const distributionMode = typeof metadata.distributionMode === 'string'
+    ? metadata.distributionMode
+    : null;
+  // JSON preserves field boundaries even when an identity contains '|'. Omit the
+  // suffix entirely for legacy producers, retaining their exact original bytes.
+  if (submitter !== null || distributionMode !== null) {
+    parts.push(JSON.stringify({ submitter, distributionMode }));
+  }
   return createHash('sha256').update(parts.join('|')).digest('hex').slice(0, 32);
 }
 

@@ -1,0 +1,352 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026110309
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026110309
+  objective: WORK-2026110309 — Submission idempotency is scoped to the submitter
+    and the distribution mode
+  acceptance_criteria:
+    - "**Key scope.** The key includes the resolved submitter identity, the same
+      value that becomes `capper_id` (reuse or mirror the `pick-foreign-keys.ts`
+      precedence; do not invent a second identity rule). It also includes the
+      distribution mode when one is present. Everything else in the key is
+      unchanged."
+    - "**Different cappers.** Two different submitters sending identical wager
+      fields get two picks, each with its own `capper_id`. Neither response
+      carries the other's pick ID."
+    - "**Same-capper retry.** The same submitter resending identical fields in
+      the same distribution mode gets the original pick back (`duplicate: true`,
+      no new rows)."
+    - "**Track Only then delivery-eligible.** The same submitter sending Track
+      Only and then the same wager delivery-eligible gets two separate picks.
+      The Track Only pick is never modified, promoted or re-enqueued: its
+      status, metadata and outbox state are unchanged after the second
+      submission. The reverse order behaves the same way."
+    - "**Legacy submissions.** Submissions with no submitter and no distribution
+      mode (board writer, candidate scanner, alert agent and other automated
+      paths) keep their current key byte-for-byte. Stated and tested, including
+      the `board-pick-writer.ts` rerun dedupe."
+    - "**Historical keys.** No stored `idempotency_key` is rewritten, and no
+      existing pick is modified. State in the proof what happens to a
+      same-capper retry of a pick created before this change. Either it dedupes
+      through a bounded legacy-key fallback that only matches when the existing
+      pick has the same `capper_id` and the same distribution mode, or it
+      creates a new pick. If you choose the fallback, test it, including that it
+      never returns another capper's pick."
+    - "**Integrity guards stay.** The UTV2-1672 and UTV2-1923 guards in
+      `submit-pick-controller.ts` stay in place and unmodified as defense in
+      depth. With the new key, the Track Only / delivery-eligible case no longer
+      reaches them for a same-capper resubmission; show which test proves that."
+    - "**Impact review (in the proof).** For grading, member performance,
+      outbox/delivery and authorization, state with file references whether
+      anything reads `picks.idempotency_key` or assumes one pick per wager.
+      Grading and performance key on `pick.id` and `capper_id`, and the outbox
+      keys on `pick.id`; confirm this or report what differs. Add a test for any
+      consumer that would change behavior."
+    - "**Regression first.** Each new behavior test fails on unmodified main,
+      then passes."
+    - "**Mutations.** Record that (a) removing the submitter from the key fails
+      the cross-capper test, and (b) removing the distribution mode from the key
+      fails the Track Only / delivery-eligible test."
+    - "**Live staging proof.** A new live suite, registered in
+      `test:t1-proof:live` and in
+      `docs/05_operations/db-writer-classification.json`, against real staging
+      Supabase through CI. It uses run-namespaced fixtures (`CI_FIXTURE_RUN_ID`)
+      with two seeded cappers, and reads every row back by primary ID. It shows:
+      two cappers → two picks with the correct `capper_id`; a same-capper retry
+      → one pick; same capper Track Only then delivery-eligible → two picks,
+      with the Track Only pick and its outbox state unchanged. No real delivery
+      target is touched, and only test-owned rows are cleaned up."
+    - "**T1 verification.**"
+    - "`pnpm verify` green at the exact head."
+    - The CI `Writable DB proof (staging only)` job green at the exact head,
+      with the new suite reporting no skips.
+    - An evidence bundle v1 tied to the merge SHA.
+    - Merge requires Griff's `t1-approved` label and a `pm-verdict/v1` APPROVED
+      comment at the exact head.
+  guardrails:
+    - No schema change, no migration and no production data mutation. Existing
+      keys and picks are never rewritten.
+    - No change to delivery authorization, kill switches, targets, outbox
+      claim/confirm, Track Only gating or member delivery.
+    - Staging only for any DB write, through CI.
+  non_goals:
+    - Backfilling or re-keying historical picks.
+    - Deduplicating across different submitters by any other rule.
+    - Discord artwork (WORK-2026110302) and keyset paging (WORK-2026110307),
+      which are separate lanes.
+  required_evidence:
+    - Failing-then-passing regression output and the mutation records.
+    - The impact review with file references.
+    - The live staging suite output from CI at the exact head.
+    - "T1 evidence bundle: `verification.md` (`## Verification`, `ASSERTIONS:`
+      checklist, `EVIDENCE:` fenced blocks, `## Merge SHA Binding`),
+      `evidence.json` (with `runtime_proof.queries` and `row_counts`),
+      `diff-summary.md` and an observed `model-routing.json`."
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026110309 — Submission idempotency is scoped to the submitter and
+      the distribution mode
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05).
+      Admitted by Production Claude on 2026-11-03 under Griff's PM product
+      decision of that date:
+
+
+      - "Different authenticated cappers submitting the same wager must receive
+      separate canonical picks."
+
+      - "Same-capper retries of the same wager and same distribution mode should
+      deduplicate."
+
+      - "Same capper submitting Track Only and then explicitly delivery-eligible
+      should create separate, immutable records. Never silently promote a Track
+      Only pick."
+
+      - "Preserve existing records and historical keys; verify impacts on
+      grading, performance, outbox and authorization."
+
+      - "Admit a bounded T1 runtime fix when singleton ownership allows."
+
+
+      ## Defect (measured at main ba359b36b)
+
+
+      1. `computeSubmissionIdempotencyKey`
+      (`apps/api/src/submission-service.ts:83`) hashes `source | market |
+      selection | line | odds | eventName` only. It has no submitter and no
+      distribution mode.
+
+      2. `processSubmission` (`:149-195`) looks up `findPickByIdempotencyKey`.
+      On a match it returns the existing row as an idempotent success
+      (`duplicate: true`) and creates no rows. A second capper's identical wager
+      is therefore answered with the first capper's pick, and the second
+      capper's pick is never recorded. Found on staging by WORK-2026110305 CI
+      run 41671267309.
+
+      3. A capper who submits Track Only and then the same wager
+      delivery-eligible hits the same key. `submit-pick-controller.ts` then
+      refuses with 409 `TRACK_ONLY_CONFLICT` or
+      `DELIVERY_AUTHORIZATION_CONFLICT` (the UTV2-1672 and UTV2-1923 integrity
+      guards). That refusal is safe: nothing is promoted. But the explicit
+      delivery-eligible submission is never recorded either.
+
+      4. The canonical capper attribution is `picks.capper_id`. It is derived
+      from `metadata.capper ?? metadata.submittedBy ?? payload.submittedBy`
+      (`packages/db/src/pick-foreign-keys.ts:46-56`). The distribution mode is
+      `metadata.distributionMode` (`'track-only' | 'delivery-eligible'`,
+      `packages/contracts/src/smart-form.ts`).
+
+
+      ## Sequencing
+
+
+      Lane start waits until `package.json` is free: WORK-2026110305 (#1826)
+      holds it until it merges. This lane and WORK-2026110302 both touch
+      `apps/api/src/submission-service.ts`, so they run one after the other.
+      This lane goes first.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026110309.md
+    title: WORK-2026110309 — Submission idempotency is scoped to the submitter and
+      the distribution mode
+    description: >-
+      # WORK-2026110309 — Submission idempotency is scoped to the submitter and
+      the distribution mode
+
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05).
+      Admitted by Production Claude on 2026-11-03 under Griff's PM product
+      decision of that date:
+
+
+      - "Different authenticated cappers submitting the same wager must receive
+      separate canonical picks."
+
+      - "Same-capper retries of the same wager and same distribution mode should
+      deduplicate."
+
+      - "Same capper submitting Track Only and then explicitly delivery-eligible
+      should create separate, immutable records. Never silently promote a Track
+      Only pick."
+
+      - "Preserve existing records and historical keys; verify impacts on
+      grading, performance, outbox and authorization."
+
+      - "Admit a bounded T1 runtime fix when singleton ownership allows."
+
+
+      ## Defect (measured at main ba359b36b)
+
+
+      1. `computeSubmissionIdempotencyKey`
+      (`apps/api/src/submission-service.ts:83`) hashes `source | market |
+      selection | line | odds | eventName` only. It has no submitter and no
+      distribution mode.
+
+      2. `processSubmission` (`:149-195`) looks up `findPickByIdempotencyKey`.
+      On a match it returns the existing row as an idempotent success
+      (`duplicate: true`) and creates no rows. A second capper's identical wager
+      is therefore answered with the first capper's pick, and the second
+      capper's pick is never recorded. Found on staging by WORK-2026110305 CI
+      run 41671267309.
+
+      3. A capper who submits Track Only and then the same wager
+      delivery-eligible hits the same key. `submit-pick-controller.ts` then
+      refuses with 409 `TRACK_ONLY_CONFLICT` or
+      `DELIVERY_AUTHORIZATION_CONFLICT` (the UTV2-1672 and UTV2-1923 integrity
+      guards). That refusal is safe: nothing is promoted. But the explicit
+      delivery-eligible submission is never recorded either.
+
+      4. The canonical capper attribution is `picks.capper_id`. It is derived
+      from `metadata.capper ?? metadata.submittedBy ?? payload.submittedBy`
+      (`packages/db/src/pick-foreign-keys.ts:46-56`). The distribution mode is
+      `metadata.distributionMode` (`'track-only' | 'delivery-eligible'`,
+      `packages/contracts/src/smart-form.ts`).
+
+
+      ## Acceptance Criteria
+
+
+      - **Key scope.** The key includes the resolved submitter identity, the
+      same value that becomes `capper_id` (reuse or mirror the
+      `pick-foreign-keys.ts` precedence; do not invent a second identity rule).
+      It also includes the distribution mode when one is present. Everything
+      else in the key is unchanged.
+
+      - **Different cappers.** Two different submitters sending identical wager
+      fields get two picks, each with its own `capper_id`. Neither response
+      carries the other's pick ID.
+
+      - **Same-capper retry.** The same submitter resending identical fields in
+      the same distribution mode gets the original pick back (`duplicate: true`,
+      no new rows).
+
+      - **Track Only then delivery-eligible.** The same submitter sending Track
+      Only and then the same wager delivery-eligible gets two separate picks.
+      The Track Only pick is never modified, promoted or re-enqueued: its
+      status, metadata and outbox state are unchanged after the second
+      submission. The reverse order behaves the same way.
+
+      - **Legacy submissions.** Submissions with no submitter and no
+      distribution mode (board writer, candidate scanner, alert agent and other
+      automated paths) keep their current key byte-for-byte. Stated and tested,
+      including the `board-pick-writer.ts` rerun dedupe.
+
+      - **Historical keys.** No stored `idempotency_key` is rewritten, and no
+      existing pick is modified. State in the proof what happens to a
+      same-capper retry of a pick created before this change. Either it dedupes
+      through a bounded legacy-key fallback that only matches when the existing
+      pick has the same `capper_id` and the same distribution mode, or it
+      creates a new pick. If you choose the fallback, test it, including that it
+      never returns another capper's pick.
+
+      - **Integrity guards stay.** The UTV2-1672 and UTV2-1923 guards in
+      `submit-pick-controller.ts` stay in place and unmodified as defense in
+      depth. With the new key, the Track Only / delivery-eligible case no longer
+      reaches them for a same-capper resubmission; show which test proves that.
+
+      - **Impact review (in the proof).** For grading, member performance,
+      outbox/delivery and authorization, state with file references whether
+      anything reads `picks.idempotency_key` or assumes one pick per wager.
+      Grading and performance key on `pick.id` and `capper_id`, and the outbox
+      keys on `pick.id`; confirm this or report what differs. Add a test for any
+      consumer that would change behavior.
+
+      - **Regression first.** Each new behavior test fails on unmodified main,
+      then passes.
+
+      - **Mutations.** Record that (a) removing the submitter from the key fails
+      the cross-capper test, and (b) removing the distribution mode from the key
+      fails the Track Only / delivery-eligible test.
+
+      - **Live staging proof.** A new live suite, registered in
+      `test:t1-proof:live` and in
+      `docs/05_operations/db-writer-classification.json`, against real staging
+      Supabase through CI. It uses run-namespaced fixtures (`CI_FIXTURE_RUN_ID`)
+      with two seeded cappers, and reads every row back by primary ID. It shows:
+      two cappers → two picks with the correct `capper_id`; a same-capper retry
+      → one pick; same capper Track Only then delivery-eligible → two picks,
+      with the Track Only pick and its outbox state unchanged. No real delivery
+      target is touched, and only test-owned rows are cleaned up.
+
+      - **T1 verification.**
+        - `pnpm verify` green at the exact head.
+        - The CI `Writable DB proof (staging only)` job green at the exact head, with the new suite reporting no skips.
+        - An evidence bundle v1 tied to the merge SHA.
+
+      Merge requires Griff's `t1-approved` label and a `pm-verdict/v1` APPROVED
+      comment at the exact head.
+
+
+      ## Guardrails
+
+
+      - No schema change, no migration and no production data mutation. Existing
+      keys and picks are never rewritten.
+
+      - No change to delivery authorization, kill switches, targets, outbox
+      claim/confirm, Track Only gating or member delivery.
+
+      - Staging only for any DB write, through CI.
+
+
+      ## Non-goals
+
+
+      - Backfilling or re-keying historical picks.
+
+      - Deduplicating across different submitters by any other rule.
+
+      - Discord artwork (WORK-2026110302) and keyset paging (WORK-2026110307),
+      which are separate lanes.
+
+
+      ## Sequencing
+
+
+      Lane start waits until `package.json` is free: WORK-2026110305 (#1826)
+      holds it until it merges. This lane and WORK-2026110302 both touch
+      `apps/api/src/submission-service.ts`, so they run one after the other.
+      This lane goes first.
+
+
+      ## Required Evidence
+
+
+      - Failing-then-passing regression output and the mutation records.
+
+      - The impact review with file references.
+
+      - The live staging suite output from CI at the exact head.
+
+      - T1 evidence bundle: `verification.md` (`## Verification`, `ASSERTIONS:`
+      checklist, `EVIDENCE:` fenced blocks, `## Merge SHA Binding`),
+      `evidence.json` (with `runtime_proof.queries` and `row_counts`),
+      `diff-summary.md` and an observed `model-routing.json`.
+    captured_at: 2026-11-04T05:40:15.193Z
+    description_sha256: bbe7d857114b1c55eb2297ce828b27259e7ec1170f7b5483f8971d73a0815366
+  contract_hash: 65bf18c661ef6e541cb1dffde84d55ea5ee597b211d73b5939f5775de95a3f6d

@@ -75,6 +75,20 @@ export interface DeliveredAwaitingSettlementRow {
   postedAt: string | null;
 }
 
+export interface TrackOnlyAwaitingSettlementRow {
+  id: string;
+  capperId: string | null;
+  capperDisplayName: string | null;
+  eventName: string | null;
+  market: string | null;
+  selection: string | null;
+  line: number | null;
+  odds: number | null;
+  stakeUnits: number | null;
+  sportDisplayName: string | null;
+  submittedAt: string | null;
+}
+
 export interface ResultsOpsSnapshot {
   counts: {
     settled24h: number;
@@ -82,8 +96,10 @@ export interface ResultsOpsSnapshot {
     corrections: number;
     stuckPosted: number;
     deliveredAwaitingSettlement: number;
+    trackOnlyAwaitingSettlement: number;
   };
   deliveredAwaitingSettlement: DeliveredAwaitingSettlementRow[];
+  trackOnlyAwaitingSettlement: TrackOnlyAwaitingSettlementRow[];
   recentSettlements: SettlementOpsRow[];
   manualReview: SettlementOpsRow[];
   corrections: SettlementOpsRow[];
@@ -416,6 +432,8 @@ export async function getResultsOpsSnapshot(filter: ResultsOpsFilter = {}): Prom
     stuckCountResult,
     deliveredAwaitingResult,
     deliveredAwaitingCountResult,
+    trackOnlyAwaitingResult,
+    trackOnlyAwaitingCountResult,
     gameLatestResult,
     game24hResult,
   ] =
@@ -453,6 +471,20 @@ export async function getResultsOpsSnapshot(filter: ResultsOpsFilter = {}): Prom
         .eq('status', 'posted')
         .is('settlement_recorded_at', null)
         .eq('metadata->deliveryAuthorization->>decision', 'authorized'),
+      // Track-only picks intentionally never enter delivery. They remain
+      // operator-settleable by their canonical pick id until settlement is recorded.
+      applyOperatorPickPopulation(client
+        .from('picks_current_state')
+        .select('id, capper_id, capper_display_name, metadata, sport_display_name, market, selection, line, odds, stake_units, created_at'))
+        .is('settlement_recorded_at', null)
+        .eq('metadata->>distributionMode', 'track-only')
+        .neq('status', 'voided')
+        .order('created_at', { ascending: true })
+        .limit(50),
+      applyOperatorPickPopulation(client.from('picks_current_state').select('id', { count: 'exact', head: true }))
+        .is('settlement_recorded_at', null)
+        .eq('metadata->>distributionMode', 'track-only')
+        .neq('status', 'voided'),
       client.from('game_results').select('sourced_at').order('sourced_at', { ascending: false }).limit(1),
       client.from('game_results').select('id', { count: 'exact', head: true }).gte('sourced_at', dayAgo),
     ]);
@@ -460,6 +492,7 @@ export async function getResultsOpsSnapshot(filter: ResultsOpsFilter = {}): Prom
   for (const result of [
     stuckResult,
     deliveredAwaitingResult,
+    trackOnlyAwaitingResult,
   ]) {
     if (result.error) throw result.error;
   }
@@ -518,6 +551,33 @@ export async function getResultsOpsSnapshot(filter: ResultsOpsFilter = {}): Prom
     };
   });
 
+  const trackOnlyAwaitingSettlement: TrackOnlyAwaitingSettlementRow[] = (
+    (trackOnlyAwaitingResult.data ?? []) as Array<Record<string, unknown>>
+  ).map((row) => {
+    const metadata = row['metadata'];
+    const pickMetadata = metadata !== null && typeof metadata === 'object' && !Array.isArray(metadata)
+      ? metadata as Record<string, unknown>
+      : {};
+    const toNumber = (value: unknown): number | null => {
+      if (value === null || value === undefined || value === '') return null;
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    };
+    return {
+      id: String(row['id'] ?? ''),
+      capperId: typeof row['capper_id'] === 'string' ? row['capper_id'] : null,
+      capperDisplayName: typeof row['capper_display_name'] === 'string' ? row['capper_display_name'] : null,
+      eventName: typeof pickMetadata['eventName'] === 'string' ? pickMetadata['eventName'] : null,
+      market: typeof row['market'] === 'string' ? row['market'] : null,
+      selection: typeof row['selection'] === 'string' ? row['selection'] : null,
+      line: toNumber(row['line']),
+      odds: toNumber(row['odds']),
+      stakeUnits: toNumber(row['stake_units']),
+      sportDisplayName: typeof row['sport_display_name'] === 'string' ? row['sport_display_name'] : null,
+      submittedAt: typeof row['created_at'] === 'string' ? row['created_at'] : null,
+    };
+  });
+
   const latestGameRow = ((gameLatestResult.data ?? []) as Array<Record<string, unknown>>)[0];
 
   return {
@@ -527,8 +587,10 @@ export async function getResultsOpsSnapshot(filter: ResultsOpsFilter = {}): Prom
       corrections: correctionCount,
       stuckPosted: stuckPostedCount,
       deliveredAwaitingSettlement: readAuthoritativeCount(deliveredAwaitingCountResult, 'delivered awaiting settlement'),
+      trackOnlyAwaitingSettlement: readAuthoritativeCount(trackOnlyAwaitingCountResult, 'track-only awaiting settlement'),
     },
     deliveredAwaitingSettlement,
+    trackOnlyAwaitingSettlement,
     recentSettlements: settlementsPage.rows,
     manualReview: manualReviewPage.rows,
     corrections: correctionsPage.rows,

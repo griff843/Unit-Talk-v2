@@ -1,0 +1,31 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110401",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "0ea2c24fc99cd0dd3702d35522014c977764d52b",
+    "verified_source_sha": "6762c0e09b22c0f4c292d4cf114b1a7b2dd56533",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-11-04T15:04:09.833Z"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm test",
+    "conclusion": "success",
+    "verified_source_sha": "6762c0e09b22c0f4c292d4cf114b1a7b2dd56533",
+    "full_suite": {
+      "command": "pnpm test",
+      "pass": 7839,
+      "fail": 0,
+      "exit_code": 0
+    },
+    "type_check": "pnpm type-check exit 0",
+    "r_level": "PASS",
+    "note": "Documentation-only lane. Local pnpm verify cannot exit 0 (ci:assert-staging refuses the loopback target); the PR's required verify check is the authority."
+  }
+}

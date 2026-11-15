@@ -26,23 +26,29 @@ export function describeThrown(error: unknown): string {
   return String(error);
 }
 
-/**
- * Compact, bounded error text for operator UI. Detailed transport errors stay
- * in server logs; rendered surfaces show the source failure without leaking a
- * stack trace or allowing an error payload to dominate the workflow.
- */
-export function describeOperatorFailure(error: unknown, fallback = 'Data source unavailable'): string {
-  let description: string;
-  if (error !== null && typeof error === 'object' && !(error instanceof Error)) {
-    const record = error as Record<string, unknown>;
-    const message = typeof record['message'] === 'string' ? record['message'] : null;
-    const code = typeof record['code'] === 'string' && record['code'].trim().length > 0 ? record['code'] : null;
-    description = message ? `${message}${code ? ` (${code})` : ''}` : describeThrown(error);
-  } else {
-    description = describeThrown(error);
-  }
+/** Trusted input guidance authored by the application, never by a data service. */
+export class OperatorInputError extends Error {}
 
-  const compact = description.replace(/\s+/g, ' ').trim();
-  if (!compact) return fallback;
-  return compact.length > 180 ? `${compact.slice(0, 177)}…` : compact;
+/** Operator-facing failure text. Raw diagnostics remain available through describeThrown. */
+export function describeOperatorFailure(error: unknown, fallback = 'Data source unavailable'): string {
+  if (error instanceof OperatorInputError) return error.message;
+  const record = error !== null && typeof error === 'object'
+    ? error as Record<string, unknown>
+    : null;
+  const code = typeof record?.['code'] === 'string' ? record['code'] : '';
+  const status = record?.['status'];
+  const diagnostic = describeThrown(error).toLowerCase();
+  if (code === '42501' || status === 403) {
+    return 'Access to this data was refused. Ask an administrator to check your access.';
+  }
+  if (status === 401 || code === 'PGRST301') {
+    return 'Your session could not be verified. Sign in again, then retry.';
+  }
+  if (code === '57014' || /timeout|timed out|statement timeout/.test(diagnostic)) {
+    return 'This data took too long to load. Retry; if it continues, contact support.';
+  }
+  if (/fetch failed|failed to fetch|network|econnrefused|enotfound/.test(diagnostic)) {
+    return 'The data service could not be reached. Retry; if it continues, contact support.';
+  }
+  return `${fallback.replace(/[.!?]+$/, '')}. Retry; if it continues, contact support.`;
 }
