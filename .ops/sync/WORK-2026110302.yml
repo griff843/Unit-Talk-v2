@@ -1,0 +1,515 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026110302
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026110302
+  objective: "WORK-2026110302 — Discord shared artwork: verified headshots/logos
+    only, honest branded fallback"
+  acceptance_criteria:
+    - "**Domain host guard (path 1).** `mediaUrl` accepts only `https` URLs
+      whose host is in a pure-constant allowlist: `cdn.nba.com`,
+      `img.mlbstatic.com`, `a.espncdn.com` and `assets.nhle.com`.
+      `cms.nhl.bamgrid.com` is excluded. A URL with credentials, an `http` URL,
+      a foreign host or a malformed URL yields no thumbnail. Every embed builder
+      goes through this guard, including the result recap."
+    - "**Worker gate (path 3).** Change only `buildDiscordMessagePayload`
+      (`:736-763`): pass a thumbnail only when `metadata.thumbnailVerified ===
+      true`. Reviewers reject any hunk outside that function. Routing, targets
+      and kill switches are untouched."
+    - "**Resolver binds by identity, never by selection text (path 5).** The
+      signature takes the participant ID that submission already resolved.
+      Selection-text matching is removed."
+    - "**Player:** the thumbnail is verified only when a fresh #1822
+      `resolveHeadshot` for that participant (display name, sport, team) returns
+      exactly the stored URL. A timeout (5s), ambiguity, mismatch or null gives
+      no thumbnail."
+    - "**Team:** use `logo_url` only when the identified participant *is* that
+      team."
+    - "**Game totals and two-team selections:** no thumbnail."
+    - Return `{ url, verified }`. **The `updateMetadata` write-back is removed.**
+    - "**Submission (path 7).** Pass the resolved participant ID at both call
+      sites. Set `metadata.thumbnailVerified` only from the resolver. Strip any
+      caller-supplied `thumbnailUrl` and `thumbnailVerified` before persisting.
+      Submission is otherwise unchanged: same validation, lifecycle, promotion
+      and response."
+    - "**Honest branded fallback.** Unresolved, unverified, shared, dead-host or
+      legacy imagery gives an embed with **no thumbnail** that keeps the
+      existing text brand. It never shows a broken image or another person's
+      photo. Old picks lacking `thumbnailVerified` get no thumbnail, and their
+      stored metadata is not rewritten."
+    - "**Tests run under verify (path 9).** Register paths 2, 4 and 6 in their
+      existing root `package.json` test scripts. Prove they are executed by
+      `pnpm verify`."
+    - "**Regression tests first.** Show each failing on unmodified main, then
+      passing:"
+    - an ambiguous name;
+    - a last-name-only match;
+    - an unrelated player;
+    - a shared stored URL;
+    - a dead NHL host;
+    - a two-team total;
+    - a provider timeout;
+    - "a caller-supplied `thumbnailVerified: true`;"
+    - no `updateMetadata` call;
+    - an unverified thumbnail dropped by the worker while the embed still sends.
+    - Record mutations that restore (a) selection-text matching, (b) an
+      unconditional worker thumbnail and (c) an any-host `mediaUrl`. Each must
+      fail a test.
+    - "**Rendered-embed proof.** Produce before/after rendered embed payload
+      fixtures in the proof dir. Each pair must show that a shared, unverified
+      or dead-host image yields no thumbnail, that the embed still sends, and
+      that a verified image renders."
+    - "**No delivery authorization change.** No change to targets, kill
+      switches, outbox, receipts, audience, entitlement, delivery timing or
+      Track Only gating. No member delivery."
+    - "**T1 verification:**"
+    - "`pnpm verify` green at the exact head;"
+    - the CI `Writable DB proof (staging only)` job green at the exact head;
+    - if pick metadata persistence changes shape, a staging live test showing
+      that a submitted pick persists `thumbnailVerified` correctly and that
+      caller-supplied values are stripped;
+    - an evidence bundle v1 tied to the merge SHA.
+    - Merge requires Griff's `t1-approved` label and a `pm-verdict/v1` APPROVED
+      comment at the exact head.
+  guardrails:
+    - No schema change, no new media host, no hosted brand image and no
+      production data write.
+    - Staging only for any DB write, through CI.
+    - "`apps/api/src/player-enrichment-service.ts` is not edited; it is
+      WORK-2026110301's scope. Import from it only."
+  non_goals:
+    - Rewriting stored production headshots (Griff's separate decision).
+    - The NHL URL-builder change (WORK-2026110301). Until it lands, NHL picks
+      show no thumbnail.
+    - Injury-alert artwork
+      (`packages/alert-runtime/src/injury-notification-pass.ts` has no caller;
+      the domain guard covers it).
+  required_evidence:
+    - Failing-then-passing regression output, mutation records and
+      rendered-embed fixtures.
+    - "T1 evidence bundle: `verification.md` (`## Verification` with
+      `ASSERTIONS:` checklist items and `EVIDENCE:` fenced blocks),
+      `evidence.json`, `diff-summary.md` and an observed `model-routing.json`."
+  exit_criteria:
+    - Exact-head CI green, `executor-result/v1` posted for that head,
+      independent Claude review, then Griff's T1 verdict.
+  unmapped_sections:
+    - >-
+      WORK-2026110302 — Discord shared artwork: verified headshots/logos only,
+      honest branded fallback
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05).
+      Admitted by Production Claude on 2026-11-03 under these directions from
+      Griff:
+
+
+      - "Admit the T1 participant-media correction".
+
+      - "Keep unresolved imagery on the branded fallback".
+
+      - "Separately approve the protected Discord presentation scope".
+
+
+      On 2026-11-03 Griff chose "Approve v2, re-resolve (Recommended)" for the
+      nine-path list in
+      `.out/discord-artwork-presentation-20261102/protected-path-request-v2.md`
+      (main checkout). That approval covers exactly the nine paths below. Scope,
+      per Griff: "using verified shared headshots/logos, honest branded fallback
+      and truthful Discord presentation. Do not change delivery authorization or
+      Track Only behavior." Copy the v2 request and its independent-review
+      findings into this lane's proof.
+
+
+      This lane reuses the #1822 matcher (`resolveHeadshot` in
+      `apps/api/src/player-enrichment-service.ts`, merged `449b28f79`). It does
+      not duplicate or edit it.
+
+
+      ## PM amendment (Griff, 2026-11-03, later the same day)
+
+
+      "Proceed with the nine-path Discord artwork scope only after exact
+      file-scope authorization, preserving canonical participant-ID
+      verification, a five-second overall artwork deadline and text-only
+      fallback. No production headshot rewrite."
+
+
+      - **File scope** is exactly the nine paths of the approved v2 request.
+      Lane start declares those nine and no others; any further path needs
+      Griff's explicit authorization first.
+
+      - **Five-second overall deadline.** All artwork work for one submission
+      (the participant lookup, the fresh `resolveHeadshot` re-resolve and any
+      logo lookup) shares a single 5-second budget, not 5 seconds per call. When
+      the budget expires, the pick is submitted with no thumbnail and
+      `thumbnailVerified` absent; submission never fails or waits longer because
+      of artwork. Test it with a resolver that never returns, and show that
+      submission completes within the budget.
+
+      - **Text-only fallback.** Every unverified case sends the embed with no
+      thumbnail or image, keeping the existing text brand.
+
+      - **Canonical participant-ID verification** is the binding rule above.
+      Selection text is never used to choose a participant.
+
+
+      ## Sequencing
+
+
+      Implementation starts only after #1816 (WORK-2026103006, worker
+      kill-switch fail-closed) merges and releases the runtime singleton. Canary
+      and worker safety come first. If admission is refused for runtime
+      ownership, this order waits as written.
+
+
+      ## Defect (measured at main 00d6c2640)
+
+
+      1. `apps/api/src/pick-asset-resolver.ts:79-112` guesses the participant
+      from the pick's **selection text**, including a last-name substring check
+      at `:106-109`. It returns the stored `headshot_url` (`:39-41`) or the team
+      `logo_url` (`:56-65`; abbreviation-prefix check at `:100-103`). It writes
+      back to `participants` at submission (`:51`).
+
+      2. `apps/api/src/submission-service.ts:407` and `:625` call the resolver
+      and copy its URL into `picks.metadata.thumbnailUrl`. Caller-supplied
+      metadata also flows straight into the pick
+      (`packages/contracts/src/picks.ts:133`), so a caller can set
+      `thumbnailUrl` directly.
+
+      3. `apps/worker/src/delivery-adapters.ts:755` passes
+      `metadata.thumbnailUrl` unchanged into the embed.
+
+      4. `packages/domain/src/discord-presentation.ts` `mediaUrl` accepts any
+      https URL.
+
+      5. Production (read-only, 2026-11-03) has 31 NHL players on 13 shared
+      stored URLs, and all 318 stored NHL URLs are on `cms.nhl.bamgrid.com`,
+      which does not resolve in public DNS.
+
+      6. Discord has no image fallback. The footer is the text `Unit Talk`
+      (`discord-presentation.ts:9,155`).
+
+
+      ## File Scope
+
+
+      - packages/domain/src/discord-presentation.ts
+
+      - packages/domain/src/discord-presentation.test.ts
+
+      - apps/worker/src/delivery-adapters.ts
+
+      - apps/worker/src/delivery-adapters.test.ts
+
+      - apps/api/src/pick-asset-resolver.ts
+
+      - apps/api/src/pick-asset-resolver.test.ts
+
+      - apps/api/src/submission-service.ts
+
+      - apps/api/src/submission-service.test.ts
+
+      - package.json
+
+
+      ## PR opening is sequenced (overrides any generic "open a draft PR" step)
+
+
+      Every pull request, including a draft, runs the shared `staging-ci-db`
+      job. That job holds one running and one pending slot, and a third arrival
+      cancels the pending proof of another lane. So:
+
+
+      - Commit and push the lane branch as normal.
+
+      - **Do not open a pull request.** When implementation and local
+      verification are complete, write `.out/ops/ready-for-pr/<this issue
+      id>.md` in the lane worktree. List the head SHA, the focused test commands
+      and their results, and the observed model and effort.
+
+      - Production Claude opens the PR when the staging slot is free, then
+      reports the PR number back. After that, ask Production Claude before every
+      push to the open PR.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026110302.md
+    title: "WORK-2026110302 — Discord shared artwork: verified headshots/logos only,
+      honest branded fallback"
+    description: >-
+      # WORK-2026110302 — Discord shared artwork: verified headshots/logos only,
+      honest branded fallback
+
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05).
+      Admitted by Production Claude on 2026-11-03 under these directions from
+      Griff:
+
+
+      - "Admit the T1 participant-media correction".
+
+      - "Keep unresolved imagery on the branded fallback".
+
+      - "Separately approve the protected Discord presentation scope".
+
+
+      On 2026-11-03 Griff chose "Approve v2, re-resolve (Recommended)" for the
+      nine-path list in
+      `.out/discord-artwork-presentation-20261102/protected-path-request-v2.md`
+      (main checkout). That approval covers exactly the nine paths below. Scope,
+      per Griff: "using verified shared headshots/logos, honest branded fallback
+      and truthful Discord presentation. Do not change delivery authorization or
+      Track Only behavior." Copy the v2 request and its independent-review
+      findings into this lane's proof.
+
+
+      This lane reuses the #1822 matcher (`resolveHeadshot` in
+      `apps/api/src/player-enrichment-service.ts`, merged `449b28f79`). It does
+      not duplicate or edit it.
+
+
+      ## PM amendment (Griff, 2026-11-03, later the same day)
+
+
+      "Proceed with the nine-path Discord artwork scope only after exact
+      file-scope authorization, preserving canonical participant-ID
+      verification, a five-second overall artwork deadline and text-only
+      fallback. No production headshot rewrite."
+
+
+      - **File scope** is exactly the nine paths of the approved v2 request.
+      Lane start declares those nine and no others; any further path needs
+      Griff's explicit authorization first.
+
+      - **Five-second overall deadline.** All artwork work for one submission
+      (the participant lookup, the fresh `resolveHeadshot` re-resolve and any
+      logo lookup) shares a single 5-second budget, not 5 seconds per call. When
+      the budget expires, the pick is submitted with no thumbnail and
+      `thumbnailVerified` absent; submission never fails or waits longer because
+      of artwork. Test it with a resolver that never returns, and show that
+      submission completes within the budget.
+
+      - **Text-only fallback.** Every unverified case sends the embed with no
+      thumbnail or image, keeping the existing text brand.
+
+      - **Canonical participant-ID verification** is the binding rule above.
+      Selection text is never used to choose a participant.
+
+
+      ## Sequencing
+
+
+      Implementation starts only after #1816 (WORK-2026103006, worker
+      kill-switch fail-closed) merges and releases the runtime singleton. Canary
+      and worker safety come first. If admission is refused for runtime
+      ownership, this order waits as written.
+
+
+      ## Defect (measured at main 00d6c2640)
+
+
+      1. `apps/api/src/pick-asset-resolver.ts:79-112` guesses the participant
+      from the pick's **selection text**, including a last-name substring check
+      at `:106-109`. It returns the stored `headshot_url` (`:39-41`) or the team
+      `logo_url` (`:56-65`; abbreviation-prefix check at `:100-103`). It writes
+      back to `participants` at submission (`:51`).
+
+      2. `apps/api/src/submission-service.ts:407` and `:625` call the resolver
+      and copy its URL into `picks.metadata.thumbnailUrl`. Caller-supplied
+      metadata also flows straight into the pick
+      (`packages/contracts/src/picks.ts:133`), so a caller can set
+      `thumbnailUrl` directly.
+
+      3. `apps/worker/src/delivery-adapters.ts:755` passes
+      `metadata.thumbnailUrl` unchanged into the embed.
+
+      4. `packages/domain/src/discord-presentation.ts` `mediaUrl` accepts any
+      https URL.
+
+      5. Production (read-only, 2026-11-03) has 31 NHL players on 13 shared
+      stored URLs, and all 318 stored NHL URLs are on `cms.nhl.bamgrid.com`,
+      which does not resolve in public DNS.
+
+      6. Discord has no image fallback. The footer is the text `Unit Talk`
+      (`discord-presentation.ts:9,155`).
+
+
+      ## Acceptance Criteria
+
+
+      - **Domain host guard (path 1).** `mediaUrl` accepts only `https` URLs
+      whose host is in a pure-constant allowlist: `cdn.nba.com`,
+      `img.mlbstatic.com`, `a.espncdn.com` and `assets.nhle.com`.
+      `cms.nhl.bamgrid.com` is excluded. A URL with credentials, an `http` URL,
+      a foreign host or a malformed URL yields no thumbnail. Every embed builder
+      goes through this guard, including the result recap.
+
+      - **Worker gate (path 3).** Change only `buildDiscordMessagePayload`
+      (`:736-763`): pass a thumbnail only when `metadata.thumbnailVerified ===
+      true`. Reviewers reject any hunk outside that function. Routing, targets
+      and kill switches are untouched.
+
+      - **Resolver binds by identity, never by selection text (path 5).** The
+      signature takes the participant ID that submission already resolved.
+      Selection-text matching is removed.
+        - **Player:** the thumbnail is verified only when a fresh #1822 `resolveHeadshot` for that participant (display name, sport, team) returns exactly the stored URL. A timeout (5s), ambiguity, mismatch or null gives no thumbnail.
+        - **Team:** use `logo_url` only when the identified participant *is* that team.
+        - **Game totals and two-team selections:** no thumbnail.
+        - Return `{ url, verified }`. **The `updateMetadata` write-back is removed.**
+      - **Submission (path 7).** Pass the resolved participant ID at both call
+      sites. Set `metadata.thumbnailVerified` only from the resolver. Strip any
+      caller-supplied `thumbnailUrl` and `thumbnailVerified` before persisting.
+      Submission is otherwise unchanged: same validation, lifecycle, promotion
+      and response.
+
+      - **Honest branded fallback.** Unresolved, unverified, shared, dead-host
+      or legacy imagery gives an embed with **no thumbnail** that keeps the
+      existing text brand. It never shows a broken image or another person's
+      photo. Old picks lacking `thumbnailVerified` get no thumbnail, and their
+      stored metadata is not rewritten.
+
+      - **Tests run under verify (path 9).** Register paths 2, 4 and 6 in their
+      existing root `package.json` test scripts. Prove they are executed by
+      `pnpm verify`.
+
+      - **Regression tests first.** Show each failing on unmodified main, then
+      passing:
+        - an ambiguous name;
+        - a last-name-only match;
+        - an unrelated player;
+        - a shared stored URL;
+        - a dead NHL host;
+        - a two-team total;
+        - a provider timeout;
+        - a caller-supplied `thumbnailVerified: true`;
+        - no `updateMetadata` call;
+        - an unverified thumbnail dropped by the worker while the embed still sends.
+
+        Record mutations that restore (a) selection-text matching, (b) an unconditional worker thumbnail and (c) an any-host `mediaUrl`. Each must fail a test.
+      - **Rendered-embed proof.** Produce before/after rendered embed payload
+      fixtures in the proof dir. Each pair must show that a shared, unverified
+      or dead-host image yields no thumbnail, that the embed still sends, and
+      that a verified image renders.
+
+      - **No delivery authorization change.** No change to targets, kill
+      switches, outbox, receipts, audience, entitlement, delivery timing or
+      Track Only gating. No member delivery.
+
+      - **T1 verification:**
+        - `pnpm verify` green at the exact head;
+        - the CI `Writable DB proof (staging only)` job green at the exact head;
+        - if pick metadata persistence changes shape, a staging live test showing that a submitted pick persists `thumbnailVerified` correctly and that caller-supplied values are stripped;
+        - an evidence bundle v1 tied to the merge SHA.
+
+      Merge requires Griff's `t1-approved` label and a `pm-verdict/v1` APPROVED
+      comment at the exact head.
+
+
+      ## Guardrails
+
+
+      - No schema change, no new media host, no hosted brand image and no
+      production data write.
+
+      - Staging only for any DB write, through CI.
+
+      - `apps/api/src/player-enrichment-service.ts` is not edited; it is
+      WORK-2026110301's scope. Import from it only.
+
+
+      ## Non-goals
+
+
+      - Rewriting stored production headshots (Griff's separate decision).
+
+      - The NHL URL-builder change (WORK-2026110301). Until it lands, NHL picks
+      show no thumbnail.
+
+      - Injury-alert artwork
+      (`packages/alert-runtime/src/injury-notification-pass.ts` has no caller;
+      the domain guard covers it).
+
+
+      ## Required Evidence
+
+
+      - Failing-then-passing regression output, mutation records and
+      rendered-embed fixtures.
+
+      - T1 evidence bundle: `verification.md` (`## Verification` with
+      `ASSERTIONS:` checklist items and `EVIDENCE:` fenced blocks),
+      `evidence.json`, `diff-summary.md` and an observed `model-routing.json`.
+
+
+      ## Exit Criteria
+
+
+      - Exact-head CI green, `executor-result/v1` posted for that head,
+      independent Claude review, then Griff's T1 verdict.
+
+
+      ## File Scope
+
+
+      - packages/domain/src/discord-presentation.ts
+
+      - packages/domain/src/discord-presentation.test.ts
+
+      - apps/worker/src/delivery-adapters.ts
+
+      - apps/worker/src/delivery-adapters.test.ts
+
+      - apps/api/src/pick-asset-resolver.ts
+
+      - apps/api/src/pick-asset-resolver.test.ts
+
+      - apps/api/src/submission-service.ts
+
+      - apps/api/src/submission-service.test.ts
+
+      - package.json
+
+
+      ## PR opening is sequenced (overrides any generic "open a draft PR" step)
+
+
+      Every pull request, including a draft, runs the shared `staging-ci-db`
+      job. That job holds one running and one pending slot, and a third arrival
+      cancels the pending proof of another lane. So:
+
+
+      - Commit and push the lane branch as normal.
+
+      - **Do not open a pull request.** When implementation and local
+      verification are complete, write `.out/ops/ready-for-pr/<this issue
+      id>.md` in the lane worktree. List the head SHA, the focused test commands
+      and their results, and the observed model and effort.
+
+      - Production Claude opens the PR when the staging slot is free, then
+      reports the PR number back. After that, ask Production Claude before every
+      push to the open PR.
+    captured_at: 2026-11-16T02:27:24.097Z
+    description_sha256: 4bb580d5f87f9ce1c6d752d9767c19038df884ede1c233ee9ffadeb6d7fd9fcb
+  contract_hash: 64f56b72e46c24f0ab24bccc2bac5c6375d6e415e3b3eeb5bbe8a5a42f5f9bb5

@@ -1,0 +1,54 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026110302",
+  "lane_type": "runtime",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110302/.out/worktrees/codex__work-2026110302-discord-artwork",
+  "branch": "codex/work-2026110302-discord-artwork",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/pick-asset-resolver.test.ts",
+    "apps/api/src/pick-asset-resolver.ts",
+    "apps/api/src/submission-service.test.ts",
+    "apps/api/src/submission-service.ts",
+    "apps/worker/src/delivery-adapters.test.ts",
+    "apps/worker/src/delivery-adapters.ts",
+    "package.json",
+    "packages/domain/src/discord-presentation.test.ts",
+    "packages/domain/src/discord-presentation.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026110302/diff-summary.md",
+    "docs/06_status/proof/WORK-2026110302/evidence.json",
+    "docs/06_status/proof/WORK-2026110302/verification.md",
+    "docs/06_status/proof/WORK-2026110302/model-routing.json"
+  ],
+  "status": "started",
+  "started_at": "2026-11-16T02:27:35.557Z",
+  "heartbeat_at": "2026-11-16T02:27:35.557Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/work-2026110302-discord-artwork.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-medium",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "3.0.0"
+  },
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110302/.out/worktrees/codex__work-2026110302-discord-artwork",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
