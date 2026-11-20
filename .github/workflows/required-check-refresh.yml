@@ -10,11 +10,11 @@ name: Required Check Refresh
 
 on:
   issue_comment:
-    types: [created, edited]
+    types: [created, edited, deleted]
   repository_dispatch:
     types: [required-check-refresh]
   workflow_run:
-    workflows: [CI, Executor Result Validator, Merge Gate]
+    workflows: [CI, Executor Result Validator, Merge Gate, Independent Review]
     types: [completed]
 
 permissions:
@@ -36,9 +36,34 @@ jobs:
 
       - name: Resolve trusted signal and retry exact-head native run
         uses: actions/github-script@v7
+        env:
+          OPERATING_MODEL: ${{ vars.OPERATING_MODEL }}
+          LEAN_MODE_ACTIVATED_AT: ${{ vars.LEAN_MODE_ACTIVATED_AT }}
+          TRUSTED_REVIEWER_LOGINS: ${{ vars.TRUSTED_REVIEWER_LOGINS }}
         with:
           script: |
             const { selectEligibleRefreshRun } = require('./scripts/ops/executor-result-check-selection.cjs');
+            // WORK-2026110804: Independent Review handling exists only while lean
+            // mode is armed. Otherwise this broker behaves exactly as the legacy
+            // definition (no 'independent' target, no summary-comment signal).
+            let operatingModel = null;
+            if (String(process.env.OPERATING_MODEL || '').trim().toLowerCase() === 'lean') {
+              try {
+                operatingModel = require('./scripts/ops/operating-model.cjs');
+              } catch (error) {
+                if (!(error && error.code === 'MODULE_NOT_FOUND' && String(error.message || '').includes('operating-model.cjs'))) throw error;
+                core.notice('Lean operating model requested, but scripts/ops/operating-model.cjs is absent; legacy refresh applies.');
+              }
+            }
+            const leanActive = Boolean(operatingModel) && operatingModel.resolveOperatingMode({
+              flag: process.env.OPERATING_MODEL,
+              activatedAt: process.env.LEAN_MODE_ACTIVATED_AT,
+            }).mode === 'lean';
+            const normLogin = login => String(login || '').trim().toLowerCase().replace(/\[bot\]$/u, '');
+            const configuredReviewers = String(process.env.TRUSTED_REVIEWER_LOGINS || '').split(',').map(l => l.trim()).filter(Boolean);
+            const trustedReviewerLogins = new Set((configuredReviewers.length
+              ? configuredReviewers
+              : (operatingModel ? operatingModel.TRUSTED_REVIEWER_LOGINS_DEFAULT : [])).map(normLogin));
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const repository = `${owner}/${repo}`;
@@ -57,6 +82,16 @@ jobs:
                 workflowPath: '.github/workflows/merge-gate.yml',
                 label: 'Merge Gate',
               },
+              independent: {
+                workflowId: 'independent-review.yml',
+                workflowPath: '.github/workflows/independent-review.yml',
+                label: 'Independent Review',
+              },
+              risk: {
+                workflowId: 'risk-class.yml',
+                workflowPath: '.github/workflows/risk-class.yml',
+                label: 'Risk Class',
+              },
             };
 
             let prNumber;
@@ -68,9 +103,53 @@ jobs:
                 throw new Error('issue_comment does not identify a pull request; refusing refresh.');
               }
               prNumber = Number(context.payload.issue.number);
+              // WORK-2026110804: 'deleted' is subscribed only for lean mode.
+              // Outside lean it is a no-op, so legacy sees exactly the
+              // created/edited signals it always did.
+              if (context.payload.action === 'deleted' && !leanActive) {
+                core.info('Deleted comment ignored: lean mode is not armed (legacy no-op).');
+                return;
+              }
               const body = String(context.payload.comment?.body || '');
               if (body.includes('EXECUTOR_RESULT:')) targets.push('executor');
               if (body.includes('PM_VERDICT:')) targets.push('merge');
+              // WORK-2026110804: the review connector's summary comment (created
+              // or edited when a review completes) is the only signal a CLEAN PR
+              // gets. Honored only in lean mode, only from a trusted Bot login,
+              // and only when the anchored summary marker parses.
+              const commenter = context.payload.comment?.user;
+              if (leanActive &&
+                  commenter?.type === 'Bot' &&
+                  trustedReviewerLogins.has(normLogin(commenter?.login)) &&
+                  operatingModel.parseCodexState(body) !== null) {
+                targets.push('independent', 'merge');
+              }
+              // WORK-2026110804: a trusted reviewer's standalone RISK-CLASS:
+              // PROTECTED issue comment escalates the class for good, so every
+              // class-dependent check must be recomputed at the live head or a
+              // stale green Standard decision survives. The predicate is the
+              // one classification uses (isTrustedReviewerEscalation), with the
+              // same configured reviewer list, so an untrusted commenter
+              // triggers nothing. Merge Gate (the decision point) and Executor
+              // Result Validation go first; both fail closed if absent.
+              // Independent Review (optional) precedes Risk Class, so a missing
+              // Risk Class run still fails the job closed but only after every
+              // other target has been rerun.
+              if (leanActive &&
+                  operatingModel.isTrustedReviewerEscalation(context.payload.comment, configuredReviewers)) {
+                targets.push('merge', 'executor', 'independent', 'risk');
+              }
+              // WORK-2026110804: editing or deleting an issue comment authored
+              // by a trusted reviewer login can remove an escalation, delete or
+              // alter a connector summary, or mark it tampered (edited by
+              // another account). Evaluation reads only trusted-login
+              // artifacts, so only those recompute; untrusted ones cannot
+              // change any class-dependent result and trigger nothing.
+              if (leanActive &&
+                  (context.payload.action === 'edited' || context.payload.action === 'deleted') &&
+                  operatingModel.isTrustedReviewerArtifact(context.payload.comment, configuredReviewers)) {
+                targets.push('merge', 'executor', 'independent', 'risk');
+              }
               if (targets.length === 0) {
                 core.info('Comment contains no recognized refresh signal.');
                 return;
@@ -81,7 +160,8 @@ jobs:
               }
               prNumber = Number(context.payload.client_payload?.pr_number);
               const requested = String(context.payload.client_payload?.target || 'both');
-              if (!['executor', 'merge', 'both'].includes(requested)) {
+              const allowedTargets = leanActive ? ['executor', 'merge', 'independent', 'both'] : ['executor', 'merge', 'both'];
+              if (!allowedTargets.includes(requested)) {
                 throw new Error(`Unknown manual refresh target ${requested}; refusing refresh.`);
               }
               targets = requested === 'both' ? ['executor', 'merge'] : [requested];
@@ -90,6 +170,10 @@ jobs:
               const { data: run } = await github.rest.actions.getWorkflowRun({
                 owner, repo, run_id: Number(advertised?.id),
               });
+              if (run.name === 'Independent Review' && !leanActive) {
+                core.info('Independent Review signal ignored: lean mode is not armed (legacy no-op).');
+                return;
+              }
               if (run.repository?.full_name !== repository || run.head_repository?.full_name !== repository) {
                 throw new Error('workflow_run repository identity mismatch; refusing refresh.');
               }
@@ -102,17 +186,31 @@ jobs:
               const trustedSignals = {
                 'CI': { path: '.github/workflows/ci.yml', event: 'pull_request', conclusion: 'success', targets: ['executor'] },
                 'Executor Result Validator': { path: '.github/workflows/executor-result-validator.yml', event: 'pull_request', conclusion: 'success', targets: ['merge'] },
-                'Merge Gate': { path: '.github/workflows/merge-gate.yml', event: 'pull_request_review', conclusion: null, targets: ['merge'] },
+                // WORK-2026110804: in lean only, the native pull_request Merge
+                // Gate run is also accepted, solely for the missed-escalation
+                // recovery below. Legacy keeps refusing it exactly as before.
+                'Merge Gate': { path: '.github/workflows/merge-gate.yml', event: leanActive ? ['pull_request_review', 'pull_request'] : 'pull_request_review', conclusion: null, targets: ['merge'] },
+                // WORK-2026110804: a trusted-reviewer review observed by the
+                // pull_request_review run reruns the native Independent Review
+                // and Merge Gate runs at the exact live head.
+                // Inline review-thread comments (created, edited, deleted) emit
+                // pull_request_review_comment, observed by the same read-only
+                // Independent Review workflow and handled identically here.
+                // The native pull_request run itself is also accepted (lean
+                // only; legacy returned above), solely for the missed-summary
+                // recovery below.
+                'Independent Review': { path: '.github/workflows/independent-review.yml', event: ['pull_request_review', 'pull_request_review_comment', 'pull_request'], conclusion: null, targets: ['independent', 'merge'] },
               };
               const expected = trustedSignals[run.name];
-              if (!expected || run.path !== expected.path || run.event !== expected.event) {
+              const expectedEvents = expected ? [].concat(expected.event) : [];
+              if (!expected || run.path !== expected.path || !expectedEvents.includes(run.event)) {
                 throw new Error(`Untrusted workflow_run identity ${run.name}/${run.path}/${run.event}; refusing refresh.`);
               }
               if (expected.conclusion && run.conclusion !== expected.conclusion) {
                 throw new Error(`Trusted workflow_run ${run.id} concluded ${run.conclusion}; refusing refresh.`);
               }
               let linkedPulls = Array.isArray(run.pull_requests) ? run.pull_requests : [];
-              if (linkedPulls.length === 0 && run.event === 'pull_request_review') {
+              if (linkedPulls.length === 0 && (run.event === 'pull_request_review' || run.event === 'pull_request_review_comment')) {
                 // GitHub's real workflow-run API leaves pull_requests empty for
                 // pull_request_review runs. Resolve server-side association by
                 // the exact run SHA; never trust a branch name or artifact.
@@ -136,6 +234,77 @@ jobs:
                 throw new Error('workflow_run pull-request/head metadata mismatch; refusing refresh.');
               }
               targets = expected.targets;
+              // WORK-2026110804 (Codex P2 and P1 on #1842): a trusted signal can
+              // land while a native pull_request run is in flight, after it
+              // read its inputs. The comment-driven refresh cannot rerun an
+              // in-flight run, so the stale run would stand (a stale Standard
+              // Merge Gate success, or a stale Independent Review failure).
+              // On that run's own completion, rerun once iff a trusted signal
+              // was written or updated at or after the run started. The rerun
+              // starts after that write, so its own completion finds nothing
+              // newer: bounded, never a loop. A missing run_started_at, or a
+              // matching signal without a valid timestamp, fails closed. Reruns
+              // re-evaluate everything themselves, so this only ever retries.
+              const signalWrittenSinceRunStart = async (label, isSignal, { includeReviews }) => {
+                const startedMs = Date.parse(String(run.run_started_at || ''));
+                if (!Number.isFinite(startedMs)) {
+                  throw new Error(`${label} run ${run.id} has no valid run_started_at; refusing refresh.`);
+                }
+                const writes = (await github.paginate(github.rest.issues.listComments, {
+                  owner, repo, issue_number: prNumber, per_page: 100,
+                })).map(node => ({ node, when: node?.updated_at || node?.created_at }));
+                if (includeReviews) {
+                  for (const node of await github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: prNumber, per_page: 100 })) {
+                    writes.push({ node, when: node?.submitted_at });
+                  }
+                  for (const node of await github.paginate(github.rest.pulls.listReviewComments, { owner, repo, pull_number: prNumber, per_page: 100 })) {
+                    writes.push({ node, when: node?.updated_at || node?.created_at });
+                  }
+                }
+                return writes.some(({ node, when }) => {
+                  if (!isSignal(node)) return false;
+                  const writtenMs = Date.parse(String(when || ''));
+                  if (!Number.isFinite(writtenMs)) {
+                    throw new Error(`A trusted signal on PR #${prNumber} has no valid timestamp; refusing refresh.`);
+                  }
+                  return writtenMs >= startedMs;
+                });
+              };
+              // WORK-2026110804 (Codex P1 on #1842, round 6): a trusted P0/P1
+              // finding (review body, CHANGES_REQUESTED review or inline review
+              // comment) written while both native runs were in flight is
+              // skipped by the review-comment refresh too, and changes both
+              // results. Both completions therefore also recover a finding,
+              // using the exact finding test Independent Review evaluates.
+              const isFinding = node => operatingModel.isTrustedReviewerFinding(node, configuredReviewers);
+              if (run.name === 'Independent Review' && run.event === 'pull_request') {
+                const isSummary = node =>
+                  node?.user?.type === 'Bot' &&
+                  trustedReviewerLogins.has(normLogin(node.user.login)) &&
+                  operatingModel.parseCodexState(String(node.body || '')) !== null;
+                const isReviewSignal = node => isSummary(node) || isFinding(node);
+                if (!(await signalWrittenSinceRunStart('Independent Review', isReviewSignal, { includeReviews: true }))) {
+                  core.info(`Independent Review run ${run.id} saw every trusted summary and finding; nothing to recover.`);
+                  return;
+                }
+                targets = ['independent', 'merge'];
+              } else if (run.name === 'Merge Gate' && run.event === 'pull_request') {
+                // Reached only in lean (legacy refuses this event above).
+                const isGateSignal = node => operatingModel.isTrustedReviewerEscalation(node, configuredReviewers) || isFinding(node);
+                if (!(await signalWrittenSinceRunStart('Merge Gate', isGateSignal, { includeReviews: true }))) {
+                  core.info(`Merge Gate run ${run.id} saw every trusted escalation and finding; nothing to recover.`);
+                  return;
+                }
+                targets = ['merge', 'executor', 'independent', 'risk'];
+              } else if (run.name === 'Independent Review' && leanActive) {
+                // WORK-2026110804: a trusted review may carry RISK-CLASS:
+                // PROTECTED in its body or a thread comment. Merge Gate
+                // recomputes the class itself, but Executor Result Validation
+                // and Risk Class would otherwise keep a stale Standard result,
+                // so lean also refreshes them. Risk Class is last: if absent
+                // the job fails closed after all other reruns were requested.
+                targets = [...expected.targets, 'executor', 'risk'];
+              }
             } else {
               throw new Error(`Unsupported event ${context.eventName}; refusing refresh.`);
             }
@@ -155,9 +324,16 @@ jobs:
               throw new Error(`Trusted signal head ${signalHeadSha} is not live PR head ${headSha}; refusing stale refresh.`);
             }
 
+            // WORK-2026110804 (Codex P1 on #1842): a missing or in-flight
+            // required target must not stop the reruns after it (an in-flight
+            // Merge Gate would otherwise leave Executor Result Validation,
+            // Independent Review and Risk Class stale). Every rerun that can be
+            // requested is requested; the job then fails closed. Only a moved
+            // PR head aborts at once, because then no rerun is valid.
+            const refusals = [];
             for (const targetName of [...new Set(targets)]) {
               const config = configs[targetName];
-              if (!config) throw new Error(`Unknown retry target ${targetName}; refusing refresh.`);
+              if (!config) { refusals.push(`Unknown retry target ${targetName}; refusing refresh.`); continue; }
               const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
                 owner, repo,
                 workflow_id: config.workflowId,
@@ -170,11 +346,20 @@ jobs:
                 prNumber,
                 headSha,
               });
+              // A missing or in-flight Independent Review run must not abort
+              // the Merge Gate rerun that follows it.
+              const optional = targetName === 'independent';
               if (!target) {
-                throw new Error(`No eligible ${config.label} pull_request run exists for PR #${prNumber} at ${headSha}.`);
+                const message = `No eligible ${config.label} pull_request run exists for PR #${prNumber} at ${headSha}.`;
+                if (optional) { core.warning(`${message} Skipping; continuing with remaining targets.`); continue; }
+                refusals.push(message);
+                continue;
               }
               if (target.status !== 'completed') {
-                throw new Error(`Newest eligible ${config.label} run ${target.id} is ${target.status}; refusing older fallback.`);
+                const message = `Newest eligible ${config.label} run ${target.id} is ${target.status}; refusing older fallback.`;
+                if (optional) { core.warning(`${message} Skipping; continuing with remaining targets.`); continue; }
+                refusals.push(message);
+                continue;
               }
 
               // This API read is intentionally adjacent to the only mutation.
@@ -189,4 +374,7 @@ jobs:
               }
               await github.rest.actions.reRunWorkflow({ owner, repo, run_id: target.id });
               core.info(`Requested native retry of ${config.label} run ${target.id} for PR #${prNumber} at ${headSha}.`);
+            }
+            if (refusals.length > 0) {
+              throw new Error(refusals.join(' '));
             }

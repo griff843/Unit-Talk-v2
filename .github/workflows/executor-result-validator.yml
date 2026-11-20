@@ -56,6 +56,11 @@ jobs:
 
       - name: Validate executor result
         uses: actions/github-script@v7
+        env:
+          # WORK-2026110804: lean-mode inputs. Unset/legacy => unchanged behavior.
+          OPERATING_MODEL: ${{ vars.OPERATING_MODEL }}
+          LEAN_MODE_ACTIVATED_AT: ${{ vars.LEAN_MODE_ACTIVATED_AT }}
+          TRUSTED_REVIEWER_LOGINS: ${{ vars.TRUSTED_REVIEWER_LOGINS }}
         with:
           script: |
             const { selectLatestVerifyCheckRun } = require('./scripts/ops/executor-result-check-selection.cjs');
@@ -74,6 +79,32 @@ jobs:
             prLabels = (issue.labels || []).map(l =>
               typeof l === 'string' ? l : l.name
             );
+
+            // ── 1b. Lean Standard: self-attestation not required ───────
+            // WORK-2026110804 (Step A keeps this required context; it reports
+            // success for lean-mode Standard PRs, whose gate is Independent
+            // Review). Protected (including reviewer-escalated), legacy, flag
+            // unset, and a base without the policy module all fall through to
+            // the full validation below, unchanged. Required lazily.
+            {
+              let operatingModel = null;
+              if (String(process.env.OPERATING_MODEL || '').trim().toLowerCase() === 'lean') {
+                try {
+                  operatingModel = require('./scripts/ops/operating-model.cjs');
+                } catch (error) {
+                  if (!(error && error.code === 'MODULE_NOT_FOUND' && String(error.message || '').includes('operating-model.cjs'))) throw error;
+                  core.notice('Lean operating model requested, but scripts/ops/operating-model.cjs is absent on the base commit; legacy path applies.');
+                }
+              }
+              if (operatingModel) {
+                const { data: prFull } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+                const policy = await operatingModel.loadPullRequestPolicy({ github, owner, repo, pr: prFull, env: process.env });
+                if (policy.mode.mode === 'lean' && policy.classification.class === 'Standard' && prFull.head.sha === headSha) {
+                  core.notice('Executor Result Validation: not required for lean-mode Standard PRs (Independent Review is the gate).');
+                  return;
+                }
+              }
+            }
 
             // ── 2. Get all PR comments ─────────────────────────────────
             const { data: comments } = await github.rest.issues.listComments({
