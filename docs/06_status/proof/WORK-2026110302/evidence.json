@@ -6,22 +6,55 @@
   "static_proof": {
     "status": "PASS",
     "focused_tests": {
-      "discord_presentation": { "pass": 17, "fail": 0 },
-      "delivery_adapters": { "pass": 29, "fail": 0 },
-      "pick_asset_resolver": { "pass": 17, "fail": 0 },
-      "submission_service": { "pass": 112, "fail": 0 }
+      "discord_presentation": {
+        "pass": 17,
+        "fail": 0
+      },
+      "delivery_adapters": {
+        "pass": 29,
+        "fail": 0
+      },
+      "pick_asset_resolver": {
+        "pass": 17,
+        "fail": 0
+      },
+      "submission_service": {
+        "pass": 112,
+        "fail": 0
+      }
     },
     "regression_before": {
-      "main_resolver_probe": { "pass": 0, "fail": 6 },
-      "main_domain_probe": { "pass": 0, "fail": 3 },
-      "main_worker_new_tests": { "pass": 1, "fail": 4 },
-      "main_submission_new_tests": { "pass": 0, "fail": 7 },
-      "main_import_failures": ["packages/domain/src/discord-presentation.test.ts", "apps/api/src/pick-asset-resolver.test.ts"]
+      "main_resolver_probe": {
+        "pass": 0,
+        "fail": 6
+      },
+      "main_domain_probe": {
+        "pass": 0,
+        "fail": 3
+      },
+      "main_worker_new_tests": {
+        "pass": 1,
+        "fail": 4
+      },
+      "main_submission_new_tests": {
+        "pass": 0,
+        "fail": 7
+      },
+      "main_import_failures": [
+        "packages/domain/src/discord-presentation.test.ts",
+        "apps/api/src/pick-asset-resolver.test.ts"
+      ]
     },
     "mutations": {
-      "a_selection_text_matching": { "fail": 2 },
-      "b_unconditional_worker_thumbnail": { "fail": 3 },
-      "c_any_host_media_url": { "fail": 11 }
+      "a_selection_text_matching": {
+        "fail": 2
+      },
+      "b_unconditional_worker_thumbnail": {
+        "fail": 3
+      },
+      "c_any_host_media_url": {
+        "fail": 11
+      }
     },
     "rendered_embeds": "rendered-embeds/",
     "commands": {
@@ -34,16 +67,41 @@
         "reason": "not run locally; no staging credentials in the cloud session"
       }
     },
-    "verified_source_sha": "set-at-commit"
+    "verified_source_sha": "b7952b0eef57bf73ec8c3065a2c5d2dd11854378"
   },
   "runtime_proof": {
     "status": "deferred_to_staging_ci",
     "suite": "apps/api/src/t1-proof-work-2026110302-artwork-metadata-live.test.ts",
     "queries": [
-      { "query": "picks?id=eq.<primary-id>&select=*", "status": "not_executed_locally; staging CI pending", "observed": false },
-      { "query": "distribution_outbox?pick_id=eq.<primary-id>&select=id", "status": "not_executed_locally; staging CI pending", "observed": false }
+      {
+        "query": "picks?id=eq.<primary-id>&select=*",
+        "status": "not_executed_locally; staging CI pending",
+        "observed": false
+      },
+      {
+        "query": "distribution_outbox?pick_id=eq.<primary-id>&select=id",
+        "status": "not_executed_locally; staging CI pending",
+        "observed": false
+      }
     ],
-    "reason": "Declared, not executed. No live measurement exists yet."
+    "reason": "Declared, not executed. No live measurement exists yet.",
+    "row_counts": [
+      {
+        "table": "picks",
+        "observed_count": null,
+        "status": "not_measured; staging CI pending (expected 3 fixture picks)"
+      },
+      {
+        "table": "participants",
+        "observed_count": null,
+        "status": "not_measured; staging CI pending (expected 1 fixture participant)"
+      },
+      {
+        "table": "distribution_outbox",
+        "observed_count": null,
+        "status": "not_measured; staging CI pending (expected 0)"
+      }
+    ]
   },
   "open_blockers": [
     "Exact-head pnpm verify and Writable DB proof (staging only) CI pending",
@@ -56,10 +114,11 @@
   "proof_profile": "app-runtime",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "set-at-commit",
+    "verified_source_sha": "b7952b0eef57bf73ec8c3065a2c5d2dd11854378",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "merge_sha",
     "bound_at": null
-  }
+  },
+  "execution_sha": "b7952b0eef57bf73ec8c3065a2c5d2dd11854378"
 }
