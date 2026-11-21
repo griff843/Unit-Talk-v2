@@ -4,7 +4,7 @@ MERGE_SHA: pending merge
 
 Issue: WORK-2026110302
 Tier: T1
-Verified source SHA: b7952b0eef57bf73ec8c3065a2c5d2dd11854378
+Verified source SHA: d279ddd0ef2eb695253a66cde6d84f1359899923
 
 result: partial — static and focused proof complete locally; exact-head CI, staging DB proof and Griff's T1 verdict pending
 

@@ -15,7 +15,7 @@
         "fail": 0
       },
       "pick_asset_resolver": {
-        "pass": 17,
+        "pass": 18,
         "fail": 0
       },
       "submission_service": {
@@ -67,7 +67,7 @@
         "reason": "not run locally; no staging credentials in the cloud session"
       }
     },
-    "verified_source_sha": "b7952b0eef57bf73ec8c3065a2c5d2dd11854378"
+    "verified_source_sha": "d279ddd0ef2eb695253a66cde6d84f1359899923"
   },
   "runtime_proof": {
     "status": "deferred_to_staging_ci",
@@ -114,11 +114,11 @@
   "proof_profile": "app-runtime",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "b7952b0eef57bf73ec8c3065a2c5d2dd11854378",
+    "verified_source_sha": "d279ddd0ef2eb695253a66cde6d84f1359899923",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "merge_sha",
     "bound_at": null
   },
-  "execution_sha": "b7952b0eef57bf73ec8c3065a2c5d2dd11854378"
+  "execution_sha": "d279ddd0ef2eb695253a66cde6d84f1359899923"
 }

@@ -1,6 +1,6 @@
 # WORK-2026110302: rendered embed payload fixtures
 
-Verified source SHA: b7952b0eef57bf73ec8c3065a2c5d2dd11854378
+Verified source SHA: d279ddd0ef2eb695253a66cde6d84f1359899923
 
 ## Evidence
 
