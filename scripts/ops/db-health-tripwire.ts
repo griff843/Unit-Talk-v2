@@ -156,7 +156,27 @@ async function runDatabaseChecks(
         s.last_autoanalyze,
         s.n_dead_tup::text,
         s.n_live_tup::text,
-        s.n_mod_since_analyze::text
+        s.n_mod_since_analyze::text,
+        COALESCE(
+          (SELECT option_value FROM pg_options_to_table(m.reloptions)
+            WHERE option_name = 'autovacuum_vacuum_threshold'),
+          current_setting('autovacuum_vacuum_threshold')
+        ) AS vacuum_threshold,
+        COALESCE(
+          (SELECT option_value FROM pg_options_to_table(m.reloptions)
+            WHERE option_name = 'autovacuum_vacuum_scale_factor'),
+          current_setting('autovacuum_vacuum_scale_factor')
+        ) AS vacuum_scale_factor,
+        COALESCE(
+          (SELECT option_value FROM pg_options_to_table(m.reloptions)
+            WHERE option_name = 'autovacuum_analyze_threshold'),
+          current_setting('autovacuum_analyze_threshold')
+        ) AS analyze_threshold,
+        COALESCE(
+          (SELECT option_value FROM pg_options_to_table(m.reloptions)
+            WHERE option_name = 'autovacuum_analyze_scale_factor'),
+          current_setting('autovacuum_analyze_scale_factor')
+        ) AS analyze_scale_factor
       FROM pg_class c
       JOIN pg_namespace n ON n.oid = c.relnamespace
       CROSS JOIN LATERAL (

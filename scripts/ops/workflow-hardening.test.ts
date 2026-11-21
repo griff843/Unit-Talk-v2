@@ -2452,6 +2452,10 @@ test('UTV2-1632: autovacuum, TOAST and timeout-rate checks each evaluate', () =>
     n_dead_tup: '10',
     n_live_tup: '1000',
     n_mod_since_analyze: '20',
+    vacuum_threshold: '50',
+    vacuum_scale_factor: '0.2',
+    analyze_threshold: '50',
+    analyze_scale_factor: '0.1',
   };
   const evalOne = (row: VacuumRow) => evaluateAutovacuumTable(row.hot_table, [row], thresholds, now);
 
@@ -2546,6 +2550,10 @@ test('UTV2-1632: a verdict may rest on an observation that has no number', () =>
     n_dead_tup: '500000',
     n_live_tup: '130',
     n_mod_since_analyze: '500000',
+    vacuum_threshold: '50',
+    vacuum_scale_factor: '0.2',
+    analyze_threshold: '50',
+    analyze_scale_factor: '0.1',
   };
   const outcome = evaluateAutovacuumTable('system_runs', [neverVacuumed], thresholds, now);
   assert.strictEqual(outcome.status, 'tripped');
@@ -2578,6 +2586,10 @@ test('DB tripwire: the 2026-11-21 production readings no longer raise false alar
     n_dead_tup: '0',
     n_live_tup: '0',
     n_mod_since_analyze: '0',
+    vacuum_threshold: '50',
+    vacuum_scale_factor: '0.2',
+    analyze_threshold: '50',
+    analyze_scale_factor: '0.1',
   });
   for (const table of ['game_results', 'odds_snapshots', 'raw_payloads']) {
     const outcome = evaluateAutovacuumTable(table, [idle(table)], thresholds, now);
@@ -2602,11 +2614,48 @@ test('DB tripwire: the 2026-11-21 production readings no longer raise false alar
     n_dead_tup: '43202',
     n_live_tup: '4401496',
     n_mod_since_analyze: '26502',
+    // UTV2-1640 tuning, as read from pg_class.reloptions in production.
+    vacuum_threshold: '100',
+    vacuum_scale_factor: '0.02',
+    analyze_threshold: '50',
+    analyze_scale_factor: '0.01',
   };
   assert.strictEqual(
     evaluateAutovacuumTable('system_runs', [systemRuns], thresholds, now).status,
     'pass',
-    '0.97% dead on 4.4M rows is far under the autovacuum trigger',
+    '43k dead on 4.4M rows is under even the tuned trigger (~88k)',
+  );
+  const stalledTuned = evaluateAutovacuumTable(
+    'system_runs',
+    [{ ...systemRuns, n_dead_tup: '200000', n_mod_since_analyze: '200000' }],
+    thresholds,
+    now,
+  );
+  assert.strictEqual(
+    stalledTuned.status,
+    'tripped',
+    'a tuned table is held to its own trigger: 200k dead is past 0.02 * 4.4M even though it is under stock 0.2',
+  );
+  assert.strictEqual(stalledTuned.severity, 'critical');
+  assert.strictEqual(
+    evaluateAutovacuumTable(
+      'system_runs',
+      [
+        {
+          ...systemRuns,
+          n_dead_tup: '200000',
+          n_mod_since_analyze: '200000',
+          vacuum_threshold: null,
+          vacuum_scale_factor: null,
+          analyze_threshold: null,
+          analyze_scale_factor: null,
+        },
+      ],
+      thresholds,
+      now,
+    ).status,
+    'pass',
+    'with settings unreadable the stock defaults apply',
   );
 
   // A partitioned table is judged by its partitions: one overdue partition trips it.

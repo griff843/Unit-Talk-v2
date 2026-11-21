@@ -379,6 +379,16 @@ export interface VacuumRow {
   n_dead_tup: string;
   n_live_tup: string;
   n_mod_since_analyze: string;
+  /**
+   * The relation's EFFECTIVE autovacuum settings: its own reloptions where set
+   * (e.g. system_runs is tuned to 0.02/0.01 by UTV2-1640), else the cluster
+   * setting. Text, as Postgres reports settings. Null or unparseable falls back
+   * to the stock defaults below.
+   */
+  vacuum_threshold: string | null;
+  vacuum_scale_factor: string | null;
+  analyze_threshold: string | null;
+  analyze_scale_factor: string | null;
 }
 
 export interface SizeRow {
@@ -401,10 +411,11 @@ export interface ToastBloatRow {
 const HOURS = 60 * 60 * 1000;
 const DEAD_TUPLE_PCT_LIMIT = 20;
 
-// Postgres's stock autovacuum trigger: a relation is due for vacuum once dead
-// tuples exceed `threshold + scale_factor * live`, and due for analyze once
-// modifications since the last analyze exceed the analyze equivalent. Supabase
-// runs the stock values. The check asks whether Postgres's OWN trigger has been
+// Postgres's autovacuum trigger: a relation is due for vacuum once dead tuples
+// exceed `threshold + scale_factor * live`, and due for analyze once
+// modifications since the last analyze exceed the analyze equivalent. Each
+// relation's effective settings are read from the catalog; these stock values
+// are only the fallback when a setting could not be read. The check asks whether Postgres's OWN trigger has been
 // crossed and autovacuum then failed to act within the staleness window. That
 // is the signature of the 2026-06-22 incident (dead autovacuum, write path
 // stalling); it does not fire for a table that simply has nothing to vacuum.
@@ -417,6 +428,11 @@ function latest(...dates: Array<Date | null>): Date | null {
   let out: Date | null = null;
   for (const d of dates) if (d && (!out || d > out)) out = d;
   return out;
+}
+
+function setting(raw: string | null, fallback: number): number {
+  const n = raw === null ? Number.NaN : Number.parseFloat(raw);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
 function toInt(raw: string | null): number {
@@ -444,8 +460,14 @@ function evaluateVacuumMember(row: VacuumRow, cutoff: Date): MemberVerdict {
   const lastVacuumActivity = latest(row.last_vacuum, row.last_autovacuum);
   const lastAnalyzeActivity = latest(row.last_analyze, row.last_autoanalyze);
 
-  const vacuumTrigger = AUTOVACUUM_VACUUM_THRESHOLD + AUTOVACUUM_VACUUM_SCALE_FACTOR * live;
-  const analyzeTrigger = AUTOVACUUM_ANALYZE_THRESHOLD + AUTOVACUUM_ANALYZE_SCALE_FACTOR * live;
+  // The triggers autovacuum actually uses for THIS relation, so a table tuned
+  // to vacuum early is held to its tuned threshold, not the stock one.
+  const vacuumTrigger =
+    setting(row.vacuum_threshold, AUTOVACUUM_VACUUM_THRESHOLD) +
+    setting(row.vacuum_scale_factor, AUTOVACUUM_VACUUM_SCALE_FACTOR) * live;
+  const analyzeTrigger =
+    setting(row.analyze_threshold, AUTOVACUUM_ANALYZE_THRESHOLD) +
+    setting(row.analyze_scale_factor, AUTOVACUUM_ANALYZE_SCALE_FACTOR) * live;
   const deadPct = dead + live === 0 ? 0 : (dead / (dead + live)) * 100;
 
   const vacuumOverdue =
