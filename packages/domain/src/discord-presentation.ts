@@ -200,14 +200,29 @@ export interface PickPresentationInput {
   timestamp?: string | null | undefined;
   thumbnailUrl?: string | null | undefined;
 }
+/**
+ * The line belongs in the title only when the selection does not already state
+ * it, and never with an `@` (which reads as odds). Spreads keep their sign;
+ * totals and props show the bare number ("Over" + 27.5 -> "Over 27.5").
+ */
+function pickTitleLine(
+  selection: string | undefined,
+  market: unknown,
+  line: unknown,
+): string {
+  if (!finiteMetric(line)) return '';
+  const magnitude = String(Math.abs(line));
+  const stated = new RegExp(`(^|[^0-9.])[+-]?${magnitude.replace('.', '\\.')}($|[^0-9])`, 'u');
+  if (selection && stated.test(selection)) return '';
+  const spread = /spread|handicap|run ?line|puck ?line/iu.test(knownText(market) ?? '');
+  return ` ${spread && line > 0 ? '+' : ''}${spread || line < 0 ? line : magnitude}`;
+}
 export function buildPickPresentation(
   family: 'official-pick' | 'pick-posted',
   input: PickPresentationInput,
 ): PresentationEmbed {
   const selection = knownText(input.selection);
-  const line = finiteMetric(input.line)
-    ? ` @ ${input.line > 0 ? '+' : ''}${input.line}`
-    : '';
+  const line = pickTitleLine(selection, input.market, input.line);
   const eventTime = sourceTimestamp(input.eventTime);
   return buildPresentationEmbed(family, {
     title: selection
