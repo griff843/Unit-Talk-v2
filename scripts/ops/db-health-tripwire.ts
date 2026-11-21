@@ -77,7 +77,6 @@ import {
   EXIT_HARNESS_ERROR,
   HOT_TABLES,
   HarnessError,
-  LINEAR_ISSUE_ENV,
   RECEIPT_SCHEMA,
   TABLE_SIZE_SQL,
   TOAST_BLOAT_TABLES,
@@ -352,7 +351,6 @@ async function postLinearAlert(checks: readonly CheckOutcome[]): Promise<LinearA
   if (tripped.length === 0) return 'not_applicable';
   if (!apiKey) return 'skipped_no_api_key';
   const issueKey = resolveLinearIssueKey();
-  if (!issueKey) return 'skipped_no_issue_configured';
 
   const lines = tripped.map(
     (c) =>
@@ -583,14 +581,8 @@ export async function runTripwire(receiptPath: string): Promise<number> {
   if (linearAlert === 'failed') {
     console.log(
       '::warning title=DB Health Tripwire::Checks tripped but the Linear alert could not be ' +
-        `delivered to ${resolveLinearIssueKey() ?? 'the configured issue'}. The finding is in the ` +
+        `delivered to ${resolveLinearIssueKey()}. The finding is in the ` +
         'receipt artifact; the notification path needs repair.',
-    );
-  }
-  if (linearAlert === 'skipped_no_issue_configured') {
-    console.log(
-      '::warning title=DB Health Tripwire::Checks tripped but no Linear alert issue is configured ' +
-        `(repository variable ${LINEAR_ISSUE_ENV} is unset). The finding is in the receipt artifact.`,
     );
   }
 

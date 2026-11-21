@@ -2574,7 +2574,7 @@ test('DB tripwire: the 2026-11-21 production readings no longer raise false alar
   // Measured live in run 44867172290. Postgres restarted 2026-09-23, resetting
   // per-table statistics; the ingest tables have taken no writes since, and
   // provider_offer_history is a partitioned parent with no stats of its own.
-  const thresholds = resolveThresholds({ TOAST_BLOAT_RATIO_THRESHOLD: '0.2' });
+  const thresholds = resolveThresholds({ TOAST_BLOAT_RATIO_THRESHOLD: '0.8' });
   const now = new Date('2026-11-21T04:39:51.000Z');
   const idle = (hot: string, rel = hot): VacuumRow => ({
     hot_table: hot,
@@ -2689,7 +2689,12 @@ test('DB tripwire: the 2026-11-21 production readings no longer raise false alar
 });
 
 test('DB tripwire: the Linear alert target is configuration, validated up front', () => {
-  assert.strictEqual(resolveLinearIssueKey({}), null, 'unset means no alert target');
+  assert.strictEqual(resolveLinearIssueKey({}), 'UTV2-1982', 'unset falls back to the live default');
+  assert.strictEqual(
+    resolveThresholds({ TOAST_BLOAT_RATIO_THRESHOLD: '0.8' })['TOAST_DEAD_TUPLE_RATIO_THRESHOLD']?.value,
+    0.2,
+    "the workflow's retired size-share value must not leak into the dead-tuple threshold",
+  );
   assert.strictEqual(resolveLinearIssueKey({ DB_TRIPWIRE_LINEAR_ISSUE: ' UTV2-2001 ' }), 'UTV2-2001');
   assert.throws(
     () => resolveLinearIssueKey({ DB_TRIPWIRE_LINEAR_ISSUE: 'not an issue' }),

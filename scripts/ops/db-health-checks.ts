@@ -17,19 +17,20 @@ import path from 'node:path';
 
 export const RECEIPT_SCHEMA = 'db-health-tripwire-receipt/v1';
 /**
- * The Linear issue that receives tripwire alerts is configuration, not code.
+ * The Linear issue that receives tripwire alerts.
  *
  * It used to be the constant `UTV2-1300`. That issue stopped resolving in
  * Linear, so every alert since failed with "Entity not found" and no finding
- * reached the tracker. The workflow now passes the issue key from the
- * `DB_TRIPWIRE_LINEAR_ISSUE` repository variable. Unset means "no alert target
- * configured", which is reported as its own disposition rather than guessed.
+ * reached the tracker. The default is now UTV2-1982, the issue that owns this
+ * monitor's repair, and an operator can point alerts elsewhere with the
+ * `DB_TRIPWIRE_LINEAR_ISSUE` environment variable without a code change.
  */
 export const LINEAR_ISSUE_ENV = 'DB_TRIPWIRE_LINEAR_ISSUE';
+export const DEFAULT_LINEAR_ISSUE_ID = 'UTV2-1982';
 
-export function resolveLinearIssueKey(env: NodeJS.ProcessEnv = process.env): string | null {
+export function resolveLinearIssueKey(env: NodeJS.ProcessEnv = process.env): string {
   const raw = (env[LINEAR_ISSUE_ENV] ?? '').trim();
-  if (!raw) return null;
+  if (!raw) return DEFAULT_LINEAR_ISSUE_ID;
   if (!/^[A-Z][A-Z0-9]*-\d+$/.test(raw)) {
     throw new HarnessError(
       `${LINEAR_ISSUE_ENV} must be a Linear issue key such as UTV2-1234, got ${JSON.stringify(raw)}`,
@@ -122,7 +123,10 @@ export const THRESHOLD_SPECS: readonly ThresholdSpec[] = [
   // Share of the TOAST relation's tuples that are dead. Not the TOAST share of
   // the table's size: an append-only jsonb table keeps nearly all of its bytes
   // in TOAST by design, so that ratio reads ~99% on a perfectly healthy table.
-  { key: 'TOAST_BLOAT_RATIO_THRESHOLD', unit: 'dead tuple ratio', kind: 'float', fallback: 0.2 },
+  // A new key on purpose: the workflow still exports the retired
+  // TOAST_BLOAT_RATIO_THRESHOLD=0.8, which measured the old size share and must
+  // not be silently reinterpreted as a dead-tuple ratio.
+  { key: 'TOAST_DEAD_TUPLE_RATIO_THRESHOLD', unit: 'dead tuple ratio', kind: 'float', fallback: 0.2 },
 ] as const;
 
 export const SIZE_THRESHOLD_KEY_BY_TABLE: Record<TableName, string> = {
@@ -298,7 +302,6 @@ export type LinearAlertDisposition =
   | 'posted'
   | 'failed'
   | 'skipped_no_api_key'
-  | 'skipped_no_issue_configured'
   | 'suppressed_threshold_override'
   | 'not_applicable';
 
@@ -633,7 +636,7 @@ export function evaluateSizeRow(row: SizeRow, thresholds: ThresholdTable): Check
  * almost all of their bytes live in TOAST on a perfectly healthy table.
  */
 export function evaluateToastRow(row: ToastBloatRow, thresholds: ThresholdTable): CheckOutcome {
-  const limit = threshold(thresholds, 'TOAST_BLOAT_RATIO_THRESHOLD');
+  const limit = threshold(thresholds, 'TOAST_DEAD_TUPLE_RATIO_THRESHOLD');
   const limitPct = limit.value * 100;
   const thresholdBlock = { key: limit.key, value: limitPct, unit: '%', source: limit.source };
 

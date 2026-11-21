@@ -55,7 +55,7 @@ env:
   GAME_RESULTS_SIZE_THRESHOLD_MB: '300'
   AUTOVACUUM_STALENESS_HOURS: '24'
   STATEMENT_TIMEOUT_RATE_THRESHOLD: '3'
-  TOAST_BLOAT_RATIO_THRESHOLD: '0.2'
+  TOAST_BLOAT_RATIO_THRESHOLD: '0.8'
   TRIPWIRE_RECEIPT_PATH: artifacts/db-health-tripwire-receipt.json
 
 jobs:
@@ -95,9 +95,6 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_TOKEN }}
-          # Linear issue key that receives alerts, e.g. UTV2-1234. Unset means no
-          # alert target; the run says so instead of posting to a dead issue.
-          DB_TRIPWIRE_LINEAR_ISSUE: ${{ vars.DB_TRIPWIRE_LINEAR_ISSUE }}
           TRIPWIRE_THRESHOLD_OVERRIDES: ${{ inputs.threshold_overrides }}
           SYSTEM_RUNS_SIZE_THRESHOLD_MB: ${{ env.SYSTEM_RUNS_SIZE_THRESHOLD_MB }}
           RAW_PAYLOADS_SIZE_THRESHOLD_MB: ${{ env.RAW_PAYLOADS_SIZE_THRESHOLD_MB }}
