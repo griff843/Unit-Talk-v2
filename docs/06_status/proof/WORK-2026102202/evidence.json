@@ -1,0 +1,88 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102202",
+  "pr_number": 1772,
+  "source_sha": "9eb932b13ee2df6ae7dfab8e2270f7e1af2028a0",
+  "reviewed_head_sha": "9eb932b13ee2df6ae7dfab8e2270f7e1af2028a0",
+  "evidence_commit_sha": null,
+  "current_head_sha": "9eb932b13ee2df6ae7dfab8e2270f7e1af2028a0",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "9eb932b13ee2df6ae7dfab8e2270f7e1af2028a0",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm verify:static",
+    "conclusion": "success",
+    "verified_source_sha": "9eb932b13ee2df6ae7dfab8e2270f7e1af2028a0",
+    "note": "Local static verification exited 0; no environment was enabled and protected exact-head CI remains pending."
+  },
+  "gate_results": [
+    {
+      "gate": "focused-site-config-tests",
+      "verdict": "PASS",
+      "detail": "8 pass, 0 fail"
+    },
+    {
+      "gate": "type-check",
+      "verdict": "PASS",
+      "detail": "pnpm type-check exited 0"
+    },
+    {
+      "gate": "test",
+      "verdict": "PASS",
+      "detail": "pnpm test exited 0"
+    },
+    {
+      "gate": "verify-static",
+      "verdict": "PASS",
+      "detail": "pnpm verify:static exited 0"
+    },
+    {
+      "gate": "r-level",
+      "verdict": "PASS",
+      "detail": "9 changed files; no rules matched"
+    },
+    {
+      "gate": "writable-db",
+      "verdict": "SKIP",
+      "detail": "Blocked/deferred: target host unparseable; protected staging CI for xskgrzbteyqdufktjrjx required"
+    }
+  ],
+  "verification": {
+    "focused_site_config_tests": {
+      "pass": 8,
+      "fail": 0
+    },
+    "type_check": "pass",
+    "test": "pass",
+    "verify_static": "pass",
+    "r_level": "PASS; 9 changed files; no rules matched"
+  },
+  "db_verification": {
+    "status": "blocked_deferred_to_protected_ci",
+    "observed_host": "unparseable",
+    "required_staging_ref": "xskgrzbteyqdufktjrjx",
+    "production_accessed": false
+  },
+  "deployment": {
+    "env_gate_set": false,
+    "published": false,
+    "enabled": false
+  },
+  "pending": [
+    "protected exact-head CI and staging DB receipt",
+    "outer-wrapper executor-result/v1 publication",
+    "PM approval and governed merge",
+    "post-merge lane finalization and orchestration reconciliation"
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "generated_at": "2026-10-22T09:50:00Z"
+}
