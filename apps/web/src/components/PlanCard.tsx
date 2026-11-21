@@ -1,6 +1,13 @@
 import Link from 'next/link';
 import type { Tier } from '@/lib/site-config';
-export function PlanCard({ tier }: { tier: Tier }) {
+import { CTAButton } from './CTAButton';
+export function PlanCard({
+  tier,
+  showCheckout = false,
+}: {
+  tier: Tier;
+  showCheckout?: boolean;
+}) {
   return (
     <article
       id={tier.id}
@@ -21,7 +28,9 @@ export function PlanCard({ tier }: { tier: Tier }) {
         ))}
       </ul>
       <p className="ut-plan-state">{tier.state}</p>
-      {tier.href && tier.cta ? (
+      {showCheckout && tier.checkoutHref && tier.checkoutCta ? (
+        <CTAButton href={tier.checkoutHref}>{tier.checkoutCta}</CTAButton>
+      ) : tier.href && tier.cta ? (
         <Link
           href={tier.href}
           className={`ut-btn ${tier.highlighted ? 'ut-btn-primary' : 'ut-btn-secondary'}`}

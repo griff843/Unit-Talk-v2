@@ -3,6 +3,8 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import test from 'node:test';
 import {
   resolveSiteUrl,
+  createTiers,
+  isVipCheckoutEnabled,
   TIERS,
   NAV_LINKS,
   LEGAL_LINKS,
@@ -50,7 +52,10 @@ test('every internal navigation target resolves to an application route or ancho
   const sourceFiles: URL[] = [];
   const visit = (directory: URL) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      const child = new URL(entry.name + (entry.isDirectory() ? '/' : ''), directory);
+      const child = new URL(
+        entry.name + (entry.isDirectory() ? '/' : ''),
+        directory,
+      );
       if (entry.isDirectory()) visit(child);
       else if (/\.(?:ts|tsx)$/.test(entry.name)) sourceFiles.push(child);
     }
@@ -61,17 +66,25 @@ test('every internal navigation target resolves to an application route or ancho
     sourceFiles
       .filter((file) => file.pathname.endsWith('/page.tsx'))
       .map((file) => {
-        const relative = decodeURIComponent(file.pathname).split('/src/app/')[1];
-        const segment = relative === 'page.tsx' ? '' : relative.replace(/\/page\.tsx$/, '');
+        const relative = decodeURIComponent(file.pathname).split(
+          '/src/app/',
+        )[1];
+        const segment =
+          relative === 'page.tsx' ? '' : relative.replace(/\/page\.tsx$/, '');
         return segment ? `/${segment}` : '/';
       }),
   );
-  assert.ok(routes.size >= 9, 'all public application routes must be discoverable');
-
-  const source = sourceFiles.map((file) => readFileSync(file, 'utf8')).join('\n');
-  const literalLinks = [...source.matchAll(/href=["'](\/?#[^"']+|\/[^"']*)["']/g)].map(
-    (match) => match[1],
+  assert.ok(
+    routes.size >= 9,
+    'all public application routes must be discoverable',
   );
+
+  const source = sourceFiles
+    .map((file) => readFileSync(file, 'utf8'))
+    .join('\n');
+  const literalLinks = [
+    ...source.matchAll(/href=["'](\/?#[^"']+|\/[^"']*)["']/g),
+  ].map((match) => match[1]);
   const configuredLinks = [
     ...NAV_LINKS.map((link) => link.href),
     ...LEGAL_LINKS.map((link) => link.href),
@@ -85,8 +98,12 @@ test('every internal navigation target resolves to an application route or ancho
   for (const href of new Set([...literalLinks, ...configuredLinks])) {
     const [pathname, fragment] = href.split('#');
     const route = pathname || '/';
-    assert.ok(routes.has(route), `${href} must resolve to an application route`);
-    if (fragment) assert.ok(knownIds.has(fragment), `${href} must resolve to an anchor`);
+    assert.ok(
+      routes.has(route),
+      `${href} must resolve to an application route`,
+    );
+    if (fragment)
+      assert.ok(knownIds.has(fragment), `${href} must resolve to an anchor`);
   }
 
   assert.ok(appRoot.pathname.endsWith('/src/app/'));
@@ -114,6 +131,59 @@ test('commercial authority preserves the Trial, complete VIP and unavailable fut
     ),
   );
   assert.ok(NAV_LINKS.some((link) => link.href === '/cappers'));
+});
+
+test('VIP checkout is fail-closed and enabled only by the explicit public gate', () => {
+  assert.equal(isVipCheckoutEnabled('true'), true);
+  for (const value of [undefined, '', 'false', 'TRUE', '1', 'yes', ' true ']) {
+    assert.equal(isVipCheckoutEnabled(value), false);
+    assert.ok(
+      createTiers(value).every((tier) => tier.checkoutHref === null),
+      `${String(value)} must not enable a checkout href`,
+    );
+  }
+
+  const disabledTiers = createTiers();
+  const disabledVip = disabledTiers.find((tier) => tier.id === 'vip')!;
+  assert.equal(disabledVip.state, 'Website checkout unavailable');
+  assert.equal(disabledVip.cta, 'Understand VIP');
+  assert.equal(disabledVip.href, '/how-it-works');
+
+  const enabledTiers = createTiers('true');
+  const checkoutTiers = enabledTiers.filter((tier) => tier.checkoutHref);
+  assert.deepEqual(
+    checkoutTiers.map((tier) => tier.id),
+    ['vip'],
+  );
+  assert.equal(
+    checkoutTiers[0]?.checkoutHref,
+    'https://whop.com/checkout/plan_pf6AQQgGbIRZg/',
+  );
+  assert.equal(checkoutTiers[0]?.checkoutCta, 'Join VIP');
+  assert.equal(checkoutTiers[0]?.state, 'VIP checkout available');
+  assert.equal(
+    enabledTiers.find((tier) => tier.id === 'trial')?.checkoutHref,
+    null,
+  );
+  assert.equal(
+    enabledTiers.find((tier) => tier.id === 'vip-plus')?.checkoutHref,
+    null,
+  );
+
+  const planCardSource = readFileSync(
+    new URL('../components/PlanCard.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    planCardSource,
+    /showCheckout && tier\.checkoutHref && tier\.checkoutCta/,
+  );
+  const ctaSource = readFileSync(
+    new URL('../components/CTAButton.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(ctaSource, /target="_blank"/);
+  assert.match(ctaSource, /rel="noopener noreferrer"/);
 });
 test('website brand assets are byte-identical copies of canonical masters', () => {
   for (const name of [
@@ -155,7 +225,10 @@ test('all rendered site copy contains no numeric performance or win-rate claim',
   const copyFiles: URL[] = [];
   const visit = (directory: URL) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      const child = new URL(entry.name + (entry.isDirectory() ? '/' : ''), directory);
+      const child = new URL(
+        entry.name + (entry.isDirectory() ? '/' : ''),
+        directory,
+      );
       if (entry.isDirectory()) visit(child);
       else if (/\.(?:ts|tsx)$/.test(entry.name)) copyFiles.push(child);
     }
