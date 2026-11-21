@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1980",
+  "lane_type": "migration",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__utv2-1980/.out/worktrees/codex__utv2-1980-governed-view-revoke",
+  "branch": "codex/utv2-1980-governed-view-revoke",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1775",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/work/UTV2-1980.md",
+    "db/migrations-rollback/20261022090000_revoke_governed_pick_performance_anon.down.sql",
+    "supabase/migrations/20261022090000_revoke_governed_pick_performance_anon.sql"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1980/diff-summary.md",
+    "docs/06_status/proof/UTV2-1980/evidence.json",
+    "docs/06_status/proof/UTV2-1980/verification.md",
+    "docs/06_status/proof/UTV2-1980/model-routing.json"
+  ],
+  "status": "parked",
+  "started_at": "2026-10-22T14:21:57.220Z",
+  "heartbeat_at": "2026-10-27T16:42:27.551Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1980-governed-view-revoke.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "2.0.0"
+  },
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__utv2-1980/.out/worktrees/codex__utv2-1980-governed-view-revoke",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
