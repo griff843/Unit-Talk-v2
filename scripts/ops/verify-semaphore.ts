@@ -895,81 +895,112 @@ export function acquireVerifySlot(options: AcquireVerifySlotOptions = {}): Verif
           }
           continue;
         }
-        const acquiredAt = now();
-        const owner: VerifySlotOwner = {
-          schema_version: VERIFY_SEMAPHORE_SCHEMA_VERSION,
-          operation_id: operationId,
-          slot,
-          pid: process.pid,
-          ppid: process.ppid,
-          process_start_token: (options.processStartToken ?? readProcessStartToken)(process.pid),
-          machine,
-          user: os.userInfo().username || 'unknown',
-          issue_id: options.issueId ?? null,
-          branch: options.branch ?? null,
-          worktree,
-          command,
-          reason,
-          acquired_at: new Date(acquiredAt).toISOString(),
-          heartbeat_at: new Date(acquiredAt).toISOString(),
-          heartbeat_interval_ms: heartbeatIntervalMs,
-          expires_at: new Date(acquiredAt + ttlMs).toISOString(),
-          hard_deadline_at: new Date(acquiredAt + hardDeadlineMs).toISOString(),
+
+        // The slot is claimed the instant that mkdir returns -- the directory
+        // IS the claim -- so the signal handlers go on here, before the owner
+        // record, the waiter cleanup or the heartbeat. Installing them after
+        // the handle was built left a window in which a SIGTERM killed the
+        // process with the slot already taken and nothing registered to give
+        // it back. That window is short but it is not theoretical: `pnpm
+        // verify` is routinely cancelled by CI and by operators, and a slot
+        // lost there is a slot no later verify can use until the reaper
+        // reclaims it.
+        //
+        // Until the handle exists there is exactly one thing to undo, and it
+        // is unambiguously ours: nobody else can have created this directory,
+        // and no record naming another owner can exist yet.
+        let releaseSlot = (): void => {
+          try {
+            fs.rmSync(slotPath, { recursive: true, force: true });
+          } catch {
+            // best effort
+          }
         };
-        const ownerPath = ownerPathFor(slotPath);
-        writeJsonAtomic(ownerPath, owner);
-        removeWaiter();
-
-        const heartbeat =
-          options.enableHeartbeat === false
-            ? null
-            : startVerifySlotHeartbeat(ownerPath, { intervalMs: heartbeatIntervalMs, ttlMs });
-
-        let released = false;
         let uninstallHandlers: (() => void) | null = null;
-        const handle: VerifySlotHandle = {
-          slot,
-          slot_path: slotPath,
-          owner_path: ownerPath,
-          operation_id: operationId,
-          max_concurrent: maxConcurrent,
-          owner,
-          reaped,
-          waited_ms: now() - startedAt,
-          heartbeat: () => beatVerifySlot(ownerPath, { ttlMs }),
-          release() {
-            if (released) {
-              return;
-            }
-            released = true;
-            heartbeat?.stop();
-            uninstallHandlers?.();
-            // Only remove the slot if we still own it: if this slot was already
-            // reaped and re-claimed by someone else, deleting it here would
-            // destroy a live verify.
-            // Positive ownership only. A record that names someone else is
-            // obviously not ours, but a *missing* record is not ours either:
-            // the one window in which it can be missing is between another
-            // process's `mkdirSync(slotPath)` and its own record write, and
-            // deleting the directory there would drop a slot out from under a
-            // verify that is starting right now. An orphaned directory left by
-            // this branch is not a leak -- it classifies as `corrupt_orphan`
-            // once past the write grace and is reclaimed normally.
-            const current = readJsonIfPresent(ownerPath);
-            if (current?.operation_id !== operationId) {
-              return;
-            }
-            try {
-              fs.rmSync(slotPath, { recursive: true, force: true });
-            } catch {
-              // best effort
-            }
-          },
-        };
         if (options.installSignalHandlers !== false) {
-          uninstallHandlers = installVerifySlotReleaseHandlers(handle);
+          uninstallHandlers = installVerifySlotReleaseHandlers({ release: () => releaseSlot() });
         }
-        return handle;
+
+        try {
+          const acquiredAt = now();
+          const owner: VerifySlotOwner = {
+            schema_version: VERIFY_SEMAPHORE_SCHEMA_VERSION,
+            operation_id: operationId,
+            slot,
+            pid: process.pid,
+            ppid: process.ppid,
+            process_start_token: (options.processStartToken ?? readProcessStartToken)(process.pid),
+            machine,
+            user: os.userInfo().username || 'unknown',
+            issue_id: options.issueId ?? null,
+            branch: options.branch ?? null,
+            worktree,
+            command,
+            reason,
+            acquired_at: new Date(acquiredAt).toISOString(),
+            heartbeat_at: new Date(acquiredAt).toISOString(),
+            heartbeat_interval_ms: heartbeatIntervalMs,
+            expires_at: new Date(acquiredAt + ttlMs).toISOString(),
+            hard_deadline_at: new Date(acquiredAt + hardDeadlineMs).toISOString(),
+          };
+          const ownerPath = ownerPathFor(slotPath);
+          writeJsonAtomic(ownerPath, owner);
+          removeWaiter();
+
+          const heartbeat =
+            options.enableHeartbeat === false
+              ? null
+              : startVerifySlotHeartbeat(ownerPath, { intervalMs: heartbeatIntervalMs, ttlMs });
+
+          let released = false;
+          const handle: VerifySlotHandle = {
+            slot,
+            slot_path: slotPath,
+            owner_path: ownerPath,
+            operation_id: operationId,
+            max_concurrent: maxConcurrent,
+            owner,
+            reaped,
+            waited_ms: now() - startedAt,
+            heartbeat: () => beatVerifySlot(ownerPath, { ttlMs }),
+            release() {
+              if (released) {
+                return;
+              }
+              released = true;
+              heartbeat?.stop();
+              uninstallHandlers?.();
+              // Only remove the slot if we still own it: if this slot was already
+              // reaped and re-claimed by someone else, deleting it here would
+              // destroy a live verify.
+              // Positive ownership only. A record that names someone else is
+              // obviously not ours, but a *missing* record is not ours either:
+              // the one window in which it can be missing is between another
+              // process's `mkdirSync(slotPath)` and its own record write, and
+              // deleting the directory there would drop a slot out from under a
+              // verify that is starting right now. An orphaned directory left by
+              // this branch is not a leak -- it classifies as `corrupt_orphan`
+              // once past the write grace and is reclaimed normally.
+              const current = readJsonIfPresent(ownerPath);
+              if (current?.operation_id !== operationId) {
+                return;
+              }
+              try {
+                fs.rmSync(slotPath, { recursive: true, force: true });
+              } catch {
+                // best effort
+              }
+            },
+          };
+          releaseSlot = () => handle.release();
+          return handle;
+        } catch (error) {
+          // Acquisition failed after the claim. Hand the slot back rather than
+          // leaving a directory behind with a handler still pointed at it.
+          uninstallHandlers?.();
+          releaseSlot();
+          throw error;
+        }
       }
 
       polls += 1;
