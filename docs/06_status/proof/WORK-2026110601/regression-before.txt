@@ -1,0 +1,1014 @@
+TAP version 13
+# Subtest: pick lifecycle states: PostgreSQL timestamp precision and equivalent UTC offsets retain chronological order across pages
+ok 1 - pick lifecycle states: PostgreSQL timestamp precision and equivalent UTC offsets retain chronological order across pages
+  ---
+  duration_ms: 169.93623
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: PostgreSQL timestamp precision and equivalent UTC offsets retain chronological order across pages
+ok 2 - full settlement correction history: PostgreSQL timestamp precision and equivalent UTC offsets retain chronological order across pages
+  ---
+  duration_ms: 33.440893
+  type: 'test'
+  ...
+# Subtest: full outbox history: PostgreSQL timestamp precision and equivalent UTC offsets retain chronological order across pages
+ok 3 - full outbox history: PostgreSQL timestamp precision and equivalent UTC offsets retain chronological order across pages
+  ---
+  duration_ms: 33.601178
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: complete 0 rows with equal timestamp boundaries and Database/InMemory parity
+ok 4 - pick lifecycle states: complete 0 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 2.161201
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: complete 1 rows with equal timestamp boundaries and Database/InMemory parity
+ok 5 - pick lifecycle states: complete 1 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 0.653931
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: complete 999 rows with equal timestamp boundaries and Database/InMemory parity
+ok 6 - pick lifecycle states: complete 999 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 11.243953
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: complete 1000 rows with equal timestamp boundaries and Database/InMemory parity
+ok 7 - pick lifecycle states: complete 1000 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 12.004703
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: complete 1001 rows with equal timestamp boundaries and Database/InMemory parity
+ok 8 - pick lifecycle states: complete 1001 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 29.929528
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: complete 2000 rows with equal timestamp boundaries and Database/InMemory parity
+ok 9 - pick lifecycle states: complete 2000 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 58.284332
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: complete 2501 rows with equal timestamp boundaries and Database/InMemory parity
+ok 10 - pick lifecycle states: complete 2501 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 94.473384
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: first query error rejects instead of partial success
+ok 11 - pick lifecycle states: first query error rejects instead of partial success
+  ---
+  duration_ms: 12.196592
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: later query error rejects instead of partial success
+ok 12 - pick lifecycle states: later query error rejects instead of partial success
+  ---
+  duration_ms: 53.19663
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: missing exact count rejects instead of partial success
+ok 13 - pick lifecycle states: missing exact count rejects instead of partial success
+  ---
+  duration_ms: 20.078766
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: fractional exact count rejects instead of partial success
+ok 14 - pick lifecycle states: fractional exact count rejects instead of partial success
+  ---
+  duration_ms: 13.691461
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: negative exact count rejects instead of partial success
+ok 15 - pick lifecycle states: negative exact count rejects instead of partial success
+  ---
+  duration_ms: 13.885336
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: nonfinite exact count rejects instead of partial success
+ok 16 - pick lifecycle states: nonfinite exact count rejects instead of partial success
+  ---
+  duration_ms: 12.97224
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: missing data rejects instead of partial success
+ok 17 - pick lifecycle states: missing data rejects instead of partial success
+  ---
+  duration_ms: 11.545116
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: short first page rejects instead of partial success
+ok 18 - pick lifecycle states: short first page rejects instead of partial success
+  ---
+  duration_ms: 62.852883
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: empty later page rejects instead of partial success
+ok 19 - pick lifecycle states: empty later page rejects instead of partial success
+  ---
+  duration_ms: 120.147
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: changed population count rejects instead of partial success
+ok 20 - pick lifecycle states: changed population count rejects instead of partial success
+  ---
+  duration_ms: 176.126187
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: duplicate identity rejects instead of partial success
+ok 21 - pick lifecycle states: duplicate identity rejects instead of partial success
+  ---
+  duration_ms: 12.25217
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: reversed order rejects instead of partial success
+ok 22 - pick lifecycle states: reversed order rejects instead of partial success
+  ---
+  duration_ms: 13.207685
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: invalid ordering timestamp rejects instead of partial success
+ok 23 - pick lifecycle states: invalid ordering timestamp rejects instead of partial success
+  ---
+  duration_ms: 13.640044
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: invalid row identity rejects instead of partial success
+ok 24 - pick lifecycle states: invalid row identity rejects instead of partial success
+  ---
+  duration_ms: 12.826778
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: wrong filter row rejects instead of partial success
+ok 25 - pick lifecycle states: wrong filter row rejects instead of partial success
+  ---
+  duration_ms: 20.469938
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: 100001 safety budget rejects instead of partial success
+ok 26 - pick lifecycle states: 100001 safety budget rejects instead of partial success
+  ---
+  duration_ms: 18.460136
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: lower server cap fails rather than treating a short page as end
+ok 27 - pick lifecycle states: lower server cap fails rather than treating a short page as end
+  ---
+  duration_ms: 78.818831
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: repeated/overlapping next page fails
+ok 28 - pick lifecycle states: repeated/overlapping next page fails
+  ---
+  duration_ms: 46.73772
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: oversize page fails
+ok 29 - pick lifecycle states: oversize page fails
+  ---
+  duration_ms: 16.400272
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: exact count beyond fetched rows fails
+ok 30 - pick lifecycle states: exact count beyond fetched rows fails
+  ---
+  duration_ms: 175.717934
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: complete 0 rows with equal timestamp boundaries and Database/InMemory parity
+ok 31 - full settlement correction history: complete 0 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 0.299042
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: complete 1 rows with equal timestamp boundaries and Database/InMemory parity
+ok 32 - full settlement correction history: complete 1 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 0.401131
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: complete 999 rows with equal timestamp boundaries and Database/InMemory parity
+ok 33 - full settlement correction history: complete 999 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 8.139368
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: complete 1000 rows with equal timestamp boundaries and Database/InMemory parity
+ok 34 - full settlement correction history: complete 1000 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 7.951087
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: complete 1001 rows with equal timestamp boundaries and Database/InMemory parity
+ok 35 - full settlement correction history: complete 1001 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 11.41399
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: complete 2000 rows with equal timestamp boundaries and Database/InMemory parity
+ok 36 - full settlement correction history: complete 2000 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 25.267031
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: complete 2501 rows with equal timestamp boundaries and Database/InMemory parity
+ok 37 - full settlement correction history: complete 2501 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 41.728025
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: first query error rejects instead of partial success
+ok 38 - full settlement correction history: first query error rejects instead of partial success
+  ---
+  duration_ms: 11.367917
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: later query error rejects instead of partial success
+ok 39 - full settlement correction history: later query error rejects instead of partial success
+  ---
+  duration_ms: 33.693432
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: missing exact count rejects instead of partial success
+ok 40 - full settlement correction history: missing exact count rejects instead of partial success
+  ---
+  duration_ms: 17.555954
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: fractional exact count rejects instead of partial success
+ok 41 - full settlement correction history: fractional exact count rejects instead of partial success
+  ---
+  duration_ms: 11.696334
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: negative exact count rejects instead of partial success
+ok 42 - full settlement correction history: negative exact count rejects instead of partial success
+  ---
+  duration_ms: 12.831689
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: nonfinite exact count rejects instead of partial success
+ok 43 - full settlement correction history: nonfinite exact count rejects instead of partial success
+  ---
+  duration_ms: 11.883309
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: missing data rejects instead of partial success
+ok 44 - full settlement correction history: missing data rejects instead of partial success
+  ---
+  duration_ms: 11.082297
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: short first page rejects instead of partial success
+ok 45 - full settlement correction history: short first page rejects instead of partial success
+  ---
+  duration_ms: 13.225576
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: empty later page rejects instead of partial success
+ok 46 - full settlement correction history: empty later page rejects instead of partial success
+  ---
+  duration_ms: 25.251077
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: changed population count rejects instead of partial success
+ok 47 - full settlement correction history: changed population count rejects instead of partial success
+  ---
+  duration_ms: 29.063326
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: duplicate identity rejects instead of partial success
+ok 48 - full settlement correction history: duplicate identity rejects instead of partial success
+  ---
+  duration_ms: 11.333847
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: reversed order rejects instead of partial success
+ok 49 - full settlement correction history: reversed order rejects instead of partial success
+  ---
+  duration_ms: 13.094988
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: invalid ordering timestamp rejects instead of partial success
+ok 50 - full settlement correction history: invalid ordering timestamp rejects instead of partial success
+  ---
+  duration_ms: 20.902342
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: invalid row identity rejects instead of partial success
+ok 51 - full settlement correction history: invalid row identity rejects instead of partial success
+  ---
+  duration_ms: 14.67087
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: wrong filter row rejects instead of partial success
+ok 52 - full settlement correction history: wrong filter row rejects instead of partial success
+  ---
+  duration_ms: 12.132966
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: 100001 safety budget rejects instead of partial success
+ok 53 - full settlement correction history: 100001 safety budget rejects instead of partial success
+  ---
+  duration_ms: 19.415039
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: lower server cap fails rather than treating a short page as end
+ok 54 - full settlement correction history: lower server cap fails rather than treating a short page as end
+  ---
+  duration_ms: 15.067008
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: repeated/overlapping next page fails
+ok 55 - full settlement correction history: repeated/overlapping next page fails
+  ---
+  duration_ms: 36.810778
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: oversize page fails
+ok 56 - full settlement correction history: oversize page fails
+  ---
+  duration_ms: 17.907253
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: exact count beyond fetched rows fails
+ok 57 - full settlement correction history: exact count beyond fetched rows fails
+  ---
+  duration_ms: 46.391371
+  type: 'test'
+  ...
+# Subtest: full outbox history: complete 0 rows with equal timestamp boundaries and Database/InMemory parity
+ok 58 - full outbox history: complete 0 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 0.274519
+  type: 'test'
+  ...
+# Subtest: full outbox history: complete 1 rows with equal timestamp boundaries and Database/InMemory parity
+ok 59 - full outbox history: complete 1 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 0.146961
+  type: 'test'
+  ...
+# Subtest: full outbox history: complete 999 rows with equal timestamp boundaries and Database/InMemory parity
+ok 60 - full outbox history: complete 999 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 7.927392
+  type: 'test'
+  ...
+# Subtest: full outbox history: complete 1000 rows with equal timestamp boundaries and Database/InMemory parity
+ok 61 - full outbox history: complete 1000 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 9.871343
+  type: 'test'
+  ...
+# Subtest: full outbox history: complete 1001 rows with equal timestamp boundaries and Database/InMemory parity
+ok 62 - full outbox history: complete 1001 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 14.840581
+  type: 'test'
+  ...
+# Subtest: full outbox history: complete 2000 rows with equal timestamp boundaries and Database/InMemory parity
+ok 63 - full outbox history: complete 2000 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 30.262076
+  type: 'test'
+  ...
+# Subtest: full outbox history: complete 2501 rows with equal timestamp boundaries and Database/InMemory parity
+ok 64 - full outbox history: complete 2501 rows with equal timestamp boundaries and Database/InMemory parity
+  ---
+  duration_ms: 57.18524
+  type: 'test'
+  ...
+# Subtest: full outbox history: first query error rejects instead of partial success
+ok 65 - full outbox history: first query error rejects instead of partial success
+  ---
+  duration_ms: 14.751641
+  type: 'test'
+  ...
+# Subtest: full outbox history: later query error rejects instead of partial success
+ok 66 - full outbox history: later query error rejects instead of partial success
+  ---
+  duration_ms: 33.310191
+  type: 'test'
+  ...
+# Subtest: full outbox history: missing exact count rejects instead of partial success
+ok 67 - full outbox history: missing exact count rejects instead of partial success
+  ---
+  duration_ms: 21.031816
+  type: 'test'
+  ...
+# Subtest: full outbox history: fractional exact count rejects instead of partial success
+ok 68 - full outbox history: fractional exact count rejects instead of partial success
+  ---
+  duration_ms: 12.091894
+  type: 'test'
+  ...
+# Subtest: full outbox history: negative exact count rejects instead of partial success
+ok 69 - full outbox history: negative exact count rejects instead of partial success
+  ---
+  duration_ms: 13.470012
+  type: 'test'
+  ...
+# Subtest: full outbox history: nonfinite exact count rejects instead of partial success
+ok 70 - full outbox history: nonfinite exact count rejects instead of partial success
+  ---
+  duration_ms: 12.156772
+  type: 'test'
+  ...
+# Subtest: full outbox history: missing data rejects instead of partial success
+ok 71 - full outbox history: missing data rejects instead of partial success
+  ---
+  duration_ms: 14.315018
+  type: 'test'
+  ...
+# Subtest: full outbox history: short first page rejects instead of partial success
+ok 72 - full outbox history: short first page rejects instead of partial success
+  ---
+  duration_ms: 13.479304
+  type: 'test'
+  ...
+# Subtest: full outbox history: empty later page rejects instead of partial success
+ok 73 - full outbox history: empty later page rejects instead of partial success
+  ---
+  duration_ms: 33.900202
+  type: 'test'
+  ...
+# Subtest: full outbox history: changed population count rejects instead of partial success
+ok 74 - full outbox history: changed population count rejects instead of partial success
+  ---
+  duration_ms: 33.478074
+  type: 'test'
+  ...
+# Subtest: full outbox history: duplicate identity rejects instead of partial success
+ok 75 - full outbox history: duplicate identity rejects instead of partial success
+  ---
+  duration_ms: 19.916059
+  type: 'test'
+  ...
+# Subtest: full outbox history: reversed order rejects instead of partial success
+ok 76 - full outbox history: reversed order rejects instead of partial success
+  ---
+  duration_ms: 12.768548
+  type: 'test'
+  ...
+# Subtest: full outbox history: invalid ordering timestamp rejects instead of partial success
+ok 77 - full outbox history: invalid ordering timestamp rejects instead of partial success
+  ---
+  duration_ms: 13.320096
+  type: 'test'
+  ...
+# Subtest: full outbox history: invalid row identity rejects instead of partial success
+ok 78 - full outbox history: invalid row identity rejects instead of partial success
+  ---
+  duration_ms: 14.671057
+  type: 'test'
+  ...
+# Subtest: full outbox history: wrong filter row rejects instead of partial success
+ok 79 - full outbox history: wrong filter row rejects instead of partial success
+  ---
+  duration_ms: 13.728185
+  type: 'test'
+  ...
+# Subtest: full outbox history: 100001 safety budget rejects instead of partial success
+ok 80 - full outbox history: 100001 safety budget rejects instead of partial success
+  ---
+  duration_ms: 14.706111
+  type: 'test'
+  ...
+# Subtest: full outbox history: lower server cap fails rather than treating a short page as end
+ok 81 - full outbox history: lower server cap fails rather than treating a short page as end
+  ---
+  duration_ms: 12.342558
+  type: 'test'
+  ...
+# Subtest: full outbox history: repeated/overlapping next page fails
+ok 82 - full outbox history: repeated/overlapping next page fails
+  ---
+  duration_ms: 29.316787
+  type: 'test'
+  ...
+# Subtest: full outbox history: oversize page fails
+ok 83 - full outbox history: oversize page fails
+  ---
+  duration_ms: 22.166505
+  type: 'test'
+  ...
+# Subtest: full outbox history: exact count beyond fetched rows fails
+ok 84 - full outbox history: exact count beyond fetched rows fails
+  ---
+  duration_ms: 43.133217
+  type: 'test'
+  ...
+# Subtest: pick bounded limit/offset reads retain explicit slicing even across server pages
+ok 85 - pick bounded limit/offset reads retain explicit slicing even across server pages
+  ---
+  duration_ms: 145.405795
+  type: 'test'
+  ...
+# Subtest: pick bounded 300-row request still works when total population exceeds full-read budget
+ok 86 - pick bounded 300-row request still works when total population exceeds full-read budget
+  ---
+  duration_ms: 5.528365
+  type: 'test'
+  ...
+# Subtest: pick limit/offset validation rejects negative, fractional and unsafe values for both implementations
+ok 87 - pick limit/offset validation rejects negative, fractional and unsafe values for both implementations
+  ---
+  duration_ms: 1.35106
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: count-aware completion never requests positive EOF (0 rows)
+ok 88 - pick lifecycle states: count-aware completion never requests positive EOF (0 rows)
+  ---
+  duration_ms: 0.385489
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: count-aware completion never requests positive EOF (1 rows)
+ok 89 - pick lifecycle states: count-aware completion never requests positive EOF (1 rows)
+  ---
+  duration_ms: 0.353084
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: count-aware completion never requests positive EOF (1000 rows)
+ok 90 - pick lifecycle states: count-aware completion never requests positive EOF (1000 rows)
+  ---
+  duration_ms: 6.4352
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: count-aware completion never requests positive EOF (2000 rows)
+ok 91 - pick lifecycle states: count-aware completion never requests positive EOF (2000 rows)
+  ---
+  duration_ms: 44.747217
+  type: 'test'
+  ...
+# Subtest: pick lifecycle states: unrelated PGRST103 error remains a failure
+ok 92 - pick lifecycle states: unrelated PGRST103 error remains a failure
+  ---
+  duration_ms: 5.240929
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: count-aware completion never requests positive EOF (0 rows)
+ok 93 - full settlement correction history: count-aware completion never requests positive EOF (0 rows)
+  ---
+  duration_ms: 0.16674
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: count-aware completion never requests positive EOF (1 rows)
+ok 94 - full settlement correction history: count-aware completion never requests positive EOF (1 rows)
+  ---
+  duration_ms: 0.132464
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: count-aware completion never requests positive EOF (1000 rows)
+ok 95 - full settlement correction history: count-aware completion never requests positive EOF (1000 rows)
+  ---
+  duration_ms: 6.408576
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: count-aware completion never requests positive EOF (2000 rows)
+ok 96 - full settlement correction history: count-aware completion never requests positive EOF (2000 rows)
+  ---
+  duration_ms: 24.913956
+  type: 'test'
+  ...
+# Subtest: full settlement correction history: unrelated PGRST103 error remains a failure
+ok 97 - full settlement correction history: unrelated PGRST103 error remains a failure
+  ---
+  duration_ms: 7.219164
+  type: 'test'
+  ...
+# Subtest: full outbox history: count-aware completion never requests positive EOF (0 rows)
+ok 98 - full outbox history: count-aware completion never requests positive EOF (0 rows)
+  ---
+  duration_ms: 0.379109
+  type: 'test'
+  ...
+# Subtest: full outbox history: count-aware completion never requests positive EOF (1 rows)
+ok 99 - full outbox history: count-aware completion never requests positive EOF (1 rows)
+  ---
+  duration_ms: 0.169954
+  type: 'test'
+  ...
+# Subtest: full outbox history: count-aware completion never requests positive EOF (1000 rows)
+ok 100 - full outbox history: count-aware completion never requests positive EOF (1000 rows)
+  ---
+  duration_ms: 9.258465
+  type: 'test'
+  ...
+# Subtest: full outbox history: count-aware completion never requests positive EOF (2000 rows)
+ok 101 - full outbox history: count-aware completion never requests positive EOF (2000 rows)
+  ---
+  duration_ms: 28.115454
+  type: 'test'
+  ...
+# Subtest: full outbox history: unrelated PGRST103 error remains a failure
+ok 102 - full outbox history: unrelated PGRST103 error remains a failure
+  ---
+  duration_ms: 4.736302
+  type: 'test'
+  ...
+# Subtest: pick explicit EOF or beyond-EOF offset propagates PostgREST416, never an invented successful empty page
+ok 103 - pick explicit EOF or beyond-EOF offset propagates PostgREST416, never an invented successful empty page
+  ---
+  duration_ms: 10.848516
+  type: 'test'
+  ...
+# Subtest: keyset cursor preserves exact timestamp text across a duplicate timestamp boundary
+ok 104 - keyset cursor preserves exact timestamp text across a duplicate timestamp boundary
+  ---
+  duration_ms: 0.56599
+  type: 'test'
+  ...
+# Subtest: population drift restarts with one coherent population
+ok 105 - population drift restarts with one coherent population
+  ---
+  duration_ms: 86.916952
+  type: 'test'
+  ...
+# Subtest: population drift fails after three attempts
+ok 106 - population drift fails after three attempts
+  ---
+  duration_ms: 122.223698
+  type: 'test'
+  ...
+# Subtest: states: real SDK cursor encodes UTC plus and retains microseconds and id
+ok 107 - states: real SDK cursor encodes UTC plus and retains microseconds and id
+  ---
+  duration_ms: 118.503342
+  type: 'test'
+  ...
+# Subtest: track-only: real SDK cursor encodes UTC plus and retains microseconds and id
+ok 108 - track-only: real SDK cursor encodes UTC plus and retains microseconds and id
+  ---
+  duration_ms: 27.275745
+  type: 'test'
+  ...
+# Subtest: promoted: real SDK cursor encodes UTC plus and retains microseconds and id
+ok 109 - promoted: real SDK cursor encodes UTC plus and retains microseconds and id
+  ---
+  duration_ms: 13.204074
+  type: 'test'
+  ...
+# Subtest: settlements: real SDK cursor encodes UTC plus and retains microseconds and id
+ok 110 - settlements: real SDK cursor encodes UTC plus and retains microseconds and id
+  ---
+  duration_ms: 11.087712
+  type: 'test'
+  ...
+# Subtest: outbox: real SDK cursor encodes UTC plus and retains microseconds and id
+ok 111 - outbox: real SDK cursor encodes UTC plus and retains microseconds and id
+  ---
+  duration_ms: 10.773324
+  type: 'test'
+  ...
+# Subtest: cursor helper emits index bound and tuple predicate: ascending=true
+ok 112 - cursor helper emits index bound and tuple predicate: ascending=true
+  ---
+  duration_ms: 0.545974
+  type: 'test'
+  ...
+# Subtest: cursor helper emits index bound and tuple predicate: ascending=false
+ok 113 - cursor helper emits index bound and tuple predicate: ascending=false
+  ---
+  duration_ms: 0.152594
+  type: 'test'
+  ...
+# Subtest: lifecycle read uses exactly one starting count and one ending count per attempt
+ok 114 - lifecycle read uses exactly one starting count and one ending count per attempt
+  ---
+  duration_ms: 66.062977
+  type: 'test'
+  ...
+# Subtest: single-page lifecycle read uses one snapshot and no head count (0 rows)
+ok 115 - single-page lifecycle read uses one snapshot and no head count (0 rows)
+  ---
+  duration_ms: 0.320898
+  type: 'test'
+  ...
+# Subtest: single-page lifecycle read uses one snapshot and no head count (1 rows)
+ok 116 - single-page lifecycle read uses one snapshot and no head count (1 rows)
+  ---
+  duration_ms: 0.181324
+  type: 'test'
+  ...
+# Subtest: single-page lifecycle read uses one snapshot and no head count (999 rows)
+ok 117 - single-page lifecycle read uses one snapshot and no head count (999 rows)
+  ---
+  duration_ms: 8.937517
+  type: 'test'
+  ...
+# Subtest: multi-page lifecycle end-count drift retries three whole reads and fails closed
+ok 118 - multi-page lifecycle end-count drift retries three whole reads and fails closed
+  ---
+  duration_ms: 69.236658
+  type: 'test'
+  ...
+# Subtest: membership ahead-swap: discards drifted attempt and retries coherently
+ok 119 - membership ahead-swap: discards drifted attempt and retries coherently
+  ---
+  duration_ms: 172.992628
+  type: 'test'
+  ...
+# Subtest: membership behind-swap: discards drifted attempt and retries coherently
+ok 120 - membership behind-swap: discards drifted attempt and retries coherently
+  ---
+  duration_ms: 159.044164
+  type: 'test'
+  ...
+# Subtest: membership delete-insert: discards drifted attempt and retries coherently
+ok 121 - membership delete-insert: discards drifted attempt and retries coherently
+  ---
+  duration_ms: 153.542684
+  type: 'test'
+  ...
+# Subtest: membership always: discards drifted attempt and retries coherently
+ok 122 - membership always: discards drifted attempt and retries coherently
+  ---
+  duration_ms: 205.645035
+  type: 'test'
+  ...
+# Subtest: bounded multi-page read omits beyond-cursor count and succeeds
+ok 123 - bounded multi-page read omits beyond-cursor count and succeeds
+  ---
+  duration_ms: 59.902128
+  type: 'test'
+  ...
+# Subtest: multi-page probe is discarded before watermark and fresh first count
+ok 124 - multi-page probe is discarded before watermark and fresh first count
+  ---
+  duration_ms: 40.718422
+  type: 'test'
+  ...
+# Subtest: stable microsecond watermark uses strict greater-than and exact DB text
+ok 125 - stable microsecond watermark uses strict greater-than and exact DB text
+  ---
+  duration_ms: 52.435951
+  type: 'test'
+  ...
+# Subtest: guard watermark retries transient 57014 response at statement level
+not ok 126 - guard watermark retries transient 57014 response at statement level
+  ---
+  duration_ms: 21.310704
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:1:23169'
+  failureType: 'testCodeFailure'
+  error: 'Failed to listByLifecycleStates: '
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    DatabasePickRepository.listByLifecycleStates (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/runtime-repositories.ts:3564:33)
+    async TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:793:22)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: guard watermark retries transient 57014 throw at statement level
+not ok 127 - guard watermark retries transient 57014 throw at statement level
+  ---
+  duration_ms: 26.066866
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:1:23169'
+  failureType: 'testCodeFailure'
+  error: ''
+  code: '57014'
+  ...
+# Subtest: guard watermark persistent 57014 fails closed after exactly three tries with code and status
+not ok 128 - guard watermark persistent 57014 fails closed after exactly three tries with code and status
+  ---
+  duration_ms: 28.730526
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:1:23853'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /57014/. Input:
+    
+    'Failed to listByLifecycleStates: '
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: 'Failed to listByLifecycleStates: '
+  operator: 'match'
+  stack: |-
+    Object.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:814:14)
+    expectedException (node:assert:576:17)
+    expectsError (node:assert:701:21)
+    Function.rejects (node:assert:767:3)
+    async TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:812:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: guard range-change retries transient 57014 response at statement level
+not ok 129 - guard range-change retries transient 57014 response at statement level
+  ---
+  duration_ms: 48.445563
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:1:23169'
+  failureType: 'testCodeFailure'
+  error: 'Failed to listByLifecycleStates: '
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    fail (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/runtime-repositories.ts:3573:15)
+    DatabasePickRepository.listByLifecycleStates (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/runtime-repositories.ts:3650:30)
+    async TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:793:22)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: guard range-change retries transient 57014 throw at statement level
+not ok 130 - guard range-change retries transient 57014 throw at statement level
+  ---
+  duration_ms: 48.086607
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:1:23169'
+  failureType: 'testCodeFailure'
+  error: ''
+  code: '57014'
+  ...
+# Subtest: guard range-change persistent 57014 fails closed after exactly three tries with code and status
+not ok 131 - guard range-change persistent 57014 fails closed after exactly three tries with code and status
+  ---
+  duration_ms: 46.850147
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:1:23853'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /57014/. Input:
+    
+    'Failed to listByLifecycleStates: '
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: 'Failed to listByLifecycleStates: '
+  operator: 'match'
+  stack: |-
+    Object.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:814:14)
+    expectedException (node:assert:576:17)
+    expectsError (node:assert:701:21)
+    Function.rejects (node:assert:767:3)
+    async TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:812:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: guard beyond retries transient 57014 response at statement level
+not ok 132 - guard beyond retries transient 57014 response at statement level
+  ---
+  duration_ms: 45.709128
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:1:23169'
+  failureType: 'testCodeFailure'
+  error: 'Failed to listByLifecycleStates: '
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    fail (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/runtime-repositories.ts:3573:15)
+    DatabasePickRepository.listByLifecycleStates (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/runtime-repositories.ts:3657:31)
+    async TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:793:22)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: guard beyond retries transient 57014 throw at statement level
+not ok 133 - guard beyond retries transient 57014 throw at statement level
+  ---
+  duration_ms: 50.860122
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:1:23169'
+  failureType: 'testCodeFailure'
+  error: ''
+  code: '57014'
+  ...
+# Subtest: guard beyond persistent 57014 fails closed after exactly three tries with code and status
+not ok 134 - guard beyond persistent 57014 fails closed after exactly three tries with code and status
+  ---
+  duration_ms: 59.887608
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:1:23853'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /57014/. Input:
+    
+    'Failed to listByLifecycleStates: '
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: 'Failed to listByLifecycleStates: '
+  operator: 'match'
+  stack: |-
+    Object.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:814:14)
+    expectedException (node:assert:576:17)
+    expectsError (node:assert:701:21)
+    Function.rejects (node:assert:767:3)
+    async TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:812:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: guard population retries transient 57014 response at statement level
+not ok 135 - guard population retries transient 57014 response at statement level
+  ---
+  duration_ms: 58.950928
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:1:23169'
+  failureType: 'testCodeFailure'
+  error: 'Failed to listByLifecycleStates: '
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    fail (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/runtime-repositories.ts:3573:15)
+    DatabasePickRepository.listByLifecycleStates (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/runtime-repositories.ts:3664:33)
+    async TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:793:22)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: guard population retries transient 57014 throw at statement level
+not ok 136 - guard population retries transient 57014 throw at statement level
+  ---
+  duration_ms: 53.816628
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:1:23169'
+  failureType: 'testCodeFailure'
+  error: ''
+  code: '57014'
+  ...
+# Subtest: guard population persistent 57014 fails closed after exactly three tries with code and status
+not ok 137 - guard population persistent 57014 fails closed after exactly three tries with code and status
+  ---
+  duration_ms: 55.73833
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:1:23853'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /57014/. Input:
+    
+    'Failed to listByLifecycleStates: '
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: 'Failed to listByLifecycleStates: '
+  operator: 'match'
+  stack: |-
+    Object.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:814:14)
+    expectedException (node:assert:576:17)
+    expectsError (node:assert:701:21)
+    Function.rejects (node:assert:767:3)
+    async TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:812:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: guard error message remains nonempty when code, status and message are absent
+not ok 138 - guard error message remains nonempty when code, status and message are absent
+  ---
+  duration_ms: 70.443497
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:1:24659'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /unknown statement error/. Input:
+    
+    'Error: Failed to listByLifecycleStates: '
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'Failed to listByLifecycleStates: '
+  stack: |-
+    fail (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/runtime-repositories.ts:3573:15)
+    DatabasePickRepository.listByLifecycleStates (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/runtime-repositories.ts:3650:30)
+    async waitForActual (node:assert:644:5)
+    async Function.rejects (node:assert:767:25)
+    async TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:834:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:834:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: guard retry retains stale W and detects a change made during the failed statement
+not ok 139 - guard retry retains stale W and detects a change made during the failed statement
+  ---
+  duration_ms: 69.007321
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:1:25010'
+  failureType: 'testCodeFailure'
+  error: 'Failed to listByLifecycleStates: '
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    fail (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/runtime-repositories.ts:3573:15)
+    DatabasePickRepository.listByLifecycleStates (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/runtime-repositories.ts:3650:30)
+    async TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/control__work-2026110601/.out/worktrees/codex__work-2026110601-guard-statement-retry/packages/db/src/member-performance-read-completeness.test.ts:849:18)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..139
+# tests 139
+# suites 0
+# pass 125
+# fail 14
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6448.61084

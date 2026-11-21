@@ -3110,6 +3110,35 @@ function isStatementTimeoutError(error: {
   );
 }
 
+/** Retry only a guard statement, without restarting pages or advancing W. */
+async function readPopulationGuardStatement<T extends {
+  error: { message: string; code?: string } | null;
+  status?: number;
+}>(statement: () => PromiseLike<T>): Promise<T> {
+  let failure: unknown;
+  let status: number | undefined;
+  for (let statementTry = 0; statementTry < 3; statementTry++) {
+    try {
+      const result = await statement();
+      if (!result.error) return result;
+      failure = result.error;
+      status = result.status;
+    } catch (error) {
+      failure = error;
+      status = undefined;
+    }
+  }
+  const detail = typeof failure === 'object' && failure !== null ? failure : {};
+  const message = 'message' in detail && typeof detail.message === 'string'
+    ? detail.message.trim() : '';
+  const code = 'code' in detail ? String(detail.code ?? '') : '';
+  if (status === undefined && 'status' in detail && typeof detail.status === 'number')
+    status = detail.status;
+  throw new Error('Failed to listByLifecycleStates: guard statement failed after 3 tries: ' +
+    (message || 'unknown statement error') + (code ? ` [${code}]` : '') +
+    (status ? ` [HTTP ${status}]` : ''));
+}
+
 export class DatabaseSubmissionRepository implements SubmissionRepository {
   private readonly client: UnitTalkSupabaseClient;
 
@@ -3560,9 +3589,8 @@ export class DatabasePickRepository implements PickRepository {
     for (let attempt = -1; attempt < 3; attempt++) {
       let watermark: string | undefined;
       if (attempt >= 0) {
-        const newest = await this.client.from('picks').select('updated_at')
-          .order('updated_at', { ascending: false }).limit(1);
-        if (newest.error) throw new Error('Failed to listByLifecycleStates: ' + newest.error.message);
+        const newest = await readPopulationGuardStatement(() => this.client.from('picks').select('updated_at')
+          .order('updated_at', { ascending: false }).limit(1));
         watermark = newest.data?.[0]?.updated_at;
       }
       let probeNeedsRestart = false;
@@ -3643,26 +3671,28 @@ export class DatabasePickRepository implements PickRepository {
         // snapshot. Multi-statement reads need an end count to detect net drift.
         if (usedCursorPage) {
           // No status filter: departed members must still be visible here.
-          let changes = this.client.from('picks')
-            .select('id', { count: 'exact', head: true });
-          if (watermark !== undefined) changes = changes.gt('updated_at', watermark);
-          if (previous) changes = changes.lte('created_at', previous.created_at);
-          const changed = await changes;
-          if (changed.error) fail(changed.error.message);
+          // Each retry reissues this statement with the original W. A stale W
+          // widens the changed-row set; it cannot hide changes during a retry.
+          const changed = await readPopulationGuardStatement(() => {
+            let changes = this.client.from('picks')
+              .select('id', { count: 'exact', head: true });
+            if (watermark !== undefined) changes = changes.gt('updated_at', watermark);
+            if (previous) changes = changes.lte('created_at', previous.created_at);
+            return changes;
+          });
           if (typeof changed.count !== 'number' || !Number.isSafeInteger(changed.count) || changed.count < 0)
             fail('missing or invalid exact population count');
           if (typeof changed.count === 'number' && changed.count > 0) fail('population membership changed while paging');
           if (limit === undefined && previous) {
-            const beyond = await applyOrderedPageCursor(this.client.from('picks')
-              .select('id', { count: 'exact', head: true }).in('status', lifecycleStates), previous, true);
-            if (beyond.error) fail(beyond.error.message);
+            const last = previous;
+            const beyond = await readPopulationGuardStatement(() => applyOrderedPageCursor(this.client.from('picks')
+              .select('id', { count: 'exact', head: true }).in('status', lifecycleStates), last, true));
             if (typeof beyond.count !== 'number' || !Number.isSafeInteger(beyond.count) || beyond.count < 0)
               fail('missing or invalid exact population count');
             if (typeof beyond.count === 'number' && beyond.count > 0) fail('population membership changed while paging');
           }
-          const population = await this.client.from('picks')
-            .select('id', { count: 'exact', head: true }).in('status', lifecycleStates);
-          if (population.error) fail(population.error.message);
+          const population = await readPopulationGuardStatement(() => this.client.from('picks')
+            .select('id', { count: 'exact', head: true }).in('status', lifecycleStates));
           if (typeof population.count !== 'number' || !Number.isSafeInteger(population.count) || population.count < 0)
             fail('missing or invalid exact population count');
           if (total !== population.count)
