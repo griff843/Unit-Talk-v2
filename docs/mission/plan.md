@@ -1,7 +1,7 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rebuilt from live evidence on 2026-10-13 under WORK-2026101301 (issue #1747). Not a log, not a backlog, not Linear in Markdown.
-**Measured against:** `origin/main` `e342655bf` (re-read 2026-11-04), deployed release `913235ce7` (Deploy run `40727467544`, 2026-10-28), production `zfzdnfwdarxucxtaojxm` (read-only SQL), GitHub API. The 2026-11-04 execution state and successor first action are in §11.
+**Measured against:** `origin/main` `f95945336` (re-read 2026-11-21), deployed release `61cb71c8b` (Deploy run `42418995085`, dispatched 2026-11-07, completed 2026-11-08), the readiness ledger `docs/06_status/readiness/readiness-score.json` (generated 2026-11-21T06:24Z, verdict **RED**), GitHub API. Production was not queried directly this reading; production figures come from the ledger. The 2026-11-21 execution state and successor first action are in §11.
 **Archives, read on demand — never at session start:**
 [`plan-readings.md`](plan-readings.md) (dated current-truth readings, production position, evidence batch) ·
 [`plan-lessons.md`](plan-lessons.md) (operating lessons) ·
@@ -64,8 +64,9 @@ A migration lane is a singleton and is forbidden alongside a runtime lane, whate
 | B | NCAAF live acceptance | **Griff** (submits), Claude (verifies read-only) | **Done:** acceptance passed (`8968f86c`) |
 | C | NCAAB participant catalog | Codex | SMALL; queued behind the migration singleton |
 | D | Command Center operator view | Codex (Delivery/UI, display only) | **Display gaps closed on `main`** (#1685, #1689, #1692); awaiting a deployed render. No lane to start. |
-| E | Plan refresh and session handoff | Claude | WORK-2026110401 (this lane, 2026-11-04) |
-| H | Private delivery-to-recap canary safeguards | Codex (T1 lanes), Production Claude dispatches | WORK-2026110309 (#1830) in review; WORK-2026110302 and WORK-2026110307 queued behind it. See §11 |
+| E | Plan refresh and session handoff | Claude | 2026-11-21 reconciliation (this edit). WORK-2026110401 (#1831) merged 2026-11-04 |
+| H | Private delivery-to-recap canary safeguards | Codex (T1 lanes), Production Claude dispatches | 0309 (#1830) and 0307 (#1832) **merged and deployed** (`61cb71c8b`). WORK-2026110302 (Discord artwork) **started 2026-11-16, no implementation, no PR**. See §11 |
+| I | Game-score evaluation (Amendment A1) | Codex, Claude | A1 ratified by Griff 2026-11-11 (#1843): engineering and staging only, no purchase, no production key. Scores ingestion and four-market staging proof merged (#1846, 2026-11-15); not deployed |
 | F | Pre-SGO engineering completion | Codex, in bounded lanes | §5 |
 | G | Discord Waves 0–6 | **Independent Codex worker** | Not duplicated here |
 
@@ -80,9 +81,9 @@ Revalidate each item against current code before building on it — the list bel
 
 | Stream | Prerequisite to prove while SGO is off | Exit evidence |
 |---|---|---|
-| Provider ingestion | Ingestion, normalization and failure paths run against recorded fixtures and staging; cost and quota are bounded and observable | Fixture/staging proof, a written minimal-provider usage and rollback plan |
+| Provider ingestion | Ingestion, normalization and failure paths run against recorded fixtures and staging; cost and quota are bounded and observable | Fixture/staging proof, a written minimal-provider usage and rollback plan. **Progress 2026-11-21:** canonical provider-offer readers with visible stale/failure states (#1839); A1 game-score scores ingestion with quota telemetry and a staging-only operator CLI (#1846). Both on `main`, neither deployed. SGO stays parked (newest `ingestor.cycle` 2026-06-30, status `failed`) |
 | Event and result matching | Participant, event and result matching is deterministic and fail-closed on ambiguity | Replay proof over fixtures, including the manual `eventId: null` path |
-| Automated grading | Grading handles all supported markets from fixtures; skip reasons are observable | Staging proof; grading skips are classified, not silent |
+| Automated grading | Grading handles all supported markets from fixtures; skip reasons are observable | Staging proof; grading skips are classified, not silent. **Progress:** cron resilience and heartbeat freshness (#1837, deployed), liveness refresh at cycle start (#1838, not deployed), scores grading gated to Track Only game lines in four markets on staging (#1846). Production grading reads `degraded_stale_input`, which is the expected reading while SGO is parked |
 | CLV snapshot plumbing | Closing-line capture and CLV computation are wired and null-safe | Fixture proof; no CLV claim on a manual pick |
 | Models, feature contracts, scoring evaluation | Feature contracts, scoring and evaluation run on truthful persisted picks | Evaluation over the governed cohort with provenance retained |
 | Operator views | Command Center renders decision, mode, participant resolution, eventless-pick notes, voided banner, capper/units (display only) | Implemented on `main`; **not yet observed in the deployed Command Center** until a deploy carries it (Griff dispatches) |
@@ -133,9 +134,12 @@ never produces delivery, and the kill switches stay as they are.
 | 7 | **Whop and Discord setup**: plan ids, webhook secret, roles, refund policy, prices and tier names | secrets, pricing authority | the paid-member path |
 | 8 | **Un-kill `official-picks`** once its delivery gaps close | member-delivery activation | first member delivery |
 | 9 | **Frozen PRs** #1491, #1492, #1495 architecture review; #1451 production DDL | merge authority; production DDL | those PRs only |
-| 10 | **`SCOPE_OVERRIDE` on #1830** for `apps/api/src/controllers/submit-pick-controller.test.ts`, then `t1-approved` + `pm-verdict/v1` at its final head (2026-11-04) | merge authority | the canary idempotency fix and everything queued behind it |
-| 11 | **Deployment dispatch** carrying the merged canary safeguards (#1811 and later); `main` is 83 commits past the deployed `913235ce7` (2026-11-04) | production deployment | the consolidated canary packet |
-| 12 | **Carry-forward allowlist** (a WORK-* closeout on `main` breaks approval carry-forward) and the production `picks.participant_id` index (2026-11-04) | merge authority; production DDL | those items only |
+| 10 | ~~`SCOPE_OVERRIDE` and approval on #1830~~ — **done:** #1830 merged 2026-11-05 with `t1-approved` | — | — |
+| 11 | ~~Deployment carrying the canary safeguards~~ — **done:** Griff dispatched `61cb71c8b` (run `42418995085`, 2026-11-07), which carries #1811, #1816, #1830, #1832 and #1837 | — | — |
+| 12 | **Carry-forward allowlist** (a WORK-* closeout on `main` breaks approval carry-forward) and the production `picks.participant_id` index. Status not re-measured on 2026-11-21: **UNKNOWN** | merge authority; production DDL | those items only |
+| 13 | **Next deployment dispatch.** `main` is 50 commits past the deployed `61cb71c8b` (19 non-ledger), carrying #1838, #1839, #1841, #1846 and others. Not urgent for the canary until 0302 merges; batch it with 0302 | production deployment | observing those changes in production |
+| 14 | **Lean operating mode #1842** (T1, merges inert): needs `t1-approved` + `pm-verdict/v1`, and its activation is a separate later decision. It touches merge-gate workflows | merge authority (reserved #7) | #1842 only |
+| 15 | **Close or keep the stale draft T1 PRs** #1833 and #1834 (Codex, idle since 2026-11-07) and the older open PRs in §11 | merge authority over abandonment | nothing on the critical path |
 
 **Affirmatively not asked for:** any containment change, any provider unparking, any member delivery,
 any clearing of the 32 stranded canary `processing` rows, any re-enabling of cron job 5.
@@ -201,17 +205,60 @@ any clearing of the 32 stranded canary `processing` rows, any re-enabling of cro
 
 ## 11. Current execution state and successor first action
 
-Recorded 2026-11-04 by Production Claude for a controlled session rotation (WORK-2026110401). The full
-dated reading is [`plan-readings.md`](plan-readings.md) §11. Re-measure before relying on it.
+Reconciled 2026-11-21 against `origin/main` `f95945336`, the Deploy runs, the readiness ledger and
+open PRs. The 2026-11-04 rotation reading stays in [`plan-readings.md`](plan-readings.md) §11 as
+history. Re-measure before relying on any figure here.
 
-- **Next objective:** the single private delivery-to-recap canary (`intent.md` § "Bounded exception").
-  Blockers, in order: the cross-capper idempotency fix (#1830), a deployment carrying the merged
-  audience exclusion (#1811), verified Discord artwork (WORK-2026110302) and keyset-paged performance
-  readers (WORK-2026110307), then the consolidated final packet for Griff.
-- **Active lane:** WORK-2026110309, PR #1830, T1, Codex via `ops:codex-exec`, resumable checkpoint
-  with four orchestrator rulings. It is waiting on Griff's `SCOPE_OVERRIDE` (decision #10).
-- **Successor first action:** read `plan-readings.md` §11, then check #1830 for a `SCOPE_OVERRIDE` at
-  its head. If it is present, record the fixture patch from #1830 comment `6632286109` as an
-  orchestrator ruling and dispatch one Codex attempt from the 0309 lane worktree. Do not open a new
-  lane for it. If it is absent, prepare (do not present) the canary packet draft; wiring the unwired
-  `apps/api` tests waits for #1830 to release `package.json` (reading §11.8).
+**Shipped versus deployed.**
+- Deployed release `61cb71c8b` (2026-11-08). It carries the canary audience exclusion (#1811), the
+  cross-capper idempotency fix (#1830), keyset-paged performance readers (#1832) and grading cron
+  resilience (#1837). Canary blockers 1, 2 and the readers half of 3 from the 2026-11-04 list are
+  therefore closed in production, subject to the containment mode, which this reading did not
+  retrieve (**UNKNOWN**).
+- Merged after the deploy, not running: #1838 grading liveness, #1839 provider-offer readers, #1840
+  and #1845 lane tooling, #1739 supporting-path admission, #1841 Smart Form canonical teams with a
+  manual player (Track Only), #1843 A1 amendment (docs), #1844 e2e specs, #1846 scores ingestion.
+- No product merge since 2026-11-15.
+
+**Readiness ledger (2026-11-21T06:24Z): RED.** Failing blocking dimensions: deploy drift (50
+commits), ingestor (SGO parked by design, last cycle 2026-06-30), grading `degraded_stale_input`
+(follows from the parked feed), and a firing DB tripwire (run `44867172290`, cause not yet read).
+Worker/outbox and dead-letter dimensions pass: 32 stranded canary `processing` rows (held), 1,950 of
+1,954 dead letters are governance holds. Non-blocking: no CI result on `main` HEAD since the
+ledger-only commits, scheduled staleness observers fail on the parked feed, one unbound proof
+(WORK-2026102603).
+
+**Private-canary prerequisites, in order.**
+1. ~~Cross-capper idempotency (#1830)~~ merged and deployed.
+2. ~~Deployed audience exclusion (#1811)~~ deployed in `61cb71c8b`.
+3. **Verified Discord artwork, WORK-2026110302 (T1, Codex).** Lane manifest `started` on
+   2026-11-16, branch `codex/work-2026110302-discord-artwork` carries lane and proof scaffolding
+   only, no implementation, no PR. Its scope lock includes `package.json`,
+   `submission-service.ts`, `delivery-adapters.ts` and `discord-presentation.ts`. This is the only
+   open engineering blocker. ~~Keyset-paged readers (0307)~~ merged and deployed.
+4. **A deployment carrying 0302** (Griff dispatch, §7 #13).
+5. **The consolidated final packet** (destination, capper, pick scope, release windows, rollback,
+   proof criteria). Not yet drafted. Presenting it and every production mutation it names are
+   Griff's.
+
+**Open PRs (2026-11-21).**
+
+| PR | Tier | State | Disposition |
+|---|---|---|---|
+| #1842 Lean operating mode | T1 | Open, behind `main` | Griff/PM decision (§7 #14) |
+| #1833 guard statement retries, #1834 `picks.updated_at` index | T1 | Draft, idle since 2026-11-07 | Triage: resume or close (§7 #15). #1834 may touch production DDL |
+| #1776 privilege-only view drill, #1775 revoke `v_governed_pick_performance` (migration) | T1 | Draft | #1775 is production DDL (Griff) |
+| #1772 env-gated VIP checkout CTA | T2 | Draft, touched 2026-11-15 | Commerce; waits on Whop setup (§7 #7) |
+| #1778, #1771 proof repairs for merged lanes | T3/T2 | Idle since October | Likely superseded; close after confirming |
+| #1738, #1736, #1505, #1498, #1429 | mixed | Idle since September or October | Triage when capacity allows |
+| #1491, #1492, #1495 | — | Frozen | Do not touch |
+| #1451 | T1 | Production DDL | Griff |
+
+Closed without merge since 2026-11-04: #1556 (tracker independence, closed 2026-11-12).
+
+**Successor first action.** Check the 0302 lane (`codex/work-2026110302-discord-artwork`) for a
+live Codex worker. If none, resume it from that branch through the lane tooling rather than opening
+a new lane. In parallel and without blocking on it: read the firing DB tripwire's receipt from run
+`44867172290`, draft (do not present) the canary packet, and triage the stale PRs above. The unwired
+`apps/api` tests task from the 2026-11-04 reading (§11.8 there) is no longer blocked by #1830 and
+can be admitted, though 0302 holds `package.json`.
