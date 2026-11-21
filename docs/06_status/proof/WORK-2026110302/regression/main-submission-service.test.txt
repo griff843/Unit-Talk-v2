@@ -1,0 +1,166 @@
+TAP version 13
+# Subtest: WORK-2026110302: a last-name-only selection never attaches a thumbnail
+not ok 1 - WORK-2026110302: a last-name-only selection never attaches a thumbnail
+  ---
+  duration_ms: 16.039429
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/apps/api/src/submission-service.test.ts:1:85138'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'https://a.espncdn.com/i/headshots/nfl/players/full/3139477.png'
+    - undefined
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  actual: 'https://a.espncdn.com/i/headshots/nfl/players/full/3139477.png'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/apps/api/src/submission-service.test.ts:3733:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: WORK-2026110302: the selection text never substitutes an unrelated player's photo
+not ok 2 - WORK-2026110302: the selection text never substitutes an unrelated player's photo
+  ---
+  duration_ms: 8.001968
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/apps/api/src/submission-service.test.ts:1:85870'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png'
+    - undefined
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  actual: 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/apps/api/src/submission-service.test.ts:3764:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: WORK-2026110302: a verified headshot for the resolved participant is persisted with thumbnailVerified
+not ok 3 - WORK-2026110302: a verified headshot for the resolved participant is persisted with thumbnailVerified
+  ---
+  duration_ms: 1.997938
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/apps/api/src/submission-service.test.ts:1:86734'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + undefined
+    - 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/apps/api/src/submission-service.test.ts:3792:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: WORK-2026110302: caller-supplied thumbnailUrl and thumbnailVerified are stripped before persisting
+not ok 4 - WORK-2026110302: caller-supplied thumbnailUrl and thumbnailVerified are stripped before persisting
+  ---
+  duration_ms: 1.966796
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/apps/api/src/submission-service.test.ts:1:87687'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'https://example.com/someone-else.png'
+    - undefined
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  actual: 'https://example.com/someone-else.png'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/apps/api/src/submission-service.test.ts:3822:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: WORK-2026110302: a caller-supplied thumbnailVerified cannot upgrade an unverified resolver result
+not ok 5 - WORK-2026110302: a caller-supplied thumbnailVerified cannot upgrade an unverified resolver result
+  ---
+  duration_ms: 1.799186
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/apps/api/src/submission-service.test.ts:1:88511'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png'
+    - undefined
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  actual: 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/apps/api/src/submission-service.test.ts:3853:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: WORK-2026110302: a resolver that never returns cannot hold submission past the 5s artwork budget
+not ok 6 - WORK-2026110302: a resolver that never returns cannot hold submission past the 5s artwork budget
+  ---
+  duration_ms: 1.845562
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/apps/api/src/submission-service.test.ts:1:89313'
+  failureType: 'testCodeFailure'
+  error: 'deadline enforced at ~5s, elapsed 1ms'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/apps/api/src/submission-service.test.ts:3886:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: WORK-2026110302: shadow submissions strip caller artwork and use the same verified resolver
+not ok 7 - WORK-2026110302: shadow submissions strip caller artwork and use the same verified resolver
+  ---
+  duration_ms: 1.644579
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/apps/api/src/submission-service.test.ts:1:90320'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png'
+    - undefined
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  actual: 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/apps/api/src/submission-service.test.ts:3914:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 0
+# fail 7
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 372.341604

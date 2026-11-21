@@ -1,114 +1,149 @@
 /**
- * Pick Asset Resolver
+ * Pick Asset Resolver (WORK-2026110302)
  *
- * Resolves a thumbnail URL for a pick by matching against enriched
- * participant data. Best-effort — returns null if no match found.
+ * Resolves Discord artwork for a pick by canonical participant identity only.
+ * Selection text is never used to choose a participant.
  *
- * Resolution order (per discord_embed_system_spec_addendum_assets.md):
- *   1. Player headshot_url from matching participant
- *   2. Team logo_url from matching team participant
- *   3. null (never block delivery)
+ *   - Player: the stored `headshot_url` is verified only when a fresh
+ *     `resolveHeadshot` for that same participant (display name, sport, team)
+ *     confirms exactly the stored URL. Ambiguity, mismatch, null or the
+ *     deadline yield no thumbnail.
+ *   - Team: the participant's own `logo_url`, only when the identified
+ *     participant is that team and the market is not a game total.
+ *   - Anything else: no thumbnail. The embed keeps its text brand.
  *
- * Called at submission time to stash the URL in pick metadata.
- * The embed builder reads metadata.thumbnailUrl — no DB access at delivery.
+ * All artwork work for one submission shares one overall deadline (5s by
+ * default). The resolver never throws and never writes to the database.
  */
 
-import type { ParticipantRepository } from '@unit-talk/db';
-import { resolveHeadshotUrl } from './player-enrichment-service.js';
+import { allowedMediaUrl, normalizeMarketKey } from '@unit-talk/domain';
+import type { ParticipantRepository, ParticipantRow } from '@unit-talk/db';
+import {
+  resolveHeadshot as defaultResolveHeadshot,
+  type HeadshotResolution,
+  type PlayerIdentity,
+} from './player-enrichment-service.js';
+
+export const PICK_ARTWORK_DEADLINE_MS = 5_000;
+
+export interface PickArtwork {
+  url: string | null;
+  verified: boolean;
+}
+
+export interface PickArtworkInput {
+  /** The canonical participant ID that submission already resolved. */
+  participantId: string | null | undefined;
+  /** The normalized market key of the pick. */
+  marketKey: string | null | undefined;
+}
+
+export interface PickArtworkOptions {
+  /** Overall budget for every artwork lookup of one submission. */
+  deadlineMs?: number;
+  /** Injection seam for tests; defaults to the #1822 matcher. */
+  resolveHeadshot?: (
+    displayName: string,
+    sport: string | null,
+    identity?: PlayerIdentity,
+  ) => Promise<HeadshotResolution>;
+}
+
+const NO_ARTWORK: PickArtwork = Object.freeze({ url: null, verified: false });
 
 /**
- * Attempts to resolve a thumbnail URL for a pick by matching the
- * pick's selection text against known participants for the sport.
- *
- * Returns the best available image URL, or null if no match.
- * Never throws — fail-open by design.
+ * A game-level total (both teams combined) has no single participant to depict.
+ * Team totals stay eligible because they belong to one team.
  */
-export async function resolvePickThumbnailUrl(
-  selection: string,
-  sport: string | null | undefined,
-  participants: ParticipantRepository,
-): Promise<string | null> {
-  if (!sport || !selection) return null;
+export function isTwoTeamMarket(marketKey: string | null | undefined): boolean {
+  if (!marketKey) return false;
+  const canonical = normalizeMarketKey(marketKey);
+  if (canonical === 'game_total_ou') return true;
+  // Canonical player props (e.g. `batting-total-bases-all-game-ou`) and team
+  // totals belong to one participant even when their key says "total".
+  if (canonical === 'team_total_ou' || canonical.endsWith('-all-game-ou')) return false;
+  const key = canonical.toLowerCase();
+  if (key.startsWith('player')) return false;
+  if (/team[_\s-]?total/u.test(key)) return false;
+  return /(^|[_\s-])(game[_\s-]?)?totals?($|[_\s-])/u.test(key);
+}
 
+export async function resolvePickArtwork(
+  input: PickArtworkInput,
+  participants: Pick<ParticipantRepository, 'findById'> | undefined,
+  options: PickArtworkOptions = {},
+): Promise<PickArtwork> {
+  const deadlineMs = options.deadlineMs ?? PICK_ARTWORK_DEADLINE_MS;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<PickArtwork>((resolve) => {
+    // Not unref'd: a short-lived caller must still see the deadline fire. The
+    // timer is always cleared below, so it never holds a process open.
+    timer = setTimeout(() => resolve(NO_ARTWORK), deadlineMs);
+  });
   try {
-    // Try player match first (player props, MVP bets, etc.)
-    const players = await participants.listByType('player', sport);
-    const playerMatch = findBestMatch(selection, players);
-    if (playerMatch) {
-      const meta = (playerMatch.metadata ?? {}) as Record<string, unknown>;
-      const headshot = meta['headshot_url'];
-      if (typeof headshot === 'string' && headshot.length > 0) {
-        return headshot;
-      }
-
-      const resolvedHeadshot = await resolveHeadshotUrl(
-        playerMatch.display_name,
-        sport,
-        typeof meta['external_id'] === 'string' ? meta['external_id'] : null,
-      );
-      if (resolvedHeadshot) {
-        // Write back to DB so the scheduled pass doesn't need to re-resolve this player
-        participants.updateMetadata(playerMatch.id, { headshot_url: resolvedHeadshot }).catch(() => {});
-        return resolvedHeadshot;
-      }
-    }
-
-    // Fall back to team match (moneyline, spread, total)
-    const teams = await participants.listByType('team', sport);
-    const teamMatch = findBestMatch(selection, teams);
-    if (teamMatch) {
-      const meta = (teamMatch.metadata ?? {}) as Record<string, unknown>;
-      const logo = meta['logo_url'];
-      if (typeof logo === 'string' && logo.length > 0) {
-        return logo;
-      }
-    }
-
-    return null;
-  } catch {
-    // Fail-open: participant lookup failure must never block submission
-    return null;
+    return await Promise.race([
+      resolveWithinBudget(input, participants, options).catch(() => NO_ARTWORK),
+      deadline,
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
-/**
- * Simple best-effort text matching: checks if the selection contains
- * the participant's display_name or abbreviation (for teams).
- *
- * Returns the first match found, or null.
- */
-function findBestMatch(
-  selection: string,
-  participants: ReadonlyArray<{
-    id: string;
-    display_name: string;
-    metadata: unknown;
-  }>,
-): { id: string; display_name: string; metadata: unknown } | null {
-  const selLower = selection.toLowerCase();
+async function resolveWithinBudget(
+  input: PickArtworkInput,
+  participants: Pick<ParticipantRepository, 'findById'> | undefined,
+  options: PickArtworkOptions,
+): Promise<PickArtwork> {
+  const participantId = input.participantId?.trim();
+  if (!participants || !participantId) return NO_ARTWORK;
+  if (isTwoTeamMarket(input.marketKey)) return NO_ARTWORK;
 
-  for (const p of participants) {
-    const name = p.display_name.toLowerCase();
+  const participant = await participants.findById(participantId);
+  if (!participant || participant.id !== participantId) return NO_ARTWORK;
+  const meta = readRecord(participant.metadata);
 
-    // Exact substring match (e.g., "Chiefs" in "Chiefs -3")
-    if (selLower.includes(name)) {
-      return p;
-    }
-
-    // Check abbreviation for teams (e.g., "KC" in "KC -3")
-    const meta = (p.metadata ?? {}) as Record<string, unknown>;
-    const abbr = typeof meta['abbreviation'] === 'string' ? meta['abbreviation'].toLowerCase() : null;
-    if (abbr && selLower.startsWith(abbr + ' ')) {
-      return p;
-    }
-
-    // Check last name for players (e.g., "Mahomes" in "Mahomes Over 2.5 TDs")
-    const nameParts = name.split(' ');
-    const lastName = nameParts[nameParts.length - 1];
-    if (lastName && lastName.length >= 3 && selLower.includes(lastName)) {
-      return p;
-    }
+  if (participant.participant_type === 'team') {
+    const logo = allowedMediaUrl(meta['logo_url']);
+    return logo ? { url: logo, verified: true } : NO_ARTWORK;
   }
 
-  return null;
+  if (participant.participant_type === 'player') {
+    return verifyPlayerHeadshot(participant, meta, options);
+  }
+
+  return NO_ARTWORK;
+}
+
+async function verifyPlayerHeadshot(
+  participant: ParticipantRow,
+  meta: Record<string, unknown>,
+  options: PickArtworkOptions,
+): Promise<PickArtwork> {
+  const stored = allowedMediaUrl(meta['headshot_url']);
+  if (!stored) return NO_ARTWORK;
+
+  const resolveHeadshot = options.resolveHeadshot ?? defaultResolveHeadshot;
+  const resolution = await resolveHeadshot(
+    participant.display_name,
+    participant.sport ?? participant.league ?? null,
+    {
+      teamId: readString(meta['team_external_id']),
+      teamAbbrev: readString(meta['team_abbrev']),
+      league: participant.league ?? readString(meta['league']),
+    },
+  );
+  return resolution.reason === 'confirmed' && resolution.url === stored
+    ? { url: stored, verified: true }
+    : NO_ARTWORK;
+}
+
+function readRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }

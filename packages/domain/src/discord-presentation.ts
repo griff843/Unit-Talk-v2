@@ -105,12 +105,32 @@ export function sourceTimestamp(value: unknown): string | undefined {
   const time = Date.parse(text);
   return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
 }
-function mediaUrl(value: unknown): string | undefined {
+/**
+ * WORK-2026110302: the only hosts whose images an embed may show. A pure
+ * constant: adding a host is a reviewed code change, never configuration.
+ * `cms.nhl.bamgrid.com` is deliberately absent (it does not resolve in public DNS).
+ */
+export const DISCORD_MEDIA_HOST_ALLOWLIST: readonly string[] = Object.freeze([
+  'cdn.nba.com',
+  'img.mlbstatic.com',
+  'a.espncdn.com',
+  'assets.nhle.com',
+]);
+/**
+ * Returns the URL only when it is https, carries no credentials and is served
+ * by an allowlisted host. Anything else yields no image, so the embed falls
+ * back to its text brand instead of a broken or foreign image.
+ */
+export function allowedMediaUrl(value: unknown): string | undefined {
   const text = knownText(value);
   if (!text) return undefined;
   try {
     const url = new URL(text);
-    return url.protocol === 'https:' && !url.username && !url.password
+    return url.protocol === 'https:' &&
+      !url.username &&
+      !url.password &&
+      !url.port &&
+      DISCORD_MEDIA_HOST_ALLOWLIST.includes(url.hostname)
       ? text
       : undefined;
   } catch {
@@ -124,7 +144,7 @@ export function buildPresentationEmbed(
 ): PresentationEmbed {
   const description = knownText(input.description);
   const timestamp = sourceTimestamp(input.timestamp);
-  const thumbnailUrl = mediaUrl(input.thumbnailUrl);
+  const thumbnailUrl = allowedMediaUrl(input.thumbnailUrl);
   const fields = (input.fields ?? [])
     .flatMap((field) => {
       const name = knownText(field.name);

@@ -1,0 +1,118 @@
+TAP version 13
+# Subtest: WORK-2026110302: a player headshot is verified when a fresh re-resolve confirms the stored URL
+ok 1 - WORK-2026110302: a player headshot is verified when a fresh re-resolve confirms the stored URL
+  ---
+  duration_ms: 1.638672
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: an ambiguous name gives no thumbnail
+ok 2 - WORK-2026110302: an ambiguous name gives no thumbnail
+  ---
+  duration_ms: 0.289988
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: an identity mismatch or null re-resolve gives no thumbnail
+ok 3 - WORK-2026110302: an identity mismatch or null re-resolve gives no thumbnail
+  ---
+  duration_ms: 0.196593
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: a shared stored URL (another player's photo) gives no thumbnail
+ok 4 - WORK-2026110302: a shared stored URL (another player's photo) gives no thumbnail
+  ---
+  duration_ms: 0.263039
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: the selected participant is the identified one, never an unrelated player
+ok 5 - WORK-2026110302: the selected participant is the identified one, never an unrelated player
+  ---
+  duration_ms: 0.249329
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: no participant ID gives no thumbnail and no lookup
+ok 6 - WORK-2026110302: no participant ID gives no thumbnail and no lookup
+  ---
+  duration_ms: 0.298339
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: an unknown participant ID gives no thumbnail
+ok 7 - WORK-2026110302: an unknown participant ID gives no thumbnail
+  ---
+  duration_ms: 0.133414
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: a dead NHL host gives no thumbnail and skips the re-resolve
+ok 8 - WORK-2026110302: a dead NHL host gives no thumbnail and skips the re-resolve
+  ---
+  duration_ms: 0.122693
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: a team pick uses the identified team's own logo
+ok 9 - WORK-2026110302: a team pick uses the identified team's own logo
+  ---
+  duration_ms: 0.358995
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: a team logo on a foreign host gives no thumbnail
+ok 10 - WORK-2026110302: a team logo on a foreign host gives no thumbnail
+  ---
+  duration_ms: 0.366906
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: a two-team game total gives no thumbnail even with a team participant
+ok 11 - WORK-2026110302: a two-team game total gives no thumbnail even with a team participant
+  ---
+  duration_ms: 0.244557
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: isTwoTeamMarket keeps team totals and player props eligible
+ok 12 - WORK-2026110302: isTwoTeamMarket keeps team totals and player props eligible
+  ---
+  duration_ms: 0.108919
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: a provider that never returns gives no thumbnail within the deadline
+ok 13 - WORK-2026110302: a provider that never returns gives no thumbnail within the deadline
+  ---
+  duration_ms: 50.672284
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: a participant lookup that never returns shares the same deadline
+ok 14 - WORK-2026110302: a participant lookup that never returns shares the same deadline
+  ---
+  duration_ms: 51.112823
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: the default overall artwork deadline is five seconds
+ok 15 - WORK-2026110302: the default overall artwork deadline is five seconds
+  ---
+  duration_ms: 0.249458
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: a throwing provider or repository gives no thumbnail
+ok 16 - WORK-2026110302: a throwing provider or repository gives no thumbnail
+  ---
+  duration_ms: 0.472518
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: artwork resolution never calls updateMetadata
+ok 17 - WORK-2026110302: artwork resolution never calls updateMetadata
+  ---
+  duration_ms: 0.249987
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: a normalized total-bases prop still resolves a verified player headshot
+ok 18 - WORK-2026110302: a normalized total-bases prop still resolves a verified player headshot
+  ---
+  duration_ms: 0.105947
+  type: 'test'
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 18
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 314.864423

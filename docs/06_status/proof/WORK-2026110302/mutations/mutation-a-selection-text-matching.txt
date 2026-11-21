@@ -1,0 +1,24 @@
+MUTATION a-selection-text-matching
+file: apps/api/src/submission-service.ts
+--- replaced:
+  const participantId =
+    readMetadataString(identityMetadata, 'participantId') ??
+    readMetadataString(identityMetadata, 'playerId');
+  const artwork
++++ with:
+  const selection = String(identityMetadata['__selection'] ?? '').toLowerCase();
+  const participantId =
+    readMetadataString(identityMetadata, 'participantId') ??
+    readMetadataString(identityMetadata, 'playerId') ??
+    (await participants?.listByType('player'))?.find((p) => {
+      const last = p.display_name.toLowerCase().split(' ').pop() ?? '';
+      return selection.includes(p.display_name.toLowerCase()) || (last.length >= 3 && selection.includes(last));
+    })?.id ?? null;
+  const artwork
+
+$ tsx --test apps/api/src/submission-service.test.ts
+not ok 106 - WORK-2026110302: a last-name-only selection never attaches a thumbnail
+not ok 112 - WORK-2026110302: shadow submissions strip caller artwork and use the same verified resolver
+# tests 112
+# pass 110
+# fail 2

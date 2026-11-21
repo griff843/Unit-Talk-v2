@@ -713,3 +713,74 @@ function readPayloadRoute(payload: unknown) {
     Object.entries(route).filter(([, value]) => value !== undefined),
   );
 }
+
+// ── WORK-2026110302: verified-only Discord artwork ─────────────────────────
+
+const VERIFIED_HEADSHOT = 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png';
+
+function outboxWithArtwork(metadata: Record<string, unknown>): OutboxRecord {
+  const outbox = createOutboxRecord('discord:canary');
+  const payload = outbox.payload as Record<string, unknown>;
+  return {
+    ...outbox,
+    payload: {
+      ...payload,
+      metadata: { ...(payload['metadata'] as Record<string, unknown>), ...metadata },
+    } as OutboxRecord['payload'],
+  };
+}
+
+test('WORK-2026110302: buildDiscordMessagePayload drops an unverified thumbnail and still builds the embed', () => {
+  const message = buildDiscordMessagePayload(
+    outboxWithArtwork({ thumbnailUrl: VERIFIED_HEADSHOT }),
+  );
+  assert.equal(message.embeds.length, 1);
+  const embed = message.embeds[0]!;
+  assert.equal(embed.thumbnail, undefined);
+  assert.equal(embed.footer.text, 'Unit Talk');
+  assert.ok(embed.fields.length > 0);
+});
+
+test('WORK-2026110302: buildDiscordMessagePayload drops a thumbnail flagged with a non-boolean verified value', () => {
+  const message = buildDiscordMessagePayload(
+    outboxWithArtwork({ thumbnailUrl: VERIFIED_HEADSHOT, thumbnailVerified: 'true' }),
+  );
+  assert.equal(message.embeds[0]!.thumbnail, undefined);
+});
+
+test('WORK-2026110302: buildDiscordMessagePayload renders a verified allowlisted thumbnail', () => {
+  const message = buildDiscordMessagePayload(
+    outboxWithArtwork({ thumbnailUrl: VERIFIED_HEADSHOT, thumbnailVerified: true }),
+  );
+  assert.deepEqual(message.embeds[0]!.thumbnail, { url: VERIFIED_HEADSHOT });
+});
+
+test('WORK-2026110302: buildDiscordMessagePayload drops a verified dead-host NHL thumbnail', () => {
+  const message = buildDiscordMessagePayload(
+    outboxWithArtwork({
+      thumbnailUrl: 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478402.jpg',
+      thumbnailVerified: true,
+    }),
+  );
+  assert.equal(message.embeds[0]!.thumbnail, undefined);
+  assert.equal(message.embeds[0]!.footer.text, 'Unit Talk');
+});
+
+test('WORK-2026110302: an unverified thumbnail is dropped while the Discord message still sends', async () => {
+  let capturedRequest: CapturedRequest | null = null;
+  const adapter = createDiscordDeliveryAdapter({
+    dryRun: false,
+    botToken: 'test-bot-token',
+    targetMap: { 'discord:canary': '333333333333333333' },
+    fetchImpl: async (url, init) => {
+      capturedRequest = captureRequest(url, init);
+      return jsonResponse({ id: 'canary-message-1' });
+    },
+  });
+  const result = await adapter(outboxWithArtwork({ thumbnailUrl: VERIFIED_HEADSHOT }));
+  const request = requireCapturedRequest(capturedRequest);
+  assert.equal(result.status, 'sent');
+  const body = JSON.parse(request.body) as { embeds: Array<Record<string, unknown>> };
+  assert.equal(body.embeds.length, 1);
+  assert.equal(body.embeds[0]!['thumbnail'], undefined);
+});

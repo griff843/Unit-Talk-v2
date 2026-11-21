@@ -513,14 +513,6 @@
         "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
       },
       {
-        "path": "apps/worker/src/delivery-adapters.test.ts",
-        "disposition": "phase-b-wiring",
-        "owner": "codex-implementation",
-        "issue": "UTV2-1636",
-        "expiry": "2026-10-31",
-        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
-      },
-      {
         "path": "apps/worker/src/delivery-alerting.test.ts",
         "disposition": "phase-b-wiring",
         "owner": "codex-implementation",

@@ -752,7 +752,12 @@ export function buildDiscordMessagePayload(outbox: OutboxRecord) {
     eventName: knownText(metadata.eventName),
     eventTime: knownText(metadata.eventTime) ?? knownText(metadata.gameTime),
     notes: knownText(metadata.thesis),
-    thumbnailUrl: knownText(metadata.thumbnailUrl),
+    // WORK-2026110302: only an identity-verified image is shown. Legacy or
+    // caller-supplied thumbnails lack the flag and fall back to the text brand.
+    thumbnailUrl:
+      metadata.thumbnailVerified === true
+        ? knownText(metadata.thumbnailUrl)
+        : undefined,
   });
   return {
     content: undefined,

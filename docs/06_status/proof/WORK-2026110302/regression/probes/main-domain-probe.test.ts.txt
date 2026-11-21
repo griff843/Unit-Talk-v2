@@ -1,0 +1,13 @@
+// Runs against UNMODIFIED main's discord-presentation (no allowlist export yet).
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { buildPickPresentation } from '../../../packages/domain/src/discord-presentation.js';
+for (const [label, url] of [
+  ['dead NHL host', 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478402.jpg'],
+  ['foreign host', 'https://example.com/someone-else.png'],
+  ['suffix-spoofed host', 'https://cdn.nba.com.evil.example/x.png'],
+]) {
+  test(`${label} must render no thumbnail`, () => {
+    assert.equal(buildPickPresentation('pick-posted', { selection: 'Over 1.5', thumbnailUrl: url }).thumbnail, undefined);
+  });
+}

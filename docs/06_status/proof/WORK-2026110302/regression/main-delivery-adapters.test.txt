@@ -1,0 +1,277 @@
+TAP version 13
+# {"timestamp":"2026-11-21T19:41:15.109Z","level":"warn","service":"worker","message":"Discord game-thread route missing; falling back to channel delivery","outboxId":"2465a389-9cea-4e44-a52a-36221fb2c08e","target":"discord:game-threads","eventKey":"Lakers vs Celtics","fallbackChannelId":"111111111111111111"}
+# Subtest: createDiscordDeliveryAdapter routes game-thread target to mapped event thread
+ok 1 - createDiscordDeliveryAdapter routes game-thread target to mapped event thread
+  ---
+  duration_ms: 15.824681
+  type: 'test'
+  ...
+# Subtest: createDiscordDeliveryAdapter falls back to game-thread channel when event thread is missing
+ok 2 - createDiscordDeliveryAdapter falls back to game-thread channel when event thread is missing
+  ---
+  duration_ms: 1.309409
+  type: 'test'
+  ...
+# Subtest: createDiscordDeliveryAdapter routes strategy-room target through a Discord DM channel
+ok 3 - createDiscordDeliveryAdapter routes strategy-room target through a Discord DM channel
+  ---
+  duration_ms: 1.070174
+  type: 'test'
+  ...
+# Subtest: createDiscordDeliveryAdapter reports strategy-room DM setup failure as retryable
+ok 4 - createDiscordDeliveryAdapter reports strategy-room DM setup failure as retryable
+  ---
+  duration_ms: 0.740793
+  type: 'test'
+  ...
+# Subtest: UTV2-1923: a pinned destination routes to that capper channel, not the shared map
+ok 5 - UTV2-1923: a pinned destination routes to that capper channel, not the shared map
+  ---
+  duration_ms: 1.541899
+  type: 'test'
+  ...
+# Subtest: UTV2-1929: the receipt records the pinned channel, not the logical target
+ok 6 - UTV2-1929: the receipt records the pinned channel, not the logical target
+  ---
+  duration_ms: 1.52584
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: an archived locked Official Picks thread is safely reopened, re-read, then posted
+ok 7 - UTV2-1970: an archived locked Official Picks thread is safely reopened, re-read, then posted
+  ---
+  duration_ms: 1.387642
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: an unlocked Official Picks thread is refused before message POST
+ok 8 - UTV2-1970: an unlocked Official Picks thread is refused before message POST
+  ---
+  duration_ms: 1.640416
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: missing thread_metadata is refused before message POST
+ok 9 - UTV2-1970: missing thread_metadata is refused before message POST
+  ---
+  duration_ms: 0.770542
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: non-object thread_metadata is refused before message POST
+ok 10 - UTV2-1970: non-object thread_metadata is refused before message POST
+  ---
+  duration_ms: 0.65691
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: missing archived flag is refused before message POST
+ok 11 - UTV2-1970: missing archived flag is refused before message POST
+  ---
+  duration_ms: 0.471934
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: non-boolean locked flag is refused before message POST
+ok 12 - UTV2-1970: non-boolean locked flag is refused before message POST
+  ---
+  duration_ms: 0.384025
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: wrong channel id is refused before message POST
+ok 13 - UTV2-1970: wrong channel id is refused before message POST
+  ---
+  duration_ms: 0.556283
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: wrong guild id is refused before message POST
+ok 14 - UTV2-1970: wrong guild id is refused before message POST
+  ---
+  duration_ms: 0.510578
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: wrong channel type is refused before message POST
+ok 15 - UTV2-1970: wrong channel type is refused before message POST
+  ---
+  duration_ms: 0.421106
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: initial GET failure remains not-sent
+ok 16 - UTV2-1970: initial GET failure remains not-sent
+  ---
+  duration_ms: 0.547135
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: PATCH failure remains not-sent
+ok 17 - UTV2-1970: PATCH failure remains not-sent
+  ---
+  duration_ms: 0.450085
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: re-read failure remains not-sent
+ok 18 - UTV2-1970: re-read failure remains not-sent
+  ---
+  duration_ms: 0.523056
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: initial GET timeout remains not-sent
+ok 19 - UTV2-1970: initial GET timeout remains not-sent
+  ---
+  duration_ms: 7.322446
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: PATCH timeout remains not-sent
+ok 20 - UTV2-1970: PATCH timeout remains not-sent
+  ---
+  duration_ms: 6.662863
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: re-read timeout remains not-sent
+ok 21 - UTV2-1970: re-read timeout remains not-sent
+  ---
+  duration_ms: 5.881909
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: an archived thread that re-reads unlocked is refused before message POST
+ok 22 - UTV2-1970: an archived thread that re-reads unlocked is refused before message POST
+  ---
+  duration_ms: 0.715036
+  type: 'test'
+  ...
+# Subtest: UTV2-1923: human delivery with no pinned destination refuses rather than falling back
+ok 23 - UTV2-1923: human delivery with no pinned destination refuses rather than falling back
+  ---
+  duration_ms: 0.384249
+  type: 'test'
+  ...
+# Subtest: UTV2-1923: a malformed pin is not a destination
+ok 24 - UTV2-1923: a malformed pin is not a destination
+  ---
+  duration_ms: 0.293582
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: buildDiscordMessagePayload drops an unverified thumbnail and still builds the embed
+not ok 25 - WORK-2026110302: buildDiscordMessagePayload drops an unverified thumbnail and still builds the embed
+  ---
+  duration_ms: 2.947505
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/apps/worker/src/delivery-adapters.test.ts:1:17424'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + {
+    +   url: 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png'
+    + }
+    - undefined
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  actual:
+    url: 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/apps/worker/src/delivery-adapters.test.ts:739:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: WORK-2026110302: buildDiscordMessagePayload drops a thumbnail flagged with a non-boolean verified value
+not ok 26 - WORK-2026110302: buildDiscordMessagePayload drops a thumbnail flagged with a non-boolean verified value
+  ---
+  duration_ms: 0.392631
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/apps/worker/src/delivery-adapters.test.ts:1:17815'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + {
+    +   url: 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png'
+    + }
+    - undefined
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  actual:
+    url: 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/apps/worker/src/delivery-adapters.test.ts:748:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: WORK-2026110302: buildDiscordMessagePayload renders a verified allowlisted thumbnail
+ok 27 - WORK-2026110302: buildDiscordMessagePayload renders a verified allowlisted thumbnail
+  ---
+  duration_ms: 0.171056
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: buildDiscordMessagePayload drops a verified dead-host NHL thumbnail
+not ok 28 - WORK-2026110302: buildDiscordMessagePayload drops a verified dead-host NHL thumbnail
+  ---
+  duration_ms: 0.184064
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/apps/worker/src/delivery-adapters.test.ts:1:18387'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + {
+    +   url: 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478402.jpg'
+    + }
+    - undefined
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  actual:
+    url: 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478402.jpg'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/apps/worker/src/delivery-adapters.test.ts:765:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: WORK-2026110302: an unverified thumbnail is dropped while the Discord message still sends
+not ok 29 - WORK-2026110302: an unverified thumbnail is dropped while the Discord message still sends
+  ---
+  duration_ms: 2.404808
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/apps/worker/src/delivery-adapters.test.ts:1:18765'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + {
+    +   url: 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png'
+    + }
+    - undefined
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  actual:
+    url: 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/apps/worker/src/delivery-adapters.test.ts:785:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..29
+# tests 29
+# suites 0
+# pass 25
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 274.675291
