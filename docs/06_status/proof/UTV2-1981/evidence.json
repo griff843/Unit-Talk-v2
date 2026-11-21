@@ -1,0 +1,183 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1981",
+  "tier": "T1",
+  "lane_type": "migration",
+  "proof_profile": "migration",
+  "status": "pre_merge",
+  "generated_at": "2026-11-07T07:40:00+00:00",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "07107d11d0d241c5933d1e671878e6e5eb09dfca",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "focused_tests": {
+      "status": "pass",
+      "tests": 135,
+      "fail": 0
+    },
+    "r_level": "pass",
+    "reversibility_presence": "pass",
+    "root_test": {
+      "status": "pass",
+      "exit_code": 0,
+      "tests": 7881,
+      "passed": 7868,
+      "failed": 0,
+      "skipped": 13,
+      "execution": "pnpm test child of pnpm verify:static"
+    },
+    "precondition_tooling_tests": {
+      "status": "pass",
+      "tests": 8,
+      "failed": 0
+    },
+    "type_check": {
+      "status": "pass",
+      "exit_code": 0
+    },
+    "verify_static": {
+      "status": "pass",
+      "exit_code": 0,
+      "execution": "pnpm verify:static child of pnpm verify; all static stages completed before live identity refusal"
+    },
+    "verify": {
+      "status": "blocked",
+      "exit_code": 1,
+      "reason": "Static stage passed; writable staging identity assertion refused host=127.0.0.1."
+    },
+    "proof_binding": {
+      "status": "pending_ci_recheck",
+      "reason": "Rebound to exact head 07107d11d0d241c5933d1e671878e6e5eb09dfca; rerun of proof-binding gate required after this proof-only commit."
+    }
+  },
+  "runtime_proof": {
+    "status": "pass_pending_post_deploy_parity",
+    "queries": [],
+    "row_counts": {},
+    "reason": "Exact-head CI at 07107d11d0d241c5933d1e671878e6e5eb09dfca: precondition drill, schema round-trip drill and staging writable DB proof all PASS. No executor staging/production DDL. Live schema parity is PENDING_POST_DEPLOY: the production index is not yet applied (Griff-only), so parity observed FAIL as expected.",
+    "head": "07107d11d0d241c5933d1e671878e6e5eb09dfca",
+    "precondition_drill": {
+      "result": "PASS",
+      "run": 42349510510,
+      "job": 128334428692,
+      "cases": [
+        "refuses decoy with SQLSTATE 42P07",
+        "schema fingerprint unchanged on refusal",
+        "applies on an empty scratch schema"
+      ]
+    },
+    "schema_roundtrip_drill": {
+      "result": "PASS",
+      "run": 42349510510,
+      "job": 128334428644,
+      "pre_up_hash": "1f5dd57add8cb9758b8aa13d13ce408a0ceacd87b70d5c01fb449c2a10067b44",
+      "post_down_hash": "1f5dd57add8cb9758b8aa13d13ce408a0ceacd87b70d5c01fb449c2a10067b44",
+      "post_up_hash": "a00dab7d08e881476261acb2140bccea03ebe80c68ca2981a8391d104fb76386",
+      "post_reup_hash": "a00dab7d08e881476261acb2140bccea03ebe80c68ca2981a8391d104fb76386"
+    },
+    "writable_db_proof_staging": {
+      "result": "PASS",
+      "run": 42349510567,
+      "job": 128334429172,
+      "workflow": "ci.yml",
+      "note": "Staging writable DB proof (staging only) succeeded at exact head; timeouts on staging are intermittent and this run does not prove the index improves them."
+    },
+    "live_schema_parity": {
+      "result": "PENDING_POST_DEPLOY",
+      "observed_result": "FAIL",
+      "run": 42349510570,
+      "job": 128334449741,
+      "production_ddl_applied": false,
+      "required_phase": "post-deploy-before-lane-close",
+      "reason": "Exact-head Live Schema Parity reported indexes missing_in_actual public.picks.picks_updated_at_idx. Separate authorized production CIC and guarded ledger apply are required after merge; no executor production DDL."
+    }
+  },
+  "production_authorization": "separate Griff packet required",
+  "pm_approval": "pending",
+  "ready_for_review_attestation": "not_published",
+  "command_logs": {
+    "verify": {
+      "path": "/tmp/utv2-1981-a2-verify.log",
+      "sha256": "6a651b6157ba10db376c732f7fe732862b0acf9e444a5bf013a9accdbc3b0b4d"
+    },
+    "focused": {
+      "path": "/tmp/utv2-1981-a2-focused.log",
+      "sha256": "3be79589968542ee4b02858d2c8e7a006ba3d73b344a97864e69e2d1daf7b4f1"
+    },
+    "typecheck": {
+      "path": "/tmp/utv2-1981-a2-typecheck.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "db": {
+      "path": "/tmp/utv2-1981-a2-db.log",
+      "sha256": "c16a495ae6ee7511695a6d68e9bab77c5934b6a6eeb85a61c67cde97f6584086"
+    },
+    "rlevel": {
+      "path": "/tmp/utv2-1981-a2-rlevel.log",
+      "sha256": "f8b27a67b0447612ff4d5d3e6dd24ea28cd0f123027c8ca0b5901fc38ecbdd58"
+    },
+    "reversibility": {
+      "path": "/tmp/utv2-1981-a2-reversibility.log",
+      "sha256": "93b7eaf06fe67f82aa16c9ae979e967ea379453203eb01a9ca5d28f46e375569"
+    },
+    "scratch": {
+      "path": "/tmp/utv2-1981-a2-scratch.log",
+      "sha256": "9b93baa42eff059bc92a5dea199cd7f5e7c8d933495488d758c7b72aba33faa7"
+    },
+    "precondition-ci": {
+      "path": "/tmp/utv2-1981-a2-precondition-ci.log",
+      "sha256": "47bc5754fe1ca762bd3185654c2553f57bfcddc8d94a4eec085ea5b779d59ed1"
+    },
+    "roundtrip-ci": {
+      "path": "/tmp/utv2-1981-a2-roundtrip-ci.log",
+      "sha256": "ee68802dba7825dcadf147f8108fffa9511f2bc943793323cc80b806d244eef2"
+    },
+    "parity-ci": {
+      "path": "/tmp/utv2-1981-a2-parity-ci.log",
+      "sha256": "4e9d903c19f1ed366f790e547e52994b22baa08c920b8290027da9dc5f437e1c"
+    },
+    "staging-ci": {
+      "path": "/tmp/utv2-1981-a2-staging-ci.log",
+      "sha256": "caf0b9f63452d5a3614e40509dc1f047c28bc9a8be3c02c87283243cb01b2d3b"
+    },
+    "proof-binding": {
+      "path": "/tmp/utv2-1981-a2-binding-final.log",
+      "sha256": "7e33fe203f30ad7dd00f3c3ed101709c016a51064d99a84fd8590e270bc0c301"
+    }
+  },
+  "limitations": [
+    "Local test:db refuses unidentified target; writable proof rests on the exact-head staging CI job (run 42349510567 job 128334429172), which passed.",
+    "A later proof-only head (4ba93c913) had its staging writable job FAIL with a listByLifecycleStates statement timeout (run 42351038313 job 128339020022); the passing receipt is at the verified source SHA 07107d11d. The timeout is intermittent and not resolved by this lane.",
+    "Staging index apply, before/after performance, under-load comparison, write costs, HOT ratio, build size and duration remain not proven.",
+    "No production or staging DDL by executor; production parity stays PENDING_POST_DEPLOY until separately authorized production apply and deploy.",
+    "No generated type edits; index has no TypeScript schema shape.",
+    "No PM approval, t1-approved label, merge or lane finalization."
+  ],
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1834",
+  "scratch_postgres": {
+    "result": "PASS",
+    "version": "17.6",
+    "target": "isolated loopback port 55481; no live project credentials",
+    "refused_sqlstate": "42P07",
+    "refused_cases": [
+      "INVALID",
+      "wrong column",
+      "partial",
+      "not ready",
+      "unique",
+      "expression",
+      "included column",
+      "wrong table"
+    ],
+    "accepted_cases": [
+      "absent index",
+      "valid matching index no-op"
+    ],
+    "up_down_up": "PASS",
+    "transcript": "verification.md"
+  }
+}
