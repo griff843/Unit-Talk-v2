@@ -15,8 +15,11 @@
     "apps/api/src/pick-asset-resolver.ts",
     "apps/api/src/submission-service.test.ts",
     "apps/api/src/submission-service.ts",
+    "apps/api/src/t1-proof-work-2026110302-artwork-metadata-live.test.ts",
     "apps/worker/src/delivery-adapters.test.ts",
     "apps/worker/src/delivery-adapters.ts",
+    "docs/05_operations/db-writer-classification.json",
+    "docs/05_operations/executable-wiring-baseline.json",
     "package.json",
     "packages/domain/src/discord-presentation.test.ts",
     "packages/domain/src/discord-presentation.ts"

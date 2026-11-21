@@ -1,0 +1,682 @@
+TAP version 13
+# Subtest: handleSubmitPick auto-enqueues a qualified pick and returns outboxEnqueued:true
+ok 1 - handleSubmitPick auto-enqueues a qualified pick and returns outboxEnqueued:true
+  ---
+  duration_ms: 19.664679
+  type: 'test'
+  ...
+# Subtest: handleSubmitPick does not enqueue a not-eligible pick and returns outboxEnqueued:false
+ok 2 - handleSubmitPick does not enqueue a not-eligible pick and returns outboxEnqueued:false
+  ---
+  duration_ms: 2.231474
+  type: 'test'
+  ...
+# Subtest: handleSubmitPick model-driven pick in routing shadow mode persists without promotion or enqueue
+ok 3 - handleSubmitPick model-driven pick in routing shadow mode persists without promotion or enqueue
+  ---
+  duration_ms: 1.659735
+  type: 'test'
+  ...
+# Subtest: handleSubmitPick qualified for best-bets enqueues to discord:best-bets
+ok 4 - handleSubmitPick qualified for best-bets enqueues to discord:best-bets
+  ---
+  duration_ms: 5.775263
+  type: 'test'
+  ...
+# Subtest: handleSubmitPick in local env keeps promotion target but enqueues to discord:canary
+ok 5 - handleSubmitPick in local env keeps promotion target but enqueues to discord:canary
+  ---
+  duration_ms: 2.794183
+  type: 'test'
+  ...
+# Subtest: UTV2-1902: handleSubmitPick smart-form pick below promotion threshold is not promoted or enqueued
+ok 6 - UTV2-1902: handleSubmitPick smart-form pick below promotion threshold is not promoted or enqueued
+  ---
+  duration_ms: 4.921132
+  type: 'test'
+  ...
+# Subtest: handleSubmitPick smart-form same-game exposure is decided by score, not by the exposure gate
+ok 7 - handleSubmitPick smart-form same-game exposure is decided by score, not by the exposure gate
+  ---
+  duration_ms: 7.539455
+  type: 'test'
+  ...
+# Subtest: validateSubmissionPayload rejects empty required fields
+ok 8 - validateSubmissionPayload rejects empty required fields
+  ---
+  duration_ms: 0.414054
+  type: 'test'
+  ...
+# Subtest: handleSubmitPick accepts snake_case stake_units from request bodies
+ok 9 - handleSubmitPick accepts snake_case stake_units from request bodies
+  ---
+  duration_ms: 1.908821
+  type: 'test'
+  ...
+# Subtest: handleSubmitPick rejects human request bodies that omit stakeUnits
+ok 10 - handleSubmitPick rejects human request bodies that omit stakeUnits
+  ---
+  duration_ms: 1.199451
+  type: 'test'
+  ...
+# Subtest: processSubmission defaults direct service payloads without stakeUnits to measurable 1u
+ok 11 - processSubmission defaults direct service payloads without stakeUnits to measurable 1u
+  ---
+  duration_ms: 1.970083
+  type: 'test'
+  ...
+# Subtest: processSubmission materializes canonical records and submission event
+ok 12 - processSubmission materializes canonical records and submission event
+  ---
+  duration_ms: 1.52896
+  type: 'test'
+  ...
+# Subtest: processSubmission normalizes known market keys before persisting the pick
+ok 13 - processSubmission normalizes known market keys before persisting the pick
+  ---
+  duration_ms: 1.365978
+  type: 'test'
+  ...
+# Subtest: processSubmission leaves unknown market keys unchanged
+ok 14 - processSubmission leaves unknown market keys unchanged
+  ---
+  duration_ms: 1.241885
+  type: 'test'
+  ...
+# Subtest: processSubmission attaches deviggingResult when a matching market offer exists
+ok 15 - processSubmission attaches deviggingResult when a matching market offer exists
+  ---
+  duration_ms: 9.320996
+  type: 'test'
+  ...
+# Subtest: processSubmission resolves deviggingResult via SGO alias when canonical key differs from provider format (UTV2-903)
+ok 16 - processSubmission resolves deviggingResult via SGO alias when canonical key differs from provider format (UTV2-903)
+  ---
+  duration_ms: 6.720274
+  type: 'test'
+  ...
+# Subtest: processSubmission matches moneyline provider offers by canonical market key and selection team
+ok 17 - processSubmission matches moneyline provider offers by canonical market key and selection team
+  ---
+  duration_ms: 2.242062
+  type: 'test'
+  ...
+# Subtest: processSubmission uses single non-SGO book before confidence-delta fallback
+ok 18 - processSubmission uses single non-SGO book before confidence-delta fallback
+  ---
+  duration_ms: 1.759013
+  type: 'test'
+  ...
+# Subtest: processSubmission attaches kellySizing when deviggingResult exists and odds are finite
+ok 19 - processSubmission attaches kellySizing when deviggingResult exists and odds are finite
+  ---
+  duration_ms: 1.297757
+  type: 'test'
+  ...
+# Subtest: processSubmission stores null kellySizing when odds are missing
+ok 20 - processSubmission stores null kellySizing when odds are missing
+  ---
+  duration_ms: 1.212461
+  type: 'test'
+  ...
+# Subtest: processSubmission leaves deviggingResult absent when no matching market offer exists
+ok 21 - processSubmission leaves deviggingResult absent when no matching market offer exists
+  ---
+  duration_ms: 1.066749
+  type: 'test'
+  ...
+# Subtest: processSubmission fails closed when provider offer lookup throws
+ok 22 - processSubmission fails closed when provider offer lookup throws
+  ---
+  duration_ms: 1.081693
+  type: 'test'
+  ...
+# Subtest: transitionPickLifecycle allows valid transitions
+ok 23 - transitionPickLifecycle allows valid transitions
+  ---
+  duration_ms: 1.103564
+  type: 'test'
+  ...
+# Subtest: transitionPickLifecycle rejects invalid transitions
+ok 24 - transitionPickLifecycle rejects invalid transitions
+  ---
+  duration_ms: 1.675571
+  type: 'test'
+  ...
+# Subtest: enqueueDistributionWork creates an outbox record with idempotency key
+ok 25 - enqueueDistributionWork creates an outbox record with idempotency key
+  ---
+  duration_ms: 1.651689
+  type: 'test'
+  ...
+# Subtest: handleSubmitPick returns success payload for valid requests
+ok 26 - handleSubmitPick returns success payload for valid requests
+  ---
+  duration_ms: 1.386622
+  type: 'test'
+  ...
+# Subtest: handleSubmitPick returns typed error payload for invalid requests
+ok 27 - handleSubmitPick returns typed error payload for invalid requests
+  ---
+  duration_ms: 0.777166
+  type: 'test'
+  ...
+# Subtest: enqueueDistributionWithRunTracking records run and audit metadata
+ok 28 - enqueueDistributionWithRunTracking records run and audit metadata
+  ---
+  duration_ms: 3.185754
+  type: 'test'
+  ...
+# Subtest: claimDistributionWork claims the next pending outbox record for a worker
+ok 29 - claimDistributionWork claims the next pending outbox record for a worker
+  ---
+  duration_ms: 1.157042
+  type: 'test'
+  ...
+# Subtest: failDistributionWork marks claimed work failed and increments attempt count
+ok 30 - failDistributionWork marks claimed work failed and increments attempt count
+  ---
+  duration_ms: 1.238117
+  type: 'test'
+  ...
+# Subtest: completeDistributionWork marks claimed work sent
+ok 31 - completeDistributionWork marks claimed work sent
+  ---
+  duration_ms: 1.224152
+  type: 'test'
+  ...
+# Subtest: recordDistributionReceipt stores a first-class delivery receipt
+ok 32 - recordDistributionReceipt stores a first-class delivery receipt
+  ---
+  duration_ms: 1.195343
+  type: 'test'
+  ...
+# Subtest: approval does not imply best-bets promotion in runtime
+ok 33 - approval does not imply best-bets promotion in runtime
+  ---
+  duration_ms: 4.297115
+  type: 'test'
+  ...
+# Subtest: non-qualified picks are blocked from best-bets enqueue during tracked runtime flow
+ok 34 - non-qualified picks are blocked from best-bets enqueue during tracked runtime flow
+  ---
+  duration_ms: 1.838198
+  type: 'test'
+  ...
+# Subtest: qualified picks are allowed to route to best-bets
+ok 35 - qualified picks are allowed to route to best-bets
+  ---
+  duration_ms: 1.734611
+  type: 'test'
+  ...
+# Subtest: force-promote override persists and allows best-bets routing
+ok 36 - force-promote override persists and allows best-bets routing
+  ---
+  duration_ms: 2.939775
+  type: 'test'
+  ...
+# Subtest: suppression override persists and blocks best-bets routing
+ok 37 - suppression override persists and blocks best-bets routing
+  ---
+  duration_ms: 2.042242
+  type: 'test'
+  ...
+# Subtest: qualified picks are allowed to route to trader-insights
+ok 38 - qualified picks are allowed to route to trader-insights
+  ---
+  duration_ms: 1.768228
+  type: 'test'
+  ...
+# Subtest: trader-insights blocks picks below minimum score
+ok 39 - trader-insights blocks picks below minimum score
+  ---
+  duration_ms: 1.491718
+  type: 'test'
+  ...
+# Subtest: trader-insights blocks picks below edge threshold
+ok 40 - trader-insights blocks picks below edge threshold
+  ---
+  duration_ms: 1.48215
+  type: 'test'
+  ...
+# Subtest: trader-insights blocks picks below trust threshold
+ok 41 - trader-insights blocks picks below trust threshold
+  ---
+  duration_ms: 1.49909
+  type: 'test'
+  ...
+# Subtest: best-bets qualified pick does not automatically qualify for trader-insights
+ok 42 - best-bets qualified pick does not automatically qualify for trader-insights
+  ---
+  duration_ms: 1.832894
+  type: 'test'
+  ...
+# Subtest: force-promote override persists and allows trader-insights routing
+ok 43 - force-promote override persists and allows trader-insights routing
+  ---
+  duration_ms: 1.779013
+  type: 'test'
+  ...
+# Subtest: generic suppression override persists and blocks trader-insights routing
+ok 44 - generic suppression override persists and blocks trader-insights routing
+  ---
+  duration_ms: 1.711854
+  type: 'test'
+  ...
+# Subtest: board cap suppresses otherwise qualified best-bets candidates
+ok 45 - board cap suppresses otherwise qualified best-bets candidates
+  ---
+  duration_ms: 15.00573
+  type: 'test'
+  ...
+# Subtest: settled best-bets picks do not consume board capacity
+ok 46 - settled best-bets picks do not consume board capacity
+  ---
+  duration_ms: 3.15717
+  type: 'test'
+  ...
+# Subtest: settled pick keeps persisted band in metadata and promotion history payload
+ok 47 - settled pick keeps persisted band in metadata and promotion history payload
+  ---
+  duration_ms: 3.416953
+  type: 'test'
+  ...
+# Subtest: duplicate suppression blocks repeated best-bets thesis
+ok 48 - duplicate suppression blocks repeated best-bets thesis
+  ---
+  duration_ms: 1.888835
+  type: 'test'
+  ...
+# Subtest: dual-qualifying pick routes exclusively to trader-insights and is blocked from best-bets
+ok 49 - dual-qualifying pick routes exclusively to trader-insights and is blocked from best-bets
+  ---
+  duration_ms: 1.911351
+  type: 'test'
+  ...
+# Subtest: exclusive-insights qualifies at its minimum threshold
+ok 50 - exclusive-insights qualifies at its minimum threshold
+  ---
+  duration_ms: 0.264414
+  type: 'test'
+  ...
+# Subtest: exclusive-insights rejects picks below its score threshold
+ok 51 - exclusive-insights rejects picks below its score threshold
+  ---
+  duration_ms: 0.148654
+  type: 'test'
+  ...
+# Subtest: exclusive-insights outranks trader-insights in eager evaluation
+ok 52 - exclusive-insights outranks trader-insights in eager evaluation
+  ---
+  duration_ms: 2.054273
+  type: 'test'
+  ...
+# Subtest: distribution gate rejects blocked discord:exclusive-insights even for qualified picks
+ok 53 - distribution gate rejects blocked discord:exclusive-insights even for qualified picks
+  ---
+  duration_ms: 1.579994
+  type: 'test'
+  ...
+# Subtest: best-bets qualified pick with absent edge and trust scores still qualifies
+ok 54 - best-bets qualified pick with absent edge and trust scores still qualifies
+  ---
+  duration_ms: 0.991766
+  type: 'test'
+  ...
+# Subtest: checkExposureGate returns null when under game limit
+ok 55 - checkExposureGate returns null when under game limit
+  ---
+  duration_ms: 0.134768
+  type: 'test'
+  ...
+# Subtest: checkExposureGate returns exposure-game-limit when at game limit
+ok 56 - checkExposureGate returns exposure-game-limit when at game limit
+  ---
+  duration_ms: 0.055485
+  type: 'test'
+  ...
+# Subtest: checkExposureGate does not count picks from different submitters
+ok 57 - checkExposureGate does not count picks from different submitters
+  ---
+  duration_ms: 0.06835
+  type: 'test'
+  ...
+# Subtest: checkExposureGate does not count picks on different events
+ok 58 - checkExposureGate does not count picks on different events
+  ---
+  duration_ms: 0.052077
+  type: 'test'
+  ...
+# Subtest: checkExposureGate returns exposure-daily-limit when at daily limit
+ok 59 - checkExposureGate returns exposure-daily-limit when at daily limit
+  ---
+  duration_ms: 0.106235
+  type: 'test'
+  ...
+# Subtest: checkExposureGate does not count picks from other days for daily limit
+ok 60 - checkExposureGate does not count picks from other days for daily limit
+  ---
+  duration_ms: 0.086543
+  type: 'test'
+  ...
+# Subtest: checkExposureGate does not count the pick itself
+ok 61 - checkExposureGate does not count the pick itself
+  ---
+  duration_ms: 0.042022
+  type: 'test'
+  ...
+# Subtest: checkExposureGate game limit takes priority over daily limit
+ok 62 - checkExposureGate game limit takes priority over daily limit
+  ---
+  duration_ms: 0.068096
+  type: 'test'
+  ...
+# Subtest: checkExposureGate uses metadata.capper for identity instead of source
+ok 63 - checkExposureGate uses metadata.capper for identity instead of source
+  ---
+  duration_ms: 0.049636
+  type: 'test'
+  ...
+# Subtest: checkExposureGate does not conflate picks with same source but different capper
+ok 64 - checkExposureGate does not conflate picks with same source but different capper
+  ---
+  duration_ms: 0.044071
+  type: 'test'
+  ...
+# Subtest: duplicate submission returns existing pick without creating a new row
+ok 65 - duplicate submission returns existing pick without creating a new row
+  ---
+  duration_ms: 2.802886
+  type: 'test'
+  ...
+# Subtest: submissions with different payloads produce different picks
+ok 66 - submissions with different payloads produce different picks
+  ---
+  duration_ms: 1.675515
+  type: 'test'
+  ...
+# Subtest: processSubmission normalizes event identity fields into pick metadata
+ok 67 - processSubmission normalizes event identity fields into pick metadata
+  ---
+  duration_ms: 1.345709
+  type: 'test'
+  ...
+# Subtest: processSubmission upgrades smart-form playerId metadata into canonical participantId
+ok 68 - processSubmission upgrades smart-form playerId metadata into canonical participantId
+  ---
+  duration_ms: 1.355769
+  type: 'test'
+  ...
+# Subtest: processShadowSubmission records a shadow capture audit row
+ok 69 - processShadowSubmission records a shadow capture audit row
+  ---
+  duration_ms: 0.854048
+  type: 'test'
+  ...
+# Subtest: event gate: pick with matching event in populated repo is accepted
+ok 70 - event gate: pick with matching event in populated repo is accepted
+  ---
+  duration_ms: 3.722762
+  type: 'test'
+  ...
+# Subtest: event gate: pick with unknown eventName is rejected when events repo is populated
+ok 71 - event gate: pick with unknown eventName is rejected when events repo is populated
+  ---
+  duration_ms: 0.734075
+  type: 'test'
+  ...
+# Subtest: event gate: pick without eventName is accepted even when events repo is populated
+ok 72 - event gate: pick without eventName is accepted even when events repo is populated
+  ---
+  duration_ms: 1.546721
+  type: 'test'
+  ...
+# Subtest: event gate: pick with eventName is accepted when events repo is empty (cold start)
+ok 73 - event gate: pick with eventName is accepted when events repo is empty (cold start)
+  ---
+  duration_ms: 1.442564
+  type: 'test'
+  ...
+# Subtest: automated write boundary materializes a board pick directly into awaiting_approval
+ok 74 - automated write boundary materializes a board pick directly into awaiting_approval
+  ---
+  duration_ms: 2.430358
+  type: 'test'
+  ...
+# Subtest: a source-only automated submission is left to the Phase 7A source brake
+ok 75 - a source-only automated submission is left to the Phase 7A source brake
+  ---
+  duration_ms: 0.176946
+  type: 'test'
+  ...
+# Subtest: automated write boundary preserves the human/manual validated path
+ok 76 - automated write boundary preserves the human/manual validated path
+  ---
+  duration_ms: 0.91098
+  type: 'test'
+  ...
+# Subtest: synthetic future system producer cannot bypass the governed boundary
+ok 77 - synthetic future system producer cannot bypass the governed boundary
+  ---
+  duration_ms: 1.699785
+  type: 'test'
+  ...
+# Subtest: automated write boundary rejects missing market evidence before persistence
+ok 78 - automated write boundary rejects missing market evidence before persistence
+  ---
+  duration_ms: 0.259012
+  type: 'test'
+  ...
+# Subtest: automated write boundary rejects a stale source snapshot before persistence
+ok 79 - automated write boundary rejects a stale source snapshot before persistence
+  ---
+  duration_ms: 0.127173
+  type: 'test'
+  ...
+# Subtest: readiness detects an automated direct-to-validated write
+ok 80 - readiness detects an automated direct-to-validated write
+  ---
+  duration_ms: 0.119236
+  type: 'test'
+  ...
+# Subtest: REGRESSION UTV2-1611: an unmarked board-construction production never persists as validated
+ok 81 - REGRESSION UTV2-1611: an unmarked board-construction production never persists as validated
+  ---
+  duration_ms: 1.949017
+  type: 'test'
+  ...
+# Subtest: REGRESSION UTV2-1611: an unmarked board production without producer identity fails closed
+ok 82 - REGRESSION UTV2-1611: an unmarked board production without producer identity fails closed
+  ---
+  duration_ms: 0.595286
+  type: 'test'
+  ...
+# Subtest: REGRESSION UTV2-1611: an unmarked board production without market evidence fails closed
+ok 83 - REGRESSION UTV2-1611: an unmarked board production without market evidence fails closed
+  ---
+  duration_ms: 0.104858
+  type: 'test'
+  ...
+# Subtest: REGRESSION UTV2-1611: board-construction carries a source-keyed fallback brake
+ok 84 - REGRESSION UTV2-1611: board-construction carries a source-keyed fallback brake
+  ---
+  duration_ms: 0.04727
+  type: 'test'
+  ...
+# Subtest: REGRESSION UTV2-1611: the submit controller does not re-apply awaiting_approval after atomic materialization
+ok 85 - REGRESSION UTV2-1611: the submit controller does not re-apply awaiting_approval after atomic materialization
+  ---
+  duration_ms: 2.104309
+  type: 'test'
+  ...
+# Subtest: REGRESSION UTV2-1611: the source-only Phase 7A brake path is still governed by the controller
+ok 86 - REGRESSION UTV2-1611: the source-only Phase 7A brake path is still governed by the controller
+  ---
+  duration_ms: 1.631463
+  type: 'test'
+  ...
+# Subtest: REGRESSION UTV2-1611: the live proof cleans up through the lifecycle FSM, not a direct status PATCH
+ok 87 - REGRESSION UTV2-1611: the live proof cleans up through the lifecycle FSM, not a direct status PATCH
+  ---
+  duration_ms: 0.481901
+  type: 'test'
+  ...
+# Subtest: REGRESSION UTV2-1611: the automated/braked drift invariant fails on the condition it names
+ok 88 - REGRESSION UTV2-1611: the automated/braked drift invariant fails on the condition it names
+  ---
+  duration_ms: 0.135844
+  type: 'test'
+  ...
+# Subtest: REGRESSION UTV2-1611: validated is a legal transient for a marker-less Phase 7A brake source
+ok 89 - REGRESSION UTV2-1611: validated is a legal transient for a marker-less Phase 7A brake source
+  ---
+  duration_ms: 0.105567
+  type: 'test'
+  ...
+# Subtest: UTV2-1842: manual coverage-gap outcome waives the event existence gate
+ok 90 - UTV2-1842: manual coverage-gap outcome waives the event existence gate
+  ---
+  duration_ms: 1.890862
+  type: 'test'
+  ...
+# Subtest: UTV2-1842: structured team fallback outcome waives the event existence gate
+ok 91 - UTV2-1842: structured team fallback outcome waives the event existence gate
+  ---
+  duration_ms: 1.421568
+  type: 'test'
+  ...
+# Subtest: UTV2-1842: canonical-event outcome does NOT waive the event existence gate
+ok 92 - UTV2-1842: canonical-event outcome does NOT waive the event existence gate
+  ---
+  duration_ms: 0.589903
+  type: 'test'
+  ...
+# Subtest: UTV2-1842: not-smart-form outcome does NOT waive the event existence gate
+ok 93 - UTV2-1842: not-smart-form outcome does NOT waive the event existence gate
+  ---
+  duration_ms: 0.563425
+  type: 'test'
+  ...
+# Subtest: UTV2-1842: a delivery-eligible manual-coverage-gap outcome does NOT waive the event existence gate
+ok 94 - UTV2-1842: a delivery-eligible manual-coverage-gap outcome does NOT waive the event existence gate
+  ---
+  duration_ms: 0.655554
+  type: 'test'
+  ...
+# Subtest: UTV2-1842: a delivery-eligible structured-team-fallback outcome does NOT waive the event existence gate
+ok 95 - UTV2-1842: a delivery-eligible structured-team-fallback outcome does NOT waive the event existence gate
+  ---
+  duration_ms: 0.465293
+  type: 'test'
+  ...
+# Subtest: UTV2-1938: a server-authorized delivery-eligible manual-coverage-gap outcome waives the event existence gate
+ok 96 - UTV2-1938: a server-authorized delivery-eligible manual-coverage-gap outcome waives the event existence gate
+  ---
+  duration_ms: 3.38182
+  type: 'test'
+  ...
+# Subtest: UTV2-1938: a server-authorized delivery-eligible structured-team-fallback outcome waives the event existence gate
+ok 97 - UTV2-1938: a server-authorized delivery-eligible structured-team-fallback outcome waives the event existence gate
+  ---
+  duration_ms: 1.407665
+  type: 'test'
+  ...
+# Subtest: UTV2-1842: waivesEventExistenceGate is the whole predicate, and it is fail-closed
+ok 98 - UTV2-1842: waivesEventExistenceGate is the whole predicate, and it is fail-closed
+  ---
+  duration_ms: 0.15972
+  type: 'test'
+  ...
+# Subtest: WORK0309 cross-capper: identical wagers create separate attributed picks; same-capper retry creates no rows
+ok 99 - WORK0309 cross-capper: identical wagers create separate attributed picks; same-capper retry creates no rows
+  ---
+  duration_ms: 1.800871
+  type: 'test'
+  ...
+# Subtest: WORK0309 distribution isolation: track-only then delivery-eligible bypasses conflict guards with separate immutable picks
+ok 100 - WORK0309 distribution isolation: track-only then delivery-eligible bypasses conflict guards with separate immutable picks
+  ---
+  duration_ms: 2.15085
+  type: 'test'
+  ...
+# Subtest: WORK0309 distribution isolation: delivery-eligible then track-only bypasses conflict guards with separate immutable picks
+ok 101 - WORK0309 distribution isolation: delivery-eligible then track-only bypasses conflict guards with separate immutable picks
+  ---
+  duration_ms: 1.48972
+  type: 'test'
+  ...
+# Subtest: WORK0309 attribution precedence matches persistence, including materialization capper pin and metadata strings
+ok 102 - WORK0309 attribution precedence matches persistence, including materialization capper pin and metadata strings
+  ---
+  duration_ms: 2.591549
+  type: 'test'
+  ...
+# Subtest: WORK0309 scope encoding cannot alias identities containing separators
+ok 103 - WORK0309 scope encoding cannot alias identities containing separators
+  ---
+  duration_ms: 0.087812
+  type: 'test'
+  ...
+# Subtest: WORK0309 historical scoped retry creates a new pick without rewriting the legacy row or key
+ok 104 - WORK0309 historical scoped retry creates a new pick without rewriting the legacy row or key
+  ---
+  duration_ms: 1.400237
+  type: 'test'
+  ...
+# Subtest: WORK0309 legacy producers retain the exact six-field key bytes without submitter or mode
+ok 105 - WORK0309 legacy producers retain the exact six-field key bytes without submitter or mode
+  ---
+  duration_ms: 0.153822
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: a last-name-only selection never attaches a thumbnail
+ok 106 - WORK-2026110302: a last-name-only selection never attaches a thumbnail
+  ---
+  duration_ms: 1.036308
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: the selection text never substitutes an unrelated player's photo
+ok 107 - WORK-2026110302: the selection text never substitutes an unrelated player's photo
+  ---
+  duration_ms: 0.989066
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: a verified headshot for the resolved participant is persisted with thumbnailVerified
+ok 108 - WORK-2026110302: a verified headshot for the resolved participant is persisted with thumbnailVerified
+  ---
+  duration_ms: 1.036148
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: caller-supplied thumbnailUrl and thumbnailVerified are stripped before persisting
+ok 109 - WORK-2026110302: caller-supplied thumbnailUrl and thumbnailVerified are stripped before persisting
+  ---
+  duration_ms: 0.883677
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: a caller-supplied thumbnailVerified cannot upgrade an unverified resolver result
+ok 110 - WORK-2026110302: a caller-supplied thumbnailVerified cannot upgrade an unverified resolver result
+  ---
+  duration_ms: 1.026614
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: a resolver that never returns cannot hold submission past the 5s artwork budget
+ok 111 - WORK-2026110302: a resolver that never returns cannot hold submission past the 5s artwork budget
+  ---
+  duration_ms: 5002.569543
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: shadow submissions strip caller artwork and use the same verified resolver
+ok 112 - WORK-2026110302: shadow submissions strip caller artwork and use the same verified resolver
+  ---
+  duration_ms: 1.72284
+  type: 'test'
+  ...
+1..112
+# tests 112
+# suites 0
+# pass 112
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5516.949171

@@ -35,7 +35,7 @@ import {
   computeSubmissionDomainAnalysis,
   enrichMetadataWithDomainAnalysis,
 } from './domain-analysis-service.js';
-import { resolvePickThumbnailUrl } from './pick-asset-resolver.js';
+import { resolvePickArtwork, type PickArtworkOptions } from './pick-asset-resolver.js';
 import { classifyMarketFamilyForGrading } from './grading-service.js';
 import { PROVIDER_OFFER_MAX_AGE_MS } from './real-edge-service.js';
 import type { RealEdgeMarketScope } from './real-edge-service.js';
@@ -159,6 +159,8 @@ export async function processSubmission(
   // UTV2-1842: optional and absent by default. An omitted outcome cannot waive anything --
   // see the event-existence gate below -- so every existing caller keeps today's behaviour.
   smartFormOutcome?: SmartFormValidationOutcome,
+  // WORK-2026110302: optional test seam for the artwork deadline and matcher.
+  artworkOptions?: PickArtworkOptions,
 ): Promise<SubmissionProcessingResult> {
   payload = ensureMeasurableStakeUnits(payload);
   const automatedWrite = prepareAutomatedSubmission(payload);
@@ -420,27 +422,25 @@ export async function processSubmission(
     }
   }
 
-  // Resolve thumbnail URL from enriched participant data (fail-open)
-  let thumbnailUrl: string | null = null;
-  if (repositories.participants) {
-    const pickSport = enrichedMetadata['sport'] as string | undefined;
-    thumbnailUrl = await resolvePickThumbnailUrl(
-      payload.selection,
-      pickSport ?? null,
-      repositories.participants,
-    );
-  }
+  // WORK-2026110302: artwork is bound to the resolved participant identity and
+  // verified, or absent. It never blocks or delays submission past its deadline.
+  const artworkMetadata = await resolveArtworkMetadata(
+    normalizedMarketKey,
+    { ...enrichedMetadata, ...normalizedIdentity },
+    repositories.participants,
+    artworkOptions,
+  );
 
   const enrichedPick: CanonicalPick = {
     ...materialized.pick,
     metadata: {
-      ...enrichedMetadata,
+      ...stripCallerArtwork(enrichedMetadata),
       ...normalizedIdentity,
       ...(deviggingResult ? { deviggingResult } : {}),
       kellySizing,
       ...realEdgeData,
       ...(payload.thesis ? { thesis: payload.thesis } : {}),
-      ...(thumbnailUrl ? { thumbnailUrl } : {}),
+      ...artworkMetadata,
       ...(payload.submittedBy ? { capper: payload.submittedBy } : {}),
     },
   };
@@ -577,6 +577,8 @@ export async function processShadowSubmission(
     participants?: import('@unit-talk/db').ParticipantRepository;
     events?: EventRepository;
   },
+  // WORK-2026110302: optional test seam for the artwork deadline and matcher.
+  artworkOptions?: PickArtworkOptions,
 ): Promise<ShadowSubmissionProcessingResult> {
   const normalizedMarketKey = normalizeMarketKey(payload.market);
   const shadowRecordedAt = new Date().toISOString();
@@ -638,26 +640,23 @@ export async function processShadowSubmission(
     normalizedMarketKey,
   );
 
-  // Resolve thumbnail URL from enriched participant data (fail-open)
-  let shadowThumbnailUrl: string | null = null;
-  if (repositories.participants) {
-    const pickSport = enrichedMetadata['sport'] as string | undefined;
-    shadowThumbnailUrl = await resolvePickThumbnailUrl(
-      payload.selection,
-      pickSport ?? null,
-      repositories.participants,
-    );
-  }
+  // WORK-2026110302: same identity-bound, deadline-bounded artwork as the primary path.
+  const shadowArtworkMetadata = await resolveArtworkMetadata(
+    normalizedMarketKey,
+    { ...enrichedMetadata, ...normalizedIdentity },
+    repositories.participants,
+    artworkOptions,
+  );
 
   const enrichedPick: CanonicalPick = {
     ...materialized.pick,
     metadata: {
-      ...enrichedMetadata,
+      ...stripCallerArtwork(enrichedMetadata),
       ...normalizedIdentity,
       ...(deviggingResult ? { deviggingResult } : {}),
       kellySizing,
       ...(payload.thesis ? { thesis: payload.thesis } : {}),
-      ...(shadowThumbnailUrl ? { thumbnailUrl: shadowThumbnailUrl } : {}),
+      ...shadowArtworkMetadata,
       ...(payload.submittedBy ? { capper: payload.submittedBy } : {}),
     },
   };
@@ -953,6 +952,27 @@ async function checkEventExistenceGate(eventName: string, events: EventRepositor
       `No event found matching "${eventName}" — verify the event name and try again`,
     );
   }
+}
+
+/** Artwork fields are server-derived only; a caller can never set them. */
+function stripCallerArtwork(metadata: Record<string, unknown>): Record<string, unknown> {
+  const { thumbnailUrl: _thumbnailUrl, thumbnailVerified: _thumbnailVerified, ...rest } = metadata;
+  return rest;
+}
+
+async function resolveArtworkMetadata(
+  marketKey: string,
+  identityMetadata: Record<string, unknown>,
+  participants: import('@unit-talk/db').ParticipantRepository | undefined,
+  options: PickArtworkOptions | undefined,
+): Promise<{ thumbnailUrl?: string; thumbnailVerified?: true }> {
+  const participantId =
+    readMetadataString(identityMetadata, 'participantId') ??
+    readMetadataString(identityMetadata, 'playerId');
+  const artwork = await resolvePickArtwork({ participantId, marketKey }, participants, options);
+  return artwork.verified && artwork.url
+    ? { thumbnailUrl: artwork.url, thumbnailVerified: true }
+    : {};
 }
 
 function readMetadataString(metadata: Record<string, unknown>, key: string): string | null {

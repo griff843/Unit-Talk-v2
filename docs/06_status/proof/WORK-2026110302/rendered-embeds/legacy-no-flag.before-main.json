@@ -1,0 +1,58 @@
+{
+  "case": "legacy-no-flag",
+  "code": "before-main",
+  "inputMetadata": {
+    "thumbnailUrl": "https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png"
+  },
+  "sends": true,
+  "thumbnail": {
+    "url": "https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png"
+  },
+  "footer": {
+    "text": "Unit Talk"
+  },
+  "message": {
+    "nonce": "0000000000004000800000000",
+    "enforce_nonce": true,
+    "embeds": [
+      {
+        "title": "Pick Posted · LeBron James Over 27.5 @ +27.5",
+        "color": 13083467,
+        "fields": [
+          {
+            "name": "Market",
+            "value": "player_points_ou",
+            "inline": true
+          },
+          {
+            "name": "Odds",
+            "value": "-110",
+            "inline": true
+          },
+          {
+            "name": "Units",
+            "value": "1u",
+            "inline": true
+          },
+          {
+            "name": "Capper",
+            "value": "griff843",
+            "inline": true
+          },
+          {
+            "name": "Game Time",
+            "value": "<t:1795307400:f>",
+            "inline": true
+          }
+        ],
+        "footer": {
+          "text": "Unit Talk"
+        },
+        "description": "NBA | Lakers vs Celtics",
+        "thumbnail": {
+          "url": "https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png"
+        }
+      }
+    ]
+  }
+}

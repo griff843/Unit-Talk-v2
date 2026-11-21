@@ -1,0 +1,154 @@
+TAP version 13
+# Subtest: ambiguous name: two "Smith" players must give no thumbnail
+not ok 1 - ambiguous name: two "Smith" players must give no thumbnail
+  ---
+  duration_ms: 1.920895
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/.out/work-0302/probe/main-resolver-probe.test.ts:2:1402'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'https://img.mlbstatic.com/a'
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: 'https://img.mlbstatic.com/a'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/.out/work-0302/probe/main-resolver-probe.test.ts:22:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: last-name-only match must give no thumbnail
+not ok 2 - last-name-only match must give no thumbnail
+  ---
+  duration_ms: 0.271459
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/.out/work-0302/probe/main-resolver-probe.test.ts:2:1801'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'https://a.espncdn.com/m.png'
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: 'https://a.espncdn.com/m.png'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/.out/work-0302/probe/main-resolver-probe.test.ts:26:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: unrelated player: a pick on Bronny must not show LeBron
+not ok 3 - unrelated player: a pick on Bronny must not show LeBron
+  ---
+  duration_ms: 0.273307
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/.out/work-0302/probe/main-resolver-probe.test.ts:2:2123'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'https://cdn.nba.com/l.png'
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: 'https://cdn.nba.com/l.png'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/.out/work-0302/probe/main-resolver-probe.test.ts:30:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: shared stored URL must give no thumbnail
+not ok 4 - shared stored URL must give no thumbnail
+  ---
+  duration_ms: 0.168007
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/.out/work-0302/probe/main-resolver-probe.test.ts:2:2478'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'https://cdn.nba.com/shared.png'
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: 'https://cdn.nba.com/shared.png'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/.out/work-0302/probe/main-resolver-probe.test.ts:35:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: dead NHL host must give no thumbnail
+not ok 5 - dead NHL host must give no thumbnail
+  ---
+  duration_ms: 0.136093
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/.out/work-0302/probe/main-resolver-probe.test.ts:2:2870'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478402.jpg'
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478402.jpg'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/.out/work-0302/probe/main-resolver-probe.test.ts:39:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: two-team total must give no thumbnail
+not ok 6 - two-team total must give no thumbnail
+  ---
+  duration_ms: 0.13344
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/.out/work-0302/probe/main-resolver-probe.test.ts:2:3239'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'https://a.espncdn.com/lal.png'
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: 'https://a.espncdn.com/lal.png'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/.out/work-0302/probe/main-resolver-probe.test.ts:43:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 0
+# fail 6
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 250.141205

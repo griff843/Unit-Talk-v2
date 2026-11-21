@@ -3670,3 +3670,264 @@ test('WORK0309 legacy producers retain the exact six-field key bytes without sub
     assert.equal(computeSubmissionIdempotencyKey({ ...payload, metadata: { unrelated: true } }), legacy);
   }
 });
+
+// ─── WORK-2026110302: identity-bound, verified-only Discord artwork ───────────
+
+const ARTWORK_LEBRON_URL = 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png';
+const ARTWORK_MAHOMES_URL = 'https://a.espncdn.com/i/headshots/nfl/players/full/3139477.png';
+
+function confirmingArtwork(url: string) {
+  const calls: string[] = [];
+  return {
+    calls,
+    options: {
+      resolveHeadshot: async (name: string) => {
+        calls.push(name);
+        return { url, reason: 'confirmed' as const };
+      },
+    },
+  };
+}
+
+async function seedArtworkPlayer(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  externalId: string,
+  displayName: string,
+  sport: string,
+  metadata: Record<string, unknown>,
+) {
+  return repositories.participants.upsertByExternalId({
+    externalId,
+    displayName,
+    participantType: 'player',
+    sport,
+    league: sport,
+    metadata,
+  });
+}
+
+test('WORK-2026110302: a last-name-only selection never attaches a thumbnail', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await seedArtworkPlayer(repositories, 'player-mahomes', 'Patrick Mahomes', 'NFL', {
+    headshot_url: ARTWORK_MAHOMES_URL,
+  });
+  const artwork = confirmingArtwork(ARTWORK_MAHOMES_URL);
+
+  const created = await processSubmission(
+    {
+      source: 'smart-form',
+      submittedBy: 'griff843',
+      market: 'player_passing_tds_ou',
+      selection: 'Mahomes Over 2.5 TDs',
+      line: 2.5,
+      odds: -110,
+      eventName: 'Chiefs vs Bills',
+      metadata: { sport: 'NFL' },
+    },
+    repositories,
+    undefined,
+    artwork.options,
+  );
+
+  const metadata = created.pick.metadata as Record<string, unknown>;
+  assert.equal(metadata['thumbnailUrl'], undefined);
+  assert.equal(metadata['thumbnailVerified'], undefined);
+  assert.deepEqual(artwork.calls, []);
+});
+
+test('WORK-2026110302: the selection text never substitutes an unrelated player\'s photo', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await seedArtworkPlayer(repositories, 'player-lebron', 'LeBron James', 'NBA', {
+    headshot_url: ARTWORK_LEBRON_URL,
+  });
+  const davis = await seedArtworkPlayer(repositories, 'player-davis', 'Anthony Davis', 'NBA', {});
+  const artwork = confirmingArtwork(ARTWORK_LEBRON_URL);
+
+  const created = await processSubmission(
+    {
+      source: 'smart-form',
+      submittedBy: 'griff843',
+      market: 'player_points_ou',
+      selection: 'LeBron James Over 27.5',
+      line: 27.5,
+      odds: -110,
+      eventName: 'Lakers vs Celtics',
+      metadata: { sport: 'NBA', participantId: davis.id },
+    },
+    repositories,
+    undefined,
+    artwork.options,
+  );
+
+  const metadata = created.pick.metadata as Record<string, unknown>;
+  assert.equal(metadata['participantId'], davis.id);
+  assert.equal(metadata['thumbnailUrl'], undefined);
+  assert.equal(metadata['thumbnailVerified'], undefined);
+});
+
+test('WORK-2026110302: a verified headshot for the resolved participant is persisted with thumbnailVerified', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const lebron = await seedArtworkPlayer(repositories, 'player-lebron', 'LeBron James', 'NBA', {
+    headshot_url: ARTWORK_LEBRON_URL,
+  });
+  const artwork = confirmingArtwork(ARTWORK_LEBRON_URL);
+
+  const created = await processSubmission(
+    {
+      source: 'smart-form',
+      submittedBy: 'griff843',
+      market: 'player_points_ou',
+      selection: 'Over 27.5',
+      line: 27.5,
+      odds: -110,
+      eventName: 'Lakers vs Celtics',
+      metadata: { playerId: lebron.id },
+    },
+    repositories,
+    undefined,
+    artwork.options,
+  );
+
+  const metadata = created.pick.metadata as Record<string, unknown>;
+  assert.equal(metadata['thumbnailUrl'], ARTWORK_LEBRON_URL);
+  assert.equal(metadata['thumbnailVerified'], true);
+  assert.deepEqual(artwork.calls, ['LeBron James']);
+  const stored = await repositories.picks.findPickById(created.pick.id);
+  const storedMetadata = (stored?.metadata ?? {}) as Record<string, unknown>;
+  assert.equal(storedMetadata['thumbnailVerified'], true);
+});
+
+test('WORK-2026110302: caller-supplied thumbnailUrl and thumbnailVerified are stripped before persisting', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+
+  const created = await processSubmission(
+    {
+      source: 'smart-form',
+      submittedBy: 'griff843',
+      market: 'player_points_ou',
+      selection: 'Someone Over 20.5',
+      line: 20.5,
+      odds: -110,
+      eventName: 'Lakers vs Celtics',
+      metadata: {
+        sport: 'NBA',
+        thumbnailUrl: 'https://example.com/someone-else.png',
+        thumbnailVerified: true,
+      },
+    },
+    repositories,
+  );
+
+  const metadata = created.pick.metadata as Record<string, unknown>;
+  assert.equal(metadata['thumbnailUrl'], undefined);
+  assert.equal(metadata['thumbnailVerified'], undefined);
+  const stored = await repositories.picks.findPickById(created.pick.id);
+  const storedMetadata = (stored?.metadata ?? {}) as Record<string, unknown>;
+  assert.equal(storedMetadata['thumbnailUrl'], undefined);
+  assert.equal(storedMetadata['thumbnailVerified'], undefined);
+});
+
+test('WORK-2026110302: a caller-supplied thumbnailVerified cannot upgrade an unverified resolver result', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const lebron = await seedArtworkPlayer(repositories, 'player-lebron', 'LeBron James', 'NBA', {
+    headshot_url: ARTWORK_LEBRON_URL,
+  });
+
+  const created = await processSubmission(
+    {
+      source: 'smart-form',
+      submittedBy: 'griff843',
+      market: 'player_points_ou',
+      selection: 'Over 27.5',
+      line: 27.5,
+      odds: -110,
+      eventName: 'Lakers vs Celtics',
+      metadata: { participantId: lebron.id, thumbnailVerified: true, thumbnailUrl: ARTWORK_LEBRON_URL },
+    },
+    repositories,
+    undefined,
+    { resolveHeadshot: async () => ({ url: null, reason: 'ambiguous' as const }) },
+  );
+
+  const metadata = created.pick.metadata as Record<string, unknown>;
+  assert.equal(metadata['thumbnailUrl'], undefined);
+  assert.equal(metadata['thumbnailVerified'], undefined);
+});
+
+test('WORK-2026110302: a resolver that never returns cannot hold submission past the 5s artwork budget', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const lebron = await seedArtworkPlayer(repositories, 'player-lebron', 'LeBron James', 'NBA', {
+    headshot_url: ARTWORK_LEBRON_URL,
+  });
+  const started = Date.now();
+
+  const created = await processSubmission(
+    {
+      source: 'smart-form',
+      submittedBy: 'griff843',
+      market: 'player_points_ou',
+      selection: 'Over 27.5',
+      line: 27.5,
+      odds: -110,
+      eventName: 'Lakers vs Celtics',
+      metadata: { participantId: lebron.id },
+    },
+    repositories,
+    undefined,
+    // Default budget (5s): only the matcher is replaced, with one that never settles.
+    { resolveHeadshot: () => new Promise(() => {}) },
+  );
+
+  const elapsedMs = Date.now() - started;
+  const metadata = created.pick.metadata as Record<string, unknown>;
+  assert.ok(created.pick.id, 'submission completed');
+  assert.equal(metadata['thumbnailUrl'], undefined);
+  assert.equal(metadata['thumbnailVerified'], undefined);
+  assert.ok(elapsedMs >= 4_900, `deadline enforced at ~5s, elapsed ${elapsedMs}ms`);
+  assert.ok(elapsedMs < 6_500, `submission finished within the budget, elapsed ${elapsedMs}ms`);
+});
+
+test('WORK-2026110302: shadow submissions strip caller artwork and use the same verified resolver', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const lebron = await seedArtworkPlayer(repositories, 'player-lebron', 'LeBron James', 'NBA', {
+    headshot_url: ARTWORK_LEBRON_URL,
+  });
+
+  const stripped = await processShadowSubmission(
+    {
+      source: 'model-driven',
+      market: 'player_points_ou',
+      selection: 'LeBron James Over 27.5',
+      line: 27.5,
+      confidence: 0.7,
+      eventName: 'Lakers vs Celtics',
+      metadata: {
+        sport: 'NBA',
+        thumbnailUrl: 'https://example.com/x.png',
+        thumbnailVerified: true,
+      },
+    },
+    repositories,
+    confirmingArtwork(ARTWORK_LEBRON_URL).options,
+  );
+  const strippedMetadata = stripped.pick.metadata as Record<string, unknown>;
+  assert.equal(strippedMetadata['thumbnailUrl'], undefined);
+  assert.equal(strippedMetadata['thumbnailVerified'], undefined);
+
+  const verified = await processShadowSubmission(
+    {
+      source: 'model-driven',
+      market: 'player_rebounds_ou',
+      selection: 'Over 7.5',
+      line: 7.5,
+      confidence: 0.7,
+      eventName: 'Lakers vs Celtics',
+      metadata: { participantId: lebron.id },
+    },
+    repositories,
+    confirmingArtwork(ARTWORK_LEBRON_URL).options,
+  );
+  const verifiedMetadata = verified.pick.metadata as Record<string, unknown>;
+  assert.equal(verifiedMetadata['thumbnailUrl'], ARTWORK_LEBRON_URL);
+  assert.equal(verifiedMetadata['thumbnailVerified'], true);
+});

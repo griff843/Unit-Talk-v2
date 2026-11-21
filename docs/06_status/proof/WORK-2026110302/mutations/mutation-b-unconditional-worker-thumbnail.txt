@@ -1,0 +1,16 @@
+MUTATION b-unconditional-worker-thumbnail
+file: apps/worker/src/delivery-adapters.ts
+--- replaced:
+      metadata.thumbnailVerified === true
+        ? knownText(metadata.thumbnailUrl)
+        : undefined,
++++ with:
+      knownText(metadata.thumbnailUrl),
+
+$ tsx --test apps/worker/src/delivery-adapters.test.ts
+not ok 25 - WORK-2026110302: buildDiscordMessagePayload drops an unverified thumbnail and still builds the embed
+not ok 26 - WORK-2026110302: buildDiscordMessagePayload drops a thumbnail flagged with a non-boolean verified value
+not ok 29 - WORK-2026110302: an unverified thumbnail is dropped while the Discord message still sends
+# tests 29
+# pass 26
+# fail 3

@@ -13,6 +13,11 @@
       "execution": ["pnpm test:t1-proof:live"]
     },
     {
+      "path": "apps/api/src/t1-proof-work-2026110302-artwork-metadata-live.test.ts",
+      "owner": "api",
+      "execution": ["pnpm test:t1-proof:live"]
+    },
+    {
       "path": "apps/api/src/t1-proof-work-2026110309-submission-idempotency-live.test.ts",
       "owner": "api",
       "execution": ["pnpm test:t1-proof:live"]

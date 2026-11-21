@@ -1,0 +1,4 @@
+      if (resolvedHeadshot) {
+        // Write back to DB so the scheduled pass doesn't need to re-resolve this player
+        participants.updateMetadata(playerMatch.id, { headshot_url: resolvedHeadshot }).catch(() => {});
+        return resolvedHeadshot;

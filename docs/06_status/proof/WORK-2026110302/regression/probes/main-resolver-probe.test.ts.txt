@@ -1,0 +1,44 @@
+// Runs against UNMODIFIED main's pick-asset-resolver API (resolvePickThumbnailUrl)
+// to record each defect the WORK-2026110302 regression list names.
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { resolvePickThumbnailUrl } from '../../../apps/api/src/pick-asset-resolver.js';
+
+const rows = (list: Array<Record<string, unknown>>) => list as never[];
+function repo(players: Array<Record<string, unknown>>, teams: Array<Record<string, unknown>> = []) {
+  const spy = { updateMetadataCalls: 0 };
+  return {
+    spy,
+    participants: {
+      async listByType(type: string) { return rows(type === 'player' ? players : teams); },
+      async updateMetadata() { spy.updateMetadataCalls += 1; return {} as never; },
+    } as never,
+  };
+}
+const p = (id: string, name: string, meta: Record<string, unknown>) => ({ id, display_name: name, metadata: meta });
+
+test('ambiguous name: two "Smith" players must give no thumbnail', async () => {
+  const { participants } = repo([p('a', 'Will Smith', { headshot_url: 'https://img.mlbstatic.com/a' }), p('b', 'Dominic Smith', { headshot_url: 'https://img.mlbstatic.com/b' })]);
+  assert.equal(await resolvePickThumbnailUrl('Smith Over 1.5 Hits', 'MLB', participants), null);
+});
+test('last-name-only match must give no thumbnail', async () => {
+  const { participants } = repo([p('m', 'Patrick Mahomes', { headshot_url: 'https://a.espncdn.com/m.png' })]);
+  assert.equal(await resolvePickThumbnailUrl('Mahomes Over 2.5 TDs', 'NFL', participants), null);
+});
+test('unrelated player: a pick on Bronny must not show LeBron', async () => {
+  const { participants } = repo([p('l', 'LeBron James', { headshot_url: 'https://cdn.nba.com/l.png' }), p('b', 'Bronny James', {})]);
+  assert.equal(await resolvePickThumbnailUrl('Bronny James Over 4.5', 'NBA', participants), null);
+});
+test('shared stored URL must give no thumbnail', async () => {
+  const shared = 'https://cdn.nba.com/shared.png';
+  const { participants } = repo([p('x', 'Jalen Williams', { headshot_url: shared }), p('y', 'Jaylin Williams', { headshot_url: shared })]);
+  assert.equal(await resolvePickThumbnailUrl('Jaylin Williams Over 6.5', 'NBA', participants), null);
+});
+test('dead NHL host must give no thumbnail', async () => {
+  const { participants } = repo([p('c', 'Connor McDavid', { headshot_url: 'https://cms.nhl.bamgrid.com/images/headshots/current/168x168/8478402.jpg' })]);
+  assert.equal(await resolvePickThumbnailUrl('Connor McDavid Over 1.5 Points', 'NHL', participants), null);
+});
+test('two-team total must give no thumbnail', async () => {
+  const { participants } = repo([], [p('t', 'Lakers', { logo_url: 'https://a.espncdn.com/lal.png' })]);
+  assert.equal(await resolvePickThumbnailUrl('Lakers vs Celtics Over 220.5', 'NBA', participants), null);
+});

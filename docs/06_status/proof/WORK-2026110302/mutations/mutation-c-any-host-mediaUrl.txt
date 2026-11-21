@@ -1,0 +1,35 @@
+MUTATION c-any-host-mediaUrl
+file: packages/domain/src/discord-presentation.ts
+--- replaced:
+      !url.port &&
+      DISCORD_MEDIA_HOST_ALLOWLIST.includes(url.hostname)
+      ? text
++++ with:
+      true
+      ? text
+
+$ tsx --test packages/domain/src/discord-presentation.test.ts
+not ok 3 - WORK-2026110302: allowedMediaUrl refuses dead NHL host
+not ok 7 - WORK-2026110302: allowedMediaUrl refuses foreign host
+not ok 8 - WORK-2026110302: allowedMediaUrl refuses allowlisted host as subdomain suffix
+not ok 9 - WORK-2026110302: allowedMediaUrl refuses subdomain of an allowlisted host
+not ok 10 - WORK-2026110302: allowedMediaUrl refuses non-default port
+not ok 15 - WORK-2026110302: buildPresentationEmbed shows no thumbnail for a refused host and keeps the text brand
+not ok 16 - WORK-2026110302: buildPickPresentation renders an allowlisted thumbnail and drops a foreign one
+not ok 17 - WORK-2026110302: the result recap goes through the host guard
+# tests 17
+# pass 9
+# fail 8
+
+$ tsx --test apps/worker/src/delivery-adapters.test.ts
+not ok 28 - WORK-2026110302: buildDiscordMessagePayload drops a verified dead-host NHL thumbnail
+# tests 29
+# pass 28
+# fail 1
+
+$ tsx --test apps/api/src/pick-asset-resolver.test.ts
+not ok 8 - WORK-2026110302: a dead NHL host gives no thumbnail and skips the re-resolve
+not ok 10 - WORK-2026110302: a team logo on a foreign host gives no thumbnail
+# tests 17
+# pass 15
+# fail 2
