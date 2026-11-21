@@ -212,9 +212,11 @@ function pickTitleLine(
 ): string {
   if (!finiteMetric(line)) return '';
   const magnitude = String(Math.abs(line));
-  const stated = new RegExp(`(^|[^0-9.])[+-]?${magnitude.replace('.', '\\.')}($|[^0-9])`, 'u');
-  if (selection && stated.test(selection)) return '';
-  const spread = /spread|handicap|run ?line|puck ?line/iu.test(knownText(market) ?? '');
+  const stated = (selection?.match(/\d+(?:\.\d+)?/gu) ?? []).some(
+    (number) => Number(number) === Math.abs(line),
+  );
+  if (stated) return '';
+  const spread = /spread|handicap|run[\s_-]?line|puck[\s_-]?line/iu.test(knownText(market) ?? '');
   return ` ${spread && line > 0 ? '+' : ''}${spread || line < 0 ? line : magnitude}`;
 }
 export function buildPickPresentation(
