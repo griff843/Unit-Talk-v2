@@ -113,12 +113,12 @@
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "81609f528e69f46d2221ad38a20dce04e69f67da",
     "verified_source_sha": "d279ddd0ef2eb695253a66cde6d84f1359899923",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "merge_sha",
-    "bound_at": null
+    "bound_at": "2026-11-21T21:07:26.305Z"
   },
   "execution_sha": "d279ddd0ef2eb695253a66cde6d84f1359899923"
 }

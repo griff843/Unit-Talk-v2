@@ -1,6 +1,6 @@
 # PROOF: WORK-2026110302
 
-MERGE_SHA: pending merge
+MERGE_SHA: 81609f528e69f46d2221ad38a20dce04e69f67da
 
 Issue: WORK-2026110302
 Tier: T1
@@ -132,5 +132,5 @@ suite skips without `CI_FIXTURE_RUN_ID` and asserts the staging host before any 
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
-PR: pending
+Merge SHA: `81609f528e69f46d2221ad38a20dce04e69f67da`
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1848
