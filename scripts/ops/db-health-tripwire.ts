@@ -77,13 +77,13 @@ import {
   EXIT_HARNESS_ERROR,
   HOT_TABLES,
   HarnessError,
-  LINEAR_ISSUE_ID,
+  LINEAR_ISSUE_ENV,
   RECEIPT_SCHEMA,
   TABLE_SIZE_SQL,
   TOAST_BLOAT_TABLES,
   countChecks,
   deriveOutcome,
-  evaluateAutovacuumRow,
+  evaluateAutovacuumTable,
   evaluateSizeRow,
   evaluateStatementTimeoutRate,
   evaluateToastRow,
@@ -91,6 +91,7 @@ import {
   hasOverriddenThreshold,
   notRunCheck,
   readRunContext,
+  resolveLinearIssueKey,
   renderCheckTable,
   resolveThresholds,
   type CheckOutcome,
@@ -143,32 +144,43 @@ async function runDatabaseChecks(
       await tx.unsafe<Array<{ transaction_read_only: string }>>('SHOW transaction_read_only');
     observedReadOnly = readOnlyRows[0]?.transaction_read_only ?? null;
 
+    // One row per member of each hot table's partition tree. A partitioned
+    // parent never carries vacuum statistics of its own; its partitions do.
     const vacuumRows = await tx<VacuumRow[]>`
       SELECT
-        relname,
-        last_vacuum,
-        last_autovacuum,
-        last_analyze,
-        last_autoanalyze,
-        n_dead_tup::text,
-        n_live_tup::text,
-        ROUND(n_dead_tup::numeric / NULLIF(n_live_tup + n_dead_tup, 0) * 100, 2)::text AS dead_tup_pct
-      FROM pg_stat_user_tables
-      WHERE relname = ANY(${tx.array(HOT_TABLES as unknown as string[])})
-      ORDER BY relname
+        c.relname AS hot_table,
+        s.relname,
+        s.last_vacuum,
+        s.last_autovacuum,
+        s.last_analyze,
+        s.last_autoanalyze,
+        s.n_dead_tup::text,
+        s.n_live_tup::text,
+        s.n_mod_since_analyze::text
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      CROSS JOIN LATERAL (
+        SELECT c.oid AS relid
+        UNION
+        SELECT pt.relid::oid FROM pg_partition_tree(c.oid) pt
+      ) t
+      JOIN pg_stat_user_tables s ON s.relid = t.relid
+      JOIN pg_class m ON m.oid = t.relid
+      WHERE n.nspname = 'public'
+        AND c.relkind IN ('r', 'p')
+        AND m.relkind = 'r'
+        AND c.relname = ANY(${tx.array(HOT_TABLES as unknown as string[])})
+      ORDER BY c.relname, s.relname
     `;
-    const vacuumSeen = new Set(vacuumRows.map((row) => row.relname));
-    for (const row of vacuumRows) checks.push(evaluateAutovacuumRow(row, thresholds, now));
     for (const table of HOT_TABLES) {
-      if (!vacuumSeen.has(table)) {
-        checks.push(
-          notRunCheck(
-            'autovacuum_staleness',
-            table,
-            `${table} has no row in pg_stat_user_tables; vacuum statistics could not be measured`,
-          ),
-        );
-      }
+      checks.push(
+        evaluateAutovacuumTable(
+          table,
+          vacuumRows.filter((row) => row.hot_table === table),
+          thresholds,
+          now,
+        ),
+      );
     }
 
     const sizeRows = await tx.unsafe<SizeRow[]>(TABLE_SIZE_SQL);
@@ -188,22 +200,19 @@ async function runDatabaseChecks(
 
     const toastRows = await tx<ToastBloatRow[]>`
       SELECT
-        relname,
-        pg_size_pretty(pg_relation_size(pg_class.oid)) AS heap_size,
-        pg_size_pretty(
-          pg_total_relation_size(pg_class.oid) - pg_relation_size(pg_class.oid)
-        ) AS toast_plus_index_size,
-        pg_size_pretty(pg_total_relation_size(pg_class.oid)) AS total_size,
-        ROUND(
-          (pg_total_relation_size(pg_class.oid) - pg_relation_size(pg_class.oid))::numeric /
-          NULLIF(pg_total_relation_size(pg_class.oid), 0) * 100,
-          1
-        )::text AS toast_pct
-      FROM pg_class
-      JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace
-      WHERE nspname = 'public'
-        AND relname = ANY(${tx.array(TOAST_BLOAT_TABLES as unknown as string[])})
-      ORDER BY relname
+        c.relname,
+        tc.relname AS toast_relname,
+        pg_size_pretty(pg_total_relation_size(tc.oid)) AS toast_size,
+        pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size,
+        ts.n_live_tup::text AS toast_live_tup,
+        ts.n_dead_tup::text AS toast_dead_tup
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      LEFT JOIN pg_class tc ON tc.oid = NULLIF(c.reltoastrelid, 0)
+      LEFT JOIN pg_stat_all_tables ts ON ts.relid = tc.oid
+      WHERE n.nspname = 'public'
+        AND c.relname = ANY(${tx.array(TOAST_BLOAT_TABLES as unknown as string[])})
+      ORDER BY c.relname
     `;
     const toastSeen = new Set(toastRows.map((row) => row.relname));
     for (const row of toastRows) checks.push(evaluateToastRow(row, thresholds));
@@ -322,6 +331,8 @@ async function postLinearAlert(checks: readonly CheckOutcome[]): Promise<LinearA
   const tripped = checks.filter((c) => c.status === 'tripped');
   if (tripped.length === 0) return 'not_applicable';
   if (!apiKey) return 'skipped_no_api_key';
+  const issueKey = resolveLinearIssueKey();
+  if (!issueKey) return 'skipped_no_issue_configured';
 
   const lines = tripped.map(
     (c) =>
@@ -335,9 +346,9 @@ async function postLinearAlert(checks: readonly CheckOutcome[]): Promise<LinearA
     'All execution actions remain PM-gated.';
 
   try {
-    const issueUuid = await resolveLinearIssueUuid(apiKey, LINEAR_ISSUE_ID);
+    const issueUuid = await resolveLinearIssueUuid(apiKey, issueKey);
     if (!issueUuid) {
-      console.warn(`[tripwire] Linear issue ${LINEAR_ISSUE_ID} could not be resolved to a UUID`);
+      console.warn(`[tripwire] Linear issue ${issueKey} could not be resolved to a UUID`);
       return 'failed';
     }
 
@@ -353,7 +364,7 @@ async function postLinearAlert(checks: readonly CheckOutcome[]): Promise<LinearA
       console.warn('[tripwire] Linear comment failed:', JSON.stringify(data));
       return 'failed';
     }
-    console.log(`[tripwire] Alert posted to Linear ${LINEAR_ISSUE_ID} (${issueUuid})`);
+    console.log(`[tripwire] Alert posted to Linear ${issueKey} (${issueUuid})`);
     return 'posted';
   } catch (err) {
     console.warn('[tripwire] Linear post error:', (err as Error).message);
@@ -468,6 +479,9 @@ export async function runTripwire(receiptPath: string): Promise<number> {
   let thresholds: ThresholdTable;
   try {
     thresholds = resolveThresholds();
+    // Validate the alert target up front so a malformed key is a harness
+    // error at the start of the run, not a silent alert failure at the end.
+    resolveLinearIssueKey();
   } catch (err) {
     return failHarness((err as Error).message);
   }
@@ -549,8 +563,14 @@ export async function runTripwire(receiptPath: string): Promise<number> {
   if (linearAlert === 'failed') {
     console.log(
       '::warning title=DB Health Tripwire::Checks tripped but the Linear alert could not be ' +
-        `delivered to ${LINEAR_ISSUE_ID}. The finding is in the receipt artifact; the ` +
-        'notification path needs repair.',
+        `delivered to ${resolveLinearIssueKey() ?? 'the configured issue'}. The finding is in the ` +
+        'receipt artifact; the notification path needs repair.',
+    );
+  }
+  if (linearAlert === 'skipped_no_issue_configured') {
+    console.log(
+      '::warning title=DB Health Tripwire::Checks tripped but no Linear alert issue is configured ' +
+        `(repository variable ${LINEAR_ISSUE_ENV} is unset). The finding is in the receipt artifact.`,
     );
   }
 

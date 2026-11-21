@@ -2188,12 +2188,13 @@ import {
   TABLE_SIZE_SQL,
   countChecks,
   deriveOutcome,
-  evaluateAutovacuumRow,
+  evaluateAutovacuumTable,
   evaluateSizeRow,
   evaluateStatementTimeoutRate,
   evaluateToastRow,
   gateReceipt,
   notRunCheck,
+  resolveLinearIssueKey,
   resolveThresholds,
   type CheckOutcome,
   type SizeRow,
@@ -2442,46 +2443,72 @@ test('UTV2-1632: autovacuum, TOAST and timeout-rate checks each evaluate', () =>
   const stale = new Date('2026-07-01T00:00:00.000Z');
 
   const base: VacuumRow = {
+    hot_table: 'system_runs',
     relname: 'system_runs',
-    last_vacuum: fresh,
+    last_vacuum: null,
     last_autovacuum: fresh,
-    last_analyze: fresh,
+    last_analyze: null,
     last_autoanalyze: fresh,
     n_dead_tup: '10',
     n_live_tup: '1000',
-    dead_tup_pct: '0.99',
+    n_mod_since_analyze: '20',
   };
-  assert.strictEqual(evaluateAutovacuumRow(base, thresholds, now).status, 'pass');
+  const evalOne = (row: VacuumRow) => evaluateAutovacuumTable(row.hot_table, [row], thresholds, now);
+
   assert.strictEqual(
-    evaluateAutovacuumRow({ ...base, last_analyze: stale }, thresholds, now).status,
-    'tripped',
+    evalOne(base).status,
+    'pass',
+    'a table autovacuum manages has no manual VACUUM; that alone is not a finding',
   );
   assert.strictEqual(
-    evaluateAutovacuumRow({ ...base, last_vacuum: null }, thresholds, now).severity,
+    evalOne({ ...base, last_autovacuum: stale, last_autoanalyze: stale }).status,
+    'pass',
+    'old vacuum timestamps are fine while the table is under the autovacuum triggers',
+  );
+  const deadAutovacuum = evalOne({
+    ...base,
+    last_autovacuum: stale,
+    n_dead_tup: '400',
+    n_live_tup: '1000',
+  });
+  assert.strictEqual(deadAutovacuum.status, 'tripped');
+  assert.strictEqual(
+    deadAutovacuum.severity,
     'critical',
-    'a table that has never been vacuumed is the 2026-06-22 write-path signature',
+    'dead tuples past the trigger with no vacuum in the window is the 2026-06-22 signature',
   );
   assert.strictEqual(
-    evaluateAutovacuumRow({ ...base, n_dead_tup: '900', dead_tup_pct: '47.37' }, thresholds, now)
-      .status,
-    'tripped',
+    evalOne({ ...base, n_dead_tup: '900', n_live_tup: '1000' }).severity,
+    'critical',
+    'over 20% dead is bloat even if autovacuum ran recently',
   );
+  const analyzeBehind = evalOne({ ...base, last_autoanalyze: stale, n_mod_since_analyze: '500' });
+  assert.strictEqual(analyzeBehind.status, 'tripped');
+  assert.strictEqual(analyzeBehind.severity, 'warn');
 
   const toastBase = {
     relname: 'raw_payloads',
-    heap_size: '10 MB',
-    toast_plus_index_size: '20 MB',
-    total_size: '30 MB',
+    toast_relname: 'pg_toast_1234',
+    toast_size: '687 MB',
+    total_size: '694 MB',
   };
-  assert.strictEqual(evaluateToastRow({ ...toastBase, toast_pct: '66.7' }, thresholds).status, 'pass');
   assert.strictEqual(
-    evaluateToastRow({ ...toastBase, toast_pct: '95.0' }, thresholds).status,
+    evaluateToastRow({ ...toastBase, toast_live_tup: '100000', toast_dead_tup: '10' }, thresholds)
+      .status,
+    'pass',
+  );
+  assert.strictEqual(
+    evaluateToastRow({ ...toastBase, toast_live_tup: '1000', toast_dead_tup: '900' }, thresholds)
+      .status,
     'tripped',
   );
   assert.strictEqual(
-    evaluateToastRow({ ...toastBase, toast_pct: null }, thresholds).status,
+    evaluateToastRow(
+      { ...toastBase, toast_relname: null, toast_size: null, toast_live_tup: null, toast_dead_tup: null },
+      thresholds,
+    ).status,
     'not_run',
-    'an uncomputable ratio is not a pass',
+    'a table with no TOAST relation was not measured, so it is not a pass',
   );
 
   const t = (minutes: number): Date => new Date(now.getTime() + minutes * 60_000);
@@ -2504,31 +2531,121 @@ test('UTV2-1632: autovacuum, TOAST and timeout-rate checks each evaluate', () =>
 // --- Execution proof ---------------------------------------------------------
 
 test('UTV2-1632: a verdict may rest on an observation that has no number', () => {
-  // Caught by the first live production run: `provider_offer_history` has never
-  // been analysed, so `hours since last_analyze` has no value — yet the check
-  // correctly tripped. Requiring a numeric measurement rejected a genuine
-  // finding, so the gate asks whether the check OBSERVED anything, which is the
-  // property that actually distinguishes evaluation from non-evaluation.
+  // A relation that has never been vacuumed has no "hours since vacuum", yet the
+  // check still looked at real data. The gate asks whether the check OBSERVED
+  // anything, which is what distinguishes evaluation from non-evaluation.
   const thresholds = resolveThresholds({});
   const now = new Date('2026-07-31T00:00:00.000Z');
-  const neverAnalyzed: VacuumRow = {
-    relname: 'provider_offer_history',
+  const neverVacuumed: VacuumRow = {
+    hot_table: 'system_runs',
+    relname: 'system_runs',
+    last_vacuum: null,
+    last_autovacuum: null,
+    last_analyze: null,
+    last_autoanalyze: null,
+    n_dead_tup: '500000',
+    n_live_tup: '130',
+    n_mod_since_analyze: '500000',
+  };
+  const outcome = evaluateAutovacuumTable('system_runs', [neverVacuumed], thresholds, now);
+  assert.strictEqual(outcome.status, 'tripped');
+  assert.strictEqual(outcome.severity, 'critical');
+  assert.strictEqual(outcome.measured.value, null, 'a never-vacuumed table has no elapsed hours');
+  assert.strictEqual(outcome.measured.observed, true, 'the row was read, so it was observed');
+
+  // Not-run rows are the opposite: nothing was read at all.
+  assert.strictEqual(notRunCheck('table_size', 'x', 'unreachable').measured.observed, false);
+  assert.strictEqual(
+    evaluateAutovacuumTable('game_results', [], thresholds, now).status,
+    'not_run',
+    'no statistics rows at all is not a pass',
+  );
+});
+
+test('DB tripwire: the 2026-11-21 production readings no longer raise false alarms', () => {
+  // Measured live in run 44867172290. Postgres restarted 2026-09-23, resetting
+  // per-table statistics; the ingest tables have taken no writes since, and
+  // provider_offer_history is a partitioned parent with no stats of its own.
+  const thresholds = resolveThresholds({ TOAST_BLOAT_RATIO_THRESHOLD: '0.2' });
+  const now = new Date('2026-11-21T04:39:51.000Z');
+  const idle = (hot: string, rel = hot): VacuumRow => ({
+    hot_table: hot,
+    relname: rel,
     last_vacuum: null,
     last_autovacuum: null,
     last_analyze: null,
     last_autoanalyze: null,
     n_dead_tup: '0',
     n_live_tup: '0',
-    dead_tup_pct: null,
-  };
-  const outcome = evaluateAutovacuumRow(neverAnalyzed, thresholds, now);
-  assert.strictEqual(outcome.status, 'tripped');
-  assert.strictEqual(outcome.measured.value, null, 'a never-analysed table has no elapsed hours');
-  assert.strictEqual(outcome.measured.observed, true, 'the row was read, so it was observed');
-  assert.match(outcome.detail, /last_analyze=never run/);
+    n_mod_since_analyze: '0',
+  });
+  for (const table of ['game_results', 'odds_snapshots', 'raw_payloads']) {
+    const outcome = evaluateAutovacuumTable(table, [idle(table)], thresholds, now);
+    assert.strictEqual(outcome.status, 'pass', `${table} is idle, not unhealthy`);
+    assert.match(outcome.detail, /no writes/);
+  }
+  const partitions = Array.from({ length: 60 }, (_, i) =>
+    idle('provider_offer_history', `provider_offer_history_p${i}`),
+  );
+  assert.strictEqual(
+    evaluateAutovacuumTable('provider_offer_history', partitions, thresholds, now).status,
+    'pass',
+  );
 
-  // Not-run rows are the opposite: nothing was read at all.
-  assert.strictEqual(notRunCheck('table_size', 'x', 'unreachable').measured.observed, false);
+  const systemRuns: VacuumRow = {
+    hot_table: 'system_runs',
+    relname: 'system_runs',
+    last_vacuum: null,
+    last_autovacuum: new Date('2026-11-18T10:18:59.133Z'),
+    last_analyze: null,
+    last_autoanalyze: new Date('2026-11-20T20:37:59.642Z'),
+    n_dead_tup: '43202',
+    n_live_tup: '4401496',
+    n_mod_since_analyze: '26502',
+  };
+  assert.strictEqual(
+    evaluateAutovacuumTable('system_runs', [systemRuns], thresholds, now).status,
+    'pass',
+    '0.97% dead on 4.4M rows is far under the autovacuum trigger',
+  );
+
+  // A partitioned table is judged by its partitions: one overdue partition trips it.
+  const overdue: VacuumRow = {
+    ...idle('provider_offer_history', 'provider_offer_history_p7'),
+    n_dead_tup: '90000',
+    n_live_tup: '100000',
+  };
+  const mixed = evaluateAutovacuumTable(
+    'provider_offer_history',
+    [...partitions.slice(1), overdue],
+    thresholds,
+    now,
+  );
+  assert.strictEqual(mixed.status, 'tripped');
+  assert.match(mixed.detail, /provider_offer_history_p7/);
+
+  // 99% of an append-only jsonb table's bytes in TOAST is the design, not bloat.
+  const jsonbArchive = evaluateToastRow(
+    {
+      relname: 'raw_payloads',
+      toast_relname: 'pg_toast_99',
+      toast_size: '687 MB',
+      total_size: '694 MB',
+      toast_live_tup: '0',
+      toast_dead_tup: '0',
+    },
+    thresholds,
+  );
+  assert.strictEqual(jsonbArchive.status, 'pass');
+});
+
+test('DB tripwire: the Linear alert target is configuration, validated up front', () => {
+  assert.strictEqual(resolveLinearIssueKey({}), null, 'unset means no alert target');
+  assert.strictEqual(resolveLinearIssueKey({ DB_TRIPWIRE_LINEAR_ISSUE: ' UTV2-2001 ' }), 'UTV2-2001');
+  assert.throws(
+    () => resolveLinearIssueKey({ DB_TRIPWIRE_LINEAR_ISSUE: 'not an issue' }),
+    /must be a Linear issue key/,
+  );
 });
 
 test('UTV2-1632: a run that evaluated nothing is a harness error, never a pass', () => {
