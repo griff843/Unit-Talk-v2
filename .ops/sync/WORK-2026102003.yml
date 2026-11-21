@@ -1,0 +1,166 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026102003
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026102003
+  objective: "Original PR #1767 merged at
+    `e22d68f9c8153afbabf4d88ad0ca102660cba26f`, but its authored
+    `docs/06_status/proof/WORK-2026101501/diff-summary.md` carries no merge-SHA
+    anchor, so automatic closeout refuses with `unbindable_proof_artifact`. Add
+    exactly one anchor line `MERGE_SHA:
+    e22d68f9c8153afbabf4d88ad0ca102660cba26f` plus a blank separator after the
+    title. Preserve every word of the authored prose. A dry-run truth check of
+    the original lane found one further gap that rebinding cannot fix: P12
+    requires the verification log to reference `pnpm type-check` and `pnpm
+    test`, and the authored log only names `pnpm verify:static` (whose script
+    chain includes both). Add a clearly labelled post-merge addendum to the
+    original `verification.md` stating that fact, verified against
+    `package.json`; change no authored line."
+  acceptance_criteria:
+    - The change to `diff-summary.md` is the anchor line and one blank
+      separator; the change to `verification.md` is one appended, labelled
+      post-merge addendum; all authored prose is intact in both.
+    - "`ops:proof-generate` for the original lane accepts the anchored file (dry
+      run) and the original lane's `ops:truth-check --dry-run` reports only the
+      bindings that the closeout workflow itself writes (evidence.json,
+      verification.md and model-routing.json merge-SHA binding)."
+    - No implementation, manifest of another lane, workflow or script change; no
+      deployment, Discord, entitlement, delivery or kill-switch action.
+  guardrails:
+    - No manifest force-close, no fabricated receipt, no checkpoint edit, no
+      bypass of any gate.
+    - If the original lane's proof has any further defect, stop and report it;
+      do not widen this lane's scope again.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged on green CI after review; then `post-merge-lane-close.yml -f
+      issue_id=WORK-2026101501` (no `pr` input) closes the original lane through
+      a passing `ops:truth-check`.
+  unmapped_sections:
+    - >-
+      WORK-2026102003 — Restore the missing merge-SHA anchor in a merged Discord
+      lane's authored diff summary
+
+      Tier: T2
+
+      Lane type: hygiene
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence). Authorized by PM follow-up
+      on PR #1769 (comment 6287243551) and PM review 6250587542. Replaces the
+      superseded Codex-executed attempt in #1769 (and a one-file Claude lane
+      that was superseded before any PR once the closeout truth check showed a
+      second gap), whose execution epoch ended in a recorded wrapper failure and
+      cannot be continued or backdated. Claude-executed on purpose: there is no
+      Codex execution epoch here, so the Codex wrapper's phase-progression and
+      implementation-corroboration controls neither apply nor are bypassed.
+
+
+      ## File Scope
+
+
+      - docs/06_status/proof/WORK-2026101501/diff-summary.md
+
+      - docs/06_status/proof/WORK-2026101501/verification.md
+
+      - (plus this work order and the lane's own metadata and proof)
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026102003.md
+    title: WORK-2026102003 — Restore the missing merge-SHA anchor in a merged
+      Discord lane's authored diff summary
+    description: >-
+      # WORK-2026102003 — Restore the missing merge-SHA anchor in a merged
+      Discord lane's authored diff summary
+
+
+      Tier: T2
+
+      Lane type: hygiene
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence). Authorized by PM follow-up
+      on PR #1769 (comment 6287243551) and PM review 6250587542. Replaces the
+      superseded Codex-executed attempt in #1769 (and a one-file Claude lane
+      that was superseded before any PR once the closeout truth check showed a
+      second gap), whose execution epoch ended in a recorded wrapper failure and
+      cannot be continued or backdated. Claude-executed on purpose: there is no
+      Codex execution epoch here, so the Codex wrapper's phase-progression and
+      implementation-corroboration controls neither apply nor are bypassed.
+
+
+      ## Objective
+
+
+      Original PR #1767 merged at `e22d68f9c8153afbabf4d88ad0ca102660cba26f`,
+      but its authored `docs/06_status/proof/WORK-2026101501/diff-summary.md`
+      carries no merge-SHA anchor, so automatic closeout refuses with
+      `unbindable_proof_artifact`. Add exactly one anchor line `MERGE_SHA:
+      e22d68f9c8153afbabf4d88ad0ca102660cba26f` plus a blank separator after the
+      title. Preserve every word of the authored prose. A dry-run truth check of
+      the original lane found one further gap that rebinding cannot fix: P12
+      requires the verification log to reference `pnpm type-check` and `pnpm
+      test`, and the authored log only names `pnpm verify:static` (whose script
+      chain includes both). Add a clearly labelled post-merge addendum to the
+      original `verification.md` stating that fact, verified against
+      `package.json`; change no authored line.
+
+
+      ## Acceptance Criteria
+
+
+      - The change to `diff-summary.md` is the anchor line and one blank
+      separator; the change to `verification.md` is one appended, labelled
+      post-merge addendum; all authored prose is intact in both.
+
+      - `ops:proof-generate` for the original lane accepts the anchored file
+      (dry run) and the original lane's `ops:truth-check --dry-run` reports only
+      the bindings that the closeout workflow itself writes (evidence.json,
+      verification.md and model-routing.json merge-SHA binding).
+
+      - No implementation, manifest of another lane, workflow or script change;
+      no deployment, Discord, entitlement, delivery or kill-switch action.
+
+
+      ## Guardrails
+
+
+      - No manifest force-close, no fabricated receipt, no checkpoint edit, no
+      bypass of any gate.
+
+      - If the original lane's proof has any further defect, stop and report it;
+      do not widen this lane's scope again.
+
+
+      ## File Scope
+
+
+      - docs/06_status/proof/WORK-2026101501/diff-summary.md
+
+      - docs/06_status/proof/WORK-2026101501/verification.md
+
+      - (plus this work order and the lane's own metadata and proof)
+
+
+      ## Exit Criteria
+
+
+      - PR merged on green CI after review; then `post-merge-lane-close.yml -f
+      issue_id=WORK-2026101501` (no `pr` input) closes the original lane through
+      a passing `ops:truth-check`.
+    captured_at: 2026-10-20T09:40:29.568Z
+    description_sha256: 5b1f88cf10569a5ef7b1ff70875169b57511452b0e531cd0b39dffacddfcb2ac
+  contract_hash: 8b4437b3bd4aa7a732c1529680304c81fda39c251ec1e6b844e366da28ab4bbc

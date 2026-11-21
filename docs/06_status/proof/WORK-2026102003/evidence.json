@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026102003",
+  "tier": "T2",
+  "lane_type": "hygiene",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "5a16ea5f4391ef6a541f41aad1aa2d5b5d39449d",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "command": "pnpm verify:static",
+    "exit_code": 0,
+    "static_checks": "PASS",
+    "writable_db": "NOT_RUN_LOCALLY_PROTECTED_STAGING_CI_ON_PR_HEAD",
+    "focused_suites": {
+      "command": "pnpm exec tsx --test scripts/ops/proof-generate.test.ts scripts/ops/proof-rebind.test.ts",
+      "tests": 183,
+      "passed": 183,
+      "failed": 0
+    },
+    "r_level": {
+      "result": "PASS",
+      "required_artifacts": []
+    }
+  },
+  "repair_target": {
+    "original_lane": "WORK-2026101501",
+    "original_pr": 1767,
+    "original_merge_sha": "e22d68f9c8153afbabf4d88ad0ca102660cba26f",
+    "superseded_attempt": "PR 1769 (Codex epoch ended INCOMPLETE_PHASE_PROGRESSION; preserved, not continued)",
+    "evidence_json_and_model_routing_untouched": true
+  },
+  "production_actions": {
+    "deployment": false,
+    "discord_interaction": false,
+    "permissions": false,
+    "entitlements": false,
+    "delivery": false,
+    "kill_switch_change": false
+  }
+}
