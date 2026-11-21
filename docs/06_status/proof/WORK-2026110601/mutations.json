@@ -1,0 +1,38 @@
+[
+  {
+    "variant": "regression-before",
+    "exit_code": 1,
+    "summary": [
+      "# tests 139",
+      "# pass 125",
+      "# fail 14"
+    ]
+  },
+  {
+    "variant": "mutation-no-retry",
+    "exit_code": 1,
+    "summary": [
+      "# tests 139",
+      "# pass 125",
+      "# fail 14"
+    ]
+  },
+  {
+    "variant": "mutation-unbounded",
+    "exit_code": 1,
+    "summary": [
+      "# tests 139",
+      "# pass 134",
+      "# fail 5"
+    ]
+  },
+  {
+    "variant": "mutation-no-code",
+    "exit_code": 1,
+    "summary": [
+      "# tests 139",
+      "# pass 135",
+      "# fail 4"
+    ]
+  }
+]

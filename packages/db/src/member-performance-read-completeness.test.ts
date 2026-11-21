@@ -24,7 +24,8 @@ interface Row {
 }
 interface Result {
   data: Row[] | null;
-  error: { message: string } | null;
+  error: { message: string; code?: string; status?: number } | null;
+  status?: number;
   count: number | null;
 }
 interface Request {
@@ -774,4 +775,80 @@ test('stable microsecond watermark uses strict greater-than and exact DB text', 
   const c = client(rows(2001));
   assert.equal((await readers[0]!.database(c)).length, 2001);
   assert.equal(c.allRequests.filter(request => request.kind === 'watermark').length, 1);
+});
+
+for (const kind of ['watermark', 'range-change', 'beyond', 'population'] as const) {
+  for (const delivery of ['response', 'throw'] as const) {
+    test(`guard ${kind} retries transient 57014 ${delivery} at statement level`, async () => {
+      const population = rows(2001);
+      let tries = 0;
+      const c = client(population, { mutate(result, request) {
+        if (request.kind === kind && ++tries === 1) {
+          const error = { message: '', code: '57014' };
+          if (delivery === 'throw') throw error;
+          return { ...result, error, status: 500 };
+        }
+        return result;
+      } });
+      const actual = await readers[0]!.database(c);
+      assert.deepEqual(actual.map(row => row.id), population.map(row => row.id));
+      assert.equal(tries, 2);
+      assert.equal(c.allRequests.filter(request => request.kind === 'watermark').length,
+        kind === 'watermark' ? 2 : 1, 'count retries must reuse W');
+      assert.equal(c.requests.length, 4, 'statement retry must not restart data pages');
+    });
+  }
+
+  test(`guard ${kind} persistent 57014 fails closed after exactly three tries with code and status`, async () => {
+    let tries = 0;
+    let returned: unknown;
+    const c = client(rows(2001), { mutate(result, request) {
+      if (request.kind !== kind) return result;
+      tries++;
+      // A fourth try succeeds deliberately: an unbounded retry must fail this
+      // rejection assertion promptly instead of hanging the test process.
+      return tries <= 3 ? { ...result, error: { message: '', code: '57014' }, status: 500 } : result;
+    } });
+    await assert.rejects(async () => { returned = await readers[0]!.database(c); }, error => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /57014/);
+      assert.match(error.message, /HTTP 500/);
+      assert.match(error.message, /after 3 tries/);
+      return true;
+    });
+    assert.equal(tries, 3);
+    assert.equal(returned, undefined, 'no rows from the failed attempt escape');
+    assert.equal(c.allRequests.filter(request => request.kind === 'watermark').length,
+      kind === 'watermark' ? 3 : 1);
+    assert.equal(c.requests.length, kind === 'watermark' ? 1 : 4);
+  });
+}
+
+test('guard error message remains nonempty when code, status and message are absent', async () => {
+  let tries = 0;
+  const c = client(rows(2001), { mutate(result, request) {
+    if (request.kind === 'range-change' && ++tries <= 3)
+      return { ...result, error: { message: '' } };
+    return result;
+  } });
+  await assert.rejects(readers[0]!.database(c), /unknown statement error/);
+  assert.equal(tries, 3);
+});
+
+test('guard retry retains stale W and detects a change made during the failed statement', async () => {
+  const population = rows(2001);
+  let tries = 0;
+  const c = client(population, { mutate(result, request) {
+    if (request.kind === 'range-change' && ++tries === 1) {
+      population[0]!.status = 'validated';
+      population[0]!.updated_at = '2026-11-05T00:00:00.000001+00:00';
+      return { ...result, error: { message: '', code: '57014' }, status: 500 };
+    }
+    return result;
+  } });
+  const actual = await readers[0]!.database(c);
+  assert.deepEqual(actual.map(row => row.id), population.filter(row => row.status === 'settled').map(row => row.id));
+  assert.equal(tries, 3, 'second statement try detects drift; fresh attempt then passes');
+  assert.equal(c.allRequests.filter(request => request.kind === 'watermark').length, 2);
+  assert.ok(!actual.some(row => row.id === 'row-0000000'), 'drifted attempt rows are discarded');
 });

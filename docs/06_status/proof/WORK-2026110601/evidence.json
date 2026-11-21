@@ -1,0 +1,146 @@
+{
+  "schema_version": 2,
+  "proof_profile": "app-runtime",
+  "issue_id": "WORK-2026110601",
+  "tier": "T1",
+  "status": "draft_static_proven_staging_failed",
+  "sha_binding": {
+    "verified_source_sha": "f246e1b0ec32fb0cf300de41b188172b24f1d411",
+    "merge_sha": null,
+    "evidence_commit_sha": "RESOLVED_BY_CI",
+    "current_pr_head_sha": "RESOLVED_BY_CI"
+  },
+  "static_proof": {
+    "focused_tests": {
+      "command": "pnpm exec tsx --test packages/db/src/member-performance-read-completeness.test.ts",
+      "tests": 139,
+      "pass": 139,
+      "fail": 0,
+      "skipped": 0,
+      "prior_regressions": 125,
+      "new_regressions": 14
+    },
+    "mutation_controls": [
+      {
+        "variant": "regression-before",
+        "exit_code": 1,
+        "summary": [
+          "# tests 139",
+          "# pass 125",
+          "# fail 14"
+        ]
+      },
+      {
+        "variant": "mutation-no-retry",
+        "exit_code": 1,
+        "summary": [
+          "# tests 139",
+          "# pass 125",
+          "# fail 14"
+        ]
+      },
+      {
+        "variant": "mutation-unbounded",
+        "exit_code": 1,
+        "summary": [
+          "# tests 139",
+          "# pass 134",
+          "# fail 5"
+        ]
+      },
+      {
+        "variant": "mutation-no-code",
+        "exit_code": 1,
+        "summary": [
+          "# tests 139",
+          "# pass 135",
+          "# fail 4"
+        ]
+      }
+    ],
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "rules_matched": []
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "exit_code": 1,
+      "static_subgate": {
+        "command": "pnpm verify:static",
+        "exit_code": 0,
+        "totals": {
+          "tests": 8136,
+          "pass": 8123,
+          "fail": 0,
+          "skipped": 13
+        }
+      },
+      "failure": "Local staging identity guard refused host=127.0.0.1 before writable tests; deferred to staging-ci.",
+      "full_log_sha256": "4bd926aa928ada21f283f46dfa5a5f4b81c240df3b8d8da47e93f5cbf972a815"
+    },
+    "close_eligibility_preflight": {
+      "eligible": true,
+      "blocking": [],
+      "note": "Required proof anchors restored after first CI preflight rejected their omission."
+    }
+  },
+  "runtime_proof": {
+    "status": "staging_failed_guard_exhaustion",
+    "reason": "Local test:db refused target identity host=127.0.0.1 before writable tests. Required staging target: xskgrzbteyqdufktjrjx via staging-ci CI_SUPABASE_* credentials.",
+    "queries": [
+      {
+        "query": "picks: updated_at watermark; created_at <= L AND updated_at > W count; rows beyond cursor; requested-state population count",
+        "status": "declared inventory; no local live measurements",
+        "observed": false
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "observed_count": null,
+        "status": "not measured locally; staging CI required"
+      }
+    ],
+    "required_command": "pnpm test:t1-proof:live",
+    "focused_live_suite": "apps/api/src/t1-proof-work-2026110307-keyset-paging-live.test.ts",
+    "exact_head_receipt": "Pending final proof-only head CI; first run smoke passed, full live suite failed.",
+    "first_ci_attempt": {
+      "run_id": 42268686255,
+      "job_id": 128067472131,
+      "head_sha": "57c7f1439b1fd0fc30572bec76b4778059659b13",
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/42268686255/job/128067472131",
+      "smoke": {
+        "pass": 9,
+        "fail": 0,
+        "receipt": "ci-db-proof-receipt.json"
+      },
+      "full_t1_live": "FAIL at keyset live suite; W read exhausted three statement timeouts",
+      "error": "Failed to listByLifecycleStates: guard statement failed after 3 tries: canceling statement due to statement timeout [57014] [HTTP 500]",
+      "stack": "runtime-repositories.ts:3591 W read; keyset live test line 44",
+      "keyset": {
+        "pass": 0,
+        "fail": 1,
+        "duration_ms": 31091.848355
+      },
+      "full_job_log_sha256": "7bc5b7adf7092d0ce6b4a4347f267281a9172ecaed4ab3b0fb096d16bc38edbd"
+    }
+  },
+  "boundaries": {
+    "slowdown_cause": "not identified",
+    "updated_at_index": "not added; no DDL",
+    "production_actions": "none",
+    "governance": "Draft candidate only. Outer executor truth/provenance, PM approvals, governed merge, lane-finalize and post-merge orchestration-reconcile remain pending."
+  },
+  "log_sha256": {
+    "mutation-no-retry.txt": "893df913765ffbcc0f0ae2d71a398620eecdab0c749d7a3f938ae19fcc664740",
+    "r-level.txt": "02c275e9ff5e82d57ecc549047bc1de55ce170e8c9383d772cd60354b13a33fe",
+    "mutation-no-code.txt": "964a5611491ccc7d8dde1f57c169672abc4ccc84e3c99f974bcba19c21d6de35",
+    "test-db.txt": "c16a495ae6ee7511695a6d68e9bab77c5934b6a6eeb85a61c67cde97f6584086",
+    "focused-after.txt": "0c6c5646a7067eb5262c9675cca45a88908522853855be306fb085440912a776",
+    "mutation-unbounded.txt": "2de57367563fbca5e0482d0b89f0941df67aab842f2e3be289711ee9abcacfa0",
+    "verify-tail.txt": "0ce00212bc4877287173efefeede066ac7ccc3037564481ff36c3a9fe0cec907",
+    "regression-before.txt": "bbbd9388a3f8de1b59f895c1c79766ec34dce773787a520145cce248e28d1401",
+    "staging-first-failure.txt": "3ad17469419572c204f9deab6d427b851350512076f7c90b7b56b8b96f37d128"
+  }
+}
