@@ -224,7 +224,7 @@ test('WORK-2026110302: a two-team game total gives no thumbnail even with a team
 });
 
 test('WORK-2026110302: isTwoTeamMarket keeps team totals and player props eligible', () => {
-  for (const key of ['team_total_ou', 'team_total', 'player_points_ou', 'player_total_bases', 'moneyline', 'spread']) {
+  for (const key of ['team_total_ou', 'team_total', 'player_points_ou', 'player_total_bases', 'player.total_bases', 'batting-total-bases-all-game-ou', 'moneyline', 'spread']) {
     assert.equal(isTwoTeamMarket(key), false, key);
   }
   assert.equal(isTwoTeamMarket(null), false);
@@ -285,4 +285,13 @@ test('WORK-2026110302: artwork resolution never calls updateMetadata', async () 
   await resolvePickArtwork({ participantId: 'p-lebron', marketKey: 'player_points_ou' }, participants, confirmed);
   await resolvePickArtwork({ participantId: 't-lakers', marketKey: 'moneyline' }, participants, confirmed);
   assert.equal(participants.updateMetadataCalls, 0);
+});
+
+test('WORK-2026110302: a normalized total-bases prop still resolves a verified player headshot', async () => {
+  const artwork = await resolvePickArtwork(
+    { participantId: 'p-lebron', marketKey: 'batting-total-bases-all-game-ou' },
+    repo([lebron]),
+    headshot({ url: LEBRON_URL, reason: 'confirmed' }),
+  );
+  assert.deepEqual(artwork, { url: LEBRON_URL, verified: true });
 });

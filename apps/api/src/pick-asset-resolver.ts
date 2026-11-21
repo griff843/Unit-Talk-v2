@@ -16,7 +16,7 @@
  * default). The resolver never throws and never writes to the database.
  */
 
-import { allowedMediaUrl } from '@unit-talk/domain';
+import { allowedMediaUrl, normalizeMarketKey } from '@unit-talk/domain';
 import type { ParticipantRepository, ParticipantRow } from '@unit-talk/db';
 import {
   resolveHeadshot as defaultResolveHeadshot,
@@ -57,7 +57,12 @@ const NO_ARTWORK: PickArtwork = Object.freeze({ url: null, verified: false });
  */
 export function isTwoTeamMarket(marketKey: string | null | undefined): boolean {
   if (!marketKey) return false;
-  const key = marketKey.toLowerCase();
+  const canonical = normalizeMarketKey(marketKey);
+  if (canonical === 'game_total_ou') return true;
+  // Canonical player props (e.g. `batting-total-bases-all-game-ou`) and team
+  // totals belong to one participant even when their key says "total".
+  if (canonical === 'team_total_ou' || canonical.endsWith('-all-game-ou')) return false;
+  const key = canonical.toLowerCase();
   if (key.startsWith('player')) return false;
   if (/team[_\s-]?total/u.test(key)) return false;
   return /(^|[_\s-])(game[_\s-]?)?totals?($|[_\s-])/u.test(key);

@@ -33,7 +33,7 @@ the cloud session. They still need copying into this directory.
 ASSERTIONS:
 - [x] Domain host guard: `allowedMediaUrl` accepts only https on `cdn.nba.com`, `img.mlbstatic.com`, `a.espncdn.com`, `assets.nhle.com` (frozen constant); refuses `cms.nhl.bamgrid.com`, http, credentials, foreign, suffix-spoofed, subdomain, non-default port and malformed URLs. Every embed builder, including the result recap, goes through it (`packages/domain/src/discord-presentation.test.ts`, 17/17).
 - [x] Worker gate: only `buildDiscordMessagePayload` changed; a thumbnail passes only when `metadata.thumbnailVerified === true`; an unverified thumbnail is dropped while the Discord message still sends (`apps/worker/src/delivery-adapters.test.ts`, 29/29).
-- [x] Resolver binds by participant ID; selection-text matching and `listByType` scanning removed; player verified only when a fresh `resolveHeadshot` returns `confirmed` with exactly the stored URL; team uses its own `logo_url`; game totals give none; returns `{ url, verified }`; no `updateMetadata` (`apps/api/src/pick-asset-resolver.test.ts`, 17/17).
+- [x] Resolver binds by participant ID; selection-text matching and `listByType` scanning removed; player verified only when a fresh `resolveHeadshot` returns `confirmed` with exactly the stored URL; team uses its own `logo_url`; game totals give none; returns `{ url, verified }`; no `updateMetadata` (`apps/api/src/pick-asset-resolver.test.ts`, 18/18, including the normalized `batting-total-bases-all-game-ou` prop from the Codex review).
 - [x] One overall 5s artwork budget covers the participant lookup and the re-resolve; a never-returning matcher at the default budget lets submission complete at ~5s with no thumbnail and `thumbnailVerified` absent.
 - [x] Submission passes the resolved participant ID at both call sites (primary and shadow), sets `thumbnailVerified` only from the resolver, and strips caller-supplied `thumbnailUrl`/`thumbnailVerified` before persisting (`apps/api/src/submission-service.test.ts`, 112/112 including 7 new).
 - [x] Regressions fail on unmodified main and pass after (see EVIDENCE). `player-enrichment-service.ts` not edited.
@@ -91,7 +91,7 @@ After (`regression/head-*.txt`):
 ```
 packages/domain/src/discord-presentation.test.ts   # pass 17  # fail 0
 apps/worker/src/delivery-adapters.test.ts          # pass 29  # fail 0
-apps/api/src/pick-asset-resolver.test.ts           # pass 17  # fail 0
+apps/api/src/pick-asset-resolver.test.ts           # pass 18  # fail 0
 apps/api/src/submission-service.test.ts            # pass 112 # fail 0
 ```
 
