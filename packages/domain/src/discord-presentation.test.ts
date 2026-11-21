@@ -103,7 +103,7 @@ test('WORK-2026110302: the result recap goes through the host guard', () => {
   });
 });
 
-// Follow-up to WORK-2026110302: the line is never shown as if it were odds.
+// WORK-2026112101: the line is never shown as if it were odds.
 test('pick title does not repeat a line the selection already states', () => {
   const title = (selection: string, line: number, market = 'player_points_ou') =>
     buildPickPresentation('pick-posted', { selection, line, market, odds: -110 }).title;
