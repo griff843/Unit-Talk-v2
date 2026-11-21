@@ -16,6 +16,7 @@
     "apps/api/src/submission-service.test.ts",
     "apps/api/src/submission-service.ts",
     "apps/api/src/t1-proof-work-2026110302-artwork-metadata-live.test.ts",
+    "apps/discord-bot/src/discord-design-system.test.ts",
     "apps/worker/src/delivery-adapters.test.ts",
     "apps/worker/src/delivery-adapters.ts",
     "docs/05_operations/db-writer-classification.json",

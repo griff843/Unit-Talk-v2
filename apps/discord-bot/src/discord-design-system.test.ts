@@ -106,9 +106,9 @@ test('missing optional data and missing/invalid media render cleanly without syn
   const enriched = buildResultPresentation({
     ...pick,
     result: 'loss',
-    thumbnailUrl: 'https://assets.example/headshot.png',
+    thumbnailUrl: 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png',
   });
-  assert.equal(enriched.thumbnail?.url, 'https://assets.example/headshot.png');
+  assert.equal(enriched.thumbnail?.url, 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png');
 });
 test('win/loss/push/void/correction have distinct settled identities and colors with equal detail', () => {
   const embeds = (['win', 'loss', 'push', 'void', 'correction'] as const).map(
