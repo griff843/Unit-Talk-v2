@@ -92,13 +92,67 @@ jobs:
       # 2. Collect changed files in this merge commit
       # ------------------------------------------------------------------
       - name: Checkout
-        if: steps.pr.outputs.tier != ''
+        # Legacy (no lean flag): identical to the pre-WORK-2026110804 gate -
+        # only labelled PRs check out. contains() is case-insensitive and
+        # tolerates whitespace; the module then decides whether lean is armed.
+        if: steps.pr.outputs.tier != '' || (steps.pr.outputs.pr_number != '' && contains(vars.OPERATING_MODEL, 'lean'))
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
+      # ------------------------------------------------------------------
+      # 1b. Effective tier (WORK-2026110804)
+      # Legacy: the tier:T* label is forwarded unchanged, and an unlabelled
+      # PR skips this step entirely (tier empty -> exit 0), exactly as before.
+      # Lean (armed): the tier is DERIVED FROM THE DIFF - the shared
+      # classification of the merged PR's changed files (plus reviewer
+      # escalation). Protected -> T1, whatever label the PR carries;
+      # Standard -> the label tier if any, else non-lane. Escalation only goes
+      # up. Runs from the merged main checkout (trusted).
+      # ------------------------------------------------------------------
+      - name: Resolve effective tier
+        id: eff
+        if: steps.pr.outputs.pr_number != '' && (steps.pr.outputs.tier != '' || contains(vars.OPERATING_MODEL, 'lean'))
+        uses: actions/github-script@v7
+        env:
+          LABEL_TIER: ${{ steps.pr.outputs.tier }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          OPERATING_MODEL: ${{ vars.OPERATING_MODEL }}
+          LEAN_MODE_ACTIVATED_AT: ${{ vars.LEAN_MODE_ACTIVATED_AT }}
+          TRUSTED_REVIEWER_LOGINS: ${{ vars.TRUSTED_REVIEWER_LOGINS }}
+        with:
+          script: |
+            const labelTier = String(process.env.LABEL_TIER || '');
+            let operatingModel = null;
+            if (String(process.env.OPERATING_MODEL || '').trim().toLowerCase() === 'lean') {
+              try {
+                operatingModel = require('./scripts/ops/operating-model.cjs');
+              } catch (error) {
+                if (!(error && error.code === 'MODULE_NOT_FOUND' && String(error.message || '').includes('operating-model.cjs'))) throw error;
+                core.notice('Lean operating model requested, but scripts/ops/operating-model.cjs is absent on the base commit; legacy path applies.');
+              }
+            }
+            if (!operatingModel) {
+              core.setOutput('tier', labelTier);
+              return;
+            }
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: Number(process.env.PR_NUMBER) });
+            const policy = await operatingModel.loadPullRequestPolicy({ github, owner, repo, pr, env: process.env });
+            if (policy.mode.mode !== 'lean') {
+              core.setOutput('tier', labelTier);
+              return;
+            }
+            if (policy.classification.class !== 'Standard') {
+              core.notice(`post-merge-qa-gate: lean Protected diff (path, content or reviewer escalation); tier derived as T1 (label: ${labelTier || 'none'}).`);
+              core.setOutput('tier', 'T1');
+              return;
+            }
+            core.setOutput('tier', labelTier);
+
       - name: Collect changed files
-        if: steps.pr.outputs.tier != ''
+        if: steps.eff.outputs.tier != ''
         id: files
         run: |
           changed=$(git diff --name-only HEAD~1 HEAD)
@@ -115,30 +169,30 @@ jobs:
       # 3. Setup toolchain (only when a tier was found and files exist)
       # ------------------------------------------------------------------
       - name: Setup pnpm
-        if: steps.pr.outputs.tier != ''
+        if: steps.eff.outputs.tier != ''
         uses: pnpm/action-setup@v4
         with:
           version: 10.29.3
 
       - name: Setup Node
-        if: steps.pr.outputs.tier != ''
+        if: steps.eff.outputs.tier != ''
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
 
       - name: Install dependencies
-        if: steps.pr.outputs.tier != ''
+        if: steps.eff.outputs.tier != ''
         run: pnpm install --frozen-lockfile
 
       # ------------------------------------------------------------------
       # 4. Run policy engine to determine whether QA is needed
       # ------------------------------------------------------------------
       - name: Evaluate policy engine
-        if: steps.pr.outputs.tier != ''
+        if: steps.eff.outputs.tier != ''
         id: policy
         env:
-          TIER: ${{ steps.pr.outputs.tier }}
+          TIER: ${{ steps.eff.outputs.tier }}
           CHANGED_FILES: ${{ steps.files.outputs.list }}
         run: |
           # Build --path flag arguments from changed files list
@@ -228,7 +282,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
-          TIER: ${{ steps.pr.outputs.tier }}
+          TIER: ${{ steps.eff.outputs.tier }}
           QA_RESULT: ${{ steps.qa.outputs.qa_result }}
           QA_EXIT: ${{ steps.qa.outputs.qa_exit }}
           POLICY_OUTPUT: ${{ steps.policy.outputs.policy_output }}
@@ -274,7 +328,7 @@ jobs:
       - name: Summary
         if: always()
         env:
-          TIER: ${{ steps.pr.outputs.tier }}
+          TIER: ${{ steps.eff.outputs.tier }}
           RUN_QA: ${{ steps.policy.outputs.run_qa }}
           QA_RESULT: ${{ steps.qa.outputs.qa_result }}
         run: |

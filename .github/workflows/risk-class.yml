@@ -1,0 +1,78 @@
+# Risk Class
+#
+# WORK-2026110804 (Standard/Protected operating model, Step A: add-only).
+#
+# Reports the mechanical risk class (Standard | Protected) of a pull request.
+# The class is computed by scripts/ops/operating-model.cjs from a Standard
+# allow-list (everything else Protected) plus content checks and trusted
+# reviewer escalation, never self-declared. It can only escalate.
+#
+# Inert unless OPERATING_MODEL=lean and LEAN_MODE_ACTIVATED_AT is set, and when
+# the base commit predates the policy module (lazy, guarded require): reports
+# "not applicable" and passes.
+#
+# Pinned to the PR's immutable base SHA so a PR cannot rewrite its own
+# classifier. The class is informational here; Merge Gate recomputes it from
+# the same module and is the single decision point.
+
+name: Risk Class
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  classify:
+    name: ${{ github.event_name == 'pull_request' && 'Risk Class' || 'Risk Class (ineligible event)' }}
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout trusted base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      - name: Classify pull request
+        uses: actions/github-script@v7
+        env:
+          OPERATING_MODEL: ${{ vars.OPERATING_MODEL }}
+          LEAN_MODE_ACTIVATED_AT: ${{ vars.LEAN_MODE_ACTIVATED_AT }}
+          TRUSTED_REVIEWER_LOGINS: ${{ vars.TRUSTED_REVIEWER_LOGINS }}
+        with:
+          script: |
+            let operatingModel = null;
+            if (String(process.env.OPERATING_MODEL || '').trim().toLowerCase() === 'lean') {
+              try {
+                operatingModel = require('./scripts/ops/operating-model.cjs');
+              } catch (error) {
+                if (!(error && error.code === 'MODULE_NOT_FOUND' && String(error.message || '').includes('operating-model.cjs'))) throw error;
+                core.notice('Lean operating model requested, but scripts/ops/operating-model.cjs is absent on the base commit; legacy path applies.');
+              }
+            }
+            if (!operatingModel) {
+              core.notice('Risk Class: not applicable (lean mode not requested or policy module absent on base).');
+              return;
+            }
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: context.payload.pull_request.number });
+            const policy = await operatingModel.loadPullRequestPolicy({ github, owner, repo, pr, env: process.env });
+            if (policy.mode.mode !== 'lean') {
+              core.notice(`Risk Class: not applicable (${policy.mode.reason})`);
+              await core.summary.addHeading('Risk Class').addRaw(`Not applicable: ${policy.mode.reason}`).write();
+              return;
+            }
+            const c = policy.classification;
+            core.notice(`Risk Class: ${c.class} (${c.reasons.length} reason(s), ${c.standardFiles.length} Standard file(s))`);
+            const lines = [
+              `Class: **${c.class}**`,
+              ...c.reasons.map(r => `- \`${r.file}\` - ${r.rule}: ${r.detail}`),
+              ...c.standardFiles.map(f => `- \`${f.file}\` - Standard (${f.rule})`),
+            ];
+            await core.summary.addHeading('Risk Class').addRaw(lines.join('\n'), true).write();

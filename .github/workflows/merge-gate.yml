@@ -102,6 +102,11 @@ jobs:
         uses: actions/github-script@v7
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          # WORK-2026110804: lean-mode inputs. Unset/legacy => the legacy path
+          # below runs byte-for-byte as before.
+          OPERATING_MODEL: ${{ vars.OPERATING_MODEL }}
+          LEAN_MODE_ACTIVATED_AT: ${{ vars.LEAN_MODE_ACTIVATED_AT }}
+          TRUSTED_REVIEWER_LOGINS: ${{ vars.TRUSTED_REVIEWER_LOGINS }}
         with:
           script: |
             const owner = context.repo.owner;
@@ -131,6 +136,60 @@ jobs:
             const notes = [];
 
             try {
+              // ── 2b. Operating mode (WORK-2026110804) ───────────────
+              // Lean applies only while OPERATING_MODEL=lean and
+              // LEAN_MODE_ACTIVATED_AT is a past ISO-8601 timestamp (global;
+              // rollback = set the flag to anything else and every LATER run
+              // takes the legacy path below - an already-green run is not
+              // re-evaluated, so rollback also requires rerunning this check on
+              // open PRs, see LEAN_MODE_ACTIVATION.md). The policy module is required LAZILY and only
+              // when lean is requested: with the flag unset the legacy path
+              // runs byte-for-byte as before, and a base commit that predates
+              // scripts/ops/operating-model.cjs also means legacy, never a
+              // MODULE_NOT_FOUND failure.
+              let leanPolicy = null;
+              if (String(process.env.OPERATING_MODEL || '').trim().toLowerCase() === 'lean') {
+                let operatingModel = null;
+                try {
+                  operatingModel = require('./scripts/ops/operating-model.cjs');
+                } catch (error) {
+                  if (!(error && error.code === 'MODULE_NOT_FOUND' && String(error.message || '').includes('operating-model.cjs'))) throw error;
+                  notes.push('Lean operating model requested, but scripts/ops/operating-model.cjs is absent on the base commit; legacy path applies.');
+                }
+                if (operatingModel) {
+                  const { data: prFull } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+                  if (!prFull.head || prFull.head.sha !== headSha) {
+                    throw new Error(`PR head moved from ${headSha} to ${prFull.head && prFull.head.sha}; refusing to evaluate a stale head.`);
+                  }
+                  const policy = await operatingModel.loadPullRequestPolicy({ github, owner, repo, pr: prFull, env: process.env });
+                  if (policy.mode.mode === 'lean') leanPolicy = { operatingModel, policy, prFull };
+                }
+              }
+
+              if (leanPolicy) {
+                // Lean: no lane manifest, tier label, preflight, scope-override
+                // or exact-head executor attestation. Decision = branch-protected
+                // checks (verify, P0 Protocol, staging proof) + Independent Review
+                // (+ head-bound CODEOWNER approval for Protected, including a
+                // trusted reviewer's RISK-CLASS: PROTECTED escalation).
+                const { operatingModel, policy, prFull } = leanPolicy;
+                const { data: leanIssue } = await github.rest.issues.get({ owner, repo, issue_number: prNumber });
+                const leanLabels = (leanIssue.labels || []).map(l => typeof l === 'string' ? l : l.name).filter(Boolean);
+                const review = operatingModel.evaluatePolicyReview({ policy, pr: prFull });
+                const approval = policy.classification.class === 'Standard'
+                  ? { errors: [] }
+                  : await operatingModel.validateHeadBoundApproval({ github, owner, repo, prNumber, headSha });
+                const lean = operatingModel.evaluateLeanGate({
+                  riskClass: policy.classification.class,
+                  labels: leanLabels,
+                  independentReview: review,
+                  protectedApprovalErrors: approval.errors,
+                });
+                errors.push(...lean.errors);
+                notes.push(
+                  `Lean operating model: class ${lean.class} (${policy.classification.reasons.length} classification reason(s)); ${policy.mode.reason}`
+                );
+              } else {
               // ── 3. Get PR labels ───────────────────────────────────
               const { data: issue } = await github.rest.issues.get({
                 owner, repo, issue_number: prNumber
@@ -565,6 +624,7 @@ jobs:
                 }
               }
 
+              } // end legacy path (WORK-2026110804)
             } catch (e) {
               errors.push(`Internal error: ${e.message}`);
             }
