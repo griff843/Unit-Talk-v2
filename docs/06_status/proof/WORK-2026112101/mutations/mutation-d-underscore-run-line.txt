@@ -1,0 +1,166 @@
+diff --git a/packages/domain/src/discord-presentation.ts b/packages/domain/src/discord-presentation.ts
+index 4df98dafe..1f1633f14 100644
+--- a/packages/domain/src/discord-presentation.ts
++++ b/packages/domain/src/discord-presentation.ts
+@@ -216,7 +216,7 @@ function pickTitleLine(
+     (number) => Number(number) === Math.abs(line),
+   );
+   if (stated) return '';
+-  const spread = /spread|handicap|run[\s_-]?line|puck[\s_-]?line/iu.test(knownText(market) ?? '');
++  const spread = /spread|handicap|run ?line|puck ?line/iu.test(knownText(market) ?? '');
+   return ` ${spread && line > 0 ? '+' : ''}${spread || line < 0 ? line : magnitude}`;
+ }
+ export function buildPickPresentation(
+TAP version 13
+# Subtest: WORK-2026110302: allowlist is exactly the four verified media hosts
+ok 1 - WORK-2026110302: allowlist is exactly the four verified media hosts
+  ---
+  duration_ms: 1.234063
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl accepts each allowlisted https host
+ok 2 - WORK-2026110302: allowedMediaUrl accepts each allowlisted https host
+  ---
+  duration_ms: 0.209139
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses dead NHL host
+ok 3 - WORK-2026110302: allowedMediaUrl refuses dead NHL host
+  ---
+  duration_ms: 0.093315
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses http scheme
+ok 4 - WORK-2026110302: allowedMediaUrl refuses http scheme
+  ---
+  duration_ms: 0.050035
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses credentials
+ok 5 - WORK-2026110302: allowedMediaUrl refuses credentials
+  ---
+  duration_ms: 0.049519
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses username only
+ok 6 - WORK-2026110302: allowedMediaUrl refuses username only
+  ---
+  duration_ms: 0.041988
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses foreign host
+ok 7 - WORK-2026110302: allowedMediaUrl refuses foreign host
+  ---
+  duration_ms: 0.079541
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses allowlisted host as subdomain suffix
+ok 8 - WORK-2026110302: allowedMediaUrl refuses allowlisted host as subdomain suffix
+  ---
+  duration_ms: 0.121848
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses subdomain of an allowlisted host
+ok 9 - WORK-2026110302: allowedMediaUrl refuses subdomain of an allowlisted host
+  ---
+  duration_ms: 1.010816
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses non-default port
+ok 10 - WORK-2026110302: allowedMediaUrl refuses non-default port
+  ---
+  duration_ms: 0.237239
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses malformed
+ok 11 - WORK-2026110302: allowedMediaUrl refuses malformed
+  ---
+  duration_ms: 0.075251
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses empty
+ok 12 - WORK-2026110302: allowedMediaUrl refuses empty
+  ---
+  duration_ms: 0.032942
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses non-string
+ok 13 - WORK-2026110302: allowedMediaUrl refuses non-string
+  ---
+  duration_ms: 0.02559
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses null
+ok 14 - WORK-2026110302: allowedMediaUrl refuses null
+  ---
+  duration_ms: 0.02543
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: buildPresentationEmbed shows no thumbnail for a refused host and keeps the text brand
+ok 15 - WORK-2026110302: buildPresentationEmbed shows no thumbnail for a refused host and keeps the text brand
+  ---
+  duration_ms: 0.408466
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: buildPickPresentation renders an allowlisted thumbnail and drops a foreign one
+ok 16 - WORK-2026110302: buildPickPresentation renders an allowlisted thumbnail and drops a foreign one
+  ---
+  duration_ms: 0.384561
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: the result recap goes through the host guard
+ok 17 - WORK-2026110302: the result recap goes through the host guard
+  ---
+  duration_ms: 0.21871
+  type: 'test'
+  ...
+# Subtest: pick title does not repeat a line the selection already states
+ok 18 - pick title does not repeat a line the selection already states
+  ---
+  duration_ms: 0.190145
+  type: 'test'
+  ...
+# Subtest: pick title appends a missing line without an @ odds marker
+not ok 19 - pick title appends a missing line without an @ odds marker
+  ---
+  duration_ms: 1.738904
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/packages/domain/src/discord-presentation.test.ts:1:4046'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'Pick Posted · Bruins 1.5'
+    - 'Pick Posted · Bruins +1.5'
+                            ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'Pick Posted · Bruins +1.5'
+  actual: 'Pick Posted · Bruins 1.5'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/packages/domain/src/discord-presentation.test.ts:126:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: pick title without a line is just the selection
+ok 20 - pick title without a line is just the selection
+  ---
+  duration_ms: 0.088066
+  type: 'test'
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 19
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 170.532683

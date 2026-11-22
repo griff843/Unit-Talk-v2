@@ -1,0 +1,175 @@
+TAP version 13
+# Subtest: WORK-2026110302: allowlist is exactly the four verified media hosts
+ok 1 - WORK-2026110302: allowlist is exactly the four verified media hosts
+  ---
+  duration_ms: 1.125347
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl accepts each allowlisted https host
+ok 2 - WORK-2026110302: allowedMediaUrl accepts each allowlisted https host
+  ---
+  duration_ms: 0.226491
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses dead NHL host
+ok 3 - WORK-2026110302: allowedMediaUrl refuses dead NHL host
+  ---
+  duration_ms: 0.107387
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses http scheme
+ok 4 - WORK-2026110302: allowedMediaUrl refuses http scheme
+  ---
+  duration_ms: 0.046782
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses credentials
+ok 5 - WORK-2026110302: allowedMediaUrl refuses credentials
+  ---
+  duration_ms: 0.051244
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses username only
+ok 6 - WORK-2026110302: allowedMediaUrl refuses username only
+  ---
+  duration_ms: 0.041854
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses foreign host
+ok 7 - WORK-2026110302: allowedMediaUrl refuses foreign host
+  ---
+  duration_ms: 0.080676
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses allowlisted host as subdomain suffix
+ok 8 - WORK-2026110302: allowedMediaUrl refuses allowlisted host as subdomain suffix
+  ---
+  duration_ms: 0.073924
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses subdomain of an allowlisted host
+ok 9 - WORK-2026110302: allowedMediaUrl refuses subdomain of an allowlisted host
+  ---
+  duration_ms: 0.120445
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses non-default port
+ok 10 - WORK-2026110302: allowedMediaUrl refuses non-default port
+  ---
+  duration_ms: 0.181889
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses malformed
+ok 11 - WORK-2026110302: allowedMediaUrl refuses malformed
+  ---
+  duration_ms: 0.077407
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses empty
+ok 12 - WORK-2026110302: allowedMediaUrl refuses empty
+  ---
+  duration_ms: 0.07891
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses non-string
+ok 13 - WORK-2026110302: allowedMediaUrl refuses non-string
+  ---
+  duration_ms: 0.027893
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses null
+ok 14 - WORK-2026110302: allowedMediaUrl refuses null
+  ---
+  duration_ms: 0.024788
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: buildPresentationEmbed shows no thumbnail for a refused host and keeps the text brand
+ok 15 - WORK-2026110302: buildPresentationEmbed shows no thumbnail for a refused host and keeps the text brand
+  ---
+  duration_ms: 0.385906
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: buildPickPresentation renders an allowlisted thumbnail and drops a foreign one
+ok 16 - WORK-2026110302: buildPickPresentation renders an allowlisted thumbnail and drops a foreign one
+  ---
+  duration_ms: 0.307456
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: the result recap goes through the host guard
+ok 17 - WORK-2026110302: the result recap goes through the host guard
+  ---
+  duration_ms: 0.209707
+  type: 'test'
+  ...
+# Subtest: pick title does not repeat a line the selection already states
+not ok 18 - pick title does not repeat a line the selection already states
+  ---
+  duration_ms: 1.503443
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/packages/domain/src/discord-presentation.test.ts:1:3391'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'Pick Posted · LeBron James Over 27.5 @ +27.5'
+    - 'Pick Posted · LeBron James Over 27.5'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'Pick Posted · LeBron James Over 27.5'
+  actual: 'Pick Posted · LeBron James Over 27.5 @ +27.5'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/packages/domain/src/discord-presentation.test.ts:110:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: pick title appends a missing line without an @ odds marker
+not ok 19 - pick title appends a missing line without an @ odds marker
+  ---
+  duration_ms: 0.28104
+  type: 'test'
+  location: '/home/user/Unit-Talk-v2/packages/domain/src/discord-presentation.test.ts:1:4046'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'Pick Posted · Over @ +27.5'
+    - 'Pick Posted · Over 27.5'
+                          ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'Pick Posted · Over 27.5'
+  actual: 'Pick Posted · Over @ +27.5'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/user/Unit-Talk-v2/packages/domain/src/discord-presentation.test.ts:120:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: pick title without a line is just the selection
+ok 20 - pick title without a line is just the selection
+  ---
+  duration_ms: 0.069938
+  type: 'test'
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 18
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 149.874329

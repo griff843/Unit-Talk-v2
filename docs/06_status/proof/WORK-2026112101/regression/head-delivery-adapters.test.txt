@@ -1,0 +1,185 @@
+TAP version 13
+# {"timestamp":"2026-11-22T21:37:49.852Z","level":"warn","service":"worker","message":"Discord game-thread route missing; falling back to channel delivery","outboxId":"b5e2308b-7e03-453b-ab83-2f5324102daa","target":"discord:game-threads","eventKey":"Lakers vs Celtics","fallbackChannelId":"111111111111111111"}
+# Subtest: createDiscordDeliveryAdapter routes game-thread target to mapped event thread
+ok 1 - createDiscordDeliveryAdapter routes game-thread target to mapped event thread
+  ---
+  duration_ms: 17.232793
+  type: 'test'
+  ...
+# Subtest: createDiscordDeliveryAdapter falls back to game-thread channel when event thread is missing
+ok 2 - createDiscordDeliveryAdapter falls back to game-thread channel when event thread is missing
+  ---
+  duration_ms: 1.309989
+  type: 'test'
+  ...
+# Subtest: createDiscordDeliveryAdapter routes strategy-room target through a Discord DM channel
+ok 3 - createDiscordDeliveryAdapter routes strategy-room target through a Discord DM channel
+  ---
+  duration_ms: 1.066895
+  type: 'test'
+  ...
+# Subtest: createDiscordDeliveryAdapter reports strategy-room DM setup failure as retryable
+ok 4 - createDiscordDeliveryAdapter reports strategy-room DM setup failure as retryable
+  ---
+  duration_ms: 0.754455
+  type: 'test'
+  ...
+# Subtest: UTV2-1923: a pinned destination routes to that capper channel, not the shared map
+ok 5 - UTV2-1923: a pinned destination routes to that capper channel, not the shared map
+  ---
+  duration_ms: 1.380785
+  type: 'test'
+  ...
+# Subtest: UTV2-1929: the receipt records the pinned channel, not the logical target
+ok 6 - UTV2-1929: the receipt records the pinned channel, not the logical target
+  ---
+  duration_ms: 1.126154
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: an archived locked Official Picks thread is safely reopened, re-read, then posted
+ok 7 - UTV2-1970: an archived locked Official Picks thread is safely reopened, re-read, then posted
+  ---
+  duration_ms: 1.52749
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: an unlocked Official Picks thread is refused before message POST
+ok 8 - UTV2-1970: an unlocked Official Picks thread is refused before message POST
+  ---
+  duration_ms: 1.035573
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: missing thread_metadata is refused before message POST
+ok 9 - UTV2-1970: missing thread_metadata is refused before message POST
+  ---
+  duration_ms: 2.554374
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: non-object thread_metadata is refused before message POST
+ok 10 - UTV2-1970: non-object thread_metadata is refused before message POST
+  ---
+  duration_ms: 0.856993
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: missing archived flag is refused before message POST
+ok 11 - UTV2-1970: missing archived flag is refused before message POST
+  ---
+  duration_ms: 0.680552
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: non-boolean locked flag is refused before message POST
+ok 12 - UTV2-1970: non-boolean locked flag is refused before message POST
+  ---
+  duration_ms: 0.682132
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: wrong channel id is refused before message POST
+ok 13 - UTV2-1970: wrong channel id is refused before message POST
+  ---
+  duration_ms: 0.822391
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: wrong guild id is refused before message POST
+ok 14 - UTV2-1970: wrong guild id is refused before message POST
+  ---
+  duration_ms: 0.761979
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: wrong channel type is refused before message POST
+ok 15 - UTV2-1970: wrong channel type is refused before message POST
+  ---
+  duration_ms: 2.33072
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: initial GET failure remains not-sent
+ok 16 - UTV2-1970: initial GET failure remains not-sent
+  ---
+  duration_ms: 0.70756
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: PATCH failure remains not-sent
+ok 17 - UTV2-1970: PATCH failure remains not-sent
+  ---
+  duration_ms: 0.565125
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: re-read failure remains not-sent
+ok 18 - UTV2-1970: re-read failure remains not-sent
+  ---
+  duration_ms: 0.641439
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: initial GET timeout remains not-sent
+ok 19 - UTV2-1970: initial GET timeout remains not-sent
+  ---
+  duration_ms: 4.969991
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: PATCH timeout remains not-sent
+ok 20 - UTV2-1970: PATCH timeout remains not-sent
+  ---
+  duration_ms: 5.053696
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: re-read timeout remains not-sent
+ok 21 - UTV2-1970: re-read timeout remains not-sent
+  ---
+  duration_ms: 6.071854
+  type: 'test'
+  ...
+# Subtest: UTV2-1970: an archived thread that re-reads unlocked is refused before message POST
+ok 22 - UTV2-1970: an archived thread that re-reads unlocked is refused before message POST
+  ---
+  duration_ms: 1.052553
+  type: 'test'
+  ...
+# Subtest: UTV2-1923: human delivery with no pinned destination refuses rather than falling back
+ok 23 - UTV2-1923: human delivery with no pinned destination refuses rather than falling back
+  ---
+  duration_ms: 0.616454
+  type: 'test'
+  ...
+# Subtest: UTV2-1923: a malformed pin is not a destination
+ok 24 - UTV2-1923: a malformed pin is not a destination
+  ---
+  duration_ms: 0.55525
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: buildDiscordMessagePayload drops an unverified thumbnail and still builds the embed
+ok 25 - WORK-2026110302: buildDiscordMessagePayload drops an unverified thumbnail and still builds the embed
+  ---
+  duration_ms: 0.320898
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: buildDiscordMessagePayload drops a thumbnail flagged with a non-boolean verified value
+ok 26 - WORK-2026110302: buildDiscordMessagePayload drops a thumbnail flagged with a non-boolean verified value
+  ---
+  duration_ms: 0.261924
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: buildDiscordMessagePayload renders a verified allowlisted thumbnail
+ok 27 - WORK-2026110302: buildDiscordMessagePayload renders a verified allowlisted thumbnail
+  ---
+  duration_ms: 0.272435
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: buildDiscordMessagePayload drops a verified dead-host NHL thumbnail
+ok 28 - WORK-2026110302: buildDiscordMessagePayload drops a verified dead-host NHL thumbnail
+  ---
+  duration_ms: 0.132543
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: an unverified thumbnail is dropped while the Discord message still sends
+ok 29 - WORK-2026110302: an unverified thumbnail is dropped while the Discord message still sends
+  ---
+  duration_ms: 0.902696
+  type: 'test'
+  ...
+1..29
+# tests 29
+# suites 0
+# pass 29
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 252.594667

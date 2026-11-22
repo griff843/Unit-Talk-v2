@@ -1,0 +1,130 @@
+TAP version 13
+# Subtest: WORK-2026110302: allowlist is exactly the four verified media hosts
+ok 1 - WORK-2026110302: allowlist is exactly the four verified media hosts
+  ---
+  duration_ms: 1.267994
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl accepts each allowlisted https host
+ok 2 - WORK-2026110302: allowedMediaUrl accepts each allowlisted https host
+  ---
+  duration_ms: 0.168766
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses dead NHL host
+ok 3 - WORK-2026110302: allowedMediaUrl refuses dead NHL host
+  ---
+  duration_ms: 0.081934
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses http scheme
+ok 4 - WORK-2026110302: allowedMediaUrl refuses http scheme
+  ---
+  duration_ms: 0.03856
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses credentials
+ok 5 - WORK-2026110302: allowedMediaUrl refuses credentials
+  ---
+  duration_ms: 0.039621
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses username only
+ok 6 - WORK-2026110302: allowedMediaUrl refuses username only
+  ---
+  duration_ms: 0.034237
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses foreign host
+ok 7 - WORK-2026110302: allowedMediaUrl refuses foreign host
+  ---
+  duration_ms: 0.068581
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses allowlisted host as subdomain suffix
+ok 8 - WORK-2026110302: allowedMediaUrl refuses allowlisted host as subdomain suffix
+  ---
+  duration_ms: 0.114063
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses subdomain of an allowlisted host
+ok 9 - WORK-2026110302: allowedMediaUrl refuses subdomain of an allowlisted host
+  ---
+  duration_ms: 0.118576
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses non-default port
+ok 10 - WORK-2026110302: allowedMediaUrl refuses non-default port
+  ---
+  duration_ms: 0.180997
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses malformed
+ok 11 - WORK-2026110302: allowedMediaUrl refuses malformed
+  ---
+  duration_ms: 0.063022
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses empty
+ok 12 - WORK-2026110302: allowedMediaUrl refuses empty
+  ---
+  duration_ms: 0.027797
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses non-string
+ok 13 - WORK-2026110302: allowedMediaUrl refuses non-string
+  ---
+  duration_ms: 0.021687
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: allowedMediaUrl refuses null
+ok 14 - WORK-2026110302: allowedMediaUrl refuses null
+  ---
+  duration_ms: 0.020625
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: buildPresentationEmbed shows no thumbnail for a refused host and keeps the text brand
+ok 15 - WORK-2026110302: buildPresentationEmbed shows no thumbnail for a refused host and keeps the text brand
+  ---
+  duration_ms: 0.258988
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: buildPickPresentation renders an allowlisted thumbnail and drops a foreign one
+ok 16 - WORK-2026110302: buildPickPresentation renders an allowlisted thumbnail and drops a foreign one
+  ---
+  duration_ms: 0.368911
+  type: 'test'
+  ...
+# Subtest: WORK-2026110302: the result recap goes through the host guard
+ok 17 - WORK-2026110302: the result recap goes through the host guard
+  ---
+  duration_ms: 0.298928
+  type: 'test'
+  ...
+# Subtest: pick title does not repeat a line the selection already states
+ok 18 - pick title does not repeat a line the selection already states
+  ---
+  duration_ms: 0.179098
+  type: 'test'
+  ...
+# Subtest: pick title appends a missing line without an @ odds marker
+ok 19 - pick title appends a missing line without an @ odds marker
+  ---
+  duration_ms: 0.313651
+  type: 'test'
+  ...
+# Subtest: pick title without a line is just the selection
+ok 20 - pick title without a line is just the selection
+  ---
+  duration_ms: 0.05046
+  type: 'test'
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 20
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 673.804225

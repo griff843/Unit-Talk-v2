@@ -1,0 +1,100 @@
+TAP version 13
+# Subtest: presentation ignores technical confidence and arbitrary source enrichment
+ok 1 - presentation ignores technical confidence and arbitrary source enrichment
+  ---
+  duration_ms: 1.370945
+  type: 'test'
+  ...
+# Subtest: null, undefined and non-finite CLV disappear; measured zero remains visible
+ok 2 - null, undefined and non-finite CLV disappear; measured zero remains visible
+  ---
+  duration_ms: 1.131209
+  type: 'test'
+  ...
+# Subtest: missing optional data and missing/invalid media render cleanly without synthesized timestamps
+ok 3 - missing optional data and missing/invalid media render cleanly without synthesized timestamps
+  ---
+  duration_ms: 1.151906
+  type: 'test'
+  ...
+# Subtest: win/loss/push/void/correction have distinct settled identities and colors with equal detail
+ok 4 - win/loss/push/void/correction have distinct settled identities and colors with equal detail
+  ---
+  duration_ms: 0.28551
+  type: 'test'
+  ...
+# Subtest: every nonsettlement launch family uses gold and the quiet brand footer
+ok 5 - every nonsettlement launch family uses gold and the quiet brand footer
+  ---
+  duration_ms: 0.184659
+  type: 'test'
+  ...
+# Subtest: long recap pages preserve late losses and obey field and combined message limits
+ok 6 - long recap pages preserve late losses and obey field and combined message limits
+  ---
+  duration_ms: 2.719231
+  type: 'test'
+  ...
+# Subtest: presentation is deterministic and preserves source time without consulting a clock
+ok 7 - presentation is deterministic and preserves source time without consulting a clock
+  ---
+  duration_ms: 0.529991
+  type: 'test'
+  ...
+# Subtest: upgrade never invents a VIP+ price or presents Black Label as purchasable
+ok 8 - upgrade never invents a VIP+ price or presents Black Label as purchasable
+  ---
+  duration_ms: 0.55299
+  type: 'test'
+  ...
+# Subtest: access denied and bot error specs carry private visibility
+ok 9 - access denied and bot error specs carry private visibility
+  ---
+  duration_ms: 0.181013
+  type: 'test'
+  ...
+# Subtest: router refusal is private and never executes the protected command
+ok 10 - router refusal is private and never executes the protected command
+  ---
+  duration_ms: 0.458612
+  type: 'test'
+  ...
+# Subtest: router errors after a public defer delete the public reply and follow up privately
+ok 11 - router errors after a public defer delete the public reply and follow up privately
+  ---
+  duration_ms: 0.237037
+  type: 'test'
+  ...
+# Subtest: leaderboard API errors remain private despite its approved public success path
+ok 12 - leaderboard API errors remain private despite its approved public success path
+  ---
+  duration_ms: 2.406112
+  type: 'test'
+  ...
+# Subtest: leaderboard renders every returned entry and its sample without inventing unknown metrics
+ok 13 - leaderboard renders every returned entry and its sample without inventing unknown metrics
+  ---
+  duration_ms: 1.172882
+  type: 'test'
+  ...
+# Subtest: stats omits null CLV while showing measured zero with its canonical sample
+ok 14 - stats omits null CLV while showing measured zero with its canonical sample
+  ---
+  duration_ms: 0.672573
+  type: 'test'
+  ...
+# Subtest: results never assume a missing stake, odds or capper identity for display
+ok 15 - results never assume a missing stake, odds or capper identity for display
+  ---
+  duration_ms: 0.354091
+  type: 'test'
+  ...
+1..15
+# tests 15
+# suites 0
+# pass 15
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2239.734303
