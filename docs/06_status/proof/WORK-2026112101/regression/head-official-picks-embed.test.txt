@@ -53,8 +53,8 @@ ok 9 - an eventless or manual official pick omits unknown Game Time
   duration_ms: 0.345161
   type: 'test'
   ...
-# Subtest: an official pick with an event time shows that time, never TBD
-ok 10 - an official pick with an event time shows that time, never TBD
+# Subtest: an official pick with an event time shows that time, never [placeholder word]
+ok 10 - an official pick with an event time shows that time, never [placeholder word]
   ---
   duration_ms: 0.580763
   type: 'test'
