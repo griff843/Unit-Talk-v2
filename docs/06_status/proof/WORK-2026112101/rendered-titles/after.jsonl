@@ -1,0 +1,9 @@
+{"input":{"selection":"LeBron James Over 27.5","line":27.5,"market":"player_points_ou"},"title":"Pick Posted · LeBron James Over 27.5"}
+{"input":{"selection":"LeBron James Over 27.50","line":27.5,"market":"player_points_ou"},"title":"Pick Posted · LeBron James Over 27.50"}
+{"input":{"selection":"Over","line":27.5,"market":"player_points_ou"},"title":"Pick Posted · Over 27.5"}
+{"input":{"selection":"Lakers -3.5","line":-3.5,"market":"spread"},"title":"Pick Posted · Lakers -3.5"}
+{"input":{"selection":"Celtics","line":3.5,"market":"spread"},"title":"Pick Posted · Celtics +3.5"}
+{"input":{"selection":"Yankees","line":-1.5,"market":"run_line"},"title":"Pick Posted · Yankees -1.5"}
+{"input":{"selection":"Bruins","line":1.5,"market":"puck_line"},"title":"Pick Posted · Bruins +1.5"}
+{"input":{"selection":"Under","line":8.5,"market":"game_total_ou"},"title":"Pick Posted · Under 8.5"}
+{"input":{"selection":"Lakers ML","market":"moneyline"},"title":"Pick Posted · Lakers ML"}

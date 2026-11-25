@@ -102,3 +102,36 @@ test('WORK-2026110302: the result recap goes through the host guard', () => {
     url: ALLOWED[1],
   });
 });
+
+// WORK-2026112101: the line is never shown as if it were odds.
+test('pick title does not repeat a line the selection already states', () => {
+  const title = (selection: string, line: number, market = 'player_points_ou') =>
+    buildPickPresentation('pick-posted', { selection, line, market, odds: -110 }).title;
+  assert.equal(title('LeBron James Over 27.5', 27.5), 'Pick Posted · LeBron James Over 27.5');
+  assert.equal(title('Lakers -3.5', -3.5, 'spread'), 'Pick Posted · Lakers -3.5');
+  assert.equal(title('Celtics +3.5', 3.5, 'spread'), 'Pick Posted · Celtics +3.5');
+  assert.equal(title('Over 220', 220, 'game_total_ou'), 'Pick Posted · Over 220');
+  assert.equal(title('LeBron James Over 27.50', 27.5), 'Pick Posted · LeBron James Over 27.50');
+});
+
+test('pick title appends a missing line without an @ odds marker', () => {
+  const title = (selection: string, line: number, market: string) =>
+    buildPickPresentation('pick-posted', { selection, line, market, odds: 150 }).title;
+  assert.equal(title('Over', 27.5, 'player_points_ou'), 'Pick Posted · Over 27.5');
+  assert.equal(title('Under', 8.5, 'game_total_ou'), 'Pick Posted · Under 8.5');
+  assert.equal(title('Lakers', -3.5, 'spread'), 'Pick Posted · Lakers -3.5');
+  assert.equal(title('Celtics', 3.5, 'spread'), 'Pick Posted · Celtics +3.5');
+  assert.equal(title('Over 2', 27.5, 'player_points_ou'), 'Pick Posted · Over 2 27.5');
+  assert.equal(title('Yankees', -1.5, 'run_line'), 'Pick Posted · Yankees -1.5');
+  assert.equal(title('Bruins', 1.5, 'puck_line'), 'Pick Posted · Bruins +1.5');
+  for (const t of [title('Over', 27.5, 'player_points_ou'), title('Lakers', -3.5, 'spread')]) {
+    assert.ok(!t.includes('@'), t);
+  }
+});
+
+test('pick title without a line is just the selection', () => {
+  assert.equal(
+    buildPickPresentation('pick-posted', { selection: 'Lakers ML', market: 'moneyline', odds: -150 }).title,
+    'Pick Posted · Lakers ML',
+  );
+});

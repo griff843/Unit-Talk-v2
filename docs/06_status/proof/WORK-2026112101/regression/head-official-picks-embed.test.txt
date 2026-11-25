@@ -1,0 +1,76 @@
+TAP version 13
+# Subtest: all worker target presentations ignore confidence and unproven metadata without media
+ok 1 - all worker target presentations ignore confidence and unproven metadata without media
+  ---
+  duration_ms: 4.949851
+  type: 'test'
+  ...
+# Subtest: official picks carry the shared Unit Talk footer
+ok 2 - official picks carry the shared Unit Talk footer
+  ---
+  duration_ms: 0.242281
+  type: 'test'
+  ...
+# Subtest: official picks show Market, Odds, Units and Capper
+ok 3 - official picks show Market, Odds, Units and Capper
+  ---
+  duration_ms: 0.205145
+  type: 'test'
+  ...
+# Subtest: units read a numeric string, and disappear when absent
+ok 4 - units read a numeric string, and disappear when absent
+  ---
+  duration_ms: 0.312838
+  type: 'test'
+  ...
+# Subtest: odds render as a bare American price
+ok 5 - odds render as a bare American price
+  ---
+  duration_ms: 0.140862
+  type: 'test'
+  ...
+# Subtest: official picks show no confidence, edge, implied probability, record or CLV
+ok 6 - official picks show no confidence, edge, implied probability, record or CLV
+  ---
+  duration_ms: 0.192371
+  type: 'test'
+  ...
+# Subtest: the official pick message carries its outbox nonce
+ok 7 - the official pick message carries its outbox nonce
+  ---
+  duration_ms: 0.098041
+  type: 'test'
+  ...
+# Subtest: the canary lane uses the same brand footer without changing its target
+ok 8 - the canary lane uses the same brand footer without changing its target
+  ---
+  duration_ms: 0.092829
+  type: 'test'
+  ...
+# Subtest: an eventless or manual official pick omits unknown Game Time
+ok 9 - an eventless or manual official pick omits unknown Game Time
+  ---
+  duration_ms: 0.345161
+  type: 'test'
+  ...
+# Subtest: an official pick with an event time shows that time, never [placeholder word]
+ok 10 - an official pick with an event time shows that time, never [placeholder word]
+  ---
+  duration_ms: 0.580763
+  type: 'test'
+  ...
+# Subtest: the official pick fields keep contract order while omitting unknown Game Time
+ok 11 - the official pick fields keep contract order while omitting unknown Game Time
+  ---
+  duration_ms: 0.151223
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 323.263849

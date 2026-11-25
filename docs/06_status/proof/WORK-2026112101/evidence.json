@@ -1,0 +1,59 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026112101",
+  "tier": "T1",
+  "status": "in_review_candidate",
+  "static_proof": {
+    "status": "PASS",
+    "focused_tests": {
+      "discord_presentation": { "pass": 20, "fail": 0 },
+      "official_picks_embed": { "pass": 11, "fail": 0 },
+      "delivery_adapters": { "pass": 29, "fail": 0 },
+      "discord_design_system": { "pass": 15, "fail": 0 }
+    },
+    "regression_before": {
+      "main_discord_presentation": { "pass": 18, "fail": 2 }
+    },
+    "mutations": {
+      "a_ignore_stated_line": { "fail": 1 },
+      "b_drop_spread_sign": { "fail": 1 },
+      "c_restore_at_marker": { "fail": 1 },
+      "d_underscore_run_line": { "fail": 1 }
+    },
+    "rendered_titles": "rendered-titles/",
+    "commands": {
+      "ci verify": { "exit_code": 0, "sha": "61db9ff7bfc47722e3753c023e5a0814e2de107d" }
+    },
+    "verified_source_sha": "61db9ff7bfc47722e3753c023e5a0814e2de107d"
+  },
+  "runtime_proof": {
+    "status": "PASS",
+    "suite": "Writable DB proof (staging only)",
+    "ci_run": "https://github.com/griff843/Unit-Talk-v2/actions/runs/44951807571/job/136991279214",
+    "reason": "Pure domain formatting change; no new write path. Exact-head staging suite run green.",
+    "row_counts": [
+      { "table": "distribution_outbox", "observed_count": 1, "status": "staging reset: rows deleted" },
+      { "table": "sports", "observed_count": 9, "status": "staging seed upserted" },
+      { "table": "cappers", "observed_count": 1, "status": "staging seed upserted" },
+      { "table": "market_families", "observed_count": 6, "status": "staging seed upserted" },
+      { "table": "selection_types", "observed_count": 3, "status": "staging seed upserted" },
+      { "table": "market_types", "observed_count": 133, "status": "staging seed upserted" }
+    ]
+  },
+  "open_blockers": [
+    "Lane manifest not yet bound (ops:lane-start needs SUPABASE_SERVICE_ROLE_KEY on Griff's machine)",
+    "Griff t1-approved label and exact-head pm-verdict/v1 APPROVED pending"
+  ],
+  "evidence_file": "verification.md",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1850",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "61db9ff7bfc47722e3753c023e5a0814e2de107d",
+    "evidence_commit_sha": null,
+    "current_pr_head_sha": null,
+    "sha_type": "verified_source_sha"
+  },
+  "execution_sha": "61db9ff7bfc47722e3753c023e5a0814e2de107d"
+}
