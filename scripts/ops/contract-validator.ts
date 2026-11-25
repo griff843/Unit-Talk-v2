@@ -3,6 +3,11 @@ import { join, basename, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 
 export const VALID_MODELS = [
+  // WORK-2026112505: Claude Code model aliases resolve to the current model of
+  // that family, so agents stop pinning an ID that ages out.
+  'sonnet',
+  'opus',
+  'haiku',
   'claude-sonnet-5',
   'claude-sonnet-4-6',
   'claude-opus-4-8',
