@@ -57,7 +57,7 @@ Approved by: PM on 2026-04-11.
 
 ## Acceptance Criteria Mapping
 
-| Acceptance Criterion (verbatim from Linear) | Assertion # |
+| Acceptance Criterion (verbatim from the work order) | Assertion # |
 |---|---|
 | canonical template exists | 1 |
 | validator enforces shape rules | 2 |
@@ -182,7 +182,7 @@ test('missing acceptance criteria mapping rows is flagged', () => {
     /## Acceptance Criteria Mapping[\s\S]*?## Stop Conditions Encountered/,
     `## Acceptance Criteria Mapping
 
-| Acceptance Criterion (verbatim from Linear) | Assertion # |
+| Acceptance Criterion (verbatim from the work order) | Assertion # |
 |---|---|
 
 ## Stop Conditions Encountered`,
@@ -271,7 +271,7 @@ def5678 fix: another thing
 
 ## Acceptance Criteria Mapping
 
-| Acceptance Criterion (verbatim from Linear) | Assertion # |
+| Acceptance Criterion (verbatim from the work order) | Assertion # |
 |---|---|
 | semantic checks work | 1 |
 

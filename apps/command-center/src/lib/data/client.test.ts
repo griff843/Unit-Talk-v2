@@ -65,8 +65,6 @@ function createEnv(overrides: Partial<AppEnv> = {}): AppEnv {
     UNIT_TALK_APP_ENV: 'production',
     UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\Dev\\Unit-Talk-v2-main',
     UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
-    LINEAR_TEAM_KEY: 'UTV2',
-    LINEAR_TEAM_NAME: 'unit-talk-v2',
     NOTION_WORKSPACE_NAME: 'unit-talk-v2',
     SLACK_WORKSPACE_NAME: 'unit-talk-v2',
     SUPABASE_URL: 'https://unit-talk.example.supabase.co',

@@ -31,7 +31,7 @@
     {
       "id": "INV-0003",
       "title": "One issue → one lane → one branch → one PR",
-      "description": "Each Linear issue maps to exactly one lane, one git branch, and one PR. Multiple issues must not share a lane. A lane must not produce multiple PRs for the same issue.",
+      "description": "Each unit of work (WORK-### work order) maps to exactly one lane, one git branch, and one PR. Multiple issues must not share a lane. A lane must not produce multiple PRs for the same issue.",
       "severity": "governance-critical",
       "enforcing_layer": ["ci", "governance"],
       "quarantine_behavior": "fail-closed",
@@ -57,7 +57,7 @@
     {
       "id": "INV-0005",
       "title": "Tier label required before Ready",
-      "description": "A Linear issue must carry a tier label (tier:T1, tier:T2, or tier:T3) before it can enter a Ready state. Untired issues must not be dispatched.",
+      "description": "A work order must declare a tier (T1, T2, or T3) before a lane can start for it; the lane manifest carries that tier. Untiered work must not be dispatched.",
       "severity": "governance-critical",
       "enforcing_layer": ["ci", "governance"],
       "quarantine_behavior": "fail-closed",

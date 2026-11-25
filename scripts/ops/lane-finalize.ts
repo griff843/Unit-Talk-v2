@@ -3,16 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
-  linearQuery,
-  type LinearQueryOptions,
-  type LinearQueryResult,
-} from './linear-client.js';
-import {
   ROOT,
   emitJson,
   getFlag,
   parseArgs,
-  readConfiguredEnvValue,
   readManifest,
   requireIssueId,
   type LaneManifest,
@@ -32,7 +26,6 @@ export interface LaneFinalizeStep {
   id:
     | 'record_merge'
     | 'apply_tier_label'
-    | 'apply_linear_tier_label'
     | 'generate_proof'
     | 'generate_t2_proof_bundle'
     | 'close_lane'
@@ -99,26 +92,6 @@ export type LaneFinalizeRunner = (
   stderr?: string | Buffer | null;
 };
 
-export type LinearTierQuery = <T>(
-  query: string,
-  variables: Record<string, unknown>,
-  options: LinearQueryOptions,
-) => Promise<LinearQueryResult<T>>;
-
-interface LinearLabelNode {
-  id: string;
-  name: string;
-}
-
-export interface ApplyLinearTierLabelResult {
-  ok: true;
-  code: 'linear_tier_label_applied' | 'linear_tier_label_already_applied';
-  issue_id: string;
-  tier: 'T1' | 'T2' | 'T3';
-  changed: boolean;
-  labels: string[];
-}
-
 export function buildLaneFinalizePlan(input: {
   manifest: LaneManifest;
   pr: string;
@@ -159,21 +132,6 @@ export function buildLaneFinalizePlan(input: {
           normalizePrUrl(input.pr),
           '--add-label',
           `tier:${input.manifest.tier}`,
-        ],
-        required: true,
-      });
-      steps.push({
-        id: 'apply_linear_tier_label',
-        command: 'pnpm',
-        args: [
-          'exec',
-          'tsx',
-          'scripts/ops/lane-finalize.ts',
-          '--issue',
-          issueId,
-          '--apply-linear-tier-label',
-          input.manifest.tier,
-          '--json',
         ],
         required: true,
       });
@@ -511,201 +469,6 @@ export function runLaneFinalizePlan(
   };
 }
 
-function normalizeTier(value: string): 'T1' | 'T2' | 'T3' {
-  const normalized = value
-    .trim()
-    .toUpperCase()
-    .replace(/^TIER:/, '');
-  if (normalized !== 'T1' && normalized !== 'T2' && normalized !== 'T3') {
-    throw new Error(`Unsupported tier label: ${value}`);
-  }
-  return normalized;
-}
-
-function tierFromLabel(label: string): 'T1' | 'T2' | 'T3' | null {
-  const normalized = label
-    .trim()
-    .toUpperCase()
-    .replace(/^TIER:/, '');
-  return normalized === 'T1' || normalized === 'T2' || normalized === 'T3'
-    ? normalized
-    : null;
-}
-
-function verifiedTier(labels: LinearLabelNode[]): 'T1' | 'T2' | 'T3' | null {
-  const tiers = [
-    ...new Set(
-      labels
-        .map((label) => tierFromLabel(label.name))
-        .filter((tier): tier is 'T1' | 'T2' | 'T3' => tier !== null),
-    ),
-  ];
-  return tiers.length === 1 ? tiers[0] : null;
-}
-
-export async function applyLinearTierLabel(input: {
-  issueId: string;
-  tier: string;
-  token: string;
-  query?: LinearTierQuery;
-}): Promise<ApplyLinearTierLabelResult> {
-  const issueId = requireIssueId(input.issueId);
-  const tier = normalizeTier(input.tier);
-  const query = input.query ?? linearQuery;
-  const current = await query<{
-    issue: {
-      id: string;
-      identifier: string;
-      labels: { nodes: LinearLabelNode[] };
-      team: { labels: { nodes: LinearLabelNode[] } } | null;
-    } | null;
-    issueLabels: { nodes: LinearLabelNode[] };
-  }>(
-    `
-      query LaneFinalizeTierLabels($issueId: String!) {
-        issue(id: $issueId) {
-          id
-          identifier
-          labels(first: 100) { nodes { id name } }
-          team { labels(first: 250) { nodes { id name } } }
-        }
-        issueLabels(first: 250) { nodes { id name } }
-      }
-    `,
-    { issueId },
-    { token: input.token, userAgent: 'unit-talk-lane-finalize' },
-  );
-  if (!current.ok || !current.data?.issue) {
-    throw new Error(
-      `Unable to read Linear tier labels for ${issueId}: ${current.error ?? 'issue not found'}`,
-    );
-  }
-
-  const currentLabels = current.data.issue.labels.nodes;
-
-  const availableLabels = [
-    ...current.data.issueLabels.nodes,
-    ...(current.data.issue.team?.labels.nodes ?? []),
-  ].filter(
-    (label, index, labels) =>
-      labels.findIndex((candidate) => candidate.id === label.id) === index,
-  );
-  const targetCandidates = availableLabels.filter(
-    (label) => tierFromLabel(label.name) === tier,
-  );
-  const target =
-    targetCandidates.find(
-      (label) => label.name.toUpperCase() === `TIER:${tier}`,
-    ) ?? targetCandidates[0];
-  if (!target) {
-    throw new Error(
-      `Linear workspace does not contain a label for tier:${tier}.`,
-    );
-  }
-  const currentTierLabels = currentLabels.filter(
-    (label) => tierFromLabel(label.name) !== null,
-  );
-  if (
-    currentTierLabels.length === 1 &&
-    currentTierLabels[0]?.id === target.id &&
-    verifiedTier(currentLabels) === tier
-  ) {
-    return {
-      ok: true,
-      code: 'linear_tier_label_already_applied',
-      issue_id: issueId,
-      tier,
-      changed: false,
-      labels: currentLabels.map((label) => label.name),
-    };
-  }
-
-  let changed = false;
-  if (!currentLabels.some((label) => label.id === target.id)) {
-    const added = await query<{
-      issueAddLabel: { success: boolean };
-    }>(
-      `
-        mutation LaneFinalizeAddTierLabel($issueId: String!, $labelId: String!) {
-          issueAddLabel(id: $issueId, labelId: $labelId) { success }
-        }
-      `,
-      { issueId: current.data.issue.id, labelId: target.id },
-      { token: input.token, userAgent: 'unit-talk-lane-finalize' },
-    );
-    if (!added.ok || added.data?.issueAddLabel.success !== true) {
-      throw new Error(
-        `Unable to add Linear tier:${tier} to ${issueId}: ${added.error ?? 'mutation did not succeed'}`,
-      );
-    }
-    changed = true;
-  }
-
-  for (const label of currentTierLabels) {
-    if (label.id === target.id) continue;
-    const removed = await query<{
-      issueRemoveLabel: { success: boolean };
-    }>(
-      `
-        mutation LaneFinalizeRemoveConflictingTierLabel($issueId: String!, $labelId: String!) {
-          issueRemoveLabel(id: $issueId, labelId: $labelId) { success }
-        }
-      `,
-      { issueId: current.data.issue.id, labelId: label.id },
-      { token: input.token, userAgent: 'unit-talk-lane-finalize' },
-    );
-    if (!removed.ok || removed.data?.issueRemoveLabel.success !== true) {
-      throw new Error(
-        `Unable to remove conflicting Linear tier label ${label.name} from ${issueId}: ${removed.error ?? 'mutation did not succeed'}`,
-      );
-    }
-    changed = true;
-  }
-
-  const verified = await query<{
-    issue: {
-      labels: { nodes: LinearLabelNode[] };
-    } | null;
-  }>(
-    `
-      query LaneFinalizeVerifyTierLabel($issueId: String!) {
-        issue(id: $issueId) {
-          labels(first: 100) { nodes { id name } }
-        }
-      }
-    `,
-    { issueId },
-    { token: input.token, userAgent: 'unit-talk-lane-finalize' },
-  );
-  const verifiedLabels = verified.data?.issue?.labels.nodes;
-  const verifiedTierLabels = verifiedLabels?.filter(
-    (label) => tierFromLabel(label.name) !== null,
-  );
-  if (
-    !verified.ok ||
-    !verifiedLabels ||
-    verifiedTierLabels?.length !== 1 ||
-    verifiedTierLabels[0]?.id !== target.id ||
-    verifiedTier(verifiedLabels) !== tier
-  ) {
-    throw new Error(
-      `Linear tier label verification failed for ${issueId}; observed ${
-        verifiedLabels?.map((label) => label.name).join(', ') ||
-        'no labels'
-      }.`,
-    );
-  }
-
-  return {
-    ok: true,
-    code: 'linear_tier_label_applied',
-    issue_id: issueId,
-    tier,
-    changed,
-    labels: verifiedLabels.map((label) => label.name),
-  };
-}
-
 function progressPath(issueId: string, root = ROOT): string {
   return path.join(root, '.out', 'ops', 'lane-finalize', `${issueId}.json`);
 }
@@ -947,67 +710,6 @@ export function parseLaneFinalizeCliArgs(argv: string[]): {
 async function main(argv = process.argv.slice(2)): Promise<number> {
   const { issueId: rawIssueId, flags, bools } = parseLaneFinalizeCliArgs(argv);
   const json = bools.has('json');
-  const linearTier = getFlag(flags, 'apply-linear-tier-label');
-  if (linearTier) {
-    const token =
-      readConfiguredEnvValue('LINEAR_API_TOKEN') ||
-      readConfiguredEnvValue('LINEAR_API_KEY');
-    // Tracker independence (ratified 2026-09-05): applying a tracker label is
-    // a MIRROR of a decision the repo already made, not the decision itself.
-    // The authoritative tier lives in the lane manifest and in the merge gate's
-    // reading of it; throwing here made an optional mirror-write a hard gate on
-    // finalize. Report `tracker_sync: skipped` and exit 0 instead.
-    //
-    // This does NOT lower a tier and does not skip tier ASSIGNMENT -- only the
-    // tracker write. `--apply-linear-tier-label` is the mirror; the manifest is
-    // the record.
-    if (!token) {
-      const skipped = {
-        ok: true,
-        code: 'tracker_sync_skipped',
-        issue_id: rawIssueId,
-        tier: linearTier,
-        tracker_sync: 'skipped',
-        message:
-          'No LINEAR_API_TOKEN or LINEAR_API_KEY present; the tier label was not mirrored to the tracker. ' +
-          'The manifest tier is unchanged and remains authoritative.',
-      };
-      if (json) emitJson(skipped);
-      else process.stdout.write(`${skipped.code}: ${rawIssueId} tier:${linearTier}\n`);
-      return 0;
-    }
-    let result: Awaited<ReturnType<typeof applyLinearTierLabel>> & {
-      tracker_sync?: string;
-    };
-    try {
-      result = { ...(await applyLinearTierLabel({
-        issueId: rawIssueId,
-        tier: linearTier,
-        token,
-      })), tracker_sync: 'synced' };
-    } catch (error) {
-      const skipped = {
-        ok: true,
-        code: 'tracker_sync_skipped',
-        issue_id: rawIssueId,
-        tier: linearTier,
-        tracker_sync: 'skipped',
-        message:
-          `Tracker label write failed and was not treated as a finalize failure: ` +
-          `${error instanceof Error ? error.message : String(error)}. ` +
-          'The manifest tier is unchanged and remains authoritative.',
-      };
-      if (json) emitJson(skipped);
-      else process.stdout.write(`${skipped.code}: ${rawIssueId} tier:${linearTier}\n`);
-      return 0;
-    }
-    if (json) emitJson(result);
-    else
-      process.stdout.write(
-        `${result.code}: ${result.issue_id} tier:${result.tier}\n`,
-      );
-    return 0;
-  }
   const manifest = readManifest(requireIssueId(rawIssueId));
   const { pr } = resolveLaneFinalizeInput({
     issueId: rawIssueId,

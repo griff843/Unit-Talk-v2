@@ -15,7 +15,7 @@ Operational guard against narrative-vs-artifact drift. Apply when deciding if wo
 | 1 | **GitHub `main`** | shipped code, merge SHAs, CI on merge |
 | 2 | **Proof bundle** (tied to merge SHA) | completion evidence for T1/T2 |
 | 3 | **Lane manifest** (`docs/06_status/lanes/*.json`) | active lane state |
-| 4 | **Linear** | workflow intent, tier label, ownership |
+| 4 | **Work order** (`.ops/work/WORK-*.md`) | workflow intent, tier, acceptance criteria |
 | 5 | **Chat / memory / agent claims** | context only — never authoritative |
 
 Laws: higher ranks win unconditionally. The agent may never escalate its own claim above a lower rank it has read. `ISSUE_QUEUE.md`, `PROGRAM_STATUS.md`, and similar docs are *views*, not truth.
@@ -54,7 +54,7 @@ The operational done-gate (7-step pre-closure checklist, tier matrix, proof rule
 | "I completed this" | You don't decide Done. `ops:truth-check` decides Done. Run it. |
 | "The PR was merged, so it's shipped" | Check `main` first-parent history. Merged PRs can be reverted or force-pushed over. |
 | "I remember the proof was valid" | Memory is rank 5. Open the proof file and check the SHA. |
-| "Linear says Done, so it's Done" | Linear is rank 4. GitHub `main` is rank 1. Check rank 1. |
+| "The work order says it's finished, so it's Done" | The work order is rank 4. GitHub `main` is rank 1. Check rank 1. |
 | "This is just a status update, accuracy isn't critical" | Status updates that cite wrong state create drift. Verify before writing. |
 
 ---
@@ -63,7 +63,7 @@ The operational done-gate (7-step pre-closure checklist, tier matrix, proof rule
 
 - A recap or status update that claims Done without citing a merge SHA
 - A proof file with a header SHA that does not match the current merge
-- Linear says Done but no merge commit is reachable on `main`
+- A lane is called Done but no merge commit is reachable on `main`
 - An open PR being described as "effectively complete"
 - A follow-up "fix" commit landing on `main` after Done, without a linked issue
 - The agent (you) composing a summary from memory instead of reading the artifacts

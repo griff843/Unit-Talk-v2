@@ -9,7 +9,7 @@ Assemble a T1 evidence bundle for a bounded change. Wraps `pnpm proof:t1` and ve
 
 ## Inputs
 
-- **issue_id** (required) — `UTV2-###`
+- **issue_id** (required) — `WORK-###`
 - **pick_ids** (optional) — comma-separated UUIDs if lifecycle/distribution/settlement/promotion is in scope
 - **change_summary** (optional) — one-line description
 
@@ -97,7 +97,7 @@ Exit 0 = bundle conforms to v1 schema. Any other exit = stop and regenerate.
 If verdict is `READY FOR T1 CLOSE`:
 1. Attach bundle path to PR body
 2. Surface T1 merge gate (PM_VERDICT required) — see `/dispatch-board` Phase 5 or `/verification`
-3. After PM approval + merge: `ops:lane-close <UTV2-###>` (wraps `ops:truth-check`)
+3. After PM approval + merge: `ops:lane-close <WORK-###>` (wraps `ops:truth-check`)
 
 ---
 

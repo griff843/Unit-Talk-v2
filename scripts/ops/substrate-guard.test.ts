@@ -16,7 +16,6 @@ function healthyFacts(): SubstrateFacts {
     ],
     orphanWorktrees: [],
     mergeRisk: { included: true, available: true, hardFails: [] },
-    linear: { checked: true, conflicts: [] },
   };
 }
 
@@ -29,7 +28,6 @@ test('healthy substrate passes with zero hard_fail and zero warning', () => {
   assert.equal(report.checks.merge_lock, 'pass');
   assert.equal(report.checks.active_lane_worktrees, 'pass');
   assert.equal(report.checks.board_hard_fail, 'pass');
-  assert.equal(report.checks.linear_conflict, 'pass');
 });
 
 test('lease dir missing AND not initializable -> hard_fail', () => {
@@ -123,27 +121,6 @@ test('merge-risk not included -> board check skipped, no warning noise from it',
   assert.equal(report.ok, true);
   assert.equal(report.checks.board_hard_fail, 'skipped');
   assert.ok(!report.findings.some((f) => f.code === 'merge_risk_unavailable'));
-});
-
-test('linear conflict (checked) -> hard_fail', () => {
-  const facts = healthyFacts();
-  facts.linear = {
-    checked: true,
-    conflicts: [{ issue_id: 'UTV2-1196', detail: 'Linear=Done but manifest=started' }],
-  };
-  const report = evaluateSubstrate(facts);
-  assert.equal(report.ok, false);
-  assert.ok(report.findings.some((f) => f.code === 'linear_manifest_conflict' && f.severity === 'hard_fail'));
-  assert.equal(report.checks.linear_conflict, 'fail');
-});
-
-test('linear check skipped -> warning, not a pass-through and not a hard_fail', () => {
-  const facts = healthyFacts();
-  facts.linear = { checked: false, conflicts: [], reason: 'no token' };
-  const report = evaluateSubstrate(facts);
-  assert.equal(report.ok, true);
-  assert.equal(report.checks.linear_conflict, 'skipped');
-  assert.ok(report.findings.some((f) => f.code === 'linear_check_skipped' && f.severity === 'warning'));
 });
 
 test('multiple hard_fails are all reported and counted', () => {

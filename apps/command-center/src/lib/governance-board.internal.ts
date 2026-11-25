@@ -84,7 +84,7 @@ export async function readGovernanceBoardSnapshotUnauthenticated(
     observedAt,
     sourceStatus: 'degraded',
     missingSources: [
-      'Linear title, owner, and workflow state are not available from lane manifests.',
+      'Work order titles (.ops/work/*.md) are not available to this data layer.',
       'PM verdicts are only shown when recorded in a lane manifest.',
     ],
     activeLanes: lanes.filter((lane) => ACTIVE_STATES.has(lane.laneState)),

@@ -22,6 +22,7 @@ import {
   validateTier,
 } from './ops/shared.js';
 import { resolveModelProfile } from './ops/model-routing.js';
+import { readWorkOrder, type WorkOrder } from './ops/work-orders.js';
 
 /**
  * Default model-profile-per-tier mapping for pnpm codex:dispatch (UTV2-1526).
@@ -55,18 +56,6 @@ const CANONICAL_LANE_TYPES = new Set([
   'delivery-ui',
   'data-canonical',
 ]);
-
-type LinearIssue = {
-  id: string;
-  identifier: string;
-  title: string;
-  url: string;
-  description?: string | null;
-  priority?: number | null;
-  labels?: { nodes: Array<{ name: string }> } | null;
-  project?: { name: string } | null;
-  state?: { name: string } | null;
-};
 
 type DispatchResult = {
   ok: boolean;
@@ -176,55 +165,9 @@ function dispatchNotifyDetail(result: DispatchResult): string {
 }
 
 function notificationEventForFailure(result: DispatchResult): CodexNotifyEvent {
-  return result.code === 'missing_linear_token' || result.message.toLowerCase().includes('missing required')
+  return result.code === 'missing_work_order' || result.message.toLowerCase().includes('missing required')
     ? 'input-needed'
     : 'fail';
-}
-
-async function fetchIssue(identifier: string, apiKey: string): Promise<LinearIssue> {
-  const query = `
-    query FetchIssue($id: String!) {
-      issue(id: $id) {
-        id
-        identifier
-        title
-        url
-        description
-        priority
-        project { name }
-        labels(first: 20) { nodes { name } }
-        state { name }
-      }
-    }
-  `;
-
-  const response = await fetch('https://api.linear.app/graphql', {
-    method: 'POST',
-    headers: {
-      Authorization: apiKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ query, variables: { id: identifier } }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Linear API error: ${response.status} ${response.statusText}`);
-  }
-
-  const payload = (await response.json()) as {
-    data?: { issue: LinearIssue | null };
-    errors?: Array<{ message?: string }>;
-  };
-
-  if (payload.errors?.length) {
-    throw new Error(payload.errors.map((entry) => entry.message ?? 'Unknown Linear error').join('; '));
-  }
-
-  const issue = payload.data?.issue;
-  if (!issue) {
-    throw new Error(`Issue not found: ${identifier}`);
-  }
-  return issue;
 }
 
 function parseJsonObject(input: string): Record<string, unknown> {
@@ -307,7 +250,7 @@ function runLaneStart(
   return runPnpm(args);
 }
 
-function inferLaneType(issue: LinearIssue, explicitLaneType: string | undefined): string {
+function inferLaneType(issue: WorkOrder, explicitLaneType: string | undefined): string {
   if (explicitLaneType) {
     if (!CANONICAL_LANE_TYPES.has(explicitLaneType)) {
       throw new Error(`Invalid --lane-type ${explicitLaneType}; use one of ${[...CANONICAL_LANE_TYPES].join(', ')}`);
@@ -315,18 +258,11 @@ function inferLaneType(issue: LinearIssue, explicitLaneType: string | undefined)
     return explicitLaneType;
   }
 
-  const labels = (issue.labels?.nodes ?? []).map((label) => label.name.toLowerCase());
-  const hasLabel = (pattern: RegExp) => labels.some((label) => pattern.test(label));
-  if (hasLabel(/migration/)) return 'migration';
-  if (hasLabel(/modeling/)) return 'modeling';
-  if (hasLabel(/data|canonical/)) return 'data-canonical';
-  if (hasLabel(/delivery|ui/)) return 'delivery-ui';
-  if (hasLabel(/verification|proof/)) return 'verification';
-  if (hasLabel(/hygiene/)) return 'hygiene';
-  if (hasLabel(/governance|tooling|hardening/)) return 'governance';
-  if (hasLabel(/runtime/)) return 'runtime';
+  if (issue.lane_type && CANONICAL_LANE_TYPES.has(issue.lane_type)) {
+    return issue.lane_type;
+  }
 
-  throw new Error('Missing required --lane-type; unable to infer a canonical lane type from Linear labels');
+  throw new Error(`Missing required --lane-type; ${issue.path} declares no canonical Lane type:`);
 }
 
 function buildVerificationLines(manifest: LaneManifest): string[] {
@@ -352,16 +288,13 @@ function buildVerificationLines(manifest: LaneManifest): string[] {
 }
 
 export function buildDispatchPacket(input: {
-  issue: LinearIssue;
+  issue: WorkOrder;
   manifest: LaneManifest;
   manifestPath: string;
   forbiddenFiles: string[];
 }): string {
   const { issue, manifest, manifestPath, forbiddenFiles } = input;
-  const labels = issue.labels?.nodes.map((label) => label.name).join(', ') ?? '';
-  const priority = issue.priority != null ? `P${issue.priority}` : 'unset';
-  const project = issue.project?.name ?? 'n/a';
-  const description = issue.description?.trim() ?? '(no description in Linear)';
+  const description = issue.body.trim() || '(empty work order)';
   const forbiddenSection =
     forbiddenFiles.length > 0
       ? forbiddenFiles.map((entry) => `* ${entry}`).join('\n')
@@ -371,8 +304,7 @@ export function buildDispatchPacket(input: {
   return `# Codex Task Packet — ${manifest.issue_id}
 
 Generated: ${new Date().toISOString()}
-Issue URL: ${issue.url}
-Priority: ${priority}  Project: ${project}  Labels: ${labels}
+Work order: ${issue.path}
 
 Lane manifest: ${manifestPath}
 Branch:        ${manifest.branch}
@@ -387,13 +319,13 @@ Preflight:     ${manifest.preflight_token}
 
 ---
 
-Work only this Linear issue.
+Work only this work order.
 
 ## Task
 
-* Linear issue: **${issue.identifier} — ${issue.title}**
+* Work order: **${issue.identifier} — ${issue.title}**
 
-### Why it matters
+### Work order
 ${description}
 
 ### Allowed files
@@ -487,13 +419,12 @@ async function main(): Promise<number> {
     const explicitLaneType = getFlag(flags, 'lane-type');
     const explicitModelProfile = getFlag(flags, 'model-profile');
     const explicitVerificationTarget = getFlag(flags, 'verification-target');
-    const env = loadEnvironment();
-    const linearToken = env.LINEAR_API_TOKEN?.trim();
-
-    if (!linearToken) {
-      throw Object.assign(new Error('LINEAR_API_TOKEN is required to fetch issue details.'), {
+    const issue = readWorkOrder(issueId);
+    if (!issue) {
+      const message = `No work order at .ops/work/${issueId}.md; write it before dispatching.`;
+      throw Object.assign(new Error(message), {
         dispatch_code: 3,
-        dispatch_result: { ok: false, code: 'missing_linear_token', message: 'LINEAR_API_TOKEN is required to fetch issue details.' } satisfies DispatchResult,
+        dispatch_result: { ok: false, code: 'missing_work_order', message } satisfies DispatchResult,
       });
     }
     if (!branch) {
@@ -504,7 +435,6 @@ async function main(): Promise<number> {
     }
     validateBranchName(branch);
 
-    const issue = await fetchIssue(issueId, linearToken);
     const laneType = inferLaneType(issue, explicitLaneType);
     const modelProfile = resolveDispatchModelProfile(tier, explicitModelProfile);
     // A verification lane's own tracking issue (issueId) is not necessarily the issue it
@@ -523,8 +453,7 @@ async function main(): Promise<number> {
       verificationTarget = requireVerificationTarget(explicitVerificationTarget);
     }
     if (explain) {
-      process.stderr.write(`Fetched ${issue.identifier}: ${issue.title}\n`);
-      process.stderr.write(`State: ${issue.state?.name ?? 'unknown'}\n`);
+      process.stderr.write(`Work order ${issue.identifier}: ${issue.title}\n`);
       process.stderr.write(`Lane type: ${laneType}\n`);
       process.stderr.write(`Model profile: ${modelProfile}\n`);
       if (verificationTarget) {

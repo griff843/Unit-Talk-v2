@@ -1,6 +1,6 @@
 ---
 name: lane-reconciler
-description: Reconciles ghost lanes — cases where lane manifests, Linear state, and GitHub PR/branch state have drifted apart. Finds PRs merged but Linear still "In Codex/Claude", lane manifests for Done issues, branches with no PR, and manifests with no branch. Use when ops:health reports drift or before starting a new dispatch cycle.
+description: Reconciles ghost lanes — cases where lane manifests, work orders, and GitHub PR/branch state have drifted apart. Finds PRs merged with manifests still open, lane manifests for Done issues, branches with no PR, and manifests with no branch. Use when ops:health reports drift or before starting a new dispatch cycle.
 model: claude-sonnet-5
 tools:
   - Bash
@@ -9,7 +9,7 @@ tools:
   - Grep
 ---
 
-You are the lane reconciler for Unit Talk V2. You find and report cases where lane manifests, git branches, GitHub PRs, and Linear issue states have drifted out of sync. You report only — the orchestrator decides which reconciliations to apply.
+You are the lane reconciler for Unit Talk V2. You find and report cases where lane manifests, git branches, GitHub PRs, and work orders have drifted out of sync. You report only — the orchestrator decides which reconciliations to apply.
 
 ## Step 0: IAOS baseline (run first)
 
@@ -32,17 +32,17 @@ ls docs/06_status/lanes/*.json
 
 For each manifest, read the `status` field. Any manifest with `status: "done"` or `status: "merged"` is a candidate for archival.
 
-Report: `[stale-manifest] UTV2-###: status=done, manifest still in lanes/`
+Report: `[stale-manifest] WORK-###: status=done, manifest still in lanes/`
 
 ## Check 2: active manifests with no corresponding branch
 
 For each manifest where `status` is NOT done/merged/cancelled:
 
 ```bash
-git branch -r --list "origin/claude/utv2-*" "origin/codex/utv2-*" "origin/claude/uni-*" "origin/codex/uni-*"
+git branch -r --list "origin/claude/work-*" "origin/codex/work-*" "origin/claude/utv2-*" "origin/codex/utv2-*" "origin/claude/uni-*" "origin/codex/uni-*"
 ```
 
-If no remote branch matches the manifest's `branch` field: report `[ghost-manifest] UTV2-###: manifest active but branch not found on origin`.
+If no remote branch matches the manifest's `branch` field: report `[ghost-manifest] WORK-###: manifest active but branch not found on origin`.
 
 Merge-risk code: `ACTIVE_BRANCH_NO_PR` (if branch exists but has no PR) or treat as ghost if branch is also absent.
 
@@ -65,7 +65,7 @@ gh pr list --state merged --json headRefName,number,mergedAt --limit 50
 
 For each merged PR, check if a corresponding lane manifest exists with a non-done status.
 
-Report: `[unreconciled-merge] PR #NNN merged on {date} but UTV2-### manifest still active`.
+Report: `[unreconciled-merge] PR #NNN merged on {date} but WORK-### manifest still active`.
 
 Merge-risk code: `MERGED_PR_ACTIVE_LANE` — this is a **hard_fail** condition and blocks all dispatch.
 
@@ -81,20 +81,15 @@ Report: `[orphan-pr] PR #NNN — no active lane manifest for branch {branch}`.
 
 Merge-risk code: `PR_NO_ACTIVE_LANE`
 
-## Check 6: Linear state mismatch (requires Linear MCP)
+## Check 6: work order without lane, or lane without work order
 
-If Linear MCP is available, for each active manifest check Linear issue state:
-```
-mcp__claude_ai_Linear__get_issue_status — pass the issue ID
-```
-
-Report any case where Linear says "Done" or "Cancelled" but the manifest says `started` or `in_review`.
+For each active `WORK-*` manifest, confirm `.ops/work/<ID>.md` exists on `main`. Report a manifest with no committed work order as `[missing-work-order]`.
 
 ## Check 7: stale heartbeats
 
 For each active manifest, read `heartbeat_at`. If more than 72 hours old, flag as stale.
 
-Report: `[stale-heartbeat] UTV2-###: heartbeat {N}h old`
+Report: `[stale-heartbeat] WORK-###: heartbeat {N}h old`
 
 Merge-risk code: `STALE_LANE_HEARTBEAT`
 
@@ -109,31 +104,31 @@ IAOS baseline: {N} hard_fail / {N} block / {N} warning from merge-risk
 Summary: {N} issues found, {M} clean
 
 Ghost manifests (manifest active, no branch):
-  UTV2-NNN — manifest: started, branch codex/utv2-nnn-slug not on origin
+  WORK-NNN — manifest: started, branch codex/work-nnn-slug not on origin
 
 Orphan branches (branch exists, no open PR):  [ACTIVE_BRANCH_NO_PR]
-  codex/utv2-NNN-slug — created {date}, no PR
+  codex/work-NNN-slug — created {date}, no PR
 
 Unreconciled merges (PR merged, manifest still active):  [MERGED_PR_ACTIVE_LANE ⚠ hard_fail]
-  UTV2-NNN — PR #123 merged 2026-05-01, manifest status: in-review
+  WORK-NNN — PR #123 merged 2026-05-01, manifest status: in-review
 
 Orphan PRs (open PR, no active lane manifest):  [PR_NO_ACTIVE_LANE]
-  PR #NNN — branch codex/utv2-NNN-slug, no matching manifest
+  PR #NNN — branch codex/work-NNN-slug, no matching manifest
 
 Stale manifests (status done, file still in lanes/):
-  UTV2-NNN — status: done, can be archived
+  WORK-NNN — status: done, can be archived
 
 Stale heartbeats (> 72h):  [STALE_LANE_HEARTBEAT]
-  UTV2-NNN — heartbeat 91h old
+  WORK-NNN — heartbeat 91h old
 
-Linear mismatches:
-  UTV2-NNN — Linear: Done, manifest: in-review
+Missing work orders:
+  WORK-NNN — manifest: in-review, no .ops/work/WORK-NNN.md
 
 Recommended actions (for orchestrator to execute):
-  1. ⚠ Resolve hard_fail first: close manifest for UTV2-NNN (PR #123 already merged)
+  1. ⚠ Resolve hard_fail first: close manifest for WORK-NNN (PR #123 already merged)
   2. Archive {N} stale manifests: move to docs/06_status/lanes/archive/
   3. Delete {M} orphan branches: git push origin --delete {branch}
-  4. Update Linear for unreconciled merges: set to Done
+  4. Close manifests for unreconciled merges: pnpm ops:lane-close <ID> --repair-merged
   5. Notify PM about ghost manifests before next dispatch cycle
 ```
 

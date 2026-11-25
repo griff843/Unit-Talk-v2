@@ -1148,7 +1148,7 @@ test('buildCodexPrompt places the resume brief ahead of the repo brief', () => {
   const taskContract = buildTaskContract({
     identifier: 'UTV2-1594',
     title: 'Resume the supplied work order',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-1594',
+    url: 'file:.ops/work/UTV2-1594.md',
     description: '## Acceptance criteria\n- Preserve completed work.',
   }, '2026-05-25T00:00:00.000Z');
   const packet = {
@@ -1385,7 +1385,7 @@ function buildLaneRoot(issueId: string, executor: 'claude' | 'codex-cli'): LaneR
     {
       identifier: issueId,
       title: 'Fixture lane',
-      url: `https://linear.app/unit-talk/issue/${issueId}`,
+      url: `file:.ops/work/${issueId}.md`,
       description: [
         '## Objective',
         objective,
@@ -1497,7 +1497,7 @@ test('codex-exec --dry-run leaves the lane root byte-identical', () => {
   assert.equal(run.status, 0, `dry run must succeed; stderr: ${run.stderr}`);
 
   // Resolving a packet normally persists the sync record in both roots and, for
-  // a pre-contract lane, makes a live Linear call. Under --dry-run none of that
+  // a pre-contract lane, builds one from its work order. Under --dry-run none of that
   // may happen -- a preview that writes is not a preview.
   assert.equal(
     laneRootChanges(lane),
@@ -1525,7 +1525,7 @@ test('codex-exec --dry-run refuses a lane with no captured contract instead of f
   assert.equal(
     fs.existsSync(lane.syncPath),
     false,
-    'a dry run must never capture a contract, which would require a live Linear call',
+    'a dry run must never capture a contract',
   );
   } finally {
     fs.rmSync(lane.tempRoot, { recursive: true, force: true });

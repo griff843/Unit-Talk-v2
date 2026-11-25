@@ -34,7 +34,6 @@ jobs:
         run: pnpm ops:lane-alert -- --write-result --json > lane-drift-result.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
           UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
 
       - name: Report stale dispatch leases

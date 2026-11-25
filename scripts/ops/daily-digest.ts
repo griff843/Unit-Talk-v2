@@ -3,10 +3,10 @@ import { buildServicePresentation } from '@unit-talk/domain';
  * UTV2-669: Daily ops health digest
  *
  * Aggregates read-only sources into a structured JSON report:
- *   1. Lane manifests → zombie stale-lane check (no GitHub/Linear API calls)
+ *   1. Lane manifests → zombie stale-lane check (no GitHub API calls)
  *   2. ci-doctor subprocess → CI failures (status === 'fail' only; infra_error = skip)
- *   3. Linear GraphQL → active lanes + top-3 backlog
- *   4. Linear GraphQL → top-3 dispatchable issues with executor routing
+ *   3. Lane manifests → active lanes; repo work orders (.ops/work/WORK-*.md) → open work
+ *   4. Open work orders (no lane manifest yet) → ranked dispatch candidates
  *
  * Outputs:
  *   - Structured JSON at .out/ops/digest/YYYY-MM-DD.json (when --write-result)
@@ -25,13 +25,12 @@ import {
   ROOT,
   emitJson,
   ensureDir,
-  readConfiguredEnvValue,
   readAllManifests,
   type CiDoctorResult,
   type LaneManifest,
 } from './shared.js';
-import { linearQuery } from './linear-client.js';
 import { loadConcurrencyConfig } from './concurrency-config.js';
+import { openWorkOrders, type WorkOrder } from './work-orders.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -43,19 +42,11 @@ interface StaleLaneEntry {
   age_hours: number;
 }
 
-interface LinearIssueSummary {
-  identifier: string;
-  title: string;
-  state_name: string;
-  state_type: string;
-  url: string;
-}
-
-interface LinearSummary {
-  active_lanes: LinearIssueSummary[];
-  backlog_top3: LinearIssueSummary[];
-  skipped: boolean;
-  error?: string;
+interface WorkQueueSummary {
+  /** Lanes whose manifest is in an active status. */
+  active_lanes: number;
+  /** Repo work orders (.ops/work/WORK-*.md) that have no lane manifest yet. */
+  open_work_orders: number;
 }
 
 interface DispatchCandidate {
@@ -146,12 +137,12 @@ interface P0EventsSummary {
 }
 
 interface DigestReport {
-  schema_version: 1 | 2;
+  schema_version: 1 | 2 | 3;
   run_at: string;
   mode: 'local' | 'scheduled';
   stale_lanes: StaleLaneEntry[];
   ci_failures: string[];
-  linear: LinearSummary;
+  work_queue: WorkQueueSummary;
   dispatch_candidates: RankedDispatchCandidate[];
   dispatch_plan: DigestDispatchPlan;
   p0_events: P0EventsSummary;
@@ -165,8 +156,7 @@ interface DigestReport {
 const ZOMBIE_THRESHOLD_MS = 48 * 60 * 60 * 1000; // 48 hours
 const DIGEST_DIR = path.join(ROOT, '.out', 'ops', 'digest');
 
-const linearToken = readConfiguredEnvValue('LINEAR_API_TOKEN') || readConfiguredEnvValue('LINEAR_API_KEY') || '';
-const linearTeamKey = process.env.LINEAR_TEAM_KEY?.trim() ?? 'UTV2';
+const ACTIVE_LANE_STATUSES = ['started', 'in_progress', 'blocked', 'in_review'];
 const webhookUrl = process.env.UNIT_TALK_OPS_ALERT_WEBHOOK_URL?.trim() ?? '';
 
 const writeResult = process.argv.includes('--write-result');
@@ -258,160 +248,18 @@ function fetchCiFailures(infraErrors: string[]): string[] {
   }
 }
 
-// ── Linear shared helpers ─────────────────────────────────────────────────
+// ── Source 3: repo work orders ────────────────────────────────────────────
 
-const linearOpts = { token: linearToken, userAgent: 'unit-talk-ops-daily-digest' };
-
-let _cachedTeamId: string | null | undefined;
-
-/** Resolve team ID from LINEAR_TEAM_KEY. Returns null and pushes to infraErrors on failure. Cached after first call. */
-async function resolveLinearTeamId(infraErrors: string[]): Promise<string | null> {
-  if (_cachedTeamId !== undefined) return _cachedTeamId;
-  if (!linearToken) {
-    infraErrors.push('LINEAR_API_TOKEN or LINEAR_API_KEY not set — skipping Linear query');
-    _cachedTeamId = null;
-    return null;
+function readOpenWorkOrders(infraErrors: string[]): WorkOrder[] {
+  try {
+    return openWorkOrders(readAllManifests().map((manifest) => manifest.issue_id));
+  } catch (err) {
+    infraErrors.push(`work orders unreadable: ${err instanceof Error ? err.message : String(err)}`);
+    return [];
   }
-
-  const teamResult = await linearQuery<{
-    teams: { nodes: Array<{ id: string; key: string }> };
-  }>(
-    `query ResolveTeam($key: String!) {
-       teams(filter: { key: { eq: $key } }, first: 1) {
-         nodes { id key }
-       }
-     }`,
-    { key: linearTeamKey },
-    linearOpts,
-  );
-
-  if (!teamResult.ok || !teamResult.data) {
-    infraErrors.push(`Linear team resolve failed: ${teamResult.error ?? 'unknown'}`);
-    _cachedTeamId = null;
-    return null;
-  }
-
-  const team = teamResult.data.teams.nodes[0];
-  if (!team) {
-    infraErrors.push(`Linear team not found: ${linearTeamKey}`);
-    _cachedTeamId = null;
-    return null;
-  }
-
-  _cachedTeamId = team.id;
-  return team.id;
 }
 
-// ── Source 3: Linear active lanes + top-3 backlog ─────────────────────────
-
-async function fetchLinearSummary(infraErrors: string[]): Promise<LinearSummary> {
-  const teamId = await resolveLinearTeamId(infraErrors);
-  if (!teamId) {
-    return { active_lanes: [], backlog_top3: [], skipped: true, error: infraErrors[infraErrors.length - 1] };
-  }
-
-  // Step 1: active lanes (state.type = started)
-  const activeResult = await linearQuery<{
-    team: {
-      issues: {
-        nodes: Array<{
-          identifier: string;
-          title: string;
-          url: string;
-          state: { name: string; type: string } | null;
-        }>;
-      };
-    } | null;
-  }>(
-    `query ActiveIssues($teamId: String!) {
-       team(id: $teamId) {
-         issues(
-           first: 20
-           filter: { state: { type: { eq: "started" } } }
-           orderBy: updatedAt
-         ) {
-           nodes {
-             identifier title url
-             state { name type }
-           }
-         }
-       }
-     }`,
-    { teamId },
-    linearOpts,
-  );
-
-  const activeNodes = activeResult.data?.team?.issues.nodes ?? [];
-  const active_lanes: LinearIssueSummary[] = activeNodes.map((n) => ({
-    identifier: n.identifier,
-    title: n.title,
-    state_name: n.state?.name ?? 'Unknown',
-    state_type: n.state?.type ?? 'unknown',
-    url: n.url,
-  }));
-
-  if (!activeResult.ok) {
-    infraErrors.push(`Linear active-issues query failed: ${activeResult.error ?? 'unknown'}`);
-  }
-
-  // Step 2: top-3 backlog (state.type in [backlog, unstarted])
-  const backlogResult = await linearQuery<{
-    team: {
-      issues: {
-        nodes: Array<{
-          identifier: string;
-          title: string;
-          url: string;
-          state: { name: string; type: string } | null;
-        }>;
-      };
-    } | null;
-  }>(
-    `query BacklogIssues($teamId: String!) {
-       team(id: $teamId) {
-         issues(
-           first: 3
-           filter: { state: { type: { eq: "unstarted" } } }
-           orderBy: updatedAt
-         ) {
-           nodes {
-             identifier title url
-             state { name type }
-           }
-         }
-       }
-     }`,
-    { teamId },
-    linearOpts,
-  );
-
-  const backlogNodes = backlogResult.data?.team?.issues.nodes ?? [];
-  const backlog_top3: LinearIssueSummary[] = backlogNodes.map((n) => ({
-    identifier: n.identifier,
-    title: n.title,
-    state_name: n.state?.name ?? 'Unknown',
-    state_type: n.state?.type ?? 'unknown',
-    url: n.url,
-  }));
-
-  if (!backlogResult.ok) {
-    infraErrors.push(`Linear backlog query failed: ${backlogResult.error ?? 'unknown'}`);
-  }
-
-  return { active_lanes, backlog_top3, skipped: false };
-}
-
-// ── Source 4: dispatch candidates from Linear ─────────────────────────────
-
-function parseTierLabel(labels: string[]): 'T1' | 'T2' | 'T3' | null {
-  for (const l of labels) {
-    const lower = l.toLowerCase();
-    if (lower === 't1' || lower === 'tier:t1') return 'T1';
-    if (lower === 't2' || lower === 'tier:t2') return 'T2';
-    if (lower === 't3' || lower === 'tier:t3') return 'T3';
-  }
-  return null;
-}
+// ── Source 4: dispatch candidates from open work orders ───────────────────
 
 function routeExecutor(tier: 'T1' | 'T2' | 'T3', labels: string[]): 'claude' | 'codex' {
   if (tier === 'T1') return 'claude';
@@ -668,83 +516,30 @@ export function buildDispatchPlan(
   };
 }
 
-function hasAcceptanceCriteria(description: string | null | undefined): boolean {
-  if (!description) return false;
-  return /acceptance\s+criteria|AC:/i.test(description);
-}
-
-async function fetchDispatchCandidates(infraErrors: string[]): Promise<DispatchCandidate[]> {
-  const teamId = await resolveLinearTeamId(infraErrors);
-  if (!teamId) return [];
-
+function fetchDispatchCandidates(workOrders: WorkOrder[], infraErrors: string[]): RankedDispatchCandidate[] {
   try {
-    const result = await linearQuery<{
-      team: {
-        issues: {
-          nodes: Array<{
-            identifier: string;
-            title: string;
-            url: string;
-            description: string | null;
-            labels: { nodes: Array<{ name: string }> };
-            state: { name: string; type: string } | null;
-          }>;
-        };
-      } | null;
-    }>(
-      `query DispatchCandidates($teamId: String!) {
-         team(id: $teamId) {
-           issues(
-             first: 10
-             filter: { state: { type: { in: ["unstarted"] } } }
-             orderBy: updatedAt
-           ) {
-             nodes {
-               identifier
-               title
-               url
-               description
-               labels { nodes { name } }
-               state { name type }
-             }
-           }
-         }
-       }`,
-      { teamId },
-      linearOpts,
-    );
-
-    if (!result.ok || !result.data?.team) {
-      infraErrors.push(`Linear dispatch query failed: ${result.error ?? 'unknown'}`);
-      return [];
-    }
-
-    const nodes = result.data.team.issues.nodes;
-
     const candidates: DispatchCandidate[] = [];
-    for (const n of nodes) {
-      const labelNames = n.labels.nodes.map((l) => l.name);
-      const tier = parseTierLabel(labelNames);
-      if (!tier) continue;
-
+    for (const order of workOrders) {
+      if (!order.tier) {
+        infraErrors.push(`work order ${order.identifier} declares no Tier: line; not a dispatch candidate`);
+        continue;
+      }
+      const labels = order.lane_type ? [`lane:${order.lane_type}`] : [];
       candidates.push({
-        identifier: n.identifier,
-        title: n.title,
-        tier,
-        recommended_executor: routeExecutor(tier, labelNames),
-        url: n.url,
-        has_acceptance_criteria: hasAcceptanceCriteria(n.description),
-        labels: labelNames,
+        identifier: order.identifier,
+        title: order.title,
+        tier: order.tier,
+        recommended_executor: order.executor ?? routeExecutor(order.tier, labels),
+        url: order.path,
+        has_acceptance_criteria: order.has_acceptance_criteria,
+        labels,
       });
-
       if (candidates.length >= 10) break;
     }
 
     const concurrency = loadConcurrencyConfig();
     return rankDispatchCandidates(candidates, {
-      active_lanes: readAllManifests().filter((manifest) =>
-        ['started', 'in_progress', 'blocked', 'in_review'].includes(manifest.status),
-      ),
+      active_lanes: readAllManifests().filter((manifest) => ACTIVE_LANE_STATUSES.includes(manifest.status)),
       max_claude: concurrency.executors.claude,
       max_codex: concurrency.executors.codex,
       singleton_lane_types: concurrency.singleton_types,
@@ -825,7 +620,7 @@ function deriveRecommendedNext(
 function buildBriefText(input: {
   stale_lanes: StaleLaneEntry[];
   ci_failures: string[];
-  linear: LinearSummary;
+  work_queue: WorkQueueSummary;
   dispatch_candidates: RankedDispatchCandidate[];
   dispatch_plan: DigestDispatchPlan;
   p0_events: P0EventsSummary;
@@ -849,8 +644,8 @@ function buildBriefText(input: {
   lines.push(`- infra_errors=${input.infra_errors.length}`);
   lines.push('');
   lines.push('Queue');
-  lines.push(`- active_linear=${input.linear.active_lanes.length}${input.linear.skipped ? ' (skipped)' : ''}`);
-  lines.push(`- backlog_top3=${input.linear.backlog_top3.length}${input.linear.skipped ? ' (skipped)' : ''}`);
+  lines.push(`- active_lanes=${input.work_queue.active_lanes}`);
+  lines.push(`- open_work_orders=${input.work_queue.open_work_orders}`);
   lines.push(`- dispatch_candidates=${input.dispatch_candidates.length}`);
   lines.push(`- fill_now=${input.dispatch_plan.fill_now.length}`);
   lines.push(`- open_slots claude=${input.dispatch_plan.lane_saturation_forecast.executors.claude.available_slots} codex=${input.dispatch_plan.lane_saturation_forecast.executors.codex.available_slots}`);
@@ -889,12 +684,14 @@ async function main(): Promise<void> {
 
   const stale_lanes = fetchStaleLanes();
   const ci_failures = fetchCiFailures(infraErrors);
-  const linear = await fetchLinearSummary(infraErrors);
-  const dispatch_candidates = await fetchDispatchCandidates(infraErrors);
+  const workOrders = readOpenWorkOrders(infraErrors);
+  const dispatch_candidates = fetchDispatchCandidates(workOrders, infraErrors);
   const concurrency = loadConcurrencyConfig();
-  const activeManifests = readAllManifests().filter((manifest) =>
-    ['started', 'in_progress', 'blocked', 'in_review'].includes(manifest.status),
-  );
+  const activeManifests = readAllManifests().filter((manifest) => ACTIVE_LANE_STATUSES.includes(manifest.status));
+  const work_queue: WorkQueueSummary = {
+    active_lanes: activeManifests.length,
+    open_work_orders: workOrders.length,
+  };
   const dispatch_plan = buildDispatchPlan(dispatch_candidates, {
     active_lanes: activeManifests,
     max_claude: concurrency.executors.claude,
@@ -907,7 +704,7 @@ async function main(): Promise<void> {
   const brief_text = buildBriefText({
     stale_lanes,
     ci_failures,
-    linear,
+    work_queue,
     dispatch_candidates,
     dispatch_plan,
     p0_events,
@@ -916,12 +713,12 @@ async function main(): Promise<void> {
   });
 
   const report: DigestReport = {
-    schema_version: 2,
+    schema_version: 3,
     run_at: runAt,
     mode,
     stale_lanes,
     ci_failures,
-    linear,
+    work_queue,
     dispatch_candidates,
     dispatch_plan,
     p0_events,
@@ -943,8 +740,8 @@ async function main(): Promise<void> {
     console.log(`[daily-digest] run_at=${runAt} mode=${mode}`);
     console.log(`  stale_lanes:    ${stale_lanes.length}`);
     console.log(`  ci_failures:    ${ci_failures.length}`);
-    console.log(`  active_lanes:   ${linear.active_lanes.length}${linear.skipped ? ' (skipped)' : ''}`);
-    console.log(`  backlog_top3:   ${linear.backlog_top3.length}${linear.skipped ? ' (skipped)' : ''}`);
+    console.log(`  active_lanes:   ${work_queue.active_lanes}`);
+    console.log(`  open_work:      ${work_queue.open_work_orders}`);
     console.log(`  p0_failures_7d: ${p0_events.total_failures}${p0_events.skipped ? ' (skipped)' : ''}`);
     if (p0_events.misconfig_warning) {
       console.warn(`  p0_misconfig: ${p0_events.misconfig_detail}`);

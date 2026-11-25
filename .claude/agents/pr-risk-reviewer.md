@@ -41,7 +41,7 @@ If scripts are unavailable, skip Step 0 and derive all dimensions manually.
 ## Inputs (ask if missing)
 
 - PR number or branch name
-- Issue ID (UTV2-### or UNI-###)
+- Issue ID (WORK-### or UNI-###)
 - Tier (T1/T2/T3)
 
 ## Risk scoring

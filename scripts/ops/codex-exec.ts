@@ -1171,7 +1171,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
 
   const resumeBrief = rework ? buildReworkBrief(existingCheckpoint) : buildResumeBrief(existingCheckpoint);
   // A preview must not mutate. Resolving the packet persists the sync record in
-  // both roots and, for a pre-contract lane, makes a live Linear call — all
+  // both roots — all
   // before the dry-run branch below, while the emitted message says "without
   // mutating state during this preview". Under --dry-run the packet is read
   // without capture or persistence, so the claim matches the behaviour.

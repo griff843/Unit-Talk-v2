@@ -12,7 +12,6 @@ import {
 import {
   ActiveLaneDiscoveryError,
   classifyLaneCapacity,
-  readConfiguredEnvValue,
   resolveActiveLaneManifests,
   resolveLaneExecutor,
   type ActiveLaneDiscoveryDeps,
@@ -26,7 +25,7 @@ import {
   type ConcurrencyManifestLike,
   type IncomingLaneScope,
 } from './concurrency-rules.js';
-import { linearQuery, type LinearQueryResult } from './linear-client.js';
+import { openWorkOrders, type WorkOrder } from './work-orders.js';
 import {
   FULL_VERIFY_THROTTLE_DIR,
   configuredFullVerifyConcurrency,
@@ -340,8 +339,8 @@ function extractFileScopeFromText(text: string | null | undefined): string[] {
     }
 
     if (inScopeBlock && line.length === 0) {
-      // Tolerate a blank line between the heading and its bullet list — Linear's
-      // markdown normalization always inserts one after a `#`-prefixed heading.
+      // Tolerate a blank line between the heading and its bullet list -- markdown
+      // normalization often inserts one after a `#`-prefixed heading.
       // Once bullets have started, a blank line still ends the block.
       if (scopes.length === 0) {
         continue;
@@ -752,30 +751,6 @@ function getFlagValue(argv: string[], name: string): string | null {
   return argv[index + 1] ?? null;
 }
 
-function parseTierLabel(labels: string[]): CandidateLane['tier'] | null {
-  for (const label of labels) {
-    const lower = label.toLowerCase();
-    if (lower === 't1' || lower === 'tier:t1') return 'T1';
-    if (lower === 't2' || lower === 'tier:t2') return 'T2';
-    if (lower === 't3' || lower === 'tier:t3') return 'T3';
-  }
-  return null;
-}
-
-function parseExecutorLabel(tier: CandidateLane['tier'], labels: string[]): CandidateLane['executor'] {
-  const lowerLabels = labels.map((label) => label.toLowerCase());
-  if (lowerLabels.some((label) => label === 'lane:codex-cli' || label === 'lane:codex' || label === 'executor:codex-cli')) {
-    return 'codex-cli';
-  }
-  if (lowerLabels.some((label) => label === 'lane:claude' || label === 'executor:claude')) {
-    return 'claude';
-  }
-  if (tier === 'T2' && !lowerLabels.some((label) => label.includes('migration') || label.includes('contract'))) {
-    return 'codex-cli';
-  }
-  return 'claude';
-}
-
 function parseBlockedByFromText(text: string | null | undefined): string[] {
   if (!text) {
     return [];
@@ -784,56 +759,7 @@ function parseBlockedByFromText(text: string | null | undefined): string[] {
   if (!blockedLine) {
     return [];
   }
-  return [...blockedLine[1].matchAll(/(?:UTV2|UNI)-\d+/g)].map((match) => match[0]);
-}
-
-/**
- * UTV2-1820: which relation types name a PREREQUISITE, and on which edge.
- *
- * Linear stores one row per relation and exposes it from both ends. Measured
- * against the live API on 2026-09-01, for the real edge UTV2-1771 -> UTV2-1370:
- *
- *   UTV2-1771.relations        -> { type: "blocks", relatedIssue: UTV2-1370 }
- *   UTV2-1370.inverseRelations -> { type: "blocks", issue:        UTV2-1771 }
- *
- * Both sides of the SAME edge carry `type: "blocks"`. The type string alone
- * therefore carries no direction at all -- the direction is which connection
- * the node came from. `relations` is the outgoing edge (this issue blocks the
- * related one, so the related one is DOWNSTREAM), and `inverseRelations` is the
- * incoming edge (the named issue blocks this one, so it is a PREREQUISITE).
- *
- * The shipped predicate treated `blocks` on the outgoing edge as a prerequisite,
- * which inverted the dependency: an issue that unblocks other work was reported
- * as blocked by that work and refused dispatch until its own dependents
- * completed -- which they could not, because they were waiting on it.
- *
- * `blocked_by` is accepted here as well. It was never observed on the wire in
- * the UTV2 team (the vocabulary seen is `blocks` and `related`), but if Linear
- * ever emits it on the inverse edge it unambiguously names a prerequisite, and
- * accepting it costs nothing while refusing it would fail open.
- */
-/**
- * Stand-in prerequisite used when a relation set cannot be read. It is not a
- * real issue identifier and never resolves to a completed issue, so a candidate
- * carrying it stays BLOCKED_DEP instead of being silently admitted.
- */
-export const LINEAR_UNREADABLE_RELATIONS_SENTINEL = 'UNREADABLE-RELATIONS';
-
-export function isPrerequisiteInverseRelation(type: string): boolean {
-  return type === 'blocks' || type === 'blocked_by';
-}
-
-/**
- * The OUTGOING edge never names a prerequisite. This exists as a named function
- * rather than an inlined `false` so the property is testable and so a future
- * reader cannot "fix" the inversion back by editing a bare literal.
- *
- * `blocked_by` on the outgoing edge would mean "this issue is blocked by the
- * related one", which IS a prerequisite -- so it is honoured. It has never been
- * observed on this connection; `blocks` and `related` are what Linear returns.
- */
-export function isPrerequisiteOutgoingRelation(type: string): boolean {
-  return type === 'blocked_by';
+  return [...blockedLine[1].matchAll(/(?:UTV2|UNI|WORK)-\d+/g)].map((match) => match[0]);
 }
 
 export function parseQueueCandidates(queuePath: string): CandidateLane[] {
@@ -884,338 +810,26 @@ export function parseQueueCandidates(queuePath: string): CandidateLane[] {
 }
 
 /**
- * Linear's server-side GraphQL query-complexity ceiling. Exceeding it is a hard
- * HTTP 400 (`"Query too complex"`), not a soft degradation.
+ * Dispatch candidates from repo work orders (`.ops/work/WORK-*.md`) that have
+ * no lane manifest yet. A work order without a `Tier:` line is not a candidate:
+ * tier is required before dispatch and is never defaulted.
  */
-export const LINEAR_CANDIDATE_COMPLEXITY_BUDGET = 10_000;
-
-/**
- * Measured complexity cost of ONE `LaneCandidates` node, taken from a live API
- * response on 2026-09-01: `first: 100` was rejected at a reported complexity of
- * 22601, i.e. ~226.01 per node. Linear charges for the nested connections in the
- * selection (`labels`, `relations` and `inverseRelations`), which is why a node
- * is this expensive.
- *
- * The figure was 116.01 with two connections. Adding `inverseRelations` -- which
- * UTV2-1820 requires, because it is the only edge that names a genuine
- * prerequisite -- very nearly doubled it, re-measured on the same day against
- * the real query text: 100 -> 22601, 75 -> 16951, 60 -> 13561, 50 -> 11301,
- * 40 -> OK. That is why the page size below had to move at the same time.
- *
- * If the node selection gains another nested connection this figure is stale --
- * `LINEAR_CANDIDATE_NESTED_CONNECTIONS` exists to make that a test failure
- * rather than a production outage.
- */
-export const LINEAR_CANDIDATE_MEASURED_COMPLEXITY_PER_NODE = 226.01;
-
-/**
- * Number of nested connections in the `LaneCandidates` node selection that the
- * per-node complexity figure above was measured against: `labels { nodes }`,
- * `relations { nodes }` and `inverseRelations { nodes }`. Adding a fourth
- * invalidates the measurement.
- */
-export const LINEAR_CANDIDATE_NESTED_CONNECTIONS = 3;
-
-/**
- * Page size for the candidate query. Linear's `issues` connection accepts up to
- * 250 rows per page, but the ROW limit is not the binding constraint -- the
- * query-complexity budget is. At the measured ~226 complexity per node, 100 rows
- * costs ~22601 against a ceiling of 10000 and is rejected outright with HTTP 400,
- * which took the whole dispatch family down (UTV2-1819). 30 costs ~6780, roughly
- * 68% of budget, leaving headroom for Linear to re-price the selection without
- * breaking discovery again.
- *
- * 50 was correct for the two-connection selection and is NOT correct for this
- * one: it costs ~11301 and would be rejected outright. The page size and the
- * measured per-node cost have to move together, which is what
- * `LINEAR_CANDIDATE_NESTED_CONNECTIONS` is there to force.
- *
- * This is a TRANSPORT detail only. It never caps the candidate population: the
- * cursor walk in `fetchLinearCandidates` pages until `hasNextPage` is false, so
- * a smaller page size costs an extra round trip and changes nothing else.
- */
-export const LINEAR_CANDIDATE_PAGE_SIZE = 30;
-
-/**
- * Hard stop on whole-board discovery, expressed in CANDIDATE NODES.
- *
- * This is the supported population ceiling: a board at or under this size is
- * fully discoverable, and a board above it FAILS CLOSED rather than returning
- * the pages collected so far -- a truncated candidate population is exactly the
- * fail-open this lane exists to remove.
- *
- * It is deliberately stated in nodes, not pages. The pre-UTV2-1819 guard was
- * `page > 100` with a page size of 100, so the real ceiling was an ACCIDENT of
- * the transport: halving the page size to stay inside Linear's complexity
- * budget would have silently halved supported board capacity from 10000 to
- * 5000. Transport page size must never define whole-board population capacity,
- * so the ceiling is named here and the page bound is derived from it below.
- */
-export const LINEAR_CANDIDATE_MAX_NODES = 10_000;
-
-/**
- * Loop bound for the cursor walk, DERIVED from the node ceiling so that
- * changing `LINEAR_CANDIDATE_PAGE_SIZE` cannot change supported capacity.
- *
- * The node ceiling alone cannot bound the loop: a server that returns empty
- * pages while still reporting `hasNextPage` would never reach it. This bound
- * exists only to make that pathological case terminate, so it is one page
- * looser than the node ceiling strictly requires and is never the guard that
- * fires on a merely-large board.
- */
-export function linearCandidateMaxPages(pageSize: number = LINEAR_CANDIDATE_PAGE_SIZE): number {
-  return Math.ceil(LINEAR_CANDIDATE_MAX_NODES / pageSize) + 1;
-}
-
-/**
- * The candidate query, exported so the complexity regression inspects the REAL
- * query text rather than a copy that could drift away from it.
- */
-export const LINEAR_CANDIDATE_QUERY = `query LaneCandidates($teamId: String!, $limit: Int!, $cursor: String) {
-       team(id: $teamId) {
-         issues(
-           first: $limit
-           after: $cursor
-           filter: { state: { type: { in: ["backlog", "unstarted"] } } }
-           orderBy: createdAt
-         ) {
-           pageInfo { hasNextPage endCursor }
-           nodes {
-             identifier
-             title
-             url
-             description
-             branchName
-             labels { nodes { name } }
-             state { name type }
-             relations {
-               nodes {
-                 type
-                 relatedIssue { identifier }
-               }
-             }
-             inverseRelations {
-               nodes {
-                 type
-                 issue { identifier }
-               }
-             }
-           }
-         }
-       }
-     }`;
-
-/** Injection seam for the Linear transport, so pagination is testable offline. */
-export interface LinearCandidateFetchDeps {
-  query?: <T>(
-    query: string,
-    variables: Record<string, unknown>,
-    options: { token: string; userAgent?: string; timeoutMs?: number },
-  ) => Promise<LinearQueryResult<T>>;
-  token?: string | null;
-}
-
-interface LinearCandidateIssueNode {
-  identifier: string;
-  title: string;
-  url: string;
-  description: string | null;
-  branchName: string | null;
-  labels: { nodes: Array<{ name: string }> };
-  state: { name: string; type: string } | null;
-  relations: {
-    nodes: Array<{
-      type: string;
-      relatedIssue: { identifier: string } | null;
-    }>;
-  };
-  /**
-   * Relations where this issue is the TARGET. A prerequisite of this issue
-   * appears here, not in `relations` -- see `isPrerequisiteInverseRelation`.
-   * Optional in the type because a server that omits it must be treated as
-   * unreadable and blocked, never as "no prerequisites".
-   */
-  inverseRelations?: {
-    nodes: Array<{
-      type: string;
-      issue: { identifier: string } | null;
-    }>;
-  } | null;
-}
-
-interface LinearCandidatePage {
-  team: {
-    issues: {
-      pageInfo: { hasNextPage: boolean; endCursor: string | null };
-      nodes: LinearCandidateIssueNode[];
-    };
-  } | null;
-}
-
-export async function fetchLinearCandidates(
-  argv: string[],
-  deps: LinearCandidateFetchDeps = {},
-): Promise<CandidateLane[]> {
-  const query = deps.query ?? linearQuery;
-  const token =
-    deps.token !== undefined
-      ? deps.token
-      : readConfiguredEnvValue('LINEAR_API_TOKEN') || readConfiguredEnvValue('LINEAR_API_KEY');
-  if (!token) {
-    throw new Error('LINEAR_API_TOKEN or LINEAR_API_KEY not set');
-  }
-
-  const teamKey = getFlagValue(argv, '--linear-team-key') ?? process.env.LINEAR_TEAM_KEY?.trim() ?? 'UTV2';
-  // UTV2-1699 Defect 3 repair. `--linear-limit` is now an OPTIONAL ceiling for
-  // an operator who deliberately wants a smaller sample. Unset (the canonical
-  // dispatch invocation) means "the whole eligible population", retrieved by
-  // cursor pagination -- not "the 10 most recently updated issues", and not
-  // clamped to 50.
-  const limitFlag = getFlagValue(argv, '--linear-limit');
-  const limitRaw = limitFlag === null ? Number.NaN : Number.parseInt(limitFlag, 10);
-  const maxCandidateIssues = Number.isFinite(limitRaw) ? Math.max(1, limitRaw) : null;
-  const linearOpts = { token, userAgent: 'unit-talk-ops-lane-maximizer' };
-  const teamResult = await query<{
-    teams: { nodes: Array<{ id: string; key: string }> };
-  }>(
-    `query ResolveTeam($key: String!) {
-       teams(filter: { key: { eq: $key } }, first: 1) {
-         nodes { id key }
-       }
-     }`,
-    { key: teamKey },
-    linearOpts,
-  );
-
-  if (!teamResult.ok || !teamResult.data?.teams.nodes[0]) {
-    throw new Error(`Linear team resolve failed: ${teamResult.error ?? teamKey}`);
-  }
-
-  const teamId = teamResult.data.teams.nodes[0].id;
-  const nodes: LinearCandidateIssueNode[] = [];
-  let cursor: string | null = null;
-  let page = 0;
-  const maxPages = linearCandidateMaxPages(LINEAR_CANDIDATE_PAGE_SIZE);
-
-  // Cursor pagination over the FULL eligible population. Every page must
-  // succeed: a mid-walk failure throws, because half a board dressed as a whole
-  // board is the same fail-open as an empty board dressed as no work.
-  //
-  // UTV2-1699: the walk is ordered by `createdAt`, NOT `updatedAt`.
-  // Linear's cursors are keyset cursors over the order field, so an issue whose
-  // order key changes mid-walk can move relative to an already-consumed cursor
-  // and be skipped entirely. `updatedAt` is mutated by literally any edit --
-  // including the edits this very dispatch cycle provokes -- so a candidate
-  // could vanish from the board purely because someone touched it while the
-  // walk was in flight. That is the same "an unattempted/incomplete read
-  // presented as a complete answer" fail-open this lane exists to remove, one
-  // layer down. `createdAt` is immutable for the life of an issue, so no issue
-  // can change its position in the ordering and no already-passed cursor can
-  // move ahead of an unread issue. An issue created mid-walk sorts after every
-  // cursor already consumed, so it is either seen on a later page or missed by
-  // one cycle -- it can never displace an existing candidate.
-  for (;;) {
-    page += 1;
-    if (page > maxPages) {
-      throw new Error(
-        `Linear candidate pagination exceeded ${maxPages} pages; ` +
-          'refusing to report a candidate population that cannot be proven complete.',
-      );
-    }
-
-    const pageSize = maxCandidateIssues === null
-      ? LINEAR_CANDIDATE_PAGE_SIZE
-      : Math.min(LINEAR_CANDIDATE_PAGE_SIZE, maxCandidateIssues - nodes.length);
-
-    const result: LinearQueryResult<LinearCandidatePage> = await query<LinearCandidatePage>(
-      LINEAR_CANDIDATE_QUERY,
-      { teamId, limit: pageSize, cursor },
-      linearOpts,
-    );
-
-    if (!result.ok || !result.data?.team) {
-      throw new Error(`Linear candidate query failed: ${result.error ?? 'unknown'}`);
-    }
-
-    const connection = result.data.team.issues;
-    nodes.push(...connection.nodes);
-
-    // Node ceiling, checked AFTER the page lands so a board of exactly
-    // LINEAR_CANDIDATE_MAX_NODES is fully discoverable and only the first node
-    // beyond it fails closed. An explicit operator sample (`--linear-limit`) is
-    // a deliberate smaller read and is handled below; this guard is about the
-    // whole board being larger than we can prove we read completely.
-    if (maxCandidateIssues === null && nodes.length > LINEAR_CANDIDATE_MAX_NODES) {
-      throw new Error(
-        `Linear candidate population exceeded ${LINEAR_CANDIDATE_MAX_NODES} nodes; ` +
-          'refusing to report a candidate population that cannot be proven complete.',
-      );
-    }
-
-    if (maxCandidateIssues !== null && nodes.length >= maxCandidateIssues) {
-      nodes.length = maxCandidateIssues;
-      break;
-    }
-    if (!connection.pageInfo?.hasNextPage) {
-      break;
-    }
-    if (!connection.pageInfo.endCursor) {
-      throw new Error(
-        'Linear reported another candidate page but returned no cursor; ' +
-          'refusing to report a truncated candidate population as the whole board.',
-      );
-    }
-    cursor = connection.pageInfo.endCursor;
-  }
-
-  return nodes.flatMap((issue): CandidateLane[] => {
-    const labels = issue.labels.nodes.map((label) => label.name);
-    const tier = parseTierLabel(labels);
-    if (!tier) {
-      return [];
-    }
-    // UTV2-1820: prerequisites come from the INVERSE edge. An outgoing
-    // `blocks` means this issue is the blocker, not the blocked.
-    const outgoingPrerequisites = issue.relations.nodes
-      .filter((relation) => isPrerequisiteOutgoingRelation(relation.type))
-      .map((relation) => relation.relatedIssue?.identifier)
-      .filter((identifier): identifier is string => Boolean(identifier));
-
-    // Fail closed on an unreadable relation set. A server that omits
-    // `inverseRelations`, or returns a relation whose issue identifier is
-    // missing, has not told us this issue is unblocked -- it has told us
-    // nothing. Admitting on silence is the fail-open this lane exists to
-    // prevent, so an unreadable set blocks under a synthetic sentinel that no
-    // completion check can ever satisfy.
-    const inverse = issue.inverseRelations;
-    let incomingPrerequisites: string[];
-    if (!inverse || !Array.isArray(inverse.nodes)) {
-      incomingPrerequisites = [LINEAR_UNREADABLE_RELATIONS_SENTINEL];
-    } else {
-      const prerequisiteNodes = inverse.nodes.filter((relation) =>
-        isPrerequisiteInverseRelation(relation.type),
-      );
-      incomingPrerequisites = prerequisiteNodes.map(
-        (relation) =>
-          relation.issue?.identifier ?? LINEAR_UNREADABLE_RELATIONS_SENTINEL,
-      );
-    }
-
-    const blockedBy = [...outgoingPrerequisites, ...incomingPrerequisites];
-    const fileScope = extractFileScopeFromText(issue.description);
+export function workOrderCandidates(orders: WorkOrder[]): CandidateLane[] {
+  return orders.flatMap((order): CandidateLane[] => {
+    if (!order.tier) return [];
+    const labels = order.lane_type ? [`lane:${order.lane_type}`] : [];
     return [{
-      issue_id: issue.identifier,
-      title: issue.title,
-      tier,
-      executor: parseExecutorLabel(tier, labels),
-      branch: issue.branchName ?? undefined,
-      lane_type: inferLaneTypeFromLabels(labels, issue.title) ?? undefined,
-      file_scope: fileScope,
-      blocked_by: Array.from(new Set([...blockedBy, ...parseBlockedByFromText(issue.description)])),
-      has_acceptance_criteria: hasAcceptanceCriteria(issue.description),
+      issue_id: order.identifier,
+      title: order.title,
+      tier: order.tier,
+      executor: order.executor === 'codex' ? 'codex-cli' : 'claude',
+      lane_type: order.lane_type ?? inferLaneTypeFromLabels(labels, order.title) ?? undefined,
+      file_scope: extractFileScopeFromText(order.body),
+      blocked_by: parseBlockedByFromText(order.body),
+      has_acceptance_criteria: order.has_acceptance_criteria || hasAcceptanceCriteria(order.body),
       labels,
-      url: issue.url,
-      verification_target: extractVerificationTargetFromText(issue.description),
+      url: order.path,
+      verification_target: extractVerificationTargetFromText(order.body),
     }];
   });
 }
@@ -1566,11 +1180,11 @@ export function evaluateCandidates(
 }
 
 /**
- * Machine-readable candidate source actually used for a given argv. `linear` is
- * the canonical default -- the form `/dispatch`, `/dispatch-board` and
+ * Machine-readable candidate source actually used for a given argv. `work-orders`
+ * is the canonical default -- the form `/dispatch`, `/dispatch-board` and
  * `/loop-dispatch` invoke.
  */
-export type CandidateSource = 'linear' | 'queue' | 'explicit';
+export type CandidateSource = 'work-orders' | 'queue' | 'explicit';
 
 export type MaximizerErrorCode =
   | 'candidate_discovery_failed'
@@ -1595,8 +1209,8 @@ export interface MaximizerErrorEnvelope {
 export interface MaximizerCliDeps {
   /** Overrides the whole candidate-source selection. Used by failure-injection tests. */
   fetchCandidates?: (argv: string[]) => Promise<CandidateLane[]>;
-  /** Transport seam for the canonical Linear candidate source. */
-  linear?: LinearCandidateFetchDeps;
+  /** Seam for the canonical work-order candidate source (defaults to `.ops/work`). */
+  readWorkOrders?: () => WorkOrder[];
   /** Overrides the canonical active-lane resolution wholesale. */
   resolveActiveLanes?: (discoveryDeps?: ActiveLaneDiscoveryDeps) => LaneManifest[];
   /** Injected dependencies for the canonical active-lane resolver itself. */
@@ -1612,70 +1226,24 @@ export interface MaximizerCliOutcome {
 }
 
 /**
- * UTV2-1699 Defect 0 repair. A BARE invocation now resolves to the canonical
- * Linear candidate source. Previously the no-flag branch fell through to
- * `parseCandidatesArg(argv)`, which parses an empty argv/stdin into zero
- * candidates -- so the canonical dispatch invocation never attempted discovery
- * at all and reported a well-formed empty board with exit 0.
- *
- * `--candidates` / `--from-stdin` remain available for a caller that genuinely
- * wants to supply the population itself, but they must now say so explicitly.
+ * UTV2-1699 Defect 0 repair, carried forward. A BARE invocation resolves to the
+ * canonical candidate source -- since the Linear workflow was retired
+ * (2026-11-25), that is the repo's open work orders. `--from-queue` reads the
+ * legacy ISSUE_QUEUE.md; `--candidates` / `--from-stdin` take an explicit
+ * population.
  */
-export function resolveCandidateSource(
-  argv: string[],
-  hasTrackerCredential: boolean = Boolean(
-    readConfiguredEnvValue('LINEAR_API_TOKEN') || readConfiguredEnvValue('LINEAR_API_KEY'),
-  ),
-): CandidateSource {
+export function resolveCandidateSource(argv: string[]): CandidateSource {
   if (hasFlag(argv, '--from-queue')) return 'queue';
   if (hasFlag(argv, '--candidates') || hasFlag(argv, '--from-stdin')) return 'explicit';
-  // An EXPLICIT --from-linear is an operator declaration and outranks the
-  // credential probe in both directions. The credential-based choice below is a
-  // default, never an override: silently reading the queue when the operator
-  // asked for the tracker would answer a different question than the one asked,
-  // and the resulting failure ('no candidates') would name neither the tracker
-  // nor the missing credential.
-  if (hasFlag(argv, '--from-linear')) return 'linear';
-  // Tracker independence (ratified 2026-09-05). The queue file is a FIRST-CLASS
-  // discovery source, not a fallback for tests: it is repo-owned, reviewable in
-  // a PR, and available when the tracker is not. A bare invocation still
-  // prefers the tracker when a credential exists -- the tracker remains the
-  // richer source and nothing here makes it optional to CONSULT -- but with no
-  // credential the previous behaviour was to throw
-  // 'LINEAR_API_TOKEN or LINEAR_API_KEY not set' out of discovery, which made
-  // the very first step of an ordinary task depend on the tracker.
-  //
-  // This is a source selection, not a silent degradation: `candidate_source` is
-  // already reported on every outcome, so a caller can always see which
-  // population it actually got.
-  if (!hasTrackerCredential) return 'queue';
-  return 'linear';
+  return 'work-orders';
 }
 
-/**
- * Whether a tracker candidate source is reachable at all.
- *
- * UTV2-1837: injected Linear deps ARE a tracker, and are what a test supplies
- * in place of the wire. Probing only the process environment here made the
- * source selection depend on whether the machine running the code happened to
- * hold a credential -- the CLI picked `linear` locally and `queue` in CI, so
- * sixteen pre-existing tests that inject a fake tracker silently stopped
- * exercising it. The decision is therefore computed ONCE, from the deps the
- * caller actually supplied, and threaded down.
- */
-export function hasTrackerSource(deps: MaximizerCliDeps = {}): boolean {
-  if (deps.linear) return true;
-  return Boolean(
-    readConfiguredEnvValue('LINEAR_API_TOKEN') || readConfiguredEnvValue('LINEAR_API_KEY'),
-  );
+function defaultReadWorkOrders(): WorkOrder[] {
+  return openWorkOrders(readLaneManifests().map((manifest) => manifest.issue_id));
 }
 
-async function defaultFetchCandidates(
-  argv: string[],
-  linearDeps: LinearCandidateFetchDeps | undefined,
-  hasTracker: boolean,
-): Promise<CandidateLane[]> {
-  switch (resolveCandidateSource(argv, hasTracker)) {
+async function defaultFetchCandidates(argv: string[], deps: MaximizerCliDeps): Promise<CandidateLane[]> {
+  switch (resolveCandidateSource(argv)) {
     case 'queue':
       return parseQueueCandidates(
         getFlagValue(argv, '--queue-file') ?? path.join(ROOT, 'docs', '06_status', 'ISSUE_QUEUE.md'),
@@ -1683,7 +1251,7 @@ async function defaultFetchCandidates(
     case 'explicit':
       return parseCandidatesArg(argv);
     default:
-      return fetchLinearCandidates(argv, linearDeps ?? {});
+      return workOrderCandidates((deps.readWorkOrders ?? defaultReadWorkOrders)());
   }
 }
 
@@ -1720,14 +1288,13 @@ export async function runMaximizerCli(
   argv: string[],
   deps: MaximizerCliDeps = {},
 ): Promise<MaximizerCliOutcome> {
-  const hasTracker = hasTrackerSource(deps);
-  const source = resolveCandidateSource(argv, hasTracker);
+  const source = resolveCandidateSource(argv);
 
   let candidates: CandidateLane[];
   try {
     candidates = deps.fetchCandidates
       ? await deps.fetchCandidates(argv)
-      : await defaultFetchCandidates(argv, deps.linear, hasTracker);
+      : await defaultFetchCandidates(argv, deps);
   } catch (error) {
     return errorOutcome(
       'candidate_discovery_failed',
@@ -1735,9 +1302,7 @@ export async function runMaximizerCli(
       `Could not read the ${source} candidate source, so the dispatchable population is unknown. ` +
         'Refusing to report an unknown candidate population as an empty board. ' +
         `Cause: ${error instanceof Error ? error.message : String(error)}`,
-      source === 'linear'
-        ? 'Restore LINEAR_API_TOKEN/LINEAR_API_KEY and network access to api.linear.app, then retry. An unknown board is never treated as an empty one.'
-        : 'Repair the supplied candidate source (queue file or --candidates payload), then retry. An unknown board is never treated as an empty one.',
+      'Repair the candidate source (.ops/work work orders, queue file or --candidates payload), then retry. An unknown board is never treated as an empty one.',
     );
   }
 
@@ -1798,7 +1363,7 @@ async function runCli(): Promise<void> {
     // machine consumer cannot distinguish from a crash-free empty board.
     outcome = errorOutcome(
       'evaluation_failed',
-      'linear',
+      'work-orders',
       `lane-maximizer failed before it could produce a report. Cause: ${
         error instanceof Error ? error.message : String(error)
       }`,

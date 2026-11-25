@@ -64,8 +64,6 @@ function runStartupProbe(options: StartupProbeOptions) {
         NODE_ENV: 'test',
         UNIT_TALK_APP_ENV: 'local',
         UNIT_TALK_LEGACY_WORKSPACE: 'legacy-test',
-        LINEAR_TEAM_KEY: 'UTV2',
-        LINEAR_TEAM_NAME: 'Unit Talk V2',
         NOTION_WORKSPACE_NAME: 'Unit Talk',
         SLACK_WORKSPACE_NAME: 'Unit Talk',
         UNIT_TALK_INGESTOR_AUTORUN: options.autorun ? 'true' : 'false',

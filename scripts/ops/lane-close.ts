@@ -1,14 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { loadEnvironment } from '@unit-talk/config';
 import {
   emitJson,
   git,
   parseArgs,
   type LaneManifest,
-  readConfiguredEnvValue,
-  resolveTrackerRef,
   readManifest,
   requireIssueId,
   validatePreflightTokenPathValue,
@@ -79,10 +76,9 @@ export type CloseoutFailureCode =
   | 'missing_proof'       // proof files absent or unreadable (P1/P2)
   | 'stale_proof'         // proof files predate or missing merge SHA reference (P3/P4)
   | 'runtime_proof_required' // runtime closeout attempted with static/narrative proof only (C6)
-  | 'state_drift'         // PR, manifest, or Linear state drift exceeds transition semantics (C7)
+  | 'state_drift'         // PR, manifest, or proof state drift exceeds transition semantics (C7)
   | 'pr_not_merged'       // PR not merged on GitHub (G1)
   | 'pr_sha_mismatch'     // PR merge SHA doesn't match manifest (G2)
-  | 'registry_mismatch'   // Linear attachment doesn't include the PR URL (L4)
   | 'truth_check_failed'  // general truth-check failure (catch-all)
   | 'truth_check_drift'   // manifest's persisted truth-check moved past the result that authorized this close
   | 'infra_error'         // missing token, manifest, or schema error
@@ -145,7 +141,7 @@ export interface RepairMergedManifestResult {
 /**
  * Maps a truth-check result to the most specific CloseoutFailureCode.
  * Priority order: infra > ineligible > pr_not_merged > pr_sha_mismatch >
- * registry_mismatch > missing_proof > stale_proof > truth_check_failed.
+ * missing_proof > stale_proof > truth_check_failed.
  */
 export function mapFailuresToCode(
   failures: string[],
@@ -157,12 +153,11 @@ export function mapFailuresToCode(
 
   const f = new Set(failures);
 
-  if (f.has('M1') || f.has('M2') || f.has('M3') || f.has('L1')) return 'infra_error';
+  if (f.has('M1') || f.has('M2') || f.has('M3')) return 'infra_error';
   if (f.has('M4')) return 'manifest_not_ready';
   if (f.has('C1') || f.has('C2') || f.has('M6')) return 'missing_merge_sha';
   if (f.has('G1')) return 'pr_not_merged';
   if (f.has('G2')) return 'pr_sha_mismatch';
-  if (f.has('L4')) return 'registry_mismatch';
   if (f.has('P1') || f.has('P2')) return 'missing_proof';
   if (f.has('P3') || f.has('P4') || f.has('C4') || f.has('C5')) return 'stale_proof';
   if (f.has('C6')) return 'runtime_proof_required';
@@ -190,15 +185,13 @@ export function remediationForCode(code: CloseoutFailureCode): string {
         '(see docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md). Run `pnpm ops:proof-repair scaffold <ISSUE_ID>` ' +
         'for the exact governed repair steps: a real `pnpm test:db` run, `pnpm ops:proof-repair apply`, and a normal PR.';
     case 'state_drift':
-      return 'PR, manifest, proof, and Linear state disagree beyond the allowed transition window. Reconcile the lane before closeout.';
+      return 'PR, manifest, and proof state disagree beyond the allowed transition window. Reconcile the lane before closeout.';
     case 'pr_not_merged':
       return 'The PR listed in manifest.pr_url is not merged. Merge the PR before closing the lane.';
     case 'pr_sha_mismatch':
       return 'PR merge SHA does not match manifest.commit_sha. Update manifest.commit_sha to the actual merge commit.';
-    case 'registry_mismatch':
-      return 'Linear issue does not have an attachment pointing to manifest.pr_url. Add the PR link as a Linear attachment.';
     case 'infra_error':
-      return 'Required token (LINEAR_API_TOKEN or GITHUB_TOKEN) is missing, or the manifest is absent or invalid. Check environment and manifest.';
+      return 'Required token (GITHUB_TOKEN) is missing, or the manifest is absent or invalid. Check environment and manifest.';
     case 'truth_check_failed':
       return 'One or more truth-check gates failed. Run `pnpm ops:truth-check <issue-id> --explain` for details.';
     case 'truth_check_drift':
@@ -1822,8 +1815,6 @@ export function createRepairRollbackTransaction(
   };
 }
 
-export type LaneCloseTrackerSync = 'synced' | 'skipped' | 'not_eligible';
-
 export type LaneWorktreeCleanup = 'not_requested' | 'already_absent' | 'removed';
 
 export interface SuccessfulLaneCloseResult {
@@ -1838,22 +1829,6 @@ export interface SuccessfulLaneCloseResult {
    */
   issue_completed: boolean;
   issue_completion: IssueCompletionEligibility;
-  /**
-   * Outcome of the OPTIONAL tracker transition (tracker independence, ratified
-   * 2026-09-05).
-   *
-   *   'synced'       -- the tracker issue was transitioned to Done
-   *   'skipped'      -- the lane has no tracker reference, or the tracker write
-   *                     failed; the lane is closed regardless
-   *   'not_eligible' -- issue completion was not eligible, so no transition was
-   *                     attempted in the first place
-   *
-   * 'skipped' and 'not_eligible' are deliberately distinct: one means the
-   * tracker was not reachable, the other means the lane was never going to
-   * complete the issue. Collapsing them would hide a failed tracker write
-   * behind a legitimate no-op.
-   */
-  tracker_sync: LaneCloseTrackerSync;
 }
 
 /**
@@ -1861,7 +1836,7 @@ export interface SuccessfulLaneCloseResult {
  * terminal manifest and proof authority are already correct. The caller must
  * validate the explicit historical PR before entering this function.
  *
- * This path deliberately never writes the manifest, transitions Linear, or
+ * This path deliberately never writes the manifest or
  * rebinds proof. It only removes the per-issue sync record, releases supported
  * coordination state, and removes the exact clean recorded worktree.
  */
@@ -1903,7 +1878,6 @@ export function completeAlreadyClosedLaneCleanup(
     // that was ALREADY closed. It completes nothing and must never be read as a
     // statement about the issue.
     issue_completed: false,
-    tracker_sync: 'not_eligible',
     issue_completion: {
       eligible: false,
       satisfied: [],
@@ -2047,8 +2021,7 @@ export function evaluateIssueCompletionEligibility(input: {
 
 /**
  * Completes the terminal closeout sequence after a passing truth-check. The
- * injected operations keep the full success path testable without contacting
- * Linear or mutating the developer's real lease/worktree state.
+ * injected operations keep the full success path testable without mutating the developer's real lease/worktree state.
  */
 export async function completeSuccessfulLaneClose(
   issueId: string,
@@ -2058,7 +2031,6 @@ export async function completeSuccessfulLaneClose(
     trustedBindingRepair?: boolean;
     repoRoot?: string;
     finalizeManifest?: (issue: string, result: TruthCheckResult) => LaneManifest;
-    transitionLinear?: (issue: string) => Promise<void>;
     /**
      * UTV2-1619 capability 17: explicit declaration that this lane completes the
      * ISSUE, not merely the lane. Absent means the issue stays open.
@@ -2109,34 +2081,6 @@ export async function completeSuccessfulLaneClose(
     truthCheck: authorizedTruthCheck,
     completionIntent: options.completionIntent,
   });
-  // Tracker independence (ratified 2026-09-05). The tracker transition is the
-  // LAST thing closeout does and it is optional. Before this it threw, and the
-  // throw landed AFTER `leaseTransition.commit()` above -- so a missing
-  // credential or an unreachable tracker left the lane half-closed: leases
-  // released, manifest written, closeout aborted. Tracker sync is now recorded
-  // rather than raised.
-  //
-  // This never suppresses a failure of the close itself. Everything that
-  // establishes the lane is closeable already ran and already passed; what is
-  // being tolerated here is a write to a system the repo does not own.
-  let trackerSync: LaneCloseTrackerSync = 'not_eligible';
-  if (completionEligibility.eligible) {
-    const trackerRef = resolveTrackerRef(manifest);
-    if (!trackerRef) {
-      trackerSync = 'skipped';
-    } else {
-      try {
-        await (options.transitionLinear ?? transitionLinearIssueToDone)(trackerRef);
-        trackerSync = 'synced';
-      } catch (error) {
-        trackerSync = 'skipped';
-        leaseTransition.warnings.push(
-          `tracker_sync: skipped -- ${error instanceof Error ? error.message : String(error)}. ` +
-            'The lane is closed; the tracker issue was not transitioned and may need a manual update.',
-        );
-      }
-    }
-  }
 
   let syncRemoved = false;
   let worktreeCleanup: LaneWorktreeCleanup = 'not_requested';
@@ -2174,7 +2118,6 @@ export async function completeSuccessfulLaneClose(
     worktree_cleanup: worktreeCleanup,
     issue_completed: completionEligibility.eligible,
     issue_completion: completionEligibility,
-    tracker_sync: trackerSync,
   };
 }
 
@@ -2237,8 +2180,7 @@ export function cleanupClosedLaneWorktree(
  *
  * This path exists so a re-close is what it should always have been: confirm
  * the lane is terminal, release any coordination state still attributable to
- * it, and report `already_closed`. It writes no manifest, transitions no
- * Linear issue, and marks nothing Done that was not already Done -- it can
+ * it, and report `already_closed`. It writes no manifest and marks nothing Done that was not already Done -- it can
  * only ever release, never grant.
  */
 export function completeIdempotentReclose(
@@ -2286,7 +2228,6 @@ export function completeIdempotentReclose(
     sync_removed: syncRemoved,
     worktree_cleanup: 'not_requested',
     issue_completed: false,
-    tracker_sync: 'not_eligible',
     issue_completion: {
       eligible: false,
       satisfied: [],
@@ -2394,7 +2335,7 @@ async function main(): Promise<void> {
         status: manifest.status,
         closed_at: manifest.closed_at,
         remediation:
-          'Lane is already closed. Coordination state was released idempotently; no manifest, proof, or Linear ' +
+          'Lane is already closed. Coordination state was released idempotently; no manifest or proof ' +
           'state was changed, and no truth-check outcome was recorded. Reopen detection remains the job of ' +
           'ops:truth-check, not of re-running the closer.',
         warnings: cleanup.warnings,
@@ -2510,8 +2451,7 @@ async function main(): Promise<void> {
           sync_removed: false,
           worktree_cleanup: 'not_requested',
           issue_completed: false,
-          tracker_sync: 'not_eligible',
-          issue_completion: {
+                issue_completion: {
             eligible: false,
             satisfied: [],
             unsatisfied: [
@@ -2924,111 +2864,6 @@ function recordChanged(changedFields: string[], previous: unknown, next: unknown
   if (previous !== next) {
     changedFields.push(field);
   }
-}
-
-async function transitionLinearIssueToDone(issueId: string): Promise<void> {
-  const env = loadEnvironment();
-  const token =
-    env.LINEAR_API_TOKEN?.trim() ||
-    process.env.LINEAR_API_KEY?.trim() ||
-    readConfiguredEnvValue('LINEAR_API_TOKEN') ||
-    readConfiguredEnvValue('LINEAR_API_KEY');
-  if (!token) {
-    throw new Error('LINEAR_API_TOKEN or LINEAR_API_KEY is required to close the Linear issue');
-  }
-
-  const issuePayload = await fetchLinear<{
-    data?: { issue: { id: string; state?: { name?: string | null } | null } | null };
-    errors?: Array<{ message?: string }>;
-  }>(
-    token,
-    `
-      query ResolveIssue($id: String!) {
-        issue(id: $id) {
-          id
-          state { name }
-        }
-      }
-    `,
-    { id: issueId },
-  );
-  if (issuePayload.errors?.length) {
-    throw new Error(issuePayload.errors.map((entry) => entry.message ?? 'Unknown Linear error').join('; '));
-  }
-  const issue = issuePayload.data?.issue;
-  if (!issue) {
-    throw new Error(`Linear issue not found: ${issueId}`);
-  }
-  if (/^done$/i.test(issue.state?.name ?? '')) {
-    return;
-  }
-
-  const statesPayload = await fetchLinear<{
-    data?: { workflowStates: { nodes: Array<{ id: string; name: string }> } };
-    errors?: Array<{ message?: string }>;
-  }>(
-    token,
-    `
-      query DoneStates {
-        workflowStates(filter: { name: { eq: "Done" } }, first: 20) {
-          nodes { id name }
-        }
-      }
-    `,
-    {},
-  );
-  if (statesPayload.errors?.length) {
-    throw new Error(statesPayload.errors.map((entry) => entry.message ?? 'Unknown Linear error').join('; '));
-  }
-  const doneState = statesPayload.data?.workflowStates.nodes[0];
-  if (!doneState) {
-    throw new Error('Linear Done state not found');
-  }
-
-  const updatePayload = await fetchLinear<{
-    data?: { issueUpdate: { success: boolean } };
-    errors?: Array<{ message?: string }>;
-  }>(
-    token,
-    `
-      mutation CloseIssue($id: String!, $input: IssueUpdateInput!) {
-        issueUpdate(id: $id, input: $input) {
-          success
-        }
-      }
-    `,
-    {
-      id: issue.id,
-      input: {
-        stateId: doneState.id,
-      },
-    },
-  );
-  if (updatePayload.errors?.length) {
-    throw new Error(updatePayload.errors.map((entry) => entry.message ?? 'Unknown Linear error').join('; '));
-  }
-  if (!updatePayload.data?.issueUpdate.success) {
-    throw new Error(`Failed to transition Linear issue ${issueId} to Done`);
-  }
-}
-
-async function fetchLinear<T>(
-  token: string,
-  query: string,
-  variables: Record<string, unknown>,
-): Promise<T> {
-  const response = await fetch('https://api.linear.app/graphql', {
-    method: 'POST',
-    headers: {
-      Authorization: token,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-  if (!response.ok) {
-    throw new Error(`Linear API request failed: ${response.status} ${response.statusText}`);
-  }
-  return (await response.json()) as T;
 }
 
 // Guard: only run main when this file is the CLI entry point, not when imported as a module

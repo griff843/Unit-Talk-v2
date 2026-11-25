@@ -1076,14 +1076,12 @@ test('UTV2-1729: GitHub-attested recovery repairs the real PR #1434 schema-v2 bu
         expected_proof_paths: manifest.expected_proof_paths,
         created_by: 'codex-cli',
       },
-      linear_state: 'Done',
       pr_merged: true,
       pr_merge_sha: manifest.commit_sha,
       pr_head_sha: approvedHeadSha,
       proof_artifacts: proofArtifacts,
       merge_timestamp_ms: 1_000,
       runtime_proof_required: false,
-      transition_age_ms: 0,
     }).filter((check) => check.status === 'fail').map((check) => check.id);
     assert.deepStrictEqual(closeoutFailures, []);
 
@@ -1347,14 +1345,12 @@ test('rebindRepairedLaneProof through the real repair path satisfies the C4 clos
         expected_proof_paths: expectedProofPaths,
         created_by: 'codex-cli',
       },
-      linear_state: 'Done',
       pr_merged: true,
       pr_merge_sha: mergeSha,
       pr_head_sha: 'head456',
       proof_artifacts: [{ path: routingPath, content: preRebind, mtime_ms: 2000 }],
       merge_timestamp_ms: 1000,
       runtime_proof_required: false,
-      transition_age_ms: 0,
     }).filter((check) => check.status === 'fail').map((check) => check.id);
     assert.deepStrictEqual(c4Before, ['C4']);
 
@@ -1387,14 +1383,12 @@ test('rebindRepairedLaneProof through the real repair path satisfies the C4 clos
         expected_proof_paths: expectedProofPaths,
         created_by: 'codex-cli',
       },
-      linear_state: 'Done',
       pr_merged: true,
       pr_merge_sha: mergeSha,
       pr_head_sha: 'head456',
       proof_artifacts: [{ path: routingPath, content: postRebind, mtime_ms: 2000 }],
       merge_timestamp_ms: 1000,
       runtime_proof_required: false,
-      transition_age_ms: 0,
     }).filter((check) => check.status === 'fail').map((check) => check.id);
     assert.deepStrictEqual(c4After, []);
   });
@@ -1931,7 +1925,7 @@ test('failing truth-check: G4 (required checks failing) maps to truth_check_fail
   assert.strictEqual(code, 'truth_check_failed');
 });
 
-// ── Scenario 4: PR/Linear mismatch ────────────────────────────────────────────
+// ── Scenario 4: PR mismatch ──────────────────────────────────────────────────
 
 test('PR not merged: G1 failure maps to pr_not_merged', () => {
   const code = mapFailuresToCode(['G1'], 'fail');
@@ -1940,21 +1934,6 @@ test('PR not merged: G1 failure maps to pr_not_merged', () => {
 
 test('PR SHA mismatch: G2 failure maps to pr_sha_mismatch', () => {
   const code = mapFailuresToCode(['G2'], 'fail');
-  assert.strictEqual(code, 'pr_sha_mismatch');
-});
-
-test('registry mismatch: L4 (Linear missing PR attachment) maps to registry_mismatch', () => {
-  const code = mapFailuresToCode(['L4'], 'fail');
-  assert.strictEqual(code, 'registry_mismatch');
-});
-
-test('PR not merged takes priority over registry mismatch when both present', () => {
-  const code = mapFailuresToCode(['G1', 'L4'], 'fail');
-  assert.strictEqual(code, 'pr_not_merged');
-});
-
-test('PR SHA mismatch takes priority over registry mismatch when both present', () => {
-  const code = mapFailuresToCode(['G2', 'L4'], 'fail');
   assert.strictEqual(code, 'pr_sha_mismatch');
 });
 
@@ -1967,11 +1946,6 @@ test('infra_error verdict maps to infra_error regardless of failures', () => {
 
 test('M1 (missing manifest) maps to infra_error', () => {
   const code = mapFailuresToCode(['M1'], 'fail');
-  assert.strictEqual(code, 'infra_error');
-});
-
-test('L1 (missing LINEAR_API_TOKEN) maps to infra_error', () => {
-  const code = mapFailuresToCode(['L1'], 'fail');
   assert.strictEqual(code, 'infra_error');
 });
 
@@ -1998,7 +1972,6 @@ const allFailureCodes: CloseoutFailureCode[] = [
   'state_drift',
   'pr_not_merged',
   'pr_sha_mismatch',
-  'registry_mismatch',
   'infra_error',
   'truth_check_failed',
   'untrusted_invocation',
@@ -2687,9 +2660,6 @@ test('UTV2-1586 #13 successful repair reaches done with terminal fields and clea
           status: 'done',
           closed_at: '2026-07-24T21:00:00.000Z',
         }),
-        transitionLinear: async () => {
-          cleanupCalls.push('linear');
-        },
         beginLeaseRelease: () => ({
           warnings: [],
           commit: () => undefined,
@@ -2737,10 +2707,9 @@ test('UTV2-1586 #13 successful repair reaches done with terminal fields and clea
     assert.strictEqual(fs.existsSync(syncPath), false);
     assert.strictEqual(completion.worktree_cleanup, 'removed');
     assert.deepStrictEqual(cleanupCalls, [
-      // UTV2-1619 capability 17: 'linear' is deliberately absent. This lane
-      // closes successfully, but no explicit final-completion intent was
-      // declared, so the ISSUE is left open. Lane completion is not issue
-      // completion.
+      // UTV2-1619 capability 17: this lane closes successfully, but no
+      // explicit final-completion intent was declared, so the ISSUE is left
+      // open. Lane completion is not issue completion.
       `locks:${manifest.issue_id}:${manifest.branch}`,
       'worktree',
     ]);
@@ -4467,14 +4436,12 @@ test('WORK-2026100802: attested workflow_dispatch recovery binds the full WORK p
         expected_proof_paths: manifest.expected_proof_paths,
         created_by: 'codex-cli',
       },
-      linear_state: 'Done',
       pr_merged: true,
       pr_merge_sha: UTV2_1745_MERGE_SHA,
       pr_head_sha: UTV2_1745_APPROVED_HEAD,
       proof_artifacts: proofArtifacts,
       merge_timestamp_ms: 1_000,
       runtime_proof_required: false,
-      transition_age_ms: 0,
     }).find((check) => check.id === 'C4');
     assert.deepStrictEqual(c4, {
       id: 'C4',
@@ -4595,21 +4562,16 @@ test('UTV2-1828: the tolerant ordinary path also offers diff-summary.md, and its
 });
 
 // ---------------------------------------------------------------------------
-// UTV2-1837 — tracker independence at closeout.
-//
-// The tracker transition sits AFTER `leaseTransition.commit()`, so before this
-// a missing credential or an unreachable tracker left the lane half-closed:
-// leases released, manifest written, closeout thrown out of. The write is to a
-// system this repository does not own, so its outcome is recorded rather than
-// raised.
+// Tracker retirement (WORK-2026112501). Closeout writes to no external tracker:
+// an eligible close completes the issue from repo state alone.
 // ---------------------------------------------------------------------------
 
-async function closeWithTracker(
+async function closeWithCompletionIntent(
   repoRoot: string,
   overrides: Parameters<typeof completeSuccessfulLaneClose>[3],
 ): Promise<Awaited<ReturnType<typeof completeSuccessfulLaneClose>>> {
-  // The five completion conditions must all hold, or the tracker block never
-  // runs and every assertion below is vacuous. `createMissingBindingManifest`
+  // The five completion conditions must all hold, or the close is never
+  // eligible to complete the issue and the assertion below is vacuous. `createMissingBindingManifest`
   // delivers nothing, so scope truth is supplied explicitly here; the lock
   // entry is a plain prefix because the eligibility check is a path-prefix
   // test rather than a glob match.
@@ -4630,11 +4592,8 @@ async function closeWithTracker(
   return completeSuccessfulLaneClose(manifest.issue_id, repair.manifest, truthCheck, {
     trustedBindingRepair: true,
     repoRoot,
-    // The tracker transition only runs for a lane that is eligible to complete
-    // its issue, and completion intent is a deliberate explicit declaration
-    // rather than an inference from lane state. Without it the whole tracker
-    // block is bypassed and every assertion below would read `not_eligible`
-    // regardless of tracker behaviour -- a vacuous test.
+    // Completion intent is a deliberate explicit declaration rather than an
+    // inference from lane state.
     completionIntent: true,
     finalizeManifest: () => ({
       ...repair.manifest,
@@ -4652,37 +4611,14 @@ async function closeWithTracker(
   });
 }
 
-test('UTV2-1837: a tracker write failure is recorded as tracker_sync skipped, not thrown', async () => {
-  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1837-skip-'));
+test('an eligible close completes the issue with no external tracker write', async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'work-tracker-free-close-'));
   try {
-    const completion = await closeWithTracker(repoRoot, {
-      transitionLinear: async () => {
-        throw new Error('LINEAR_API_TOKEN or LINEAR_API_KEY is required to close the Linear issue');
-      },
-    } as never);
-    assert.strictEqual(completion.manifest.status, 'done', 'the lane still closes');
-    assert.strictEqual(completion.tracker_sync, 'skipped');
-    assert.ok(
-      completion.warnings.some((warning) => warning.includes('tracker_sync: skipped')),
-      'the skipped transition is surfaced, never silent',
-    );
-  } finally {
-    fs.rmSync(repoRoot, { recursive: true, force: true });
-  }
-});
-
-test('UTV2-1837 AC4 inversion: a working tracker still transitions and reports synced', async () => {
-  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1837-sync-'));
-  try {
-    let called = 0;
-    const completion = await closeWithTracker(repoRoot, {
-      transitionLinear: async () => {
-        called += 1;
-      },
-    } as never);
-    assert.strictEqual(called, 1, 'the transition is still attempted when a tracker exists');
-    assert.strictEqual(completion.tracker_sync, 'synced');
+    const completion = await closeWithCompletionIntent(repoRoot, {});
+    assert.strictEqual(completion.manifest.status, 'done');
+    assert.strictEqual(completion.issue_completed, true);
     assert.deepStrictEqual(completion.warnings, []);
+    assert.equal('tracker_sync' in completion, false);
   } finally {
     fs.rmSync(repoRoot, { recursive: true, force: true });
   }

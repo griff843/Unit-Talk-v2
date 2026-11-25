@@ -10,7 +10,7 @@ Schema version: `execution-packet-v1`
 
 | Field | Type | Description |
 |---|---|---|
-| `issue_id` | `string` | Canonical Linear issue identifier such as `UTV2-969`. |
+| `issue_id` | `string` | Work order identifier such as `WORK-2026112501` (legacy lanes: `UTV2-969`). |
 | `title` | `string` | Human-facing issue title. If the manifest does not carry a title field, generators may fall back to the issue ID. |
 | `project` | `string` | Project name for the lane. Current generators use `Unit Talk V2`. |
 | `tier` | `string` | Lane tier, typically `T1`, `T2`, or `T3`. |
@@ -23,7 +23,7 @@ Schema version: `execution-packet-v1`
 | `required_verification` | `string[]` | Tier-derived verification checklist, supplemented with expected proof paths. |
 | `expected_proof_paths` | `string[]` | Canonical proof artifact paths copied from `manifest.expected_proof_paths`. |
 | `closeout_instructions` | `string[]` | Standard closeout reminders for verify, R-level, PR creation, tier label, and post-merge truth-check. |
-| `source_of_truth.linear_url` | `string` | Canonical Linear URL in the form `https://linear.app/unit-talk-v2/issue/<issue_id>`. |
+| `source_of_truth.work_order_path` | `string` | Repo-relative work order path in the form `.ops/work/<issue_id>.md` (replaced `linear_url` when the Linear workflow was retired, 2026-11-25). |
 | `source_of_truth.branch` | `string` | Branch copied from the manifest for drift checks. |
 | `source_of_truth.manifest_path` | `string` | Canonical manifest path in the form `docs/06_status/lanes/<issue_id>.json`. |
 | `generated_at` | `string` | Packet generation timestamp in ISO 8601 format. |
@@ -93,7 +93,7 @@ After the base tier list is created, every entry in `expected_proof_paths` is ap
     "Run ops:truth-check after merge to close lane"
   ],
   "source_of_truth": {
-    "linear_url": "https://linear.app/unit-talk-v2/issue/UTV2-969",
+    "work_order_path": ".ops/work/UTV2-969.md",
     "branch": "codex/utv2-969-generate-standardized-execution-packets",
     "manifest_path": "docs/06_status/lanes/UTV2-969.json"
   },

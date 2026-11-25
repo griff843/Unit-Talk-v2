@@ -167,7 +167,7 @@ Frozen-domain status:
   ws-3.5    — FROZEN | NOT IN SET
   treasury  — FROZEN | NOT IN SET | CONFIRMED NOT FROZEN
 
-Next safe Linear issue batch: <recommendation>
+Next safe work-order batch: <recommendation>
 ```
 
 ---

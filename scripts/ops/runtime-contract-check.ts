@@ -58,21 +58,6 @@ function checkGhCli(): CheckResult {
   return { name: 'gh-cli', ok: false, message: 'gh auth status failed — run: gh auth login', level: 'fail' };
 }
 
-function checkLinear(): CheckResult {
-  const token = process.env.LINEAR_API_TOKEN;
-  if (!token) {
-    return { name: 'linear', ok: false, message: 'LINEAR_API_TOKEN not set', level: 'fail' };
-  }
-  // Basic connectivity check via curl
-  const result = run(
-    `curl -sf -X POST https://api.linear.app/graphql -H "Authorization: ${token}" -H "Content-Type: application/json" -d '{"query":"{ teams { nodes { id } } }"}'`
-  );
-  if (result.ok && result.stdout.includes('"teams"')) {
-    return { name: 'linear', ok: true, message: 'Linear API reachable and token valid', level: 'pass' };
-  }
-  return { name: 'linear', ok: false, message: 'Linear API query failed — check LINEAR_API_TOKEN', level: 'fail' };
-}
-
 function checkNodeVersion(): CheckResult {
   const raw = process.version; // e.g. "v20.11.0"
   const m = raw.match(/v(\d+)/);
@@ -104,7 +89,6 @@ function main(): void {
   const checks: CheckResult[] = [
     checkCodexCli(),
     checkGhCli(),
-    checkLinear(),
     checkNodeVersion(),
     checkCodexVersion(),
   ];

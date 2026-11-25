@@ -3,7 +3,6 @@
 # Idempotent — safe to re-run.
 #
 # Spec: docs/05_operations/P0_PROTOCOL_SPEC.md
-# Linear: UTV2-948
 #
 # Required: gh CLI authenticated with admin access to griff843/Unit-Talk-v2.
 #

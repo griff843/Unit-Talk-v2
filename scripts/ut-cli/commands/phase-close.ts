@@ -19,9 +19,9 @@ import type { CommandContext } from '../types.js';
 function printChecklist(issueId: string, downstreamUnlocks: string[]): void {
   console.log(`PHASE CLOSE OK - ${issueId}`);
   console.log('CLI has marked this issue as locally closed. The following manual steps remain:');
-  console.log(`  [ ] Move Linear issue ${issueId} to Done`);
+  console.log(`  [ ] Close the lane with pnpm ops:lane-close ${issueId}`);
   for (const downstream of downstreamUnlocks) {
-    console.log(`  [ ] Transition Linear issue ${downstream} to Ready`);
+    console.log(`  [ ] Confirm work order ${downstream} is ready to start`);
   }
   console.log('  [ ] Verify PROGRAM_STATUS.md entry is accurate and dated');
   console.log('  [ ] If this was a phase proof bundle issue, confirm the next phase gate opens');

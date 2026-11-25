@@ -21,7 +21,6 @@ pnpm ops:brief -- --static
    database, production, or proof truth.
 4. If the task is specifically queue or branch related, also inspect:
 ```bash
-pnpm linear:work
 pnpm github:current
 ```
 5. Confirm three things before proceeding:
@@ -38,7 +37,7 @@ pnpm github:current
 ## Stop and reconcile when
 
 - the applicable static or full `ops:brief` fails
-- Linear state conflicts with repo truth
+- A work order conflicts with repo truth
 - mainline health is unclear
 - you cannot name the next concrete lane
 

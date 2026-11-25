@@ -86,7 +86,7 @@ test('active lane summary includes active manifests with expected fields', () =>
     conflict_risk: 'clear',
     recommended_action: 'complete proof artifacts',
     blockers: [],
-    source_url: 'https://linear.app/unit-talk-v2/issue/UTV2-974/',
+    source_url: 'https://github.com/griff843/Unit-Talk-v2/blob/main/docs/06_status/lanes/UTV2-974.json',
     manifest_source: 'local_worktree',
     manifest_location: 'lanes_root',
     capacity: {

@@ -8,7 +8,6 @@ name: Post-Merge Lane Close
 #   1. Identify merged lane     — hard-gate (no lane = exit 0 silently)
 #   2. Run lane closeout        — hard-gate (failure halts)
 #   3. Commit closeout state    — hard-gate (must succeed)
-#   4. Update Linear            — skipped (linear-auto-close.yml handles it)
 #
 # Issue ID extraction:
 #   1. Scans the head commit message for canonical repository-owned IDs
@@ -30,7 +29,6 @@ name: Post-Merge Lane Close
 #   - Does NOT commit lane manifest changes
 #
 # Requirements:
-#   - Repo secret LINEAR_API_TOKEN (for truth-check's Linear checks)
 #   - Repo secret SYNC_BOT_TOKEN (PAT with repo scope — allows git push to bypass
 #     branch protection; must be a token from a repo admin/owner). Falls back to
 #     GITHUB_TOKEN if not set, but git push will be blocked by branch protection.
@@ -384,7 +382,6 @@ jobs:
           ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
           MERGE_SHA: ${{ steps.resolve_sha.outputs.merge_sha }}
           MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
-          LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
@@ -418,7 +415,6 @@ jobs:
         env:
           ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
           EXPLICIT_PR: ${{ steps.extract.outputs.pr_input }}
-          LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eo pipefail

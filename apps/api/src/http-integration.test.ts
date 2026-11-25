@@ -785,8 +785,6 @@ function createTestEnvironment(overrides: Partial<AppEnv> = {}): AppEnv {
     UNIT_TALK_APP_ENV: 'local',
     UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\dev\\unit-talk-v2',
     UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
-    LINEAR_TEAM_KEY: 'UNIT',
-    LINEAR_TEAM_NAME: 'Unit Talk',
     NOTION_WORKSPACE_NAME: 'Unit Talk',
     SLACK_WORKSPACE_NAME: 'Unit Talk',
     ...overrides,

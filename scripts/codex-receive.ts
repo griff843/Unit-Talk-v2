@@ -6,7 +6,6 @@ import {
   getFlag,
   isCodexLane,
   parseArgs,
-  readConfiguredEnvValue,
   readManifest,
   requireIssueId,
   validateBranchName,
@@ -23,12 +22,6 @@ type ReceiveResult = {
   worktree_path?: string;
   status?: string;
   heartbeat_at?: string;
-  linear_comment?: 'posted' | 'skipped' | 'failed';
-  warning?: string;
-};
-
-type LinearIssueResolution = {
-  issueInternalId: string;
 };
 
 const PR_URL_PATTERN = /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+$/;
@@ -131,108 +124,7 @@ function branchExistsAnywhere(branch: string): { ok: boolean; warning?: string }
   return { ok: false };
 }
 
-function buildLinearComment(input: {
-  issueId: string;
-  manifestPath: string;
-  branch: string;
-  prUrl: string;
-  tier: string;
-  worktreePath: string;
-  fileScopeLock: string[];
-  expectedProofPaths: string[];
-}): string {
-  return [
-    `**Codex returned work — ${input.issueId}**`,
-    '',
-    `PR:       ${input.prUrl}`,
-    `Branch:   \`${input.branch}\``,
-    `Tier:     ${input.tier}`,
-    `Worktree: ${input.worktreePath}`,
-    '',
-    `Lane manifest: ${input.manifestPath}`,
-    '',
-    'Status: in_review (transitioned by ops:lane-link-pr)',
-    '',
-    '### Locked file scope',
-    ...input.fileScopeLock.map((entry) => `- \`${entry}\``),
-    '',
-    '### Expected proof paths for close',
-    ...(input.expectedProofPaths.length > 0
-      ? input.expectedProofPaths.map((entry) => `- \`${entry}\``)
-      : ['- *(none declared for this tier)*']),
-    '',
-    '---',
-    '',
-    `Next step: this lane closes via \`ops:lane-close ${input.issueId}\`, which runs \`ops:truth-check\``,
-    'against the merge SHA and the proof paths above. Verification is CI + truth-check;',
-    'codex-receive does not gate merge.',
-  ].join('\n');
-}
-
-async function resolveLinearIssue(issueId: string, token: string): Promise<LinearIssueResolution> {
-  const response = await fetch('https://api.linear.app/graphql', {
-    method: 'POST',
-    headers: {
-      Authorization: token,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      query: `
-        query ResolveIssue($id: String!) {
-          issue(id: $id) {
-            id
-          }
-        }
-      `,
-      variables: { id: issueId },
-    }),
-  });
-  if (!response.ok) {
-    throw new Error(`Linear API error: ${response.status} ${response.statusText}`);
-  }
-  const payload = (await response.json()) as {
-    data?: { issue: { id: string } | null };
-    errors?: Array<{ message?: string }>;
-  };
-  if (payload.errors?.length) {
-    throw new Error(payload.errors.map((entry) => entry.message ?? 'Unknown Linear error').join('; '));
-  }
-  if (!payload.data?.issue?.id) {
-    throw new Error(`Linear issue not found: ${issueId}`);
-  }
-  return {
-    issueInternalId: payload.data.issue.id,
-  };
-}
-
-async function postLinearComment(issueId: string, token: string, body: string): Promise<void> {
-  const resolved = await resolveLinearIssue(issueId, token);
-  const response = await fetch('https://api.linear.app/graphql', {
-    method: 'POST',
-    headers: {
-      Authorization: token,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      query: `
-        mutation CreateComment($issueId: String!, $body: String!) {
-          commentCreate(input: { issueId: $issueId, body: $body }) {
-            success
-          }
-        }
-      `,
-      variables: {
-        issueId: resolved.issueInternalId,
-        body,
-      },
-    }),
-  });
-  if (!response.ok) {
-    throw new Error(`Linear API error: ${response.status} ${response.statusText}`);
-  }
-}
-
-async function main(argv = process.argv.slice(2)): Promise<number> {
+function main(argv = process.argv.slice(2)): number {
   const { flags, bools } = parseArgs(argv);
   let issueId = '';
   let branch = '';
@@ -249,7 +141,6 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
     const dryRun = bools.has('dry-run');
     const json = bools.has('json');
     const explain = bools.has('explain');
-    const noLinear = bools.has('no-linear');
 
     if (!branch) {
       throw new Error('Missing required --branch');
@@ -269,20 +160,6 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
       };
       if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
       return 1;
-    }
-
-    const linearToken = readConfiguredEnvValue('LINEAR_API_TOKEN');
-    if (!noLinear && !linearToken) {
-      const result: ReceiveResult = {
-        ok: false,
-        code: 'missing_linear_token',
-        message: 'LINEAR_API_TOKEN is required unless --no-linear is supplied',
-        issue_id: issueId,
-        branch,
-        pr_url: prUrl,
-      };
-      if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
-      return 3;
     }
 
     let manifest;
@@ -369,7 +246,6 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
         worktree_path: manifest.worktree_path,
         status: manifest.status,
         heartbeat_at: manifest.heartbeat_at,
-        linear_comment: 'skipped',
       };
       if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
       return 0;
@@ -401,7 +277,6 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
         worktree_path: manifest.worktree_path,
         status: manifest.status,
         heartbeat_at: manifest.heartbeat_at,
-        linear_comment: 'skipped',
       };
       if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
       return 0;
@@ -441,7 +316,7 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
       const result: ReceiveResult = {
         ok: true,
         code: 'receive_dry_run_ready',
-        message: 'Receive validation passed; canonical writer and Linear comment skipped due to --dry-run',
+        message: 'Receive validation passed; canonical writer skipped due to --dry-run',
         issue_id: issueId,
         manifest_path: manifestPath,
         branch,
@@ -482,34 +357,6 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
       return 1;
     }
 
-    let linearComment: ReceiveResult['linear_comment'] = 'skipped';
-    let warning: string | undefined;
-    if (!noLinear && linearToken) {
-      try {
-        await postLinearComment(
-          issueId,
-          linearToken,
-          buildLinearComment({
-            issueId,
-            manifestPath,
-            branch: manifestAfter.branch,
-            prUrl,
-            tier: manifestAfter.tier,
-            worktreePath: manifestAfter.worktree_path,
-            fileScopeLock: manifestAfter.file_scope_lock,
-            expectedProofPaths: manifestAfter.expected_proof_paths,
-          }),
-        );
-        linearComment = 'posted';
-      } catch (error) {
-        linearComment = 'failed';
-        warning = error instanceof Error ? error.message : String(error);
-        if (!json) {
-          process.stderr.write(`Linear comment failed (non-fatal): ${warning}\n`);
-        }
-      }
-    }
-
     const result: ReceiveResult = {
       ok: true,
       code: 'receive_recorded',
@@ -521,8 +368,6 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
       worktree_path: manifestAfter.worktree_path,
       status: manifestAfter.status,
       heartbeat_at: manifestAfter.heartbeat_at,
-      linear_comment: linearComment,
-      warning,
     };
 
     if (json) {
@@ -550,7 +395,5 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  void main().then((exitCode) => {
-    process.exitCode = exitCode;
-  });
+  process.exitCode = main();
 }

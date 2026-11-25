@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { loadEnvironment } from '@unit-talk/config';
 import { readAllManifests } from './ops/shared.js';
+import { openWorkOrders } from './ops/work-orders.js';
 
 
 type SectionResult = {
@@ -44,7 +45,7 @@ async function main(): Promise<void> {
     : [
         buildOverviewSection(repo, issueId, pickIds),
         buildCodexLanesSection(),
-        buildLinearSection(issueId),
+        buildWorkOrderSection(issueId),
         buildGitHubSection(),
         buildPipelineSection(),
         buildProductTruthSection(),
@@ -85,7 +86,7 @@ function buildStaticModeSection(): SectionResult {
     name: 'Static Mode',
     ok: true,
     lines: [
-      'external checks skipped: Linear, GitHub, runtime, pipeline, product truth, DB/live, proof, closeout',
+      'external checks skipped: work orders, GitHub, runtime, pipeline, product truth, DB/live, proof, closeout',
       'run pnpm ops:brief for the full operational snapshot',
     ],
   };
@@ -174,38 +175,26 @@ function isCodexCliLane(manifest: { lane_type: string; executor?: string }): boo
   return manifest.executor === 'codex-cli' || manifest.lane_type === 'codex-cli';
 }
 
-function buildLinearSection(issueId: string | null): SectionResult {
-  if (!env.LINEAR_API_TOKEN) {
+function buildWorkOrderSection(issueId: string | null): SectionResult {
+  let manifestIds: string[] = [];
+  try {
+    manifestIds = readAllManifests().map((manifest) => manifest.issue_id);
+  } catch (error) {
     return {
-      name: 'Linear',
+      name: 'Work Orders',
       ok: false,
-      lines: ['skipped: LINEAR_API_TOKEN not available in current env'],
+      lines: [`failed to read lane manifests: ${error instanceof Error ? error.message : String(error)}`],
     };
   }
-
-  const commandArgs = issueId
-    ? ['linear:issues', '--', '--states', 'Ready,In Progress,In Review', '--limit', '10']
-    : ['linear:work', '--limit', '5'];
-  const result = runPnpm(commandArgs);
-  if (!result.ok) {
-    return failureSection('Linear', result);
+  const open = openWorkOrders(manifestIds);
+  const lines = [
+    `open work orders (no lane yet): ${open.length}`,
+    ...open.slice(0, 5).map((order) => `${order.identifier} ${order.tier ?? 'untiered'} ${order.title}`),
+  ];
+  if (issueId && !manifestIds.includes(issueId) && !open.some((order) => order.identifier === issueId)) {
+    lines.unshift(`${issueId}: no lane manifest and no open work order`);
   }
-
-  let lines = summarizePlainLines(result.stdout);
-  if (issueId) {
-    const match = lines.find((line) => line.includes(issueId));
-    if (match) {
-      lines = [`current ${match}`, ...lines.filter((line) => line !== match).slice(0, 4)];
-    } else {
-      lines = [`${issueId}: not present in current Ready/In Progress/In Review slice`, ...lines.slice(0, 4)];
-    }
-  }
-
-  return {
-    name: 'Linear',
-    ok: true,
-    lines: lines.slice(0, 6),
-  };
+  return { name: 'Work Orders', ok: true, lines: lines.slice(0, 6) };
 }
 
 function buildGitHubSection(): SectionResult {
@@ -385,7 +374,7 @@ function buildCloseoutSection(
       `${issueId}: ready to run pnpm proof:t1 -- --issue ${issueId} --change "<summary>" ${currentPickIds.map((pickId) => `--pick ${pickId}`).join(' ')}`,
     );
     lines.push(
-      `${issueId}: if proof passes, close with pnpm linear:close -- ${issueId} --comment "<closeout note>"`,
+      `${issueId}: if proof passes, close with pnpm ops:lane-close ${issueId}`,
     );
   }
 

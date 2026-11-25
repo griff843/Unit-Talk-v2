@@ -8,9 +8,7 @@
  *      (a missing/released/held lock is the normal idle/active state)
  *   3. a registered git worktree tied to an ACTIVE lane is missing    -> hard_fail
  *   4. an ACTIVE lane's declared worktree directory is missing        -> hard_fail
- *   5. Linear state conflicts with the local manifest                 -> hard_fail
- *      (best-effort; skipped -> warning when no token / not requested)
- *   6. an existing board hard_fail lane exists (via ops:merge-risk)   -> hard_fail
+ *   5. an existing board hard_fail lane exists (via ops:merge-risk)   -> hard_fail
  *   plus: a registered worktree NOT tied to an active lane whose dir is
  *         missing                                                     -> warning
  *
@@ -66,7 +64,6 @@ export interface SubstrateFacts {
     hardFails: Array<{ code: string; lanes: string[]; detail: string }>;
     error?: string;
   };
-  linear: { checked: boolean; conflicts: Array<{ issue_id: string; detail: string }>; reason?: string };
 }
 
 // ---------------------------------------------------------------------------
@@ -156,7 +153,7 @@ export function evaluateSubstrate(facts: SubstrateFacts): SubstrateReport {
     }
   }
 
-  // 6. existing board hard_fail lane (via merge-risk)
+  // 5. existing board hard_fail lane (via merge-risk)
   if (facts.mergeRisk.included) {
     if (!facts.mergeRisk.available) {
       findings.push({
@@ -178,26 +175,6 @@ export function evaluateSubstrate(facts: SubstrateFacts): SubstrateReport {
     }
   }
 
-  // 5. Linear vs manifest conflict
-  if (facts.linear.checked) {
-    for (const conflict of facts.linear.conflicts) {
-      findings.push({
-        code: 'linear_manifest_conflict',
-        severity: 'hard_fail',
-        lanes: [conflict.issue_id],
-        detail: conflict.detail,
-      });
-    }
-  } else {
-    findings.push({
-      code: 'linear_check_skipped',
-      severity: 'warning',
-      detail:
-        facts.linear.reason ??
-        'Linear/manifest conflict check skipped (no LINEAR_API_TOKEN or --check-linear not set); ops:orchestration-reconcile is the authority for Linear drift.',
-    });
-  }
-
   const hard_fail = findings.filter((f) => f.severity === 'hard_fail').length;
   const warning = findings.filter((f) => f.severity === 'warning').length;
 
@@ -213,7 +190,6 @@ export function evaluateSubstrate(facts: SubstrateFacts): SubstrateReport {
         : has('board_hard_fail')
           ? 'fail'
           : 'pass',
-    linear_conflict: !facts.linear.checked ? 'skipped' : has('linear_manifest_conflict') ? 'fail' : 'pass',
   };
 
   return { ok: hard_fail === 0, checks, findings, summary: { hard_fail, warning } };
@@ -276,7 +252,7 @@ function gatherMergeRiskHardFails(): SubstrateFacts['mergeRisk'] {
 }
 
 export function gatherSubstrateFacts(
-  options: { includeMergeRisk?: boolean; checkLinear?: boolean } = {},
+  options: { includeMergeRisk?: boolean } = {},
 ): SubstrateFacts {
   const includeMergeRisk = options.includeMergeRisk ?? true;
 
@@ -333,49 +309,12 @@ export function gatherSubstrateFacts(
     ? gatherMergeRiskHardFails()
     : { included: false, available: false, hardFails: [], error: 'skipped (--skip-merge-risk)' };
 
-  // 5. Linear vs manifest — best effort, deferred to orchestration-reconcile unless explicitly requested.
-  const linear = options.checkLinear
-    ? gatherLinearConflicts(activeManifests.map((m) => m.issue_id))
-    : {
-        checked: false,
-        conflicts: [],
-        reason:
-          '--check-linear not set; ops:orchestration-reconcile (run in dispatch Phase 0) is the authority for Linear/manifest drift.',
-      };
-
   return {
     leaseDir: { exists: leaseExists, initializable },
     mergeLock: { state: lockState, detail: lockDetail },
     activeLanes,
     orphanWorktrees,
     mergeRisk,
-    linear,
-  };
-}
-
-/**
- * Best-effort Linear conflict gather. Requires LINEAR_API_TOKEN; without it the
- * check is reported as skipped (a warning), never a silent pass. Live Linear
- * reconciliation is owned by ops:orchestration-reconcile; this is a lightweight
- * fail-closed signal only when a token is present.
- */
-function gatherLinearConflicts(issueIds: string[]): SubstrateFacts['linear'] {
-  if (!process.env.LINEAR_API_TOKEN) {
-    return {
-      checked: false,
-      conflicts: [],
-      reason: '--check-linear requested but LINEAR_API_TOKEN is absent; cannot verify Linear state.',
-    };
-  }
-  // Live Linear querying is intentionally delegated to ops:orchestration-reconcile,
-  // which already cross-checks Linear vs manifest vs GitHub under the merge mutex.
-  // The guard surfaces that this dedicated check was not performed inline.
-  void issueIds;
-  return {
-    checked: false,
-    conflicts: [],
-    reason:
-      'Inline Linear check is delegated to ops:orchestration-reconcile (Phase 0). Run that for authoritative Linear/manifest drift.',
   };
 }
 
@@ -386,8 +325,7 @@ function gatherLinearConflicts(issueIds: string[]): SubstrateFacts['linear'] {
 function runCli(): void {
   const { bools } = parseArgs(process.argv.slice(2));
   const includeMergeRisk = !bools.has('skip-merge-risk');
-  const checkLinear = bools.has('check-linear');
-  const facts = gatherSubstrateFacts({ includeMergeRisk, checkLinear });
+  const facts = gatherSubstrateFacts({ includeMergeRisk });
   const report = evaluateSubstrate(facts);
   report.generated_at = new Date().toISOString();
   emitJson(report);

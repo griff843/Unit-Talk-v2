@@ -9,15 +9,14 @@ import { buildDispatchPacket, resolveDispatchModelProfile } from './codex-dispat
 test('buildDispatchPacket uses manifest truth for the canonical header block', () => {
   const packet = buildDispatchPacket({
     issue: {
-      id: '1',
       identifier: 'UTV2-999',
       title: 'Dispatch integration',
-      url: 'https://linear.app/unit-talk/issue/UTV2-999',
-      description: 'Test packet generation',
-      priority: 2,
-      labels: { nodes: [{ name: 'T2' }] },
-      project: { name: 'Ops' },
-      state: { name: 'Ready' },
+      tier: 'T2',
+      lane_type: 'governance',
+      executor: 'codex',
+      has_acceptance_criteria: true,
+      path: '.ops/work/UTV2-999.md',
+      body: 'Test packet generation',
     },
     manifest: {
       schema_version: 1,

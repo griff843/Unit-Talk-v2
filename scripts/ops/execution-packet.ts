@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
@@ -14,7 +13,6 @@ import {
   ROOT,
   emitJson,
   parseArgs,
-  readConfiguredEnvValue,
   readManifest,
   type LaneManifest,
 } from './shared.js';
@@ -51,7 +49,7 @@ export interface ExecutionPacket {
   closeout_instructions: string[];
   repo_brief: string;
   source_of_truth: {
-    linear_url: string;
+    work_order_path: string;
     branch: string;
     manifest_path: string;
   };
@@ -60,7 +58,7 @@ export interface ExecutionPacket {
 
 export type TaskContractSourceKind = 'linear-issue-snapshot' | 'local-description';
 
-export interface LinearTaskSource {
+export interface TaskSource {
   identifier: string;
   title: string;
   url: string;
@@ -86,15 +84,14 @@ export interface TaskContract {
      * Where the task contract's text came from (tracker independence, ratified
      * 2026-09-05).
      *
-     *   'linear-issue-snapshot' -- captured from the tracker API
      *   'local-description'     -- authored in the repository, as a
      *                              `--description` / `--description-file`
-     *                              value or `.ops/work/<ID>.md`
-     *
-     * Both are equally valid work orders. The KIND is recorded rather than
-     * assumed so an executor and a reviewer can always tell which one they are
-     * reading, and so the tracker-captured shape is never claimed for text that
-     * never came from a tracker.
+     *                              value or `.ops/work/<ID>.md`. The only
+     *                              source new contracts are built from.
+     *   'linear-issue-snapshot' -- legacy: captured from the retired external
+     *                              tracker (WORK-2026112501). Still accepted
+     *                              so contracts persisted before retirement
+     *                              keep validating; never produced any more.
      */
     kind: TaskContractSourceKind;
     issue_url: string;
@@ -149,12 +146,8 @@ export interface SkillRoutingResult {
   note: string;
 }
 
-type LinearFetchRunner = typeof spawnSync;
-
 export interface DispatchPacketOptions {
   root?: string;
-  linearToken?: string;
-  runner?: LinearFetchRunner;
   /** See `ExecutionPacketOptions.enforceSufficiency`. Defaults to false. */
   enforceSufficiency?: boolean;
 }
@@ -417,7 +410,7 @@ export function generateExecutionPacket(
     ),
     repo_brief: loadScopedRepoBrief(manifest, root),
     source_of_truth: {
-      linear_url: `https://linear.app/unit-talk-v2/issue/${issueId}`,
+      work_order_path: `.ops/work/${issueId}.md`,
       branch: manifest.branch,
       manifest_path: `docs/06_status/lanes/${issueId}.json`,
     },
@@ -1071,9 +1064,9 @@ function taskContractHash(
 }
 
 export function buildTaskContract(
-  source: LinearTaskSource,
+  source: TaskSource,
   capturedAt = packetTimestamp(),
-  kind: TaskContractSourceKind = 'linear-issue-snapshot',
+  kind: TaskContractSourceKind = 'local-description',
 ): TaskContract {
   const issueId = source.identifier.trim().toUpperCase();
   const title = source.title.trim();
@@ -1278,10 +1271,10 @@ export function assertTaskContract(
       );
     }
   }
-  // Tracker independence: a repo-authored work order is a first-class source.
-  // The rest of the assertion is UNCHANGED -- title, description, capture time
-  // and the description hash are still all required, so a local contract is
-  // held to the same integrity bar as a captured one.
+  // A repo-authored work order is the source of every new contract; the legacy
+  // tracker kind is still accepted for contracts persisted before retirement.
+  // Title, description, capture time and the description hash are all
+  // required either way.
   if (
     !value.source ||
     (value.source.kind !== 'linear-issue-snapshot' &&
@@ -1338,96 +1331,22 @@ export function buildSyncYmlWithTaskContract(
   });
 }
 
-function curlConfigValue(value: string): string {
-  if (/\r|\n/u.test(value)) {
-    throw new Error('Linear API token contains an invalid newline');
-  }
-  return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
-}
-
-export function fetchLinearTaskSource(
-  issueId: string,
-  token: string,
-  runner: LinearFetchRunner = spawnSync,
-): LinearTaskSource {
-  // WORK-2026092622: a repo-minted identity names no tracker issue, so the only
-  // answer Linear can give is "Entity not found". Name the missing work order
-  // instead of spending a network call to report a misleading error.
-  if (/^WORK-\d+$/u.test(issueId)) {
-    throw new Error(
-      `${issueId} is a repo-owned identity with no tracker issue; its task contract is ` +
-        `${relativeWorkPath(issueId)}, which was not found`,
-    );
-  }
-  if (!token.trim()) {
-    throw new Error(
-      `LINEAR_API_TOKEN or LINEAR_API_KEY is required to capture the task contract for ${issueId}`,
-    );
-  }
-  const query = `
-    query LaneTaskContract($id: String!) {
-      issue(id: $id) { identifier title url description }
-    }
-  `;
-  const result = runner(
-    'curl',
-    [
-      '--config',
-      '-',
-      '--fail-with-body',
-      '--silent',
-      '--show-error',
-      '--request',
-      'POST',
-      'https://api.linear.app/graphql',
-      '--header',
-      'Content-Type: application/json',
-      '--data-binary',
-      JSON.stringify({ query, variables: { id: issueId } }),
-    ],
-    {
-      cwd: ROOT,
-      encoding: 'utf8',
-      stdio: 'pipe',
-      timeout: 15_000,
-      input: `header = "Authorization: ${curlConfigValue(token)}"\n`,
-    },
+/**
+ * Every lane's task contract is a repo work order at `.ops/work/<ID>.md`
+ * (tracker retired, WORK-2026112501). A missing one is a refusal that names the
+ * file to write, never a fallback to another source.
+ */
+export function missingWorkOrderError(issueId: string): Error {
+  return new Error(
+    `${issueId} has no task contract: write the work order at ${relativeWorkPath(issueId)} ` +
+      '(or pass --description / --description-file) before starting the lane',
   );
-  if (result.error || result.status !== 0) {
-    throw new Error(
-      `failed to capture Linear task contract for ${issueId}: ${result.error?.message ?? result.stderr ?? `curl exit ${result.status}`}`,
-    );
-  }
-  const payload = JSON.parse(String(result.stdout ?? '{}')) as {
-    data?: { issue?: LinearTaskSource | null };
-    errors?: Array<{ message?: string }>;
-  };
-  if (payload.errors?.length) {
-    throw new Error(
-      `failed to capture Linear task contract for ${issueId}: ${payload.errors.map((entry) => entry.message ?? 'unknown Linear error').join('; ')}`,
-    );
-  }
-  const issue = payload.data?.issue;
-  if (!issue || issue.identifier.toUpperCase() !== issueId) {
-    throw new Error(
-      `failed to capture Linear task contract for ${issueId}: issue identity mismatch or missing issue`,
-    );
-  }
-  return {
-    identifier: issue.identifier.toUpperCase(),
-    title: issue.title ?? '',
-    url: issue.url ?? '',
-    description: issue.description ?? '',
-  };
 }
-
 
 /**
- * The repository-owned work-order location for a lane with no tracker issue
- * (tracker independence, ratified 2026-09-05).
+ * The repository-owned work-order location for a lane.
  *
- * A file here is the SAME artifact a tracker description would have been: a
- * markdown body whose sections `buildTaskContract` already knows how to parse.
+ * A file here is a markdown body whose sections `buildTaskContract` parses.
  * Nothing about the contract's required shape is relaxed -- objective,
  * acceptance criteria, guardrails, non-goals, required evidence and exit
  * criteria are still all extracted and still all required downstream.
@@ -1437,17 +1356,15 @@ export function localTaskSourcePath(issueId: string, root: string = ROOT): strin
 }
 
 /**
- * Build a task source from repo-authored text instead of the tracker API.
+ * Build a task source from repo-authored text.
  *
  * `description` wins over `descriptionFile`, which wins over the conventional
- * `.ops/work/<ID>.md`. Returns `null` when none of the three is present, so a
- * caller can fall through to the tracker rather than being forced into one
- * source or the other.
+ * `.ops/work/<ID>.md`. Returns `null` when none of the three is present.
  */
 export function readLocalTaskSource(
   issueId: string,
   options: { description?: string; descriptionFile?: string; root?: string } = {},
-): LinearTaskSource | null {
+): TaskSource | null {
   const root = options.root ?? ROOT;
   let description: string | null = null;
   let origin = '';
@@ -1477,8 +1394,7 @@ export function readLocalTaskSource(
     throw new Error(`local task contract for ${issueId} is empty (${origin})`);
   }
 
-  // The first `# ` heading, when present, is the title -- the same role the
-  // tracker's title field plays. Absent one, the identifier stands in, exactly
+  // The first `# ` heading, when present, is the title. Absent one, the identifier stands in, exactly
   // as `buildTaskContract` already falls back to the title for the objective.
   const titleMatch = description.match(/^#\s+(.+)$/mu);
   return {
@@ -1495,9 +1411,7 @@ function relativeWorkPath(issueId: string): string {
 
 export function captureOrReadTaskContract(
   issueId: string,
-  token: string,
   root: string = ROOT,
-  runner: LinearFetchRunner = spawnSync,
   localSource: { description?: string; descriptionFile?: string } = {},
 ): TaskContract {
   const syncPath = path.join(root, '.ops', 'sync', `${issueId}.yml`);
@@ -1507,34 +1421,12 @@ export function captureOrReadTaskContract(
       return readTaskContract(issueId, root);
     }
   }
-  // Tracker independence (ratified 2026-09-05). A repo-authored work order is
-  // preferred over the tracker when one is explicitly supplied, and is the only
-  // source available when there is no credential -- which is what previously
-  // made a FIRST capture impossible without Linear and stranded delegation on a
-  // transient `curl ETIMEDOUT`.
-  //
-  // Precedence is deliberate: explicit flags beat the conventional file, and
-  // both beat the tracker. Falling back to the tracker AFTER an explicit local
-  // source was given would silently ignore what the operator authored.
+  // Explicit flags beat the conventional `.ops/work/<ID>.md` file.
   const local = readLocalTaskSource(issueId, { ...localSource, root });
   if (local) {
     return buildTaskContract(local, packetTimestamp(), 'local-description');
   }
-  return buildTaskContract(fetchLinearTaskSource(issueId, token, runner));
-}
-
-/** First value that is a non-empty string; `''` when there is none. */
-export function firstNonEmpty(
-  ...values: Array<string | undefined | null>
-): string {
-  for (const value of values) {
-    // A whitespace-only value is not a usable token: `fetchLinearTaskSource`
-    // rejects it via `token.trim()`, so selecting it here would strand the
-    // caller instead of falling through to the next candidate. Emptiness is
-    // judged on the trimmed form; the ORIGINAL value is returned unchanged.
-    if (typeof value === 'string' && value.trim() !== '') return value;
-  }
-  return '';
+  throw missingWorkOrderError(issueId);
 }
 
 /**
@@ -1584,25 +1476,21 @@ export function readValidTaskContractAt(
 
 export interface TaskContractResolution {
   contract: TaskContract;
-  fetched: boolean;
-  /** Index into the `roots` argument, or -1 for a fresh Linear capture. */
+  /** Index into the `roots` argument that supplied the contract. */
   rootIndex: number;
 }
 
 /**
- * Resolve one work order across every root that may hold one, WITHOUT making
- * Linear a dependency of a lane that already has a contract.
+ * Resolve one work order across every root that may hold one.
  *
  * `roots` is in precedence order: the first root holding a valid contract wins
  * when all agree. Any two valid contracts with different hashes are a refusal,
- * never a silent overwrite. Capture happens only when no root has one, and it
- * is the sole network call.
+ * never a silent overwrite. When no root holds a persisted contract, the first
+ * root with a repo work order (`.ops/work/<ID>.md`) supplies it.
  */
 export function resolveTaskContractAcrossRoots(
   issueId: string,
   roots: string[],
-  token: string,
-  runner: LinearFetchRunner = spawnSync,
 ): TaskContractResolution {
   const found: Array<{ root: string; index: number; contract: TaskContract }> =
     [];
@@ -1624,29 +1512,18 @@ export function resolveTaskContractAcrossRoots(
 
   const winner = found[0];
   if (winner) {
-    return { contract: winner.contract, fetched: false, rootIndex: winner.index };
+    return { contract: winner.contract, rootIndex: winner.index };
   }
-  // Tracker independence (ratified 2026-09-05). Before reaching for the tracker,
-  // look for a repo-authored work order in each root, in the SAME precedence
-  // order the roots were given. This is what lets a first capture succeed with
-  // no credential and no network -- the observed live failure mode was a
-  // transient `curl ETIMEDOUT` on a metadata fetch aborting a lane start whose
-  // work needed nothing from the tracker at all.
   for (const [index, root] of roots.entries()) {
     const local = readLocalTaskSource(issueId, { root });
     if (local) {
       return {
         contract: buildTaskContract(local, packetTimestamp(), 'local-description'),
-        fetched: false,
         rootIndex: index,
       };
     }
   }
-  return {
-    contract: buildTaskContract(fetchLinearTaskSource(issueId, token, runner)),
-    fetched: true,
-    rootIndex: -1,
-  };
+  throw missingWorkOrderError(issueId);
 }
 
 /**
@@ -1697,19 +1574,6 @@ export function generateDispatchExecutionPacketResult(
 ): ExecutionPacketResult {
   const root = options.root ?? ROOT;
   try {
-    // `??` only skips null/undefined. `readConfiguredEnvValue` returns '' for a
-    // key it cannot resolve, so an empty LINEAR_API_TOKEN in local.env/.env
-    // short-circuited the chain and capture refused as tokenless even though
-    // LINEAR_API_KEY was configured. Truthy fallback, matching lane-start's
-    // `linearTaskToken()`.
-    const token = firstNonEmpty(
-      options.linearToken,
-      env['LINEAR_API_TOKEN'],
-      env['LINEAR_API_KEY'],
-      readConfiguredEnvValue('LINEAR_API_TOKEN'),
-      readConfiguredEnvValue('LINEAR_API_KEY'),
-    );
-
     const laneCwd = manifest.execution_location?.cwd ?? manifest.worktree_path;
     const laneRoot = path.isAbsolute(laneCwd)
       ? laneCwd
@@ -1723,8 +1587,6 @@ export function generateDispatchExecutionPacketResult(
     const resolution = resolveTaskContractAcrossRoots(
       manifest.issue_id,
       laneRootExists ? [laneRoot, root] : [root],
-      token,
-      options.runner ?? spawnSync,
     );
     const contract = resolution.contract;
 

@@ -1,9 +1,7 @@
 /**
  * scripts/codex-classify.ts
- * Auto-classify Linear issues as claude-only, codex-safe, blocked, or needs-contract.
- *
- * Reads all Ready/In Progress/In Review issues from Linear and applies the
- * classification rules from CLAUDE.md to determine which are Codex-safe.
+ * Auto-classify open repo work orders (`.ops/work/WORK-*.md` with no lane
+ * manifest yet) as claude-only, codex-safe, or needs-contract.
  *
  * Classification rules (from CLAUDE.md):
  *
@@ -13,12 +11,12 @@
  *   - shared route or repository changes
  *   - scoring/promotion/lifecycle logic
  *   - governance/status reconciliation
- *   - any issue with ambiguity
- *   - any issue that overlaps another active task
- *   - any T1 issue
+ *   - any work order with ambiguity
+ *   - any work order that overlaps another active task
+ *   - any T1 work order
  *
  * codex-safe (ALL must be true):
- *   - issue exists in Linear
+ *   - work order exists in the repo
  *   - scope is explicit
  *   - acceptance criteria are explicit
  *   - allowed files are explicit
@@ -28,34 +26,21 @@
  *   - verification path is independent
  *
  * Usage:
- *   pnpm codex:classify [--states "Ready,In Progress"] [--limit 50] [--json]
+ *   pnpm codex:classify [--limit 50] [--json]
  */
 
-import { loadEnvironment } from '@unit-talk/config';
 import {
   ACTIVE_LOCK_STATUSES,
   readAllManifests,
 } from './ops/shared.js';
+import { openWorkOrders, type WorkOrder } from './ops/work-orders.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Classification = 'claude-only' | 'codex-safe' | 'blocked' | 'needs-contract';
 
-interface LinearIssue {
-  id: string;
-  identifier: string;
-  title: string;
-  url: string;
-  branchName?: string | null;
-  description?: string | null;
-  priority?: number | null;
-  labels?: { nodes: Array<{ name: string }> } | null;
-  project?: { name: string } | null;
-  state?: { name: string; type?: string } | null;
-}
-
 interface ClassifiedIssue {
-  issue: LinearIssue;
+  issue: WorkOrder;
   classification: Classification;
   reason: string;
   dispatchReady: boolean;
@@ -106,56 +91,28 @@ const CLAUDE_ONLY_SIGNALS: RegExp[] = [
   /ingestor/i,
 ];
 
-// Labels that signal blocked state
-const BLOCKED_LABEL_SIGNALS: RegExp[] = [
-  /blocked/i,
-  /waiting/i,
-  /depends/i,
-];
-
-// Labels/title signals for needs-contract
-const NEEDS_CONTRACT_SIGNALS: RegExp[] = [
-  /design/i,
-  /spec/i,
-  /plan/i,
-  /tbd/i,
-  /unknown/i,
-  /research/i,
-];
-
 function classifyIssue(
-  issue: LinearIssue,
+  issue: WorkOrder,
   activeIssueIds: Set<string>,
 ): { classification: Classification; reason: string } {
-  const titleAndDesc = `${issue.title} ${issue.description ?? ''}`.toLowerCase();
-  const labels = (issue.labels?.nodes ?? []).map((l) => l.name.toLowerCase());
-  const stateType = issue.state?.type?.toLowerCase() ?? '';
+  const titleAndDesc = `${issue.title} ${issue.body}`.toLowerCase();
 
   // Already active in another lane
   if (activeIssueIds.has(issue.identifier)) {
     return { classification: 'claude-only', reason: 'already active in a lane' };
   }
 
-  // Blocked state
-  if (stateType === 'cancelled' || stateType === 'completed') {
-    return { classification: 'blocked', reason: `state=${issue.state?.name}` };
+  // A work order with no acceptance criteria cannot be executed yet.
+  if (!issue.has_acceptance_criteria) {
+    return { classification: 'needs-contract', reason: 'no ## Acceptance Criteria section' };
   }
 
-  if (labels.some((l) => BLOCKED_LABEL_SIGNALS.some((re) => re.test(l)))) {
-    return { classification: 'blocked', reason: 'blocked label detected' };
+  if (issue.tier === 'T1') {
+    return { classification: 'claude-only', reason: 'T1 work order' };
   }
 
-  // Needs contract
-  if (labels.some((l) => NEEDS_CONTRACT_SIGNALS.some((re) => re.test(l)))) {
-    return { classification: 'needs-contract', reason: 'spec/design label — needs AC before execution' };
-  }
-
-  // No description = ambiguous
-  if (!issue.description || issue.description.trim().length < 50) {
-    return {
-      classification: 'needs-contract',
-      reason: 'description too short or missing — AC unclear',
-    };
+  if (issue.executor === 'claude') {
+    return { classification: 'claude-only', reason: 'work order names Executor: claude' };
   }
 
   // Claude-only signal detection
@@ -175,77 +132,8 @@ function classifyIssue(
   };
 }
 
-// ─── Linear API ───────────────────────────────────────────────────────────────
-
-async function fetchIssues(
-  states: string[],
-  limit: number,
-  apiKey: string,
-): Promise<LinearIssue[]> {
-  // Resolve team ID first
-  const teamsResp = await fetch('https://api.linear.app/graphql', {
-    method: 'POST',
-    headers: { Authorization: apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query: `query { teams(first: 10) { nodes { id key name } } }`,
-    }),
-  });
-
-  if (!teamsResp.ok) throw new Error(`Linear API: ${teamsResp.status}`);
-  const teamsData = (await teamsResp.json()) as {
-    data?: { teams: { nodes: Array<{ id: string; key: string }> } };
-  };
-  const teamId = teamsData.data?.teams.nodes[0]?.id;
-  if (!teamId) throw new Error('Could not resolve Linear team ID');
-
-  const query = `
-    query ListIssues($teamId: String!, $states: [String!], $first: Int!) {
-      team(id: $teamId) {
-        issues(
-          first: $first
-          filter: { state: { name: { in: $states } } }
-          orderBy: updatedAt
-        ) {
-          nodes {
-            id
-            identifier
-            title
-            url
-            branchName
-            description
-            priority
-            project { name }
-            labels(first: 8) { nodes { name } }
-            state { name type }
-          }
-        }
-      }
-    }
-  `;
-
-  const resp = await fetch('https://api.linear.app/graphql', {
-    method: 'POST',
-    headers: { Authorization: apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables: { teamId, states, first: limit } }),
-  });
-
-  if (!resp.ok) throw new Error(`Linear API: ${resp.status}`);
-  const data = (await resp.json()) as {
-    data?: { team?: { issues: { nodes: LinearIssue[] } } | null };
-    errors?: Array<{ message?: string }>;
-  };
-
-  if (data.errors?.length) {
-    throw new Error(data.errors.map((e) => e.message ?? 'Unknown').join('; '));
-  }
-
-  return data.data?.team?.issues.nodes ?? [];
-}
-
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-const env = loadEnvironment();
-const apiKey = env.LINEAR_API_TOKEN?.trim();
 const cliArgs = process.argv.slice(2);
 
 function readArg(name: string): string | undefined {
@@ -256,28 +144,12 @@ function readArg(name: string): string | undefined {
   return undefined;
 }
 
-const statesArg = readArg('states') ?? 'Ready,In Progress,In Review';
 const limitArg = parseInt(readArg('limit') ?? '50', 10);
 const jsonOutput = cliArgs.includes('--json');
 
-if (!apiKey) {
-  console.error('Error: LINEAR_API_TOKEN is required.');
-  process.exit(1);
-}
-
-const states = statesArg.split(',').map((s) => s.trim());
-
 void (async () => {
   try {
-    console.log(c.dim(`Fetching issues (states: ${states.join(', ')}, limit: ${limitArg})...`));
-    const issues = await fetchIssues(states, limitArg, apiKey);
-
-    if (issues.length === 0) {
-      console.log('(no issues found)');
-      process.exit(0);
-    }
-
-    // Load active lane IDs from canonical manifests
+    // Load lane manifests: they decide which work orders are still open.
     let manifests: Array<{ issue_id: string; status: string; lane_type: string }> = [];
     try {
       manifests = readAllManifests();
@@ -289,6 +161,14 @@ void (async () => {
         .filter((m) => ACTIVE_LOCK_STATUSES.has(m.status as never))
         .map((m) => m.issue_id),
     );
+
+    console.log(c.dim(`Reading open work orders (limit: ${limitArg})...`));
+    const issues = openWorkOrders(new Set(manifests.map((m) => m.issue_id))).slice(0, limitArg);
+
+    if (issues.length === 0) {
+      console.log('(no open work orders found)');
+      process.exit(0);
+    }
 
     // Classify
     const classified: ClassifiedIssue[] = issues.map((issue) => {
@@ -316,7 +196,7 @@ void (async () => {
 
     const line = '─'.repeat(80);
     console.log('');
-    console.log(c.bold('ISSUE CLASSIFICATION'));
+    console.log(c.bold('WORK ORDER CLASSIFICATION'));
     console.log(line);
     console.log(
       `  Total: ${issues.length}    ` +
@@ -333,10 +213,9 @@ void (async () => {
       console.log(c.dim('  These are cleared for Codex CLI dispatch after you verify scope.'));
       console.log('');
       for (const item of groups['codex-safe']) {
-        const priority = item.issue.priority != null ? ` P${item.issue.priority}` : '';
-        const project = item.issue.project?.name ? ` [${item.issue.project.name}]` : '';
+        const tier = item.issue.tier ? ` ${item.issue.tier}` : '';
         console.log(
-          `  ${c.green(item.issue.identifier.padEnd(12))} ${item.issue.title.slice(0, 52).padEnd(54)}${priority}${project}`,
+          `  ${c.green(item.issue.identifier.padEnd(18))} ${item.issue.title.slice(0, 52).padEnd(54)}${tier}`,
         );
         console.log(c.dim(`    ↳ ${item.reason}`));
         console.log(c.dim(`    ↳ dispatch: pnpm codex:dispatch -- --issue ${item.issue.identifier}`));
@@ -349,9 +228,9 @@ void (async () => {
       console.log(c.cyan('CLAUDE-ONLY'));
       console.log('');
       for (const item of groups['claude-only']) {
-        const priority = item.issue.priority != null ? ` P${item.issue.priority}` : '';
+        const tier = item.issue.tier ? ` ${item.issue.tier}` : '';
         console.log(
-          `  ${c.cyan(item.issue.identifier.padEnd(12))} ${item.issue.title.slice(0, 52).padEnd(54)}${priority}`,
+          `  ${c.cyan(item.issue.identifier.padEnd(18))} ${item.issue.title.slice(0, 52).padEnd(54)}${tier}`,
         );
         console.log(c.dim(`    ↳ ${item.reason}`));
       }
@@ -398,11 +277,11 @@ void (async () => {
     }
 
     if (groups['codex-safe'].length === 0) {
-      console.log(c.dim('No Codex-safe issues found. All ready work requires Claude Code.'));
+      console.log(c.dim('No Codex-safe work orders found. All open work requires Claude Code.'));
     } else {
       console.log(
         c.green(
-          `${groups['codex-safe'].length} issue(s) ready for Codex CLI dispatch.`,
+          `${groups['codex-safe'].length} work order(s) ready for Codex CLI dispatch.`,
         ),
       );
       console.log(c.dim(`  pnpm codex:dispatch -- --issue <ID>`));

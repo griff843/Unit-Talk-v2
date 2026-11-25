@@ -59,7 +59,7 @@ interface PipelineReport {
   };
   windows: Record<WindowKey, ReportWindow>;
   definitions: Record<CountKey, string>;
-  suggested_linear_issue: {
+  suggested_work_order: {
     title: string;
     description: string;
   };
@@ -646,7 +646,7 @@ function identifySuspectedBlockers(counts: PipelineWindowCounts): string[] {
   return blockers.length > 0 ? blockers : ['No obvious zero-count blocker detected from the requested funnel counts.'];
 }
 
-function buildSuggestedLinearIssue(report: PipelineReport): PipelineReport['suggested_linear_issue'] {
+function buildSuggestedWorkOrder(report: PipelineReport): PipelineReport['suggested_work_order'] {
   const primary = report.windows.last24h;
   const counts = primary.counts;
   const blockers = primary.suspectedBlockers.map((blocker) => `- ${blocker}`).join('\n');
@@ -732,11 +732,11 @@ function renderMarkdown(report: PipelineReport): string {
     lines.push(`- ${countKey}: ${report.definitions[countKey]}`);
   }
   lines.push('');
-  lines.push('## Suggested Linear Issue Text');
+  lines.push('## Suggested Work Order Text');
   lines.push('');
-  lines.push(`Title: ${report.suggested_linear_issue.title}`);
+  lines.push(`Title: ${report.suggested_work_order.title}`);
   lines.push('');
-  lines.push(report.suggested_linear_issue.description);
+  lines.push(report.suggested_work_order.description);
   lines.push('');
 
   return lines.join('\n');
@@ -765,10 +765,10 @@ async function buildPipelineReport(db: DatabaseClient): Promise<PipelineReport> 
     },
     windows: { today, last24h },
     definitions: DEFINITIONS,
-    suggested_linear_issue: { title: '', description: '' },
+    suggested_work_order: { title: '', description: '' },
   };
 
-  report.suggested_linear_issue = buildSuggestedLinearIssue(report);
+  report.suggested_work_order = buildSuggestedWorkOrder(report);
   return report;
 }
 

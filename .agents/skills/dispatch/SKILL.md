@@ -1,14 +1,14 @@
 ---
 name: dispatch
-description: Run Unit Talk's Codex-native dispatch workflow. Use when the user asks for /dispatch, queue dispatch, Codex lane dispatch, or one-command issue execution from Linear into a lane.
+description: Run Unit Talk's Codex-native dispatch workflow. Use when the user asks for /dispatch, queue dispatch, Codex lane dispatch, or one-command work-order execution into a lane.
 category: governance
 owner: codex
-trigger: User asks for /dispatch, queue dispatch, Codex lane dispatch, or one-command Linear issue execution.
+trigger: User asks for /dispatch, queue dispatch, Codex lane dispatch, or one-command work-order execution.
 ---
 
 # Dispatch
 
-Use this when the user asks for `/dispatch`, wants a Linear issue moved into an execution lane, or wants to inspect what Codex can take from the queue.
+Use this when the user asks for `/dispatch`, wants a work order moved into an execution lane, or wants to inspect what Codex can take from the queue.
 
 This is the Codex version of Claude's `/dispatch` command. It uses the existing repo scripts instead of Claude slash-command state.
 
@@ -22,7 +22,7 @@ pnpm ops:brief
 ```bash
 pnpm codex:status
 ```
-3. For queue selection or Linear-derived scope, inspect:
+3. For queue selection or work-order scope, inspect:
 ```bash
 pnpm codex:classify
 ```
@@ -33,7 +33,7 @@ If `pnpm ops:brief` fails, report the failure and continue only for local skill/
 
 For any specific issue, validate before starting a lane:
 ```bash
-pnpm codex:dispatch -- --issue UTV2-### --tier T2 --branch codex/utv2-###-slug --files <path> --dry-run
+pnpm codex:dispatch -- --issue WORK-### --tier T2 --branch codex/work-###-slug --files <path> --dry-run
 ```
 
 Use repeatable `--files` flags. Do not use the removed `--allowed` flag.
@@ -42,7 +42,7 @@ Use repeatable `--files` flags. Do not use the removed `--allowed` flag.
 
 When prerequisites are clear and file scope is explicit:
 ```bash
-pnpm codex:dispatch -- --issue UTV2-### --tier T2 --branch codex/utv2-###-slug --files <path>
+pnpm codex:dispatch -- --issue WORK-### --tier T2 --branch codex/work-###-slug --files <path>
 ```
 
 The command:
@@ -50,11 +50,11 @@ The command:
 - runs `ops:preflight`
 - creates or resumes the git worktree and lane manifest via `ops:lane-start`
 - records `worktree_path`, dependency setup state, and cwd guard instructions in the manifest/packet
-- writes the Codex task packet to `.claude/codex-queue/UTV2-###.md`
+- writes the Codex task packet to `.claude/codex-queue/WORK-###.md`
 
 After dispatch, read and follow the generated packet before implementing:
 ```bash
-Get-Content .claude\codex-queue\UTV2-###.md
+Get-Content .claude\codex-queue\WORK-###.md
 ```
 
 Run lane work from the packet worktree cwd. The main checkout is control and merge only; do not branch-switch it for executable lane work.
@@ -63,7 +63,7 @@ Run lane work from the packet worktree cwd. The main checkout is control and mer
 
 When a Codex lane returns with a branch and PR:
 ```bash
-pnpm codex:receive -- --issue UTV2-### --branch <branch> --pr <github-pr-url>
+pnpm codex:receive -- --issue WORK-### --branch <branch> --pr <github-pr-url>
 ```
 
 This links the PR to the lane manifest and moves the lane to review. It does not replace verification.
@@ -72,7 +72,7 @@ This links the PR to the lane manifest and moves the lane to review. It does not
 
 After the PR merges, serialize closeout through the merge mutex and run:
 ```bash
-pnpm ops:lane-finalize -- --issue UTV2-### --pr <github-pr-url-or-number> --json
+pnpm ops:lane-finalize -- --issue WORK-### --pr <github-pr-url-or-number> --json
 pnpm ops:orchestration-reconcile --current --cleanup-plan --json
 ```
 
@@ -82,12 +82,12 @@ The finalize command records the merge SHA, generates eligible T2 proof, closes 
 
 Before accepting any Codex return, run this checklist in order:
 
-- [ ] **sync.yml issue matches branch** — `.ops/sync.yml` entities.issues[0] must equal the branch's `UTV2-###`. Run `pnpm ops:sync-check` or inspect manually. If mismatched, correct the file before committing.
+- [ ] **sync.yml issue matches branch** — `.ops/sync.yml` entities.issues[0] must equal the branch's `WORK-###`. Run `pnpm ops:sync-check` or inspect manually. If mismatched, correct the file before committing.
 - [ ] **test:ops completeness** — `package.json` `test:ops` must include all test files added or renamed by the Codex PR. Compare against prior `main` state. Codex sometimes replaces rather than appends; restore any dropped entries.
 - [ ] **No orphaned untracked files** — Run `git status` in the worktree. Untracked files that aren't intentional artifacts (e.g., `.md` docs committed by Codex) must be deleted or committed. Files that conflict with other active lanes must not be present.
 - [ ] **pnpm verify passes** — Run `pnpm verify` from repo root on the Codex branch before committing or pushing. If verify fails, fix the Codex output before merging.
 
-If the Codex branch is behind `main`, create a v2 branch (`claude/utv2-###-v2` or `codex/utv2-###-v2`), cherry-pick the Codex commits, resolve any conflicts (`.ops/sync.yml` and `package.json` are the most common), then push the v2 branch.
+If the Codex branch is behind `main`, create a v2 branch (`claude/work-###-v2` or `codex/work-###-v2`), cherry-pick the Codex commits, resolve any conflicts (`.ops/sync.yml` and `package.json` are the most common), then push the v2 branch.
 
 ## Routing Rules
 

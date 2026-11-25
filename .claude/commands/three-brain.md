@@ -7,7 +7,7 @@ description: |
   Codex review or Explore scans. Claude invokes it directly for failure
   rescue and codebase scans.
 
-  This skill does NOT create lanes, open PRs, or update Linear.
+  This skill does NOT create lanes or open PRs.
   /dispatch owns lane lifecycle. This skill owns the routing decision.
 ---
 
@@ -102,7 +102,7 @@ npx tsx scripts/ops/codex-health-check.ts --json
 ```
 
 If `healthy: false` → executor = **Claude**, announce = **false**, log reason in dispatch report:
-`Codex unavailable ({error}) — routing UTV2-### to Claude.`
+`Codex unavailable ({error}) — routing WORK-### to Claude.`
 
 If `healthy: true` → proceed to Rule 4.
 
@@ -208,7 +208,7 @@ T2 merge is **not** a Rule 9 stop condition: per `merge-gate.yml` (ratified 2026
 - Financial or compliance logic (settlement, CLV, grading corrections, promotion thresholds)
 - Dependency bump (package.json, lockfile, tsconfig, build config)
 - Environment variable addition, removal, or default change
-- Source-of-truth conflict (Linear state vs repo truth vs lane manifest)
+- Source-of-truth conflict (work order vs repo truth vs lane manifest)
 - Scope ambiguity: two interpretations equally defensible and the choice affects behavior
 
 **Announce and stop:**
@@ -259,7 +259,7 @@ through the rules above.
 Pass the resolved profile to lane-start explicitly (Codex lanes only):
 
 ```bash
-pnpm ops:lane-start UTV2-{number} --tier T2 --branch codex/utv2-{number}-slug \
+pnpm ops:lane-start WORK-{number} --tier T2 --branch codex/work-{number}-slug \
   --lane-type <type> --executor codex-cli --model-profile codex-luna-medium \
   --files <path1> [--files <path2> ...]
 ```
@@ -335,7 +335,7 @@ executor: claude   model_profile: null              announce: true   escalate: f
 
 ## Integration with /dispatch
 
-`/dispatch` calls this skill during **Phase 1** to determine executor per issue. Dispatch owns: lane manifest creation, Linear state update, file-scope lock, PR opening. This skill owns: choosing the executor, surfacing Griff escalations, triggering rescue.
+`/dispatch` calls this skill during **Phase 1** to determine executor per issue. Dispatch owns: lane manifest creation, file-scope lock, PR opening. This skill owns: choosing the executor, surfacing Griff escalations, triggering rescue.
 
 Dispatch Phase 2.5 (Codex health check) is replaced by Rule 3 of this skill. The health check runs inside the routing decision, not as a separate phase.
 

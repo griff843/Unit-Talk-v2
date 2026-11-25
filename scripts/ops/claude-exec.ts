@@ -295,10 +295,10 @@ export function main(argv = process.argv.slice(2), runner: CommandRunner = runCo
   }
 
   // A preview must not mutate. Resolving the packet persists the sync record in
-  // both roots and, for a pre-contract lane, makes a live Linear call -- all
+  // both roots -- all
   // before the dry-run branch below. codex-exec already guards this; claude-exec
   // did not, so `--dry-run` wrote a git-tracked sync file in the shared control
-  // checkout and fired an outbound call, including while delegation is
+  // checkout, including while delegation is
   // suspended. Under --dry-run the packet is now read without capture or
   // persistence, so the preview claim matches the behaviour.
   let packet!: ExecutionPacket;

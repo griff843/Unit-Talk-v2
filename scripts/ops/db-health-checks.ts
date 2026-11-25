@@ -16,7 +16,8 @@
 import path from 'node:path';
 
 export const RECEIPT_SCHEMA = 'db-health-tripwire-receipt/v1';
-export const LINEAR_ISSUE_ID = 'UTV2-1300';
+/** Title of the GitHub issue the tripwire comments on when a check trips. */
+export const ALERT_ISSUE_TITLE = 'DB health tripwire alerts';
 export const DEFAULT_RECEIPT_PATH = path.join('artifacts', 'db-health-tripwire-receipt.json');
 
 /** Exit code for "the harness could not run the checks". Distinct from a finding. */
@@ -271,10 +272,10 @@ export interface RunContext {
   event: string | null;
 }
 
-export type LinearAlertDisposition =
+export type AlertDisposition =
   | 'posted'
   | 'failed'
-  | 'skipped_no_api_key'
+  | 'skipped_no_token'
   | 'suppressed_threshold_override'
   | 'not_applicable';
 
@@ -291,7 +292,7 @@ export interface TripwireReceipt {
   threshold_override_active: boolean;
   counts: ReceiptCounts;
   checks: CheckOutcome[];
-  linear_alert: LinearAlertDisposition;
+  alert: AlertDisposition;
 }
 
 export function readRunContext(env: NodeJS.ProcessEnv = process.env): RunContext {

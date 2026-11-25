@@ -19,10 +19,6 @@ export interface AppEnv {
   // caller satisfies with a fake string validates nothing; it only decides who
   // is forced to invent one.
   UNIT_TALK_LEGACY_WORKSPACE?: string | undefined;
-  LINEAR_API_TOKEN?: string | undefined;
-  LINEAR_TEAM_ID?: string | undefined;
-  LINEAR_TEAM_KEY?: string | undefined;
-  LINEAR_TEAM_NAME?: string | undefined;
   NOTION_WORKSPACE_NAME?: string | undefined;
   SLACK_WORKSPACE_NAME?: string | undefined;
   SUPABASE_PROJECT_REF?: string | undefined;
@@ -216,10 +212,6 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     UNIT_TALK_APP_ENV: normalizeAppEnv(readEnvValue('UNIT_TALK_APP_ENV', merged)),
     UNIT_TALK_ACTIVE_WORKSPACE: optionalEnv('UNIT_TALK_ACTIVE_WORKSPACE', merged) ?? 'unit-talk-v2',
     UNIT_TALK_LEGACY_WORKSPACE: optionalEnv('UNIT_TALK_LEGACY_WORKSPACE', merged),
-    LINEAR_API_TOKEN: optionalEnv('LINEAR_API_TOKEN', merged),
-    LINEAR_TEAM_ID: optionalEnv('LINEAR_TEAM_ID', merged),
-    LINEAR_TEAM_KEY: optionalEnv('LINEAR_TEAM_KEY', merged),
-    LINEAR_TEAM_NAME: optionalEnv('LINEAR_TEAM_NAME', merged),
     NOTION_WORKSPACE_NAME: optionalEnv('NOTION_WORKSPACE_NAME', merged),
     SLACK_WORKSPACE_NAME: optionalEnv('SLACK_WORKSPACE_NAME', merged),
     SUPABASE_PROJECT_REF: optionalEnv('SUPABASE_PROJECT_REF', merged),

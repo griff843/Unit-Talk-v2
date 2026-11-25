@@ -1,8 +1,9 @@
 name: Track A Monitor
 
 # Durable replacement for the session-only Track A cron (UTV2-1276).
-# Read-only CLV-path watch for UTV2-1250. Runs every 6 hours; posts a Linear
-# comment ONLY when a trigger fires (see scripts/ops/track-a-triggers.ts).
+# Read-only CLV-path watch for UTV2-1250. Runs every 6 hours; posts a comment on
+# the "Track A monitor (CLV-path watch)" GitHub issue ONLY when a trigger fires
+# (see scripts/ops/track-a-triggers.ts). That issue also holds the prior snapshot.
 #
 # Guardrails: read-only DB access, no production mutation, no certification,
 # no CLV/ROI/edge claims, no public Discord, no backfill, no secret printing.
@@ -15,6 +16,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   monitor:
@@ -43,7 +45,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           mkdir -p artifacts
           pnpm exec tsx scripts/ops/track-a-monitor.ts --output-json artifacts/track-a-monitor.json

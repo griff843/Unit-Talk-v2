@@ -72,7 +72,7 @@ test('buildClaudePrompt includes lane cwd, allowed scope, verification, and clos
     task_contract: buildTaskContract({
       identifier: 'UTV2-1200',
       title: 'Execute the supplied work order',
-      url: 'https://linear.app/unit-talk-v2/issue/UTV2-1200',
+      url: 'file:.ops/work/UTV2-1200.md',
       description: [
         '## Acceptance criteria',
         '- Implement the requested change.',
@@ -87,7 +87,7 @@ test('buildClaudePrompt includes lane cwd, allowed scope, verification, and clos
     closeout_instructions: ['Open PR'],
     repo_brief: '[brief]',
     source_of_truth: {
-      linear_url: 'https://linear.app/unit-talk-v2/issue/UTV2-1200',
+      work_order_path: '.ops/work/UTV2-1200.md',
       branch: 'claude/utv2-1200-governance',
       manifest_path: 'docs/06_status/lanes/UTV2-1200.json',
     },
@@ -350,7 +350,7 @@ function buildClaudeLaneRoot(issueId: string): LaneRoot {
     {
       identifier: issueId,
       title: 'Fixture lane',
-      url: `https://linear.app/unit-talk/issue/${issueId}`,
+      url: `file:.ops/work/${issueId}.md`,
       description: [
         '## Objective',
         objective,
@@ -452,7 +452,7 @@ test('claude-exec --dry-run leaves the lane root byte-identical', () => {
   assert.equal(run.status, 0, `dry run must succeed; stderr: ${run.stderr}`);
 
   // Resolving a packet normally persists the sync record in both roots and, for
-  // a pre-contract lane, makes a live Linear call. Under --dry-run none of that
+  // a pre-contract lane, builds one from its work order. Under --dry-run none of that
   // may happen -- a preview that writes is not a preview.
   assert.equal(
     claudeLaneRootChanges(lane),
@@ -483,6 +483,6 @@ test('claude-exec --dry-run failure path refuses structurally without throwing',
   assert.equal(
     fs.existsSync(lane.syncPath),
     false,
-    'a dry run must never capture a contract, which would require a live Linear call',
+    'a dry run must never capture a contract',
   );
 });

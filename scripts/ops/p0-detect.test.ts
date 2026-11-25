@@ -1,18 +1,36 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { P0_PROJECT_ID, P0_PROJECT_NAME } from './p0-detect.js';
+import { detectP0FromManifest } from './p0-detect.js';
 
-test('P0_PROJECT_ID is the Runtime Hardening P0 project UUID', () => {
-  assert.strictEqual(P0_PROJECT_ID, '46229dc4-c7c1-4ccb-af0d-dedaf8147a97');
+test('detectP0FromManifest: manifest declaring p0_protocol.required=true is P0', () => {
+  const result = detectP0FromManifest('work-2026112501', {
+    exists: () => true,
+    read: () => ({ p0_protocol: { required: true } }),
+  });
+  assert.strictEqual(result.issue_id, 'WORK-2026112501');
+  assert.strictEqual(result.is_p0, true);
+  assert.strictEqual(result.source, 'manifest');
 });
 
-test('P0_PROJECT_NAME matches the Linear project name verbatim', () => {
-  assert.strictEqual(P0_PROJECT_NAME, 'Runtime Hardening P0 - Runtime Trustworthiness');
+test('detectP0FromManifest: manifest without p0_protocol is not P0', () => {
+  const result = detectP0FromManifest('UTV2-1', { exists: () => true, read: () => ({}) });
+  assert.strictEqual(result.is_p0, false);
+  assert.strictEqual(result.source, 'manifest');
+});
+
+test('detectP0FromManifest: missing manifest is not P0 and says so', () => {
+  const result = detectP0FromManifest('UTV2-2', {
+    exists: () => false,
+    read: () => {
+      throw new Error('must not read a missing manifest');
+    },
+  });
+  assert.strictEqual(result.is_p0, false);
+  assert.strictEqual(result.source, 'no_manifest');
 });
 
 // Synthetic counter-tests that mirror the workflow guards in
-// .github/workflows/p0-protocol.yml. These do not require Linear access —
-// they verify the regex / grep predicates the workflow uses, so a regression
+// .github/workflows/p0-protocol.yml. They verify the regex / grep predicates the workflow uses, so a regression
 // in the predicate is caught locally before CI sees it.
 
 const RUNTIME_VERIFY_FAIL_PATTERN = /^\s*-\s*\[[ xX]\]\s+.*:\s*(FAIL|SKIP|SKIPPED)\s*$/m;

@@ -15,7 +15,6 @@ import {
   localTaskSourcePath,
   readLocalTaskSource,
   deriveSkillRouting,
-  fetchLinearTaskSource,
   generateExecutionPacket as generateExecutionPacketRaw,
   generateExecutionPacketResult,
   generateDispatchExecutionPacketResult,
@@ -74,7 +73,7 @@ function testTaskContract(issueId = 'UTV2-969') {
     {
       identifier: issueId,
       title: 'Deliver executor work orders',
-      url: `https://linear.app/unit-talk-v2/issue/${issueId}`,
+      url: `file:.ops/work/${issueId}.md`,
       description: [
         '## Objective',
         'Give every executor the authoritative task.',
@@ -142,7 +141,7 @@ test('legacy issue descriptions remain dispatchable without a bulk migration', (
   const contract = buildTaskContract({
     identifier: 'UTV2-1667',
     title: 'Legacy lane objective',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-1667',
+    url: 'file:.ops/work/UTV2-1667.md',
     description,
   }, '2000-01-01T00:00:00.000Z');
 
@@ -155,7 +154,7 @@ test('a present but empty acceptance section fails closed instead of using the l
     () => buildTaskContract({
       identifier: 'UTV2-1668',
       title: 'Malformed modern issue',
-      url: 'https://linear.app/unit-talk-v2/issue/UTV2-1668',
+      url: 'file:.ops/work/UTV2-1668.md',
       description: 'Background text.\n\n## Acceptance criteria\n\n## Guardrails\n- Keep scope narrow.',
     }),
     /missing acceptance criteria/u,
@@ -679,7 +678,7 @@ test('preamble before the first heading survives into the rendered prompt', () =
   const contract = buildTaskContract({
     identifier: 'UTV2-9999',
     title: 'preamble guard',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-9999',
+    url: 'file:.ops/work/UTV2-9999.md',
     description:
       'Do not run a blanket UPDATE against production.\n\n## Objective\nx\n\n## Acceptance criteria\n- y\n',
   });
@@ -731,7 +730,7 @@ test('control characters in the issue description never reach the rendered promp
   const contract = buildTaskContract({
     identifier: 'UTV2-9999',
     title: 'control char guard',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-9999',
+    url: 'file:.ops/work/UTV2-9999.md',
     description: hostile,
   });
   const rendered = renderTaskContract(contract);
@@ -756,7 +755,7 @@ test('a section heading with an empty body is still carried as residue', () => {
   const contract = buildTaskContract({
     identifier: 'UTV2-9999',
     title: 'empty section guard',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-9999',
+    url: 'file:.ops/work/UTV2-9999.md',
     description:
       '## Objective\nx\n\n## Acceptance criteria\n- y\n\n## DO NOT TOUCH PRODUCTION\n\n## Details\n- ok\n',
   });
@@ -774,7 +773,7 @@ test('a heading whose only content is a subsection keeps that subsection with it
   const contract = buildTaskContract({
     identifier: 'UTV2-9999',
     title: 'nested prohibition',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-9999',
+    url: 'file:.ops/work/UTV2-9999.md',
     description:
       '## Objective\nx\n\n## Acceptance criteria\n- y\n\n## DO NOT TOUCH PRODUCTION\n\n### Details\n- no DDL\n',
   });
@@ -790,7 +789,7 @@ test('a contract predating unmapped_sections refuses structurally, not with a Ty
       buildTaskContract({
         identifier: 'UTV2-9999',
         title: 'stale guard',
-        url: 'https://linear.app/unit-talk-v2/issue/UTV2-9999',
+        url: 'file:.ops/work/UTV2-9999.md',
         description: '## Objective\nx\n\n## Acceptance criteria\n- y\n',
       }),
     ),
@@ -811,7 +810,7 @@ test('the rendered prompt carries source provenance so staleness is visible', ()
   const contract = buildTaskContract({
     identifier: 'UTV2-9999',
     title: 'provenance guard',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-9999',
+    url: 'file:.ops/work/UTV2-9999.md',
     description: '## Objective\nx\n\n## Acceptance criteria\n- y\n',
   });
   const rendered = renderTaskContract(contract);
@@ -858,24 +857,16 @@ test('the standalone packet CLI produces a packet for a newly admitted pre-contr
     spawnSync('git', args, { cwd: root, stdio: 'pipe' });
   }
 
-  // Offline Linear. The CLI's single capture reads this instead of the network.
-  const bin = path.join(dir, 'bin');
-  fs.mkdirSync(bin, { recursive: true });
+  // The lane's repo work order is the contract source.
   const objective = 'Preview a pre-contract lane without refusing.';
-  const payload = JSON.stringify({ data: { issue: {
-    identifier: issueId, title: 'CLI fixture',
-    url: `https://linear.app/unit-talk/issue/${issueId}`,
-    description: `## Objective\n${objective}\n\n## Acceptance criteria\n- the CLI emits a packet\n\n## Where to look\n- scripts/ops/fixture.ts\n\n## Required evidence\n- tests pass\n\n## Exit criteria\n- the CLI emits a packet`,
-  } } });
-  fs.writeFileSync(path.join(bin, 'curl'),
-    `#!/bin/sh\ncat >/dev/null 2>&1\ncat <<'JSON'\n${payload}\nJSON\nexit 0\n`, { mode: 0o755 });
+  fs.mkdirSync(path.join(root, '.ops', 'work'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.ops', 'work', `${issueId}.md`),
+    `# CLI fixture\n\n## Objective\n${objective}\n\n## Acceptance criteria\n- the CLI emits a packet\n\n## Where to look\n- scripts/ops/fixture.ts\n\n## Required evidence\n- tests pass\n\n## Exit criteria\n- the CLI emits a packet\n`);
 
   const run = spawnSync(
     path.join(ROOT, 'node_modules', '.bin', 'tsx'),
     [path.join(ROOT, 'scripts', 'ops', 'execution-packet.ts'), issueId],
-    { cwd: root, encoding: 'utf8', timeout: 180_000,
-      env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env['PATH'] ?? ''}`,
-             LINEAR_API_TOKEN: 'stub-token' } },
+    { cwd: root, encoding: 'utf8', timeout: 180_000, env: process.env },
   );
 
   assert.equal(run.status, 0,
@@ -883,8 +874,8 @@ test('the standalone packet CLI produces a packet for a newly admitted pre-contr
   const packet = JSON.parse(run.stdout.slice(run.stdout.indexOf('{'), run.stdout.lastIndexOf('}') + 1)) as
     { task_contract?: { objective?: string } };
   assert.equal(packet.task_contract?.objective, objective,
-    'the emitted packet must carry the captured objective');
-  // The capture is persisted, so the next read is not another network call.
+    'the emitted packet must carry the work order objective');
+  // The contract is persisted, so the next read reuses it.
   assert.equal(readTaskContract(issueId, root).objective, objective,
     'the CLI must persist the contract it captured');
 });
@@ -909,7 +900,7 @@ test('acceptance criteria under a nested subheading are not lost', () => {
 
   const contract = buildTaskContract({
     identifier: 'UTV2-999821', title: 'nested acceptance',
-    url: 'https://linear.app/unit-talk/issue/UTV2-999821', description,
+    url: 'file:.ops/work/UTV2-999821.md', description,
   }, '2026-08-24T00:00:00.000Z');
 
   const joined = contract.acceptance_criteria.join('\n');
@@ -945,7 +936,7 @@ test('unclassified content keeps its line and formatting semantics', () => {
 
   const contract = buildTaskContract({
     identifier: 'UTV2-999822', title: 'residue fidelity',
-    url: 'https://linear.app/unit-talk/issue/UTV2-999822', description,
+    url: 'file:.ops/work/UTV2-999822.md', description,
   }, '2026-08-24T00:00:00.000Z');
 
   const residue = contract.unmapped_sections.join('\n');
@@ -1003,24 +994,6 @@ function dispatchManifest(issueId: string, wt: string): LaneManifest {
   });
 }
 
-function linearRunner(description: string, title = 'Fixture'): typeof spawnSync {
-  return ((_cmd: string, _args: string[], _opts: unknown) => ({
-    status: 0,
-    error: undefined,
-    stderr: '',
-    stdout: JSON.stringify({
-      data: {
-        issue: {
-          identifier: 'PLACEHOLDER_ID',
-          title,
-          url: 'https://linear.app/unit-talk/issue/x',
-          description,
-        },
-      },
-    }),
-  })) as unknown as typeof spawnSync;
-}
-
 test('F1: divergent valid contracts in control and lane roots refuse instead of overwriting', () => {
   const issueId = 'UTV2-999901';
   const { root, wt } = seedDispatchRoots();
@@ -1028,13 +1001,13 @@ test('F1: divergent valid contracts in control and lane roots refuse instead of 
   const controlContract = buildTaskContract({
     identifier: issueId,
     title: 'Control copy',
-    url: 'https://linear.app/unit-talk/issue/x',
+    url: 'file:.ops/work/x.md',
     description: '## Objective\ncontrol objective\n\n## Acceptance criteria\n- control',
   });
   const laneContract = buildTaskContract({
     identifier: issueId,
     title: 'Lane copy',
-    url: 'https://linear.app/unit-talk/issue/x',
+    url: 'file:.ops/work/x.md',
     description: '## Objective\nlane objective\n\n## Acceptance criteria\n- lane',
   });
 
@@ -1062,8 +1035,8 @@ test('F1: divergent valid contracts in control and lane roots refuse instead of 
 
   const result = generateDispatchExecutionPacketResult(
     dispatchManifest(issueId, wt),
-    { LINEAR_API_TOKEN: 'stub' },
-    { root, runner: linearRunner('unused') },
+    {},
+    { root },
   );
 
   assert.equal(result.ok, false, 'a divergent pair must refuse, not produce a packet');
@@ -1076,54 +1049,6 @@ test('F1: divergent valid contracts in control and lane roots refuse instead of 
     fs.readFileSync(path.join(wt, '.ops', 'sync', `${issueId}.yml`)),
     laneBytesBefore,
     'the lane worktree contract must be left byte-identical, never overwritten',
-  );
-});
-
-test('F2: an empty configured LINEAR_API_TOKEN does not mask LINEAR_API_KEY', () => {
-  const issueId = 'UTV2-999902';
-  const { root, wt } = seedDispatchRoots();
-  const env = { LINEAR_API_TOKEN: '', LINEAR_API_KEY: 'real-key' };
-
-  // Precondition: the masking value really is an empty string, not undefined.
-  // `??` skips undefined, so an undefined fixture would test nothing.
-  assert.equal(env.LINEAR_API_TOKEN, '', 'fixture must use an EMPTY token');
-  assert.ok(env.LINEAR_API_KEY.length > 0, 'fixture must supply a real key');
-
-  let sawToken: string | null = null;
-  const runner = ((_cmd: string, _args: string[], opts: { input?: string }) => {
-    sawToken = opts?.input ?? '';
-    return {
-      status: 0,
-      error: undefined,
-      stderr: '',
-      stdout: JSON.stringify({
-        data: {
-          issue: {
-            identifier: issueId,
-            title: 'Fixture',
-            url: 'https://linear.app/unit-talk/issue/x',
-            description: '## Objective\ncapture must proceed\n\n## Acceptance criteria\n- captured\n\n## Where to look\n- fixture.ts\n\n## Required evidence\n- tests pass\n\n## Exit criteria\n- fixture is captured',
-          },
-        },
-      }),
-    };
-  }) as unknown as typeof spawnSync;
-
-  const result = generateDispatchExecutionPacketResult(
-    dispatchManifest(issueId, wt),
-    env,
-    { root, runner },
-  );
-
-  assert.equal(
-    result.ok,
-    true,
-    `capture must fall through to LINEAR_API_KEY; got ${result.ok === false ? result.message : ''}`,
-  );
-  assert.match(
-    String(sawToken ?? ''),
-    /real-key/u,
-    'the configured key must actually reach the fetch, not just avoid the refusal',
   );
 });
 
@@ -1148,7 +1073,7 @@ test('F3: a repeated normalized heading keeps both occurrences as distinct secti
   const contract = buildTaskContract({
     identifier: 'UTV2-999903',
     title: 'Repeated headings',
-    url: 'https://linear.app/unit-talk/issue/x',
+    url: 'file:.ops/work/x.md',
     description,
   });
 
@@ -1188,7 +1113,7 @@ test('F4: an unmapped heading keeps its authored case, punctuation and flag pref
   const contract = buildTaskContract({
     identifier: 'UTV2-999904',
     title: 'Verbatim headings',
-    url: 'https://linear.app/unit-talk/issue/x',
+    url: 'file:.ops/work/x.md',
     description,
   });
 
@@ -1212,55 +1137,6 @@ test('F4: an unmapped heading keeps its authored case, punctuation and flag pref
     renderTaskContract(contract),
     /Never run `--force` against production!/u,
     'the rendered prompt must carry the authored heading',
-  );
-});
-
-test('F6: a whitespace-only LINEAR_API_TOKEN does not mask LINEAR_API_KEY', () => {
-  const issueId = 'UTV2-999905';
-  const { root, wt } = seedDispatchRoots();
-  const env = { LINEAR_API_TOKEN: '   \t\n ', LINEAR_API_KEY: 'real-key' };
-
-  // Precondition: the masking value is non-empty as a STRING but empty once
-  // trimmed. F2's exact-'' fixture cannot reach this branch, so without this
-  // assertion the test could silently degrade into a duplicate of F2.
-  assert.notEqual(env.LINEAR_API_TOKEN, '', 'fixture token must not be exactly empty');
-  assert.equal(env.LINEAR_API_TOKEN.trim(), '', 'fixture token must be whitespace-only');
-
-  let sawToken: string | null = null;
-  const runner = ((_cmd: string, _args: string[], opts: { input?: string }) => {
-    sawToken = opts?.input ?? '';
-    return {
-      status: 0,
-      error: undefined,
-      stderr: '',
-      stdout: JSON.stringify({
-        data: {
-          issue: {
-            identifier: issueId,
-            title: 'Fixture',
-            url: 'https://linear.app/unit-talk/issue/x',
-            description: '## Objective\ncapture must proceed\n\n## Acceptance criteria\n- captured\n\n## Where to look\n- fixture.ts\n\n## Required evidence\n- tests pass\n\n## Exit criteria\n- fixture is captured',
-          },
-        },
-      }),
-    };
-  }) as unknown as typeof spawnSync;
-
-  const result = generateDispatchExecutionPacketResult(
-    dispatchManifest(issueId, wt),
-    env,
-    { root, runner },
-  );
-
-  assert.equal(
-    result.ok,
-    true,
-    `a whitespace-only token must fall through to LINEAR_API_KEY; got ${result.ok === false ? result.message : ''}`,
-  );
-  assert.match(
-    String(sawToken ?? ''),
-    /real-key/u,
-    'the configured key must actually reach the fetch, not merely avoid the refusal',
   );
 });
 
@@ -1291,7 +1167,7 @@ test('F7: a repeated recognized heading aggregates instead of yielding only the 
   const contract = buildTaskContract({
     identifier: 'UTV2-999906',
     title: 'Repeated recognized heading',
-    url: 'https://linear.app/unit-talk/issue/x',
+    url: 'file:.ops/work/x.md',
     description,
   });
 
@@ -1333,7 +1209,7 @@ test('F8: an unmapped heading is rendered as an exact line with no invented punc
   const contract = buildTaskContract({
     identifier: 'UTV2-999907',
     title: 'Exact residue heading',
-    url: 'https://linear.app/unit-talk/issue/x',
+    url: 'file:.ops/work/x.md',
     description,
   });
 
@@ -1376,7 +1252,7 @@ test('G1: a recognized section nested under another recognized section lands in 
   const contract = buildTaskContract({
     identifier: 'UTV2-999952',
     title: 'Nested recognized section',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999952',
+    url: 'file:.ops/work/UTV2-999952.md',
     description,
   });
 
@@ -1432,7 +1308,7 @@ test('G5: a claimed child is subtracted from an UNRECOGNIZED ancestor that survi
   const contract = buildTaskContract({
     identifier: 'UTV2-999955',
     title: 'Recognized child under unrecognized ancestor',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999955',
+    url: 'file:.ops/work/UTV2-999955.md',
     description,
   });
 
@@ -1474,7 +1350,7 @@ test('G6: a non-goal nested under acceptance criteria is NOT also an acceptance 
   const contract = buildTaskContract({
     identifier: 'UTV2-999960',
     title: 'Nested non-goal under acceptance criteria',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999960',
+    url: 'file:.ops/work/UTV2-999960.md',
     description,
   });
 
@@ -1522,7 +1398,7 @@ test('G7: guardrails and required evidence nested under a contract field are not
   const contract = buildTaskContract({
     identifier: 'UTV2-999961',
     title: 'Nested guardrails and evidence under objective',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999961',
+    url: 'file:.ops/work/UTV2-999961.md',
     description,
   });
 
@@ -1611,7 +1487,7 @@ test('G8: EVERY extraction heading is reserved -- proven behaviourally, per head
       const contract = buildTaskContract({
         identifier: 'UTV2-999965',
         title: `reservation coverage for ${heading}`,
-        url: 'https://linear.app/unit-talk-v2/issue/UTV2-999965',
+        url: 'file:.ops/work/UTV2-999965.md',
         description,
       });
 
@@ -1677,7 +1553,7 @@ test('G9: a "#" line inside a fenced code block is not parsed as a heading', () 
   const contract = buildTaskContract({
     identifier: 'UTV2-999962',
     title: 'Fenced hash line',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999962',
+    url: 'file:.ops/work/UTV2-999962.md',
     description,
   });
 
@@ -1734,7 +1610,7 @@ test('G18: the empty-acceptance fallback guard reads the SHARED table, for every
         buildTaskContract({
           identifier: 'UTV2-999970',
           title: `empty acceptance under "${heading}"`,
-          url: 'https://linear.app/unit-talk-v2/issue/UTV2-999970',
+          url: 'file:.ops/work/UTV2-999970.md',
           description,
         }),
       /missing acceptance criteria/u,
@@ -1749,7 +1625,7 @@ test('G18: the empty-acceptance fallback guard reads the SHARED table, for every
   const legacy = buildTaskContract({
     identifier: 'UTV2-999971',
     title: 'legacy issue with no acceptance heading',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999971',
+    url: 'file:.ops/work/UTV2-999971.md',
     description: '## Objective\nship the transport\n\nsome legacy prose body',
   });
   assert.match(
@@ -1786,7 +1662,7 @@ test('G16: TAB-indented code is preserved, not collapsed', () => {
   const contract = buildTaskContract({
     identifier: 'UTV2-999968',
     title: 'Tab-indented code under a contract field',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999968',
+    url: 'file:.ops/work/UTV2-999968.md',
     description,
   });
 
@@ -1833,7 +1709,7 @@ test('G17: a blank line does not end an indented block', () => {
   const contract = buildTaskContract({
     identifier: 'UTV2-999969',
     title: 'Blank line inside an indented block',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999969',
+    url: 'file:.ops/work/UTV2-999969.md',
     description,
   });
 
@@ -1876,7 +1752,7 @@ test('G14: prefix heading matching stops at a word boundary', () => {
   const contract = buildTaskContract({
     identifier: 'UTV2-999967',
     title: 'Prefix boundary',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999967',
+    url: 'file:.ops/work/UTV2-999967.md',
     description,
   });
 
@@ -1920,7 +1796,7 @@ test('G13: an indented code block survives as ONE item with its newlines', () =>
   const contract = buildTaskContract({
     identifier: 'UTV2-999966',
     title: 'Indented code under a contract field',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999966',
+    url: 'file:.ops/work/UTV2-999966.md',
     description,
   });
 
@@ -1968,7 +1844,7 @@ test('G11: a fenced block inside a contract field survives as ONE item with newl
   const contract = buildTaskContract({
     identifier: 'UTV2-999964',
     title: 'Fenced block preserved as one item',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999964',
+    url: 'file:.ops/work/UTV2-999964.md',
     description,
   });
 
@@ -2003,7 +1879,7 @@ test('G10: an indented code line beginning with "#" is not parsed as a heading',
   const contract = buildTaskContract({
     identifier: 'UTV2-999963',
     title: 'Indented hash line',
-    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999963',
+    url: 'file:.ops/work/UTV2-999963.md',
     description,
   });
 
@@ -2067,7 +1943,7 @@ test('G22: a nested list item indented to four columns is held verbatim -- tabs 
     return buildTaskContract({
       identifier: 'UTV2-999969',
       title: 'Nested list item indentation',
-      url: 'https://linear.app/unit-talk-v2/issue/UTV2-999969',
+      url: 'file:.ops/work/UTV2-999969.md',
       description,
     }).acceptance_criteria;
   };
@@ -2098,7 +1974,7 @@ function contractFrom(description: string, issueId = 'UTV2-999970'): TaskContrac
   return buildTaskContract({
     identifier: issueId,
     title: 'Guard fixture',
-    url: `https://linear.app/unit-talk-v2/issue/${issueId}`,
+    url: `file:.ops/work/${issueId}.md`,
     description,
   }, '2026-08-25T00:00:00.000Z');
 }
@@ -2181,31 +2057,6 @@ test('G31: a backtick fence whose info string contains a backtick does not open 
   );
 });
 
-test('G32: a token containing a newline is REFUSED, not written into the curl config', () => {
-  // Security control, introduced by this lane and previously covered by nothing.
-  // curl --config reads directives line by line, so an unrefused newline in a
-  // token value injects arbitrary curl directives -- an SSRF/exfiltration
-  // primitive, not a formatting bug.
-  let calls = 0;
-  const runner = (() => {
-    calls += 1;
-    return { status: 0, stdout: '{}', stderr: '', error: undefined };
-  }) as typeof spawnSync;
-
-  assert.throws(
-    () => fetchLinearTaskSource('UTV2-999971', 'good-token\n--output /tmp/pwned', runner),
-    /invalid newline/u,
-    'a newline in the token must fail closed',
-  );
-  assert.equal(calls, 0, 'and must refuse BEFORE curl is invoked at all');
-
-  for (const bad of ['tok\ren', 'tok\r\nen', '\ntok']) {
-    assert.throws(() => fetchLinearTaskSource('UTV2-999971', bad, runner), /invalid newline/u,
-      `CR and LF alike must be refused (${JSON.stringify(bad)})`);
-  }
-  assert.equal(calls, 0);
-});
-
 test('G33: an invalid contract is REFUSED before it can be persisted to a sync record', () => {
   // buildSyncYmlWithTaskContract is the only writer of .ops/sync/<ID>.yml.
   // Without its assertTaskContract call an unvalidated object is written to
@@ -2271,38 +2122,6 @@ test('G35: an UNRECOGNIZED nested section renders once, inside its ancestor -- n
     'the nested section must appear exactly once -- a surviving ancestor already carries it');
   assert.match(occurrences[0]!, /Operator notes/u,
     'and it must appear INSIDE that ancestor, not as a section of its own');
-});
-
-test('G38: a token containing a quote or backslash is ESCAPED into the curl config, not passed raw', () => {
-  // The sixth review found the newline half of `curlConfigValue` covered by G32
-  // and the ESCAPING half covered by nothing: replacing the body with
-  // `return value` left both suites green. The token is interpolated into a
-  // quoted curl directive (`header = "Authorization: ..."`), so an unescaped
-  // quote terminates that value and everything after it is read by curl as
-  // further directives -- the same injection primitive G32 refuses newlines for.
-  let seen: string | undefined;
-  const runner = ((_cmd: string, _args: string[], opts: { input?: string }) => {
-    seen = opts.input;
-    return { status: 0, stdout: '{"data":{"issue":null}}', stderr: '', error: undefined };
-  }) as unknown as typeof spawnSync;
-
-  try {
-    fetchLinearTaskSource('UTV2-999982', 'tok"en\\with', runner);
-  } catch {
-    // The stub returns a null issue, so the call throws AFTER curl is invoked.
-    // The assertion below is about what was handed to curl, not the outcome.
-  }
-
-  assert.ok(seen, 'curl must have been invoked with a config on stdin');
-  assert.equal(
-    seen,
-    'header = "Authorization: tok\\"en\\\\with"\n',
-    'both the quote and the backslash must arrive escaped',
-  );
-  // An earlier draft added a regex assertion for "no unescaped quote", which
-  // matched the directive's own CLOSING quote and failed on correct output. The
-  // byte-equality above is strictly stronger than any such regex, so it stands
-  // alone rather than being propped up by a weaker, wronger companion.
 });
 
 test('G39: a shorter fence does not close a longer one', () => {
@@ -2471,7 +2290,7 @@ test('G45/G46: readTaskContract refuses a wrong schema_version and an empty crit
   const contract = buildTaskContract({
     identifier: issueId,
     title: 'Guarded',
-    url: 'https://linear.app/unit-talk/issue/x',
+    url: 'file:.ops/work/x.md',
     description: '## Objective\nguard\n\n## Acceptance criteria\n- one',
   });
   const good = buildSyncYmlWithTaskContract(issueId, contract, null);
@@ -2514,7 +2333,7 @@ function skillFixtureContract(issueId: string, description: string): TaskContrac
     {
       identifier: issueId,
       title: 'Fixture',
-      url: `https://linear.app/unit-talk-v2/issue/${issueId}`,
+      url: `file:.ops/work/${issueId}.md`,
       description,
     },
     '2000-01-01T00:00:00.000Z',
@@ -3058,59 +2877,26 @@ test('UTV2-1837 AC4 inversion: an unknown source kind is still refused', () => {
   assert.throws(() => assertTaskContract(bogus, 'WORK-1'), /valid source snapshot/u);
 });
 
-test('UTV2-1837: captureOrReadTaskContract needs neither a credential nor the network', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1837-cap-'));
+test('captureOrReadTaskContract builds a contract from a local work order', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'work-order-cap-'));
   try {
     fs.mkdirSync(path.join(root, '.ops', 'work'), { recursive: true });
     fs.writeFileSync(localTaskSourcePath('WORK-1', root), workOrderFixture, 'utf8');
-    const runner = (): never => {
-      throw new Error('the tracker must not be contacted when a local work order exists');
-    };
-    const contract = captureOrReadTaskContract('WORK-1', '', root, runner as never);
+    const contract = captureOrReadTaskContract('WORK-1', root);
     assert.equal(contract.source.kind, 'local-description');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
-test('UTV2-1837 AC4 inversion: with no local work order the tracker is still consulted', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1837-fall-'));
+test('a lane with no work order refuses and names the file to write', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'work-order-missing-'));
   try {
-    let contacted = false;
-    const runner = ((): never => {
-      contacted = true;
-      throw new Error('contacted');
-    }) as never;
-    assert.throws(() => captureOrReadTaskContract('UTV2-1837', 'tok', root, runner));
-    assert.equal(contacted, true, 'the local source must not silently replace the tracker');
+    assert.throws(
+      () => captureOrReadTaskContract('WORK-2026099901', root),
+      /WORK-2026099901 has no task contract: write the work order at \.ops\/work\/WORK-2026099901\.md/u,
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
-});
-
-test('WORK-2026092622: a repo-owned identity never reaches the tracker for its task contract', () => {
-  let calls = 0;
-  const runner = (() => {
-    calls += 1;
-    return { status: 0, stdout: '{}', stderr: '', error: undefined };
-  }) as typeof spawnSync;
-
-  assert.throws(
-    () => fetchLinearTaskSource('WORK-2026099901', 'lin_api_present', runner),
-    /WORK-2026099901 is a repo-owned identity with no tracker issue; its task contract is \.ops\/work\/WORK-2026099901\.md/u,
-  );
-  assert.equal(calls, 0, 'a WORK identity must be refused before curl is invoked, even with a credential');
-
-  // A tracker identity still reaches the tracker exactly as before.
-  const trackerRunner = (() => {
-    calls += 1;
-    return {
-      status: 0,
-      stdout: JSON.stringify({ data: { issue: { identifier: 'UTV2-999972', title: 't', url: 'u', description: 'd' } } }),
-      stderr: '',
-      error: undefined,
-    };
-  }) as typeof spawnSync;
-  assert.equal(fetchLinearTaskSource('UTV2-999972', 'lin_api_present', trackerRunner).identifier, 'UTV2-999972');
-  assert.equal(calls, 1);
 });

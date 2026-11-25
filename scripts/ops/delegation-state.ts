@@ -8,7 +8,7 @@
  *
  * This switch protects against RUNAWAY AUTOMATION: an operator can set
  * `delegation: "suspended"` to stop new lane starts and new executor process
- * spawns without touching git, GitHub, or Linear state, and without needing to
+ * spawns without touching git or GitHub state, and without needing to
  * kill any in-flight process. It is explicitly NOT a security boundary and must
  * never be described as one -- it is not a defense against a malicious actor who
  * already holds a valid repo token or shell access, since that actor could

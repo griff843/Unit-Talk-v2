@@ -70,7 +70,7 @@ jobs:
             if (!tier) {
               core.setFailed(
                 `No authoritative tier found for ${issueId}. ` +
-                'GitHub tier labels are evidence only; add/fix the lane manifest tier from Linear.'
+                'GitHub tier labels are evidence only; add/fix the lane manifest tier.'
               );
               return;
             }
@@ -165,7 +165,7 @@ jobs:
               '**Tier label synchronization blocked**',
               '',
               'GitHub tier labels are required evidence, but they are not authoritative.',
-              'Fix the Linear/lane manifest tier first; automation will mirror the matching `tier:T*` label.',
+              'Fix the lane manifest tier first; automation will mirror the matching `tier:T*` label.',
               '',
               'PM is not required to manually apply or reapply the GitHub tier label.'
             ].join('\n');

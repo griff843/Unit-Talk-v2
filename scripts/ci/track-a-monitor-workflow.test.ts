@@ -48,14 +48,17 @@ test('secrets are passed as env, never echoed', () => {
   const env = (runStep?.env as Record<string, string> | undefined) ?? {};
   assert.match(env.SUPABASE_URL ?? '', /secrets\.SUPABASE_URL/);
   assert.match(env.SUPABASE_SERVICE_ROLE_KEY ?? '', /secrets\.SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(env.LINEAR_API_TOKEN ?? '', /secrets\.LINEAR_API_TOKEN/);
+  assert.match(env.GITHUB_TOKEN ?? '', /github\.token/);
+  assert.equal(env.LINEAR_API_TOKEN, undefined, 'the retired Linear token must not be wired');
 
   // No step echoes/prints a secret value.
   assert.doesNotMatch(text, /echo[^\n]*secrets\./i);
-  assert.doesNotMatch(text, /echo[^\n]*\$\{?\s*(SUPABASE_SERVICE_ROLE_KEY|LINEAR_API_TOKEN)/);
+  assert.doesNotMatch(text, /echo[^\n]*\$\{?\s*(SUPABASE_SERVICE_ROLE_KEY|GITHUB_TOKEN)/);
 });
 
-test('workflow holds least-privilege read-only permissions', () => {
+test('workflow holds least-privilege permissions (read contents, write only issues)', () => {
   const { wf } = load();
   assert.equal(wf.permissions?.contents, 'read');
+  assert.equal(wf.permissions?.issues, 'write');
+  assert.deepEqual(Object.keys(wf.permissions ?? {}).sort(), ['contents', 'issues']);
 });

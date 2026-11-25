@@ -8,7 +8,7 @@
  *   ghost_merged: the lane's PR is MERGED on GitHub while the manifest is still
  *                 in an active status → status → merged, commit_sha bound
  *
- * Does not modify branches or Linear state. Idempotent — safe to re-run.
+ * Does not modify branches. Idempotent — safe to re-run.
  *
  * ## ghost_merged (UTV2-1613)
  *

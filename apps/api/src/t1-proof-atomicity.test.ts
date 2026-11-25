@@ -465,8 +465,6 @@ describe('STEP 6 — Fail-closed (UTV2-217)', () => {
       UNIT_TALK_API_RUNTIME_MODE: 'fail_closed',
       UNIT_TALK_ACTIVE_WORKSPACE: 'test',
       UNIT_TALK_LEGACY_WORKSPACE: 'test',
-      LINEAR_TEAM_KEY: 'test',
-      LINEAR_TEAM_NAME: 'test',
       NOTION_WORKSPACE_NAME: 'test',
       SLACK_WORKSPACE_NAME: 'test',
     };

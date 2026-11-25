@@ -93,7 +93,7 @@ async function main(): Promise<void> {
         validation_script: 'scripts/validate-env.mjs — checks required keys, warns about secrets in shared files',
         ci_integration: 'pnpm verify runs env:check as first step — fails pipeline on missing config',
         config_loader: '@unit-talk/config loadEnvironment() — merges .env.example → .env → local.env → process.env',
-        required_keys: ['NODE_ENV', 'UNIT_TALK_APP_ENV', 'UNIT_TALK_ACTIVE_WORKSPACE', 'LINEAR_TEAM_ID', 'LINEAR_TEAM_KEY'],
+        required_keys: ['NODE_ENV', 'UNIT_TALK_APP_ENV', 'UNIT_TALK_ACTIVE_WORKSPACE', 'UNIT_TALK_LEGACY_WORKSPACE'],
       },
       notes: 'Environment validated at startup via validate-env.mjs (pnpm env:check). Runs as first step of pnpm verify. Config loader handles three-layer merge with process.env override.',
     });

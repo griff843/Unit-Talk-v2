@@ -1,4 +1,4 @@
-import { spawnSync, type SpawnSyncOptionsWithStringEncoding, type SpawnSyncReturns } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,8 +39,6 @@ import {
   type ActiveLaneDiscovery,
   readManifest,
   readManifestAtRef,
-  readConfiguredEnvValue,
-  resolveTrackerRef,
   relativeToRoot,
   requireIssueId,
   requireVerificationTarget,
@@ -74,7 +72,7 @@ import {
   TaskContractConflictError,
   type TaskContract,
 } from './execution-packet.js';
-export { captureOrReadTaskContract, fetchLinearTaskSource } from './execution-packet.js';
+export { captureOrReadTaskContract } from './execution-packet.js';
 // One conflict rule for the whole system. lane-start and the dispatch packet
 // path previously carried separate copies; only lane-start's refused.
 export {
@@ -219,20 +217,6 @@ function isDocsOnlyFastPathFile(filePath: string): boolean {
   );
 }
 
-/**
- * Exported so the token plumbing has a positive control. Every lane-start E2E
- * test is deliberately offline with both variables stripped, so nothing
- * otherwise proves this function can read a configured token at all -- a
- * mutation returning `''` unconditionally survived a 21-mutation battery.
- */
-export function linearTaskToken(): string {
-  return (
-    readConfiguredEnvValue('LINEAR_API_TOKEN') ||
-    readConfiguredEnvValue('LINEAR_API_KEY') ||
-    ''
-  );
-}
-
 // ── WORK-2026092608: a lane that can close the first time ────────────────────
 
 /**
@@ -329,173 +313,6 @@ export function scaffoldLaneProofFiles(input: {
   return created;
 }
 
-export type TrackerTransitionResult =
-  | { status: 'skipped'; reason: string }
-  | { status: 'already_started'; tracker_ref: string; state: string }
-  | { status: 'advanced'; tracker_ref: string; from: string; to: string }
-  | { status: 'warning'; tracker_ref: string | null; reason: string };
-
-/** The started-type workflow state lane-start moves a tracker issue into. */
-export function trackerStartStateName(executor: LaneExecutor): string {
-  return executor === 'claude' ? 'In Claude' : 'In Codex';
-}
-
-export type TrackerRunner = (
-  command: string,
-  args: string[],
-  options: SpawnSyncOptionsWithStringEncoding,
-) => Pick<SpawnSyncReturns<string>, 'status' | 'stdout' | 'stderr' | 'error'>;
-
-function trackerGraphql(
-  runner: TrackerRunner,
-  token: string,
-  query: string,
-  variables: Record<string, unknown>,
-): Record<string, unknown> {
-  if (/\r|\n/u.test(token)) {
-    throw new Error('Linear API token contains an invalid newline');
-  }
-  const result = runner(
-    'curl',
-    [
-      '--config',
-      '-',
-      '--fail-with-body',
-      '--silent',
-      '--show-error',
-      '--request',
-      'POST',
-      'https://api.linear.app/graphql',
-      '--header',
-      'Content-Type: application/json',
-      '--data-binary',
-      JSON.stringify({ query, variables }),
-    ],
-    {
-      cwd: ROOT,
-      encoding: 'utf8',
-      stdio: 'pipe',
-      timeout: 15_000,
-      input: `header = "Authorization: ${token.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"\n`,
-    },
-  );
-  if (result.error || result.status !== 0) {
-    throw new Error(result.error?.message ?? (String(result.stderr ?? '').trim() || `curl exit ${result.status}`));
-  }
-  const payload = JSON.parse(String(result.stdout ?? '{}')) as {
-    data?: Record<string, unknown>;
-    errors?: Array<{ message?: string }>;
-  };
-  if (payload.errors?.length) {
-    throw new Error(payload.errors.map((entry) => entry.message ?? 'unknown Linear error').join('; '));
-  }
-  return payload.data ?? {};
-}
-
-/**
- * Best-effort: move a lane's tracker issue into its executor's started state.
- *
- * WHY. Closeout's L3 refuses a lane whose issue is still `unstarted`, and
- * nothing moved it -- only lane-close ever wrote the tracker, and only to Done.
- * A lane that forgot the manual transition failed closeout after merge
- * (UTV2-1954 needed two attempts).
- *
- * BOUNDS. Tracker sync is optional and non-blocking (intent.md, tracker
- * independence). This never throws: a lane with no tracker issue is skipped, and
- * a missing credential, network failure, or unexpected workflow is returned as a
- * warning. It only ever moves an issue OUT of an unstarted type (backlog,
- * unstarted, triage) and never touches one that is started, completed or
- * canceled. L3 itself is unchanged.
- */
-export function advanceTrackerIssueOnStart(input: {
-  manifest: { issue_id: string; tracker_ref?: string | null };
-  executor: LaneExecutor;
-  token: string;
-  runner?: TrackerRunner;
-}): TrackerTransitionResult {
-  const trackerRef = resolveTrackerRef(input.manifest);
-  if (!trackerRef) {
-    return { status: 'skipped', reason: `${input.manifest.issue_id} has no tracker issue` };
-  }
-  if (!input.token.trim()) {
-    return {
-      status: 'warning',
-      tracker_ref: trackerRef,
-      reason: 'no Linear credential (LINEAR_API_TOKEN/LINEAR_API_KEY); tracker state left unchanged',
-    };
-  }
-  const runner: TrackerRunner = input.runner ?? ((command, args, options) => spawnSync(command, args, options));
-  const target = trackerStartStateName(input.executor);
-  try {
-    const issueData = trackerGraphql(
-      runner,
-      input.token,
-      `query LaneStartIssue($id: String!) {
-        issue(id: $id) {
-          id
-          identifier
-          state { id name type }
-          team { states { nodes { id name type } } }
-        }
-      }`,
-      { id: trackerRef },
-    );
-    const issue = issueData['issue'] as
-      | {
-          id?: string;
-          identifier?: string;
-          state?: { name?: string; type?: string } | null;
-          team?: { states?: { nodes?: Array<{ id?: string; name?: string; type?: string }> } } | null;
-        }
-      | null
-      | undefined;
-    if (!issue?.id || (issue.identifier ?? '').toUpperCase() !== trackerRef) {
-      return { status: 'warning', tracker_ref: trackerRef, reason: 'tracker issue not found or identity mismatch' };
-    }
-    const currentName = issue.state?.name ?? 'Unknown';
-    const currentType = (issue.state?.type ?? '').toLowerCase();
-    if (currentType === 'started') {
-      return { status: 'already_started', tracker_ref: trackerRef, state: currentName };
-    }
-    if (!['backlog', 'unstarted', 'triage'].includes(currentType)) {
-      return {
-        status: 'warning',
-        tracker_ref: trackerRef,
-        reason: `issue is in ${currentName} (type ${currentType || 'unknown'}); lane-start only advances an unstarted issue`,
-      };
-    }
-    const targetState = (issue.team?.states?.nodes ?? []).find(
-      (state) => state.name === target && (state.type ?? '').toLowerCase() === 'started',
-    );
-    if (!targetState?.id) {
-      return {
-        status: 'warning',
-        tracker_ref: trackerRef,
-        reason: `the issue's team has no started-type "${target}" state`,
-      };
-    }
-    const updateData = trackerGraphql(
-      runner,
-      input.token,
-      `mutation LaneStartIssueUpdate($id: String!, $input: IssueUpdateInput!) {
-        issueUpdate(id: $id, input: $input) { success }
-      }`,
-      { id: issue.id, input: { stateId: targetState.id } },
-    );
-    const update = updateData['issueUpdate'] as { success?: boolean } | undefined;
-    if (!update?.success) {
-      return { status: 'warning', tracker_ref: trackerRef, reason: 'Linear reported issueUpdate success=false' };
-    }
-    return { status: 'advanced', tracker_ref: trackerRef, from: currentName, to: target };
-  } catch (error) {
-    return {
-      status: 'warning',
-      tracker_ref: trackerRef,
-      reason: `tracker transition failed: ${error instanceof Error ? error.message : String(error)}`,
-    };
-  }
-}
-
 /**
  * Reads a lane's status for the lease sweep: `origin/main` first, because a
  * closeout that ran in CI is recorded there and not in this checkout, then the
@@ -552,25 +369,10 @@ function runLeaseSweep(): TerminalLeaseSweepResult {
   }
 }
 
-function runTrackerStartTransition(
-  manifest: { issue_id: string; tracker_ref?: string | null },
-  executor: LaneExecutor,
-): TrackerTransitionResult {
-  const result = advanceTrackerIssueOnStart({ manifest, executor, token: linearTaskToken() });
-  if (result.status === 'warning') {
-    process.stderr.write(`[lane-start] warning: tracker not advanced: ${result.reason}\n`);
-  }
-  return result;
-}
-
-/**
- * Where a lane's contract came from. `linear-capture` is the only value that
- * means the network was touched.
- */
+/** Which root a lane's contract came from. */
 export interface LaneContractResolution {
   contract: TaskContract;
-  fetched: boolean;
-  source: 'lane-worktree' | 'control-checkout' | 'linear-capture';
+  source: 'lane-worktree' | 'control-checkout';
 }
 
 /**
@@ -591,11 +393,10 @@ export function laneContractRoots(worktreePath: string | null): string[] {
 }
 
 /**
- * Resolve the lane's work order WITHOUT making Linear a dependency of every
- * resume. A lane that already holds a valid contract reuses it verbatim; only a
- * lane with no valid contract anywhere performs one bounded capture. That
- * capture is the sole network call, and it happens before any lease, worktree
- * or manifest mutation, so a Linear failure leaves lane state untouched.
+ * Resolve the lane's work order. A lane that already holds a valid contract
+ * reuses it verbatim; a lane with none builds it from its repo work order
+ * (`.ops/work/<ID>.md`). Resolution happens before any lease, worktree or
+ * manifest mutation, so a missing work order leaves lane state untouched.
  *
  * Delegates to the shared resolver so lane-start and the dispatch packet path
  * cannot drift apart on what counts as a conflict.
@@ -603,18 +404,13 @@ export function laneContractRoots(worktreePath: string | null): string[] {
 export function resolveLaneTaskContract(
   issueId: string,
   worktreePath: string | null,
-  token: string,
-  runner: typeof spawnSync = spawnSync,
 ): LaneContractResolution {
   // The lane's own copy wins when both agree: it is the one the executor reads.
   const roots = laneContractRoots(worktreePath);
-  const resolved = resolveTaskContractAcrossRoots(issueId, roots, token, runner);
-  const source: LaneContractResolution['source'] = resolved.fetched
-    ? 'linear-capture'
-    : roots[resolved.rootIndex] === ROOT
-      ? 'control-checkout'
-      : 'lane-worktree';
-  return { contract: resolved.contract, fetched: resolved.fetched, source };
+  const resolved = resolveTaskContractAcrossRoots(issueId, roots);
+  const source: LaneContractResolution['source'] =
+    roots[resolved.rootIndex] === ROOT ? 'control-checkout' : 'lane-worktree';
+  return { contract: resolved.contract, source };
 }
 
 /**
@@ -635,15 +431,13 @@ export function resolveLaneTaskContract(
 export function resolveReadmissionContract(
   readmitExistingBranch: boolean,
   issueId: string,
-  token: string,
   resolve: (
     id: string,
     worktreePath: string | null,
-    t: string,
   ) => LaneContractResolution = resolveLaneTaskContract,
 ): LaneContractResolution | null {
   if (readmitExistingBranch) return null;
-  return resolve(issueId, null, token);
+  return resolve(issueId, null);
 }
 
 /** Persist one contract to every root, each merged against its own record. */
@@ -1045,7 +839,7 @@ function main(): void {
     // Fail closed on an unsafe lane substrate before reserving a lease or
     // creating a worktree (UTV2 SPRINT-OPS-LANE-SUBSTRATE-STABILIZATION-001).
     // Local checks only here (lease dir, merge-lock validity, active-lane
-    // worktree integrity); board hard_fail + Linear drift are enforced by the
+    // worktree integrity); board hard_fail is enforced by the
     // standalone `pnpm ops:substrate-guard` run in dispatch Phase 0. Break-glass
     // via --force-unsafe-substrate (logged in the failure payload).
     const forceUnsafeSubstrate = bools.has('force-unsafe-substrate') || flags.has('force-unsafe-substrate');
@@ -1365,15 +1159,9 @@ function main(): void {
         throw new Error(`Existing manifest execution cwd is incoherent: ${cwdErrors.join('; ')}`);
       }
 
-      // Resume must not depend on Linear. The lane already holds its work order;
-      // re-fetching it on every resume made a reachable Linear a precondition
-      // for continuing existing work, and could swap in a different contract
-      // hash while the executor was already acting on the old one.
-      const contractResolution = resolveLaneTaskContract(
-        issueId,
-        worktreePath,
-        linearTaskToken(),
-      );
+      // Resume reuses the work order the lane already holds, so the contract
+      // hash cannot change while the executor is acting on it.
+      const contractResolution = resolveLaneTaskContract(issueId, worktreePath);
 
       const setup = prepareLaneWithIsolatedPnpm(worktreePath, normalizedFiles);
       const lease = reserveLease({
@@ -1399,7 +1187,6 @@ function main(): void {
       // Each destination merges against its OWN record, so the branch's
       // accumulated entities, findings, controls and proofs survive.
       persistLaneTaskContract(issueId, contractResolution.contract, [ROOT, worktreePath]);
-      const trackerTransition = runTrackerStartTransition(manifest, executor);
       emitJson({
         ok: true,
         code: 'lane_resumed',
@@ -1411,18 +1198,14 @@ function main(): void {
         lease_code: lease.code,
         lease_path: lease.lease_path,
         manifest_path: relativeToRoot(manifestPath),
-        // Which root the work order came from, and whether the network was
-        // touched to get it. An operator reconciling a lane that is running on
-        // an unexpected contract needs to know WHICH copy won, and an
-        // automated caller needs `linear-capture` to be distinguishable from a
-        // reuse. Emitting it is also what makes the root precedence in
+        // Which root the work order came from. An operator reconciling a lane
+        // that is running on an unexpected contract needs to know WHICH copy
+        // won. Emitting it is also what makes the root precedence in
         // `laneContractRoots` an observable property rather than a dead field.
         contract_source: contractResolution.source,
         contract_hash: contractResolution.contract.contract_hash,
-        contract_fetched: contractResolution.fetched,
         status: manifest.status,
         lease_sweep: leaseSweep,
-        tracker_transition: trackerTransition,
       });
       return;
     }
@@ -1467,25 +1250,19 @@ function main(): void {
       modelRouting = resolution.model_routing!;
     }
 
-    // One bounded capture, before any lease, worktree or manifest mutation, so a
-    // Linear failure leaves lane state completely unchanged. A lane that already
-    // holds a valid contract reuses it and touches no network.
+    // Resolve the work order before any lease, worktree or manifest mutation,
+    // so a missing work order leaves lane state completely unchanged. A lane
+    // that already holds a valid contract reuses it.
     //
     // Readmission deliberately captures NOTHING here. The preserved branch may
     // carry its OWN authoritative contract, and that copy only becomes visible
     // once the worktree exists. Resolving now can see only the control
     // checkout, so on a branch whose contract control does not have it would
-    // fetch a NEWER one from Linear and persist it to ROOT -- after which the
+    // build one from control's work order and persist it to ROOT -- after which the
     // post-checkout resolution sees a contract at BOTH roots and, if they
     // differ, fails closed as lane_contract_conflict against the branch's own
-    // valid record. It would also make readmission require the network for a
-    // branch that already carries everything it needs. Fresh lanes keep the
-    // early bounded capture unchanged.
-    const contractResolution = resolveReadmissionContract(
-      readmitExistingBranch,
-      issueId,
-      linearTaskToken(),
-    );
+    // valid record. Fresh lanes keep the early resolution unchanged.
+    const contractResolution = resolveReadmissionContract(readmitExistingBranch, issueId);
 
     if (readmitExistingBranch) {
       if (!branchContainsExactIssue(branch, issueId)) {
@@ -1647,18 +1424,11 @@ function main(): void {
         // readmission path -- runs after the branch is checked out, with the
         // worktree root ordered ahead of the control checkout so the branch's
         // own copy wins. A branch carrying a valid contract is therefore reused
-        // verbatim and OFFLINE: resolveTaskContractAcrossRoots only reaches
-        // fetchLinearTaskSource when NO root holds one, so the empty token
-        // returned by linearTaskToken() under containment is never consumed.
-        // A branch carrying none still inherits control's copy, and only a
+        // verbatim. A branch carrying none still inherits control's copy, and only a
         // genuine disagreement between two VALID contracts fails closed as
         // lane_contract_conflict. Each destination is merged against its own
         // sync record rather than overwritten wholesale.
-        const readmittedResolution = resolveLaneTaskContract(
-          issueId,
-          worktreePath,
-          linearTaskToken(),
-        );
+        const readmittedResolution = resolveLaneTaskContract(issueId, worktreePath);
         const readmittedContract = readmittedResolution.contract;
         persistLaneTaskContract(issueId, readmittedContract, [ROOT, worktreePath]);
 
@@ -1701,8 +1471,7 @@ function main(): void {
         if (!commit.ok) {
           throw new Error(`failed to commit regenerated readmission metadata: ${commit.stderr}`);
         }
-        const trackerTransition = runTrackerStartTransition(manifest, executor);
-
+  
         emitJson({
           ok: true,
           code: 'lane_readmitted_existing_branch',
@@ -1728,11 +1497,9 @@ function main(): void {
           preflight_token: preflight.tokenRelativePath,
           contract_source: readmittedResolution.source,
           contract_hash: readmittedContract.contract_hash,
-          contract_fetched: readmittedResolution.fetched,
           status: 'started',
           lease_sweep: leaseSweep,
-          tracker_transition: trackerTransition,
-        });
+          });
         return;
       } catch (error) {
         if (leaseReserved) {
@@ -1826,10 +1593,6 @@ function main(): void {
       );
     }
     persistLaneTaskContract(issueId, contractResolution.contract, [ROOT]);
-    // WORK-2026092608: preflight has passed and the manifest is written, so the
-    // tracker issue (if the lane has one) can be moved to a started state. A
-    // tracker failure is a warning; it never fails the start.
-    const trackerTransition = runTrackerStartTransition(manifest, executor);
 
     // The proof directory (UTV2-1492) is scaffolded directly inside
     // the lane worktree below, alongside the manifest/sync mirror — not in
@@ -1932,11 +1695,9 @@ function main(): void {
       preflight_token: preflight.tokenRelativePath,
       contract_source: contractResolution.source,
       contract_hash: contractResolution.contract.contract_hash,
-      contract_fetched: contractResolution.fetched,
       status: 'started',
       scaffolded_proof_paths: scaffoldedProofPaths,
       lease_sweep: leaseSweep,
-      tracker_transition: trackerTransition,
       // UTV2-1619 capability 18: an authorized admission must never look like an
       // ordinary one. Absent when the lane was admitted under the caps.
       ...(bootstrapAuthorization === null

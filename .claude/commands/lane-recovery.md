@@ -1,6 +1,6 @@
 # /lane-recovery
 
-Triage and repair a lane whose state has already broken. `/lane-management` is the forward path — start, progress, close. This skill is the reverse path: a lane is stuck, a gate is refusing, or manifest / Linear / GitHub disagree, and you need to know which repair to run.
+Triage and repair a lane whose state has already broken. `/lane-management` is the forward path — start, progress, close. This skill is the reverse path: a lane is stuck, a gate is refusing, or manifest / work order / GitHub disagree, and you need to know which repair to run.
 
 **Never invent a repair.** Every fix below is an existing governed script. If the symptom is not in this tree, stop and report it — do not hand-edit a manifest, delete a lease, or force a status.
 
@@ -12,7 +12,7 @@ Triage and repair a lane whose state has already broken. `/lane-management` is t
 pnpm ops:substrate-guard            # fail-closed: is the substrate even safe?
 pnpm ops:execution-state            # active lanes, slots, stale heartbeats, merge mutex
 pnpm ops:orchestration-reconcile --current --json
-pnpm ops:lane-manifest -- status UTV2-### --json
+pnpm ops:lane-manifest -- status WORK-### --json
 ```
 
 Substrate-guard exit 1 means HALT. Do not proceed to any repair until its condition clears — a repair run on unsafe substrate is how residue spreads.
@@ -27,7 +27,7 @@ The blocker is a **leaked lease**, not a manifest. `merged` and `done` are not a
 
 ```bash
 pnpm ops:lease report
-pnpm ops:lease release --issue UTV2-### --branch <branch> --executor <executor> --cwd <path>
+pnpm ops:lease release --issue WORK-### --branch <branch> --executor <executor> --cwd <path>
 pnpm ops:lease-recover            # reclaim expired leases in bulk
 ```
 
@@ -37,13 +37,13 @@ Re-run `ops:substrate-guard` before retrying lane-start.
 
 Two distinct causes — diagnose before acting:
 
-- **Control-plane paths.** The guard reads the manifest as of its *first-adding commit* (`firstAddingCommit(base, head, path)`), so PR-time edits to `file_scope_lock` are ignored by design. The lane's own `.ops/sync/UTV2-###.yml` and `docs/06_status/lanes/UTV2-###.json` must be declared in `file_scope_lock` **at lane-start**, not added later.
+- **Control-plane paths.** The guard reads the manifest as of its *first-adding commit* (`firstAddingCommit(base, head, path)`), so PR-time edits to `file_scope_lock` are ignored by design. The lane's own `.ops/sync/WORK-###.yml` and `docs/06_status/lanes/WORK-###.json` must be declared in `file_scope_lock` **at lane-start**, not added later.
 - **Reopened lane / second increment.** The guard reads the manifest from base, where the closed increment still sits. This is expected and cannot be fixed by editing the branch.
 
 Widening scope after the fact requires a PM `scope-override/v1` comment on the PR. That is the only exit. Do not rewrite history to smuggle a wider manifest into the first-adding commit.
 
 ```bash
-pnpm ops:scope-diff --issue UTV2-### --json   # what the guard actually sees
+pnpm ops:scope-diff --issue WORK-### --json   # what the guard actually sees
 ```
 
 ### S3. Ghost lane — PR merged, manifest still `in_progress`
@@ -51,7 +51,7 @@ pnpm ops:scope-diff --issue UTV2-### --json   # what the guard actually sees
 Blocks every subsequent lane's file-scope lock and concurrency check.
 
 ```bash
-pnpm ops:lane-close UTV2-### --repair-merged
+pnpm ops:lane-close WORK-### --repair-merged
 ```
 
 `--repair-merged` re-derives the merge binding from GitHub's authoritative `pr.mergeSha`. As of UTV2-1613 it appends **nothing** to `truth_check_history` — the only writer there is the real `runTruthCheck()` in `main()`. If it refuses with `repair_required_via_pr`, you ran it from a checkout on `main` and it produced tracked changes; those changes must land through a governed branch and PR, not a direct push.
@@ -64,15 +64,15 @@ Usually means *ambiguous*, not absent — multiple PRs opened off one lane branc
 gh workflow run post-merge-lane-close.yml -f pr=<number>
 ```
 
-Then release the local lease (S1) and re-run Linear auto-close by hand if the issue is still in an executing state.
+Then release the local lease (S1).
 
 ### S5. Manifest missing `pr_url` or `commit_sha`
 
 ```bash
-pnpm ops:lane-manifest -- record-merge UTV2-### --pr <url-or-number> --json
+pnpm ops:lane-manifest -- record-merge WORK-### --pr <url-or-number> --json
 pnpm ops:proof-generate --merge-sha <sha>
-pnpm ops:truth-check UTV2-###
-pnpm ops:lane-close UTV2-###
+pnpm ops:truth-check WORK-###
+pnpm ops:lane-close WORK-###
 ```
 
 `record-merge` writes status, `commit_sha`, `pr_url`, and heartbeat — nothing else. It leaves `truth_check_history` byte-for-byte as supplied and always reports `historyAppended: false`. It cannot measure a verdict and does not claim one.
@@ -86,14 +86,14 @@ Repair the reported milestone, then re-run and read the *new* failures as if the
 ### S7. Manifest drifted or schema-invalid
 
 ```bash
-pnpm ops:lane-manifest -- validate UTV2-### --json
+pnpm ops:lane-manifest -- validate WORK-### --json
 pnpm ops:manifest-repair --json
 ```
 
 ### S8. Proof bound to the wrong SHA
 
 ```bash
-pnpm ops:proof-rebind --issue UTV2-### --merge-sha <sha> --apply
+pnpm ops:proof-rebind --issue WORK-### --merge-sha <sha> --apply
 ```
 
 See `/proof-authoring` for what the rebind requires to be present in the file first — the `Merge SHA:` field must hold a real SHA or the literal `N/A`. Prose in that field makes rebinding refuse and strands the lane merged-but-unclosed.

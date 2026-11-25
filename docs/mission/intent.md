@@ -156,7 +156,7 @@ a mission goal.
 
 **How that goal is pursued is itself a PM decision, not an agent decision.** The execution and
 governance system currently on `main` — lanes, lane manifests, `ops:lane-start` / `ops:lane-close`,
-`ops:truth-check`, tiers, proof bundles, `/dispatch`, and Linear as workflow intent — remains
+`ops:truth-check`, tiers, proof bundles, `/dispatch`, and repo work orders as workflow intent — remains
 controlling until PM ratifies a replacement. An agent may propose a change to it and must not
 adopt one unilaterally. See "Changes to the operating model" below.
 
@@ -273,6 +273,21 @@ The cutover closes when all five hold, demonstrated rather than asserted:
 Once they hold, **close the cutover and return that capacity to product work.** Do not keep
 expanding it with optional improvements.
 
+### Linear workflow retired (2026-11-25)
+
+Ratified by Griff on 2026-11-25 ("remove the linear workflow / process all together now. i
+approve all of this"). The Linear workflow is removed entirely, not merely made optional:
+
+- Work identity, tier and acceptance criteria come from repo work orders at
+  `.ops/work/WORK-<n>.md`, committed before a lane starts. Branches are named
+  `claude/work-<n>-<slug>` or `codex/work-<n>-<slug>`.
+- No script, workflow, hook or skill reads or writes Linear, and no Linear credential is
+  required anywhere. Alerts that used to file Linear issues go to GitHub issues.
+- Closed Linear issues and `UTV2-###` lane records remain historical discovery material only.
+
+This retirement changes the workflow-intent source. It does not change merge authority, the merge
+gate, tier risk semantics or proof requirements.
+
 ## Governance and tooling debt policy
 
 Ratified by PM on 2026-09-03. These are durable rules, not a new contract — nothing here creates a
@@ -286,7 +301,7 @@ finding is recorded under `plan.md` → Learned and production continues. Record
 deferring it; it is refusing to pretend a queue position exists.
 
 **2. One defect class, one canonical issue.** Before filing governance or tooling debt, search
-Linear for the existing owner. A new occurrence is attached to the canonical issue as evidence or an
+the work orders and GitHub issues for the existing owner. A new occurrence is attached to the canonical issue as evidence or an
 instance — never filed as a new issue. Fragmenting one defect across many issues is what makes the
 backlog unreadable and the real cost invisible.
 

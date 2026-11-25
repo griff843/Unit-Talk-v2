@@ -142,7 +142,7 @@ function buildPacketMarkdown(opts: {
     '- T1 requires runtime proof against real Supabase',
     '',
     '### Review checklist (complete all)',
-    '- [ ] All acceptance criteria in the Linear issue are met',
+    '- [ ] All acceptance criteria in the work order are met',
     '- [ ] No new silent failure paths introduced',
     '- [ ] No unauthorized file scope expansion',
     '- [ ] Tests are adversarial (not just happy path)',

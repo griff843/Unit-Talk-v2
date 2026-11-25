@@ -45,7 +45,7 @@ export interface ExecutionStateReport {
   proof_readiness: ProofReadiness[];
   source_of_truth: {
     manifests_path: string;
-    linear_url: string;
+    work_orders_path: string;
     github_url: string;
   };
 }
@@ -166,7 +166,6 @@ interface MergeRiskBuilderInput {
 export interface BuildExecutionStateReportOptions {
   generatedAt?: string;
   nowMs?: number;
-  linearBaseUrl?: string;
   githubBaseUrl?: string;
   artifactExists?: (artifact: string, manifest: LaneManifest) => boolean;
   mergeRiskBuilder?: (input: MergeRiskBuilderInput) => MergeRiskReportLike;
@@ -178,7 +177,6 @@ interface TierVerificationRule {
   extraArtifacts: string[];
 }
 
-const LINEAR_BASE_URL = 'https://linear.app/unit-talk-v2';
 const GITHUB_BASE_URL = 'https://github.com/griff843/Unit-Talk-v2';
 
 // Load from CONCURRENCY_CONFIG.json — single source of truth
@@ -217,7 +215,6 @@ export function buildExecutionStateReport(
   options: BuildExecutionStateReportOptions = {},
 ): ExecutionStateReport {
   const generatedAt = options.generatedAt ?? new Date(options.nowMs ?? Date.now()).toISOString();
-  const linearBaseUrl = options.linearBaseUrl ?? LINEAR_BASE_URL;
   const githubBaseUrl = options.githubBaseUrl ?? GITHUB_BASE_URL;
   const activeLanes = discovery.lanes.filter((lane) => isActiveLane(lane.manifest));
   const activeManifests = activeLanes.map((lane) => lane.manifest);
@@ -251,7 +248,7 @@ export function buildExecutionStateReport(
       .map((lane) => summarizeLane(lane, {
         nowMs,
         observedAt: generatedAt,
-        linearBaseUrl,
+        githubBaseUrl,
         proofReadiness,
         mergeRiskConditions: mergeRiskReport.conditions,
         remoteBranches: options.mergeRiskInput?.remoteBranches ?? [],
@@ -265,7 +262,7 @@ export function buildExecutionStateReport(
       .map((lane) => summarizeLane(lane, {
         nowMs,
         observedAt: generatedAt,
-        linearBaseUrl,
+        githubBaseUrl,
         proofReadiness,
         mergeRiskConditions: mergeRiskReport.conditions,
         remoteBranches: options.mergeRiskInput?.remoteBranches ?? [],
@@ -290,7 +287,7 @@ export function buildExecutionStateReport(
     proof_readiness: proofReadiness,
     source_of_truth: {
       manifests_path: MANIFEST_DIR,
-      linear_url: linearBaseUrl,
+      work_orders_path: '.ops/work',
       github_url: githubBaseUrl,
     },
   };
@@ -554,7 +551,7 @@ function summarizeLane(
   context: {
     nowMs: number;
     observedAt: string;
-    linearBaseUrl: string;
+    githubBaseUrl: string;
     proofReadiness: ProofReadiness[];
     mergeRiskConditions: MergeRiskConditionLike[];
     remoteBranches: string[];
@@ -604,7 +601,7 @@ function summarizeLane(
       mergeReady,
     }),
     blockers: [...manifest.blocked_by],
-    source_url: `${context.linearBaseUrl}/issue/${manifest.issue_id}/`,
+    source_url: `${context.githubBaseUrl}/blob/main/docs/06_status/lanes/${manifest.issue_id}.json`,
     manifest_source: lane.source,
     manifest_location: lane.manifestLocation,
     capacity: {

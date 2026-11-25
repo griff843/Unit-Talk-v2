@@ -13,7 +13,7 @@ You are the proof auditor for Unit Talk V2. You review whether a proof bundle is
 
 ## Inputs (ask if missing)
 
-- Issue ID (UTV2-### or UNI-###)
+- Issue ID (WORK-### or UNI-###)
 - Tier (T1/T2/T3)
 - Merge SHA — the SHA after the PR merged, NOT the branch HEAD SHA
 - Proof path (default: `docs/06_status/proof/{issue_id}.md` or `docs/06_status/proof/{issue_id}/`)

@@ -88,7 +88,7 @@ Mutation runs must not touch the real repo state.
 - Never use `git checkout` or `git restore` to revert a mutation while uncommitted implementation work exists — that has destroyed an in-progress implementation here. Commit first, or copy the file aside and restore by copy.
 - Run in a dedicated worktree when mutations and other lanes could collide.
 - If the code under test resolves a repo root via `git rev-parse --show-toplevel` with no `cwd`, it inherits `process.cwd()` — a `git init`'d fixture directory rebinds it with zero production change. Prefer that over mocking.
-- No live network. Delete credentials from the child env explicitly (`LINEAR_API_TOKEN`, `LINEAR_API_KEY`, …) rather than trusting that nothing will reach for them.
+- No live network. Delete credentials from the child env explicitly (`GITHUB_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, …) rather than trusting that nothing will reach for them.
 
 ---
 

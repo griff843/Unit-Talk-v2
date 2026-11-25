@@ -73,8 +73,6 @@ jobs:
           COMMAND_CENTER_AUTH_TOKEN=ci-command-center-token
           AUTH_SECRET=ci-auth-secret
           NEXTAUTH_SECRET=ci-nextauth-secret
-          LINEAR_API_TOKEN=
-          LINEAR_TEAM_ID=
           NOTION_TOKEN=
           SLACK_BOT_TOKEN=
           SLACK_SIGNING_SECRET=

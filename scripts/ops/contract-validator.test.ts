@@ -331,7 +331,6 @@ const EXISTING_SKILLS = [
   'dispatch',
   'doc-truth-audit',
   'frontend-design',
-  'linear-execution',
   'merge-conflict-resolution',
   'operator-surface',
   'outbox-worker',

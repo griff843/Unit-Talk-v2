@@ -4,7 +4,8 @@
  * Consolidates the read-only diagnostics described in
  * `docs/06_status/proof/UTV2-1276/MONITOR_SPEC.md` into a single snapshot, decides
  * whether a report is warranted (see `track-a-triggers.ts`), and posts a comment to
- * the Track A monitor lane ONLY when a trigger fires. Designed to run from a GitHub
+ * the Track A monitor GitHub issue ONLY when a trigger fires. The issue (found by
+ * its title, created on first report) also holds the previous snapshot. Designed to run from a GitHub
  * Actions scheduled workflow every 6 hours.
  *
  * Hard guardrails — this script:
@@ -31,8 +32,7 @@ import {
   type TriggerResult,
 } from './track-a-triggers.js';
 
-const MONITOR_ISSUE = 'UTV2-1250';
-const LINEAR_TEAM_KEY = 'UTV2';
+const MONITOR_ISSUE_TITLE = 'Track A monitor (CLV-path watch)';
 const STATE_MARKER = 'TRACK_A_STATE_JSON:';
 const PENDING_STATUSES = 'posted,awaiting_approval,queued';
 
@@ -265,27 +265,37 @@ function emptySnapshot(capturedAt: string, errors: string[]): TrackASnapshot {
   };
 }
 
-// --- Linear state (previous snapshot) read + comment write -----------------
+// --- GitHub issue state (previous snapshot) read + comment write ----------
 
-async function linearGraphql<T>(token: string, query: string, variables: unknown): Promise<T> {
-  const res = await fetch('https://api.linear.app/graphql', {
-    method: 'POST',
-    headers: { Authorization: token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables }),
-  });
-  const json = (await res.json()) as { data?: T; errors?: unknown };
-  if (json.errors) throw new Error(`Linear GraphQL: ${JSON.stringify(json.errors)}`);
-  return json.data as T;
+interface GitHubContext {
+  token: string;
+  repo: string; // owner/name
 }
 
-interface IssueLookup {
-  issues: {
-    nodes: Array<{
-      id: string;
-      identifier: string;
-      comments: { nodes: Array<{ body: string; createdAt: string }> };
-    }>;
-  };
+async function githubRest<T>(ctx: GitHubContext, method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`https://api.github.com/repos/${ctx.repo}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${ctx.token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      'User-Agent': 'unit-talk-track-a-monitor',
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`GitHub ${method} ${path}: HTTP ${res.status}`);
+  return (await res.json()) as T;
+}
+
+interface GitHubIssue {
+  number: number;
+  title: string;
+  pull_request?: unknown;
+}
+
+interface GitHubComment {
+  body?: string;
+  created_at: string;
 }
 
 function parseState(body: string): TrackASnapshot | null {
@@ -309,45 +319,51 @@ function parseState(body: string): TrackASnapshot | null {
 }
 
 interface PriorState {
-  issueId: string;
+  issueNumber: number | null;
   previous: TrackASnapshot | null;
   hoursSinceLastReport: number | null;
 }
 
-async function loadPriorState(token: string): Promise<PriorState> {
-  const data = await linearGraphql<IssueLookup>(
-    token,
-    `query($key:String!,$num:Float!){
-      issues(filter:{team:{key:{eq:$key}},number:{eq:$num}},first:1){
-        nodes{ id identifier comments(first:100){ nodes{ body createdAt } } }
-      }
-    }`,
-    { key: LINEAR_TEAM_KEY, num: Number(MONITOR_ISSUE.split('-')[1]) },
-  );
-  const issue = data.issues.nodes[0];
-  if (!issue) throw new Error(`Linear issue ${MONITOR_ISSUE} not found`);
+async function findMonitorIssue(ctx: GitHubContext): Promise<number | null> {
+  const issues = await githubRest<GitHubIssue[]>(ctx, 'GET', '/issues?state=open&per_page=100');
+  const match = issues.find((issue) => !issue.pull_request && issue.title === MONITOR_ISSUE_TITLE);
+  return match?.number ?? null;
+}
 
-  const marked = issue.comments.nodes
-    .filter((c) => c.body.includes(STATE_MARKER))
-    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+async function loadPriorState(ctx: GitHubContext): Promise<PriorState> {
+  const issueNumber = await findMonitorIssue(ctx);
+  if (issueNumber === null) {
+    return { issueNumber: null, previous: null, hoursSinceLastReport: null };
+  }
+  const comments = await githubRest<GitHubComment[]>(
+    ctx,
+    'GET',
+    `/issues/${issueNumber}/comments?per_page=100`,
+  );
+  const marked = comments
+    .filter((c) => (c.body ?? '').includes(STATE_MARKER))
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
   const latest = marked[0];
   return {
-    issueId: issue.id,
-    previous: latest ? parseState(latest.body) : null,
+    issueNumber,
+    previous: latest ? parseState(latest.body ?? '') : null,
     hoursSinceLastReport: latest
-      ? (Date.now() - Date.parse(latest.createdAt)) / 3_600_000
+      ? (Date.now() - Date.parse(latest.created_at)) / 3_600_000
       : null,
   };
 }
 
-async function postComment(token: string, issueId: string, body: string): Promise<void> {
-  await linearGraphql(
-    token,
-    `mutation($issueId:String!,$body:String!){
-      commentCreate(input:{issueId:$issueId,body:$body}){ success }
-    }`,
-    { issueId, body },
-  );
+async function postComment(ctx: GitHubContext, issueNumber: number | null, body: string): Promise<number> {
+  let target = issueNumber;
+  if (target === null) {
+    const created = await githubRest<GitHubIssue>(ctx, 'POST', '/issues', {
+      title: MONITOR_ISSUE_TITLE,
+      body: 'Read-only Track A CLV-path monitor. `scripts/ops/track-a-monitor.ts` posts here only when a trigger fires.',
+    });
+    target = created.number;
+  }
+  await githubRest(ctx, 'POST', `/issues/${target}/comments`, { body });
+  return target;
 }
 
 function renderComment(s: TrackASnapshot, t: TriggerResult): string {
@@ -403,14 +419,16 @@ function renderComment(s: TrackASnapshot, t: TriggerResult): string {
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const snapshot = await collectSnapshot();
-  const token = process.env.LINEAR_API_TOKEN ?? '';
+  const token = process.env.GITHUB_TOKEN?.trim() ?? '';
+  const repo = process.env.GITHUB_REPOSITORY?.trim() ?? '';
+  const ctx: GitHubContext | null = token && repo ? { token, repo } : null;
 
-  let prior: PriorState = { issueId: '', previous: null, hoursSinceLastReport: null };
-  if (token && !args.dryRun) {
+  let prior: PriorState = { issueNumber: null, previous: null, hoursSinceLastReport: null };
+  if (ctx && !args.dryRun) {
     try {
-      prior = await loadPriorState(token);
+      prior = await loadPriorState(ctx);
     } catch (err) {
-      snapshot.errors.push(`linear state read failed: ${(err as Error).message}`);
+      snapshot.errors.push(`monitor state read failed: ${(err as Error).message}`);
     }
   }
 
@@ -429,16 +447,16 @@ async function main(): Promise<void> {
     console.log(`[track-a-monitor] wrote ${args.outputJson}`);
   }
 
-  if (decision.shouldReport && token && !args.dryRun && prior.issueId) {
+  if (decision.shouldReport && ctx && !args.dryRun) {
     try {
-      await postComment(token, prior.issueId, renderComment(snapshot, decision));
-      console.log(`[track-a-monitor] posted comment to ${MONITOR_ISSUE}`);
+      const issueNumber = await postComment(ctx, prior.issueNumber, renderComment(snapshot, decision));
+      console.log(`[track-a-monitor] posted comment to issue #${issueNumber}`);
     } catch (err) {
       console.error(`[track-a-monitor] comment post failed: ${(err as Error).message}`);
     }
   } else {
     console.log(
-      `[track-a-monitor] no comment (shouldReport=${decision.shouldReport} dryRun=${args.dryRun} hasToken=${Boolean(token)})`,
+      `[track-a-monitor] no comment (shouldReport=${decision.shouldReport} dryRun=${args.dryRun} hasGitHub=${Boolean(ctx)})`,
     );
   }
 }

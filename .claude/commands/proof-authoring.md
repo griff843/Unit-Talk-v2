@@ -82,10 +82,10 @@ Three gates read the proof directory and each wants something different. Write a
 
 ### Layout that satisfies all three
 
-`docs/06_status/proof/UTV2-###/verification.md`:
+`docs/06_status/proof/WORK-###/verification.md`:
 
 ```markdown
-# PROOF: UTV2-###
+# PROOF: WORK-###
 MERGE_SHA: <40-hex or N/A>
 ASSERTIONS: <count>
 EVIDENCE: <relative paths>
@@ -119,10 +119,10 @@ A proof that omits a skipped step is a false proof. If a check was waived, block
 ## Pre-submit checklist
 
 ```bash
-pnpm exec tsx scripts/ops/proof-auditor-gate.ts --proof-dir docs/06_status/proof/UTV2-### --sha <head> --json
-pnpm exec tsx scripts/ops/runtime-verifier-gate.ts --proof-dir docs/06_status/proof/UTV2-### --sha <head> --json
+pnpm exec tsx scripts/ops/proof-auditor-gate.ts --proof-dir docs/06_status/proof/WORK-### --sha <head> --json
+pnpm exec tsx scripts/ops/runtime-verifier-gate.ts --proof-dir docs/06_status/proof/WORK-### --sha <head> --json
 pnpm ops:proof-check --pr <number> --json
-grep -nE 'TODO|TBD|PLACEHOLDER|INSERT HERE|FILL IN' docs/06_status/proof/UTV2-###/*
+grep -nE 'TODO|TBD|PLACEHOLDER|INSERT HERE|FILL IN' docs/06_status/proof/WORK-###/*
 ```
 
 Running the auditor **without** the `--require-executed-command` flag CI uses will pass locally while CI fails. Match CI's invocation.

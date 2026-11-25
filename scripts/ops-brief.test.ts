@@ -20,7 +20,6 @@ test('ops:brief --static is a local-only compact snapshot with no external/live 
       encoding: 'utf8',
       env: {
         ...process.env,
-        LINEAR_API_TOKEN: '',
         SUPABASE_URL: '',
         SUPABASE_SERVICE_ROLE_KEY: '',
       },
@@ -38,10 +37,10 @@ test('ops:brief --static is a local-only compact snapshot with no external/live 
   );
   assert.match(payload.recommendation.join('\n'), /local static snapshot only/);
   const staticMode = payload.sections[2]!.lines.join('\n');
-  for (const skipped of ['Linear', 'GitHub', 'runtime', 'pipeline', 'product truth', 'DB/live']) {
+  for (const skipped of ['work orders', 'GitHub', 'runtime', 'pipeline', 'product truth', 'DB/live']) {
     assert.match(staticMode, new RegExp(skipped, 'iu'));
   }
-  for (const forbiddenSection of ['Linear', 'GitHub', 'Pipeline', 'Product Truth', 'Proof', 'Closeout']) {
+  for (const forbiddenSection of ['Work Orders', 'GitHub', 'Pipeline', 'Product Truth', 'Proof', 'Closeout']) {
     assert.ok(
       !payload.sections.some((section) => section.name === forbiddenSection),
       `--static must not build ${forbiddenSection}`,

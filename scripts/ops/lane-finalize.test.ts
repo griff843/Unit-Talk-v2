@@ -5,7 +5,6 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
-  applyLinearTierLabel,
   buildLaneFinalizePlan,
   parseLaneFinalizeCliArgs,
   readLaneFinalizeProgress,
@@ -15,7 +14,6 @@ import {
   withLaneFinalizeMergeLock,
   writeLaneFinalizeProgress,
   type LaneFinalizeRunner,
-  type LinearTierQuery,
 } from './lane-finalize.js';
 import { acquireMergeLock, readMergeLock } from './merge-mutex.js';
 import { issueToManifestPath, ROOT, type LaneManifest } from './shared.js';
@@ -59,7 +57,6 @@ test('lane finalize plan chains merge record, proof generation, lane close, and 
     [
       'record_merge',
       'apply_tier_label',
-      'apply_linear_tier_label',
       'generate_proof',
       'generate_t2_proof_bundle',
       'reconcile_current',
@@ -75,16 +72,6 @@ test('lane finalize plan chains merge record, proof generation, lane close, and 
     '--json',
   ]);
   assert.deepEqual(plan.steps[2]?.args, [
-    'exec',
-    'tsx',
-    'scripts/ops/lane-finalize.ts',
-    '--issue',
-    'UTV2-1073',
-    '--apply-linear-tier-label',
-    'T2',
-    '--json',
-  ]);
-  assert.deepEqual(plan.steps[3]?.args, [
     'ops:proof-generate',
     'UTV2-1073',
     '--json',
@@ -94,7 +81,7 @@ test('lane finalize plan chains merge record, proof generation, lane close, and 
     '--pr-url',
     'https://github.com/griff843/Unit-Talk-v2/pull/123',
   ]);
-  assert.deepEqual(plan.steps[4]?.args, [
+  assert.deepEqual(plan.steps[3]?.args, [
     'exec',
     'tsx',
     'scripts/ops/t2-proof-bundle.ts',
@@ -123,7 +110,6 @@ test('lane finalize leaves runtime T2 proof generation to the existing proof pat
     [
       'record_merge',
       'apply_tier_label',
-      'apply_linear_tier_label',
       'generate_proof',
       'reconcile_current',
       'close_lane',
@@ -261,203 +247,6 @@ test('tier label application failure aborts lane finalize', () => {
   );
 });
 
-test('Linear tier label application failure aborts before proof generation', () => {
-  const result = runLaneFinalizePlan(
-    buildLaneFinalizePlan({ manifest: manifest({ tier: 'T2' }), pr: '456' }),
-    {
-      runner: ((command, args) => {
-        if (command === 'pnpm' && args.includes('--apply-linear-tier-label')) {
-          return { status: 1, stdout: '', stderr: 'Linear write failed' };
-        }
-        return { status: 0, stdout: '', stderr: '' };
-      }) as LaneFinalizeRunner,
-    },
-  );
-
-  assert.equal(result.ok, false);
-  assert.equal(result.steps.at(-1)?.id, 'apply_linear_tier_label');
-  assert.equal(result.steps.at(-1)?.status, 'failed');
-  assert.match(result.message, /incomplete.*apply_linear_tier_label.*Re-run/s);
-  assert.deepEqual(result.completed_step_ids, [
-    'record_merge',
-    'apply_tier_label',
-  ]);
-});
-
-test('Linear tier label writer is idempotent when the authoritative label is already present', async () => {
-  let calls = 0;
-  const query: LinearTierQuery = async <T>() => {
-    calls += 1;
-    return {
-      ok: true,
-      data: {
-        issue: {
-          id: 'issue-id',
-          identifier: 'UTV2-1073',
-          labels: { nodes: [{ id: 'tier-t1', name: 'tier:T1' }] },
-          team: { labels: { nodes: [{ id: 'tier-t1', name: 'tier:T1' }] } },
-        },
-        issueLabels: { nodes: [{ id: 'tier-t1', name: 'tier:T1' }] },
-      } as T,
-    };
-  };
-
-  const result = await applyLinearTierLabel({
-    issueId: 'UTV2-1073',
-    tier: 'T1',
-    token: 'test-token',
-    query,
-  });
-
-  assert.equal(result.code, 'linear_tier_label_already_applied');
-  assert.equal(result.changed, false);
-  assert.equal(calls, 1, 'an idempotent re-run must not issue a mutation');
-});
-
-test('Linear tier label writer replaces conflicting tier labels, preserves other labels, and verifies the write', async () => {
-  const variables: Array<Record<string, unknown>> = [];
-  const query: LinearTierQuery = async <T>(document, input) => {
-    variables.push(input);
-    if (document.includes('LaneFinalizeTierLabels')) {
-      return {
-        ok: true,
-        data: {
-          issue: {
-            id: 'issue-id',
-            identifier: 'UTV2-1073',
-            labels: {
-              nodes: [
-                { id: 'area-ops', name: 'area:tooling' },
-                { id: 'tier-t2', name: 'tier:T2' },
-              ],
-            },
-            team: {
-              labels: {
-                nodes: [
-                  { id: 'tier-t1', name: 'tier:T1' },
-                  { id: 'tier-t2', name: 'tier:T2' },
-                ],
-              },
-            },
-          },
-          issueLabels: {
-            nodes: [
-              { id: 'tier-t1', name: 'tier:T1' },
-              { id: 'tier-t2', name: 'tier:T2' },
-            ],
-          },
-        } as T,
-      };
-    }
-    if (document.includes('LaneFinalizeAddTierLabel')) {
-      return {
-        ok: true,
-        data: { issueAddLabel: { success: true } } as T,
-      };
-    }
-    if (document.includes('LaneFinalizeRemoveConflictingTierLabel')) {
-      return {
-        ok: true,
-        data: { issueRemoveLabel: { success: true } } as T,
-      };
-    }
-    return {
-      ok: true,
-      data: {
-        issue: {
-          labels: {
-            nodes: [
-              { id: 'area-ops', name: 'area:tooling' },
-              // Added concurrently after the discovery query. Relation-specific
-              // mutations must preserve it without a read/replace race.
-              { id: 'priority-p1', name: 'priority:1' },
-              { id: 'tier-t1', name: 'tier:T1' },
-            ],
-          },
-        },
-      } as T,
-    };
-  };
-
-  const result = await applyLinearTierLabel({
-    issueId: 'UTV2-1073',
-    tier: 'T1',
-    token: 'test-token',
-    query,
-  });
-
-  assert.equal(result.code, 'linear_tier_label_applied');
-  assert.equal(result.changed, true);
-  assert.deepEqual(variables[1], {
-    issueId: 'issue-id',
-    labelId: 'tier-t1',
-  });
-  assert.deepEqual(variables[2], {
-    issueId: 'issue-id',
-    labelId: 'tier-t2',
-  });
-  assert.deepEqual(result.labels, [
-    'area:tooling',
-    'priority:1',
-    'tier:T1',
-  ]);
-});
-
-test('Linear tier label writer fails closed when the mutation response does not verify the requested tier', async () => {
-  let calls = 0;
-  const query: LinearTierQuery = async <T>(document) => {
-    calls += 1;
-    if (document.includes('LaneFinalizeAddTierLabel')) {
-      return {
-        ok: true,
-        data: { issueAddLabel: { success: true } } as T,
-      };
-    }
-    if (document.includes('LaneFinalizeRemoveConflictingTierLabel')) {
-      return {
-        ok: true,
-        data: { issueRemoveLabel: { success: true } } as T,
-      };
-    }
-    return {
-      ok: true,
-      data: (document.includes('LaneFinalizeTierLabels')
-        ? {
-            issue: {
-              id: 'issue-id',
-              identifier: 'UTV2-1073',
-              labels: { nodes: [{ id: 'tier-t2', name: 'tier:T2' }] },
-              team: {
-                labels: { nodes: [{ id: 'tier-t1', name: 'tier:T1' }] },
-              },
-            },
-            issueLabels: {
-              nodes: [
-                { id: 'tier-t1', name: 'tier:T1' },
-                { id: 'tier-t2', name: 'tier:T2' },
-              ],
-            },
-          }
-        : {
-            issue: {
-              labels: { nodes: [{ id: 'tier-t2', name: 'tier:T2' }] },
-            },
-          }) as T,
-    };
-  };
-
-  await assert.rejects(
-    applyLinearTierLabel({
-      issueId: 'UTV2-1073',
-      tier: 'T1',
-      token: 'test-token',
-      query,
-    }),
-    /verification failed.*tier:T2/,
-  );
-  assert.equal(calls, 4);
-});
-
 test('a partial finalize durably resumes without repeating completed steps', () => {
   const plan = buildLaneFinalizePlan({
     manifest: manifest({ tier: 'T1' }),
@@ -476,7 +265,6 @@ test('a partial finalize durably resumes without repeating completed steps', () 
   assert.deepEqual(durable, [
     'record_merge',
     'apply_tier_label',
-    'apply_linear_tier_label',
   ]);
 
   const rerunCommands: string[] = [];
@@ -491,17 +279,11 @@ test('a partial finalize durably resumes without repeating completed steps', () 
   assert.equal(resumed.ok, true);
   assert.equal(resumed.resumed, true);
   assert.deepEqual(
-    resumed.steps.slice(0, 3).map((step) => step.status),
-    ['skipped', 'skipped', 'skipped'],
+    resumed.steps.slice(0, 2).map((step) => step.status),
+    ['skipped', 'skipped'],
   );
   assert.equal(
     rerunCommands.some((command) => command.includes('record-merge')),
-    false,
-  );
-  assert.equal(
-    rerunCommands.some((command) =>
-      command.includes('--apply-linear-tier-label'),
-    ),
     false,
   );
 });
@@ -699,7 +481,6 @@ test('a reopened lane starts a fresh finalize generation instead of skipping com
     completed.completed_step_ids = [
       'record_merge',
       'apply_tier_label',
-      'apply_linear_tier_label',
       'generate_proof',
       'generate_t2_proof_bundle',
       'reconcile_current',

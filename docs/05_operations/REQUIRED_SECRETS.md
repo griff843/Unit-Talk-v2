@@ -51,16 +51,6 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "purpose": "Read-only API access for ci-doctor to list secrets, inspect branch protection, and read workflow run history. Auto-provided by GitHub Actions; never manually configured."
     },
     {
-      "name": "LINEAR_API_TOKEN",
-      "required": true,
-      "source": "manual",
-      "scope": "repo",
-      "used_by": [
-        ".github/workflows/linear-auto-close.yml"
-      ],
-      "purpose": "Linear API write token used by linear-auto-close to transition referenced UTV2 issues to Done and post merge-SHA comments on push to main."
-    },
-    {
       "name": "UNIT_TALK_OPS_ALERT_WEBHOOK_URL",
       "required": false,
       "source": "manual",
@@ -574,16 +564,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
 - **Fail-closed implications when missing:** `ci-doctor` exits `3` (infra) and cannot report. `CS1`, `CS2`, `CS3`, `CR1`..`CR4`, `CV5`, and `CH1`..`CH4` all return `infra_error`. The daily digest surfaces the stale artifact as a FAIL-equivalent.
 - **Scope restrictions:** Must not be used with any write scope. ci-doctor's contract (`CI_DOCTOR_SPEC.md` §4) forbids mutation tokens.
 
-### 3.2 `LINEAR_API_TOKEN`
+### 3.2 `LINEAR_API_TOKEN` (retired 2026-11-25)
 
-- **Required:** Yes for the Linear auto-close path to function. The repo merges to `main` will still succeed without it, but referenced UTV2 issues will not auto-transition.
-- **Scope:** Repo-level secret. Write scope on Linear (needed to update issue state and post comments).
-- **Used by:** `.github/workflows/linear-auto-close.yml` (steps that call the Linear API on `push` to `main`).
-- **Local vs CI:**
-  - **CI:** required; absence causes the `linear-auto-close` job to fail at runtime.
-  - **Local:** not required for normal development. Only required if an operator manually runs the auto-close script locally for replay/recovery.
-- **Fail-closed implications when missing:** `linear-auto-close` job fails; the workflow is not in main's required-check set, so this does not block merges. Linear drift accumulates silently until the token is restored, which is a known acceptable degradation (the close intent is derivable from merge SHA at any later point).
-- **Rotation:** after rotation, re-run `pnpm ops:ci-doctor -- --scope secrets` locally to confirm the new secret existence.
+- Retired with the Linear workflow. `linear-auto-close.yml` was deleted and no workflow or script reads this secret. The repo secret can be deleted.
 
 ### 3.3 `SUPABASE_ACCESS_TOKEN`
 
@@ -655,7 +638,7 @@ The following are intentionally excluded and must stay out of the fenced JSON bl
 
 ### 4.1 Workflow-local placeholder env vars
 
-The `ci.yml` `verify` job writes a `local.env` file with empty placeholder values for `LINEAR_API_TOKEN`, `NOTION_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`, `DISCORD_ANNOUNCEMENT_CHANNEL_ID`, and `OPENAI_API_KEY`. These are **not** `${{ secrets.* }}` references; they are empty strings used to satisfy `@unit-talk/config` validation in CI mode. Including them here would cause `CS3` to fail because they are not actually configured as GitHub secrets.
+The `ci.yml` `verify` job writes a `local.env` file with empty placeholder values for `NOTION_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`, `DISCORD_ANNOUNCEMENT_CHANNEL_ID`, and `OPENAI_API_KEY`. These are **not** `${{ secrets.* }}` references; they are empty strings used to satisfy `@unit-talk/config` validation in CI mode. Including them here would cause `CS3` to fail because they are not actually configured as GitHub secrets.
 
 **Note:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` were previously excluded here because `ci.yml` used them as placeholder env vars. They are now included in §2 because `proof-regression.yml` also references them as actual `${{ secrets.* }}` references (guarded by `HAS_SUPABASE`). The `ci.yml` placeholder usage remains excluded per the above rule — those are not `${{ secrets.* }}` references and are not counted by `CW6`.
 

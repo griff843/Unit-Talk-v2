@@ -13,8 +13,6 @@ function makeBaseEnv(overrides: Partial<AppEnv> = {}): AppEnv {
     UNIT_TALK_APP_ENV: 'local',
     UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\dev\\unit-talk-v2',
     UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
-    LINEAR_TEAM_KEY: 'UTV2',
-    LINEAR_TEAM_NAME: 'unit-talk-v2',
     NOTION_WORKSPACE_NAME: 'unit-talk-v2',
     SLACK_WORKSPACE_NAME: 'unit-talk-v2',
     ...overrides,

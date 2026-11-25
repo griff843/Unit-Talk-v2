@@ -9,6 +9,8 @@ This document defines how execution truth is established, enforced, and verified
 
 When this document and any other source disagree, **this document wins**. Update it instead of working around it.
 
+> **2026-11-25:** the Linear workflow is retired. Repo work orders (`.ops/work/WORK-*.md`) replace Linear issues as rank 4. Older references to UTV2 issue ids describe legacy lanes.
+
 ---
 
 ## 1. Truth Hierarchy
@@ -20,7 +22,7 @@ Execution truth is ranked. Higher ranks win unconditionally.
 | 1 | **GitHub `main`** | shipped code, merge SHAs, CI state on merge | what is in progress, intent |
 | 2 | **Proof bundle** (tied to merge SHA) | completion evidence for T1/T2 | anything beyond the linked SHA |
 | 3 | **Lane manifest** (`docs/06_status/lanes/*.json`) | active lane state, file locks, heartbeats | shipped outcomes |
-| 4 | **Linear issue state** | workflow intent, ownership, tier label | whether code is actually merged |
+| 4 | **Work order** (`.ops/work/WORK-*.md`) | workflow intent, tier, acceptance criteria | whether code is actually merged |
 | 5 | **Chat, memory, agent claims, session notes** | context only | **nothing — never authoritative** |
 
 **Laws:**
@@ -45,12 +47,12 @@ Ready ──▶ Lane Started ──▶ In Progress ──▶ In Review ──▶
 
 | State | Entry Condition | Exit Condition | Authority |
 |---|---|---|---|
-| **Ready** | Linear issue has tier label, acceptance criteria, allowed-files scope | `ops:lane-start` succeeds | Linear |
+| **Ready** | committed work order has a tier, acceptance criteria and allowed-files scope | `ops:lane-start` succeeds | Work order |
 | **Lane Started** | manifest created, preflight token valid, worktree + branch created, file locks acquired | first commit pushed | Manifest |
 | **In Progress** | commits landing, heartbeat fresh | PR opened | Manifest |
 | **In Review** | PR open, CI running | PR merged into `main` | GitHub |
 | **Merged** | merge commit on `main` first-parent history | `ops:truth-check` passes | GitHub |
-| **Done** | `ops:truth-check` pass recorded in manifest, Linear transitioned, manifest closed | — | Truth-check output |
+| **Done** | `ops:truth-check` pass recorded in manifest, manifest closed | — | Truth-check output |
 | **Blocked** | explicit blocker with reason + reference | blocker resolved | Manifest |
 | **Reopened** | post-Done truth-check failure OR follow-up fix within 24h without linked issue | re-entry to In Progress | Truth-check |
 
@@ -61,9 +63,9 @@ These are the **only** sanctioned lane transitions:
 | Command | Purpose | Fails If |
 |---|---|---|
 | `ops:preflight` | verifies env, git, deps, secrets; emits preflight token | any precondition missing |
-| `ops:lane-start <UTV2-###>` | creates manifest, worktree, branch, file locks | no preflight token, issue missing tier, file-scope collision |
-| `ops:lane-close <UTV2-###>` | runs truth-check, transitions Linear, closes manifest | truth-check fails |
-| `ops:truth-check <UTV2-###>` | the done-gate (see `TRUTH_CHECK_SPEC.md`) | any mechanical check fails |
+| `ops:lane-start <WORK-###>` | creates manifest, worktree, branch, file locks | no preflight token, no committed work order or tier, file-scope collision |
+| `ops:lane-close <WORK-###>` | runs truth-check, closes manifest | truth-check fails |
+| `ops:truth-check <WORK-###>` | the done-gate (see `TRUTH_CHECK_SPEC.md`) | any mechanical check fails |
 
 **No lane may start without a valid preflight token. No lane may be closed without a passing truth-check. These are hard gates, not conventions.**
 
@@ -76,9 +78,8 @@ An issue is **Done** if and only if **all** are true:
 1. A merge commit exists on `main`'s first-parent history referencing the issue.
 2. CI on that merge commit is green.
 3. Required proof artifacts exist at declared paths and reference the merge SHA.
-4. `ops:truth-check <UTV2-###>` exits 0.
-5. The lane manifest records the truth-check pass and has `status: closed`.
-6. The Linear issue is transitioned to Done by `ops:lane-close`, not by hand.
+4. `ops:truth-check <WORK-###>` exits 0.
+5. The lane manifest records the truth-check pass and has `status: closed`, written by `ops:lane-close`, not by hand.
 
 An issue is **not Done** on the basis of:
 - agent narrative ("I completed this")
@@ -94,7 +95,7 @@ An issue is **not Done** on the basis of:
 
 ## 4. Tier Model
 
-Every Linear issue carries exactly one machine-readable tier label. Tier determines proof, verification, and merge requirements.
+Every work order carries exactly one machine-readable tier (`Tier: T1|T2|T3`), snapshotted into the lane manifest at lane start; `ops:lane-finalize` applies the matching PR label. Tier determines proof, verification, and merge requirements.
 
 | Tier | Scope | Required Verification | Required Proof | Merge Authority |
 |---|---|---|---|---|
@@ -128,7 +129,7 @@ The placement law: **if a rule can be enforced mechanically, it must not live on
 | Scope bleed on Codex returns | `ops:scope-diff` against task packet `allowed_files` |
 | Merge authority per tier | GitHub branch protection + CODEOWNERS + PR labels |
 | Evidence schema | `evidence_bundle_v1.schema.json` + `evidence:validate` |
-| Issue tier labels | Linear automation + `ops:lane-start` refusal |
+| Work tier | work order `Tier:` line + `ops:preflight` / `ops:lane-start` refusal |
 | Truth hierarchy / lifecycle spec | this document |
 | Domain purity rules | `betting-domain` skill + CI import guards |
 | Session bootstrap | `session-bootstrap` skill |
@@ -141,7 +142,7 @@ The placement law: **if a rule can be enforced mechanically, it must not live on
 
 **What belongs in CI:** anything mechanically checkable on a PR or scheduled cadence.
 
-**What belongs in GitHub/Linear policy:** branch protection, required checks, CODEOWNERS, required labels, state transitions.
+**What belongs in GitHub policy:** branch protection, required checks, CODEOWNERS, required labels, state transitions.
 
 ---
 
@@ -153,7 +154,7 @@ An issue returns from Done to In Progress (and manifest reopens) if **any** are 
 - A follow-up commit on `main` within 24h touches files in `files_changed` without a linked follow-up issue.
 - Required proof artifacts become unreadable or schema-invalid.
 - Phase-boundary guard flags a violation traced to the merge SHA.
-- PM explicitly reopens via label `reopened` on the Linear issue.
+- PM explicitly reopens via label `reopened` on the PR.
 
 Reopen is mechanical and logged in the manifest's `reopen_history` field.
 

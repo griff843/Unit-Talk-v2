@@ -6,18 +6,18 @@ Load current system state before acting. Run at session start and after `/clear`
 
 ## Steps
 
-1. **Run ops:brief** — get lane health, Linear queue, runtime status:
+1. **Run ops:brief** — get lane health, open work orders, runtime status:
    ```bash
    pnpm ops:brief
    ```
    If active Codex lanes exist: `pnpm codex:status`
 
-2. **Read Linear queue** — via `pnpm linear:work` or Linear MCP. Note Ready, In Progress, In Review issues.
+2. **Read open work orders** — `.ops/work/WORK-*.md` with no lane manifest yet (listed by `pnpm ops:brief`).
 
-3. **Reconcile** — for each In Progress/In Review issue:
-   - PR merged → mark Done
-   - Branch stale/abandoned → mark blocked
-   - Code on main already → mark Done
+3. **Reconcile** — for each active lane manifest:
+   - PR merged → `pnpm ops:lane-close <ID>`
+   - Branch stale/abandoned → mark the manifest blocked
+   - Code on main already → `pnpm ops:lane-close <ID> --repair-merged`
    ```bash
    pnpm github:current
    ```
@@ -33,4 +33,4 @@ Load current system state before acting. Run at session start and after `/clear`
 
 **Proceed** when milestone is clear, executable issues exist, no stale conflicts.
 
-**Stop** when Linear conflicts with repo truth, milestone is unclear, baseline is red, or a T1 issue has no contract.
+**Stop** when a work order conflicts with repo truth, milestone is unclear, baseline is red, or a T1 issue has no contract.

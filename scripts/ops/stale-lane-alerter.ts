@@ -2,7 +2,7 @@ import { buildServicePresentation } from '@unit-talk/domain';
 /**
  * UTV2-670: Read-only stale lane alerter
  *
- * Compares lane manifests against GitHub PR/branch state and Linear issue state.
+ * Compares lane manifests against GitHub PR/branch state.
  * Emits a structured drift report and posts a Discord alert on drift.
  * Never mutates manifests or closes lanes.
  *
@@ -27,7 +27,6 @@ import {
 export type DriftKind =
   | 'pr_merged_lane_open'
   | 'branch_deleted_lane_open'
-  | 'linear_done_lane_open'
   | 'done_missing_closed_at'
   | 'zombie_lane'
   | 'lease_stale_reclaim_required';
@@ -67,7 +66,6 @@ const LANE_DRIFT_DIR = path.join(ROOT, '.out', 'ops', 'lane-drift');
 const githubToken = process.env.GITHUB_TOKEN?.trim() ?? '';
 const repoSlug =
   process.env.GITHUB_REPOSITORY?.trim() ?? deriveRepoSlug();
-const linearToken = process.env.LINEAR_API_TOKEN?.trim() ?? '';
 const webhookUrl = process.env.UNIT_TALK_OPS_ALERT_WEBHOOK_URL?.trim() ?? '';
 const writeResult = process.argv.includes('--write-result');
 const jsonMode = process.argv.includes('--json');
@@ -113,35 +111,6 @@ async function branchExistsOnRemote(branch: string): Promise<boolean | null> {
   return true;
 }
 
-// ── Linear helper ──────────────────────────────────────────────────────────
-
-async function getLinearIssueState(issueId: string): Promise<string | null> {
-  if (!linearToken) return null;
-  try {
-    const identifier = issueId.toUpperCase();
-    const body = JSON.stringify({
-      query: `query { issue(id: "${identifier}") { state { type } } }`,
-    });
-    const response = await fetch('https://api.linear.app/graphql', {
-      method: 'POST',
-      headers: {
-        Authorization: linearToken,
-        'Content-Type': 'application/json',
-        'User-Agent': 'unit-talk-ops-stale-lane-alerter',
-      },
-      body,
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!response.ok) return null;
-    const json = (await response.json()) as {
-      data?: { issue?: { state?: { type?: string } } };
-    };
-    return json.data?.issue?.state?.type ?? null;
-  } catch {
-    return null;
-  }
-}
-
 // ── Discord alert ──────────────────────────────────────────────────────────
 
 async function postOpsAlert(message: string): Promise<void> {
@@ -168,7 +137,7 @@ export function buildStaleLaneAlertMessage(input: StaleLaneAlertInput): string {
     ),
   ];
   if (input.infra_errors.length > 0) {
-    lines.push('', `_${input.infra_errors.length} check(s) skipped (no GitHub/Linear token)_`);
+    lines.push('', `_${input.infra_errors.length} check(s) skipped (no GitHub token)_`);
   }
   return lines.join('\n');
 }
@@ -254,20 +223,7 @@ async function checkManifest(
     });
   }
 
-  // 4. Linear issue Done/Cancelled but lane open
-  const linearState = await getLinearIssueState(manifest.issue_id);
-  if (linearState !== null && (linearState === 'completed' || linearState === 'cancelled')) {
-    entries.push({
-      issue_id: manifest.issue_id,
-      kind: 'linear_done_lane_open',
-      detail: `Linear issue state is "${linearState}" but lane status is "${manifest.status}"`,
-      manifest_status: manifest.status,
-      pr_url: manifest.pr_url,
-      branch: manifest.branch,
-    });
-  }
-
-  // 5. Zombie: in_progress with heartbeat older than threshold
+  // 4. Zombie: in_progress with heartbeat older than threshold
   //    Codex lanes use a 1h threshold for faster slot reclaim.
   //    Claude lanes keep the 48h threshold.
   if (manifest.status === 'in_progress' && manifest.heartbeat_at) {

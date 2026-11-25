@@ -165,12 +165,12 @@ Type-level headroom (§1, read live from CONCURRENCY_CONFIG.json this cycle):
   Delivery/UI:    {N}/1-per-app  Verification: {N}/1-per-target
 
 Merge-risk status: {N} hard_fail / {N} block / {N} warning
-  HARD_FAIL  {code}: {detail} — lanes: {UTV2-###}
-  BLOCK      {code}: {detail} — lanes: {UTV2-###}
+  HARD_FAIL  {code}: {detail} — lanes: {WORK-###}
+  BLOCK      {code}: {detail} — lanes: {WORK-###}
   WARNING    {code}: {detail}
 
 Safe to dispatch:
-  UTV2-NNN [Hygiene, T2, codex] — disjoint scope, slot available, no forbidden pair
+  WORK-NNN [Hygiene, T2, codex] — disjoint scope, slot available, no forbidden pair
   UTV2-MMM [Governance, T3, codex] — no blockers, within Governance cap (1/3)
 
 Blocked (do not dispatch):
@@ -180,7 +180,7 @@ Blocked (do not dispatch):
   UTV2-UUU [T1, claude] — blocked_by: UTV2-VVV still active
 
 PM authorization required:
-  Dispatching UTV2-NNN + UTV2-MMM would bring total to {N} lanes (above the policy §10 baseline).
+  Dispatching WORK-NNN + UTV2-MMM would bring total to {N} lanes (above the policy §10 baseline).
   §10 requires explicit PM authorization in the dispatch instruction. Authorization does not persist.
 
 Pre-dispatch gate status (at the policy §10 pre-dispatch-gate threshold):
