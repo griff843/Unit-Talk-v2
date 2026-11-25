@@ -130,6 +130,43 @@ async function resetMutableTables(client: ReturnType<typeof createClient>): Prom
   }
 }
 
+/**
+ * WORK-2026112503 — `provider_offer_history` is partitioned by day and nothing
+ * on staging creates future partitions (production has its own path). On
+ * 2026-11-25 staging had none after 2026-11-24, so every insert dated today
+ * failed with "no partition of relation provider_offer_history found for row"
+ * and the staging DB proof (and therefore every PR's `verify`) went red.
+ *
+ * Each proof run now ensures a rolling window of daily partitions before the
+ * suites write. `ensure_provider_offer_history_partitions` is idempotent
+ * (create-if-missing), so overlapping runs are harmless.
+ */
+export const PARTITION_LOOKBACK_DAYS = 1;
+export const PARTITION_LOOKAHEAD_DAYS = 14;
+
+export function partitionWindow(now: Date): { p_start_day: string; p_end_day: string } {
+  const day = (offset: number) =>
+    new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + offset))
+      .toISOString()
+      .slice(0, 10);
+  return { p_start_day: day(-PARTITION_LOOKBACK_DAYS), p_end_day: day(PARTITION_LOOKAHEAD_DAYS) };
+}
+
+async function ensureOfferHistoryPartitions(client: ReturnType<typeof createClient>): Promise<void> {
+  const window = partitionWindow(new Date());
+  const { data, error } = await client.rpc('ensure_provider_offer_history_partitions', window);
+  if (error) {
+    // Fail closed: without today's partition the suites fail later with a
+    // misleading error far from the cause.
+    console.error(`[seed-staging] provider_offer_history partitions: ${error.message}`);
+    process.exit(1);
+  }
+  const count = Array.isArray(data) ? data.length : 0;
+  console.log(
+    `[seed-staging] provider_offer_history partitions ensured ${window.p_start_day}..${window.p_end_day} (${count} day(s))`,
+  );
+}
+
 async function main(): Promise<void> {
   // Resolve from the same sources the DB clients use (local.env > .env >
   // .env.example, then process.env). Reading process.env alone is exactly the
@@ -158,6 +195,7 @@ async function main(): Promise<void> {
   });
 
   await resetMutableTables(client);
+  await ensureOfferHistoryPartitions(client);
 
   for (const { table, rows } of STAGING_FIXTURES) {
     const { error } = await client.from(table).upsert(rows, { onConflict: 'id' });
@@ -187,7 +225,7 @@ async function main(): Promise<void> {
     console.error(`[seed-staging] best-bets board drain: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
-  console.log('[seed-staging] done (mutable tables reset, reference data re-seeded, board drained)');
+  console.log('[seed-staging] done (mutable tables reset, partitions ensured, reference data re-seeded, board drained)');
 }
 
 /**
