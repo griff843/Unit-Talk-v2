@@ -220,10 +220,10 @@ test('dispatch skill documents the Codex lane workflow', () => {
   );
 
   assert.match(skill, /name: dispatch/);
-  assert.match(skill, /pnpm codex:dispatch -- --issue UTV2-###/);
+  assert.match(skill, /pnpm codex:dispatch -- --issue WORK-###/);
   assert.match(skill, /pnpm codex:status/);
-  assert.match(skill, /pnpm codex:receive -- --issue UTV2-###/);
-  assert.match(skill, /pnpm ops:lane-finalize -- --issue UTV2-###/);
+  assert.match(skill, /pnpm codex:receive -- --issue WORK-###/);
+  assert.match(skill, /pnpm ops:lane-finalize -- --issue WORK-###/);
   assert.match(skill, /main checkout is control and merge only/i);
   assert.match(skill, /Do not use the removed `--allowed` flag/);
 });
