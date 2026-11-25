@@ -16,7 +16,28 @@
 import path from 'node:path';
 
 export const RECEIPT_SCHEMA = 'db-health-tripwire-receipt/v1';
-export const LINEAR_ISSUE_ID = 'UTV2-1300';
+/**
+ * The Linear issue that receives tripwire alerts.
+ *
+ * It used to be the constant `UTV2-1300`. That issue stopped resolving in
+ * Linear, so every alert since failed with "Entity not found" and no finding
+ * reached the tracker. The default is now UTV2-1982, the issue that owns this
+ * monitor's repair, and an operator can point alerts elsewhere with the
+ * `DB_TRIPWIRE_LINEAR_ISSUE` environment variable without a code change.
+ */
+export const LINEAR_ISSUE_ENV = 'DB_TRIPWIRE_LINEAR_ISSUE';
+export const DEFAULT_LINEAR_ISSUE_ID = 'UTV2-1982';
+
+export function resolveLinearIssueKey(env: NodeJS.ProcessEnv = process.env): string {
+  const raw = (env[LINEAR_ISSUE_ENV] ?? '').trim();
+  if (!raw) return DEFAULT_LINEAR_ISSUE_ID;
+  if (!/^[A-Z][A-Z0-9]*-\d+$/.test(raw)) {
+    throw new HarnessError(
+      `${LINEAR_ISSUE_ENV} must be a Linear issue key such as UTV2-1234, got ${JSON.stringify(raw)}`,
+    );
+  }
+  return raw;
+}
 export const DEFAULT_RECEIPT_PATH = path.join('artifacts', 'db-health-tripwire-receipt.json');
 
 /** Exit code for "the harness could not run the checks". Distinct from a finding. */
@@ -99,7 +120,13 @@ export const THRESHOLD_SPECS: readonly ThresholdSpec[] = [
   { key: 'GAME_RESULTS_SIZE_THRESHOLD_MB', unit: 'MB', kind: 'int', fallback: 300 },
   { key: 'AUTOVACUUM_STALENESS_HOURS', unit: 'hours', kind: 'int', fallback: 24 },
   { key: 'STATEMENT_TIMEOUT_RATE_THRESHOLD', unit: 'events/hour', kind: 'int', fallback: 3 },
-  { key: 'TOAST_BLOAT_RATIO_THRESHOLD', unit: 'ratio', kind: 'float', fallback: 0.8 },
+  // Share of the TOAST relation's tuples that are dead. Not the TOAST share of
+  // the table's size: an append-only jsonb table keeps nearly all of its bytes
+  // in TOAST by design, so that ratio reads ~99% on a perfectly healthy table.
+  // A new key on purpose: the workflow still exports the retired
+  // TOAST_BLOAT_RATIO_THRESHOLD=0.8, which measured the old size share and must
+  // not be silently reinterpreted as a dead-tuple ratio.
+  { key: 'TOAST_DEAD_TUPLE_RATIO_THRESHOLD', unit: 'dead tuple ratio', kind: 'float', fallback: 0.2 },
 ] as const;
 
 export const SIZE_THRESHOLD_KEY_BY_TABLE: Record<TableName, string> = {
@@ -340,7 +367,13 @@ export function deriveOutcome(checks: readonly CheckOutcome[]): TripwireOutcome 
 // value against a threshold, independently of whether a database was reachable.
 // ---------------------------------------------------------------------------
 
+/**
+ * One relation's vacuum statistics. For a partitioned hot table there is one row
+ * per member of its partition tree (the parent itself never carries stats);
+ * for a plain table there is exactly one row. `hot_table` groups them.
+ */
 export interface VacuumRow {
+  hot_table: string;
   relname: string;
   last_vacuum: Date | null;
   last_autovacuum: Date | null;
@@ -348,7 +381,17 @@ export interface VacuumRow {
   last_autoanalyze: Date | null;
   n_dead_tup: string;
   n_live_tup: string;
-  dead_tup_pct: string | null;
+  n_mod_since_analyze: string;
+  /**
+   * The relation's EFFECTIVE autovacuum settings: its own reloptions where set
+   * (e.g. system_runs is tuned to 0.02/0.01 by UTV2-1640), else the cluster
+   * setting. Text, as Postgres reports settings. Null or unparseable falls back
+   * to the stock defaults below.
+   */
+  vacuum_threshold: string | null;
+  vacuum_scale_factor: string | null;
+  analyze_threshold: string | null;
+  analyze_scale_factor: string | null;
 }
 
 export interface SizeRow {
@@ -358,76 +401,182 @@ export interface SizeRow {
   total_bytes: string;
 }
 
+/** Statistics of a hot table's TOAST relation (`pg_class.reltoastrelid`). */
 export interface ToastBloatRow {
   relname: string;
-  heap_size: string;
-  toast_plus_index_size: string;
+  toast_relname: string | null;
+  toast_size: string | null;
   total_size: string;
-  toast_pct: string | null;
+  toast_live_tup: string | null;
+  toast_dead_tup: string | null;
 }
 
 const HOURS = 60 * 60 * 1000;
 const DEAD_TUPLE_PCT_LIMIT = 20;
-const DEAD_TUPLE_ABSOLUTE_LIMIT = 100_000;
 
-export function evaluateAutovacuumRow(
-  row: VacuumRow,
+// Postgres's autovacuum trigger: a relation is due for vacuum once dead tuples
+// exceed `threshold + scale_factor * live`, and due for analyze once
+// modifications since the last analyze exceed the analyze equivalent. Each
+// relation's effective settings are read from the catalog; these stock values
+// are only the fallback when a setting could not be read. The check asks whether Postgres's OWN trigger has been
+// crossed and autovacuum then failed to act within the staleness window. That
+// is the signature of the 2026-06-22 incident (dead autovacuum, write path
+// stalling); it does not fire for a table that simply has nothing to vacuum.
+export const AUTOVACUUM_VACUUM_THRESHOLD = 50;
+export const AUTOVACUUM_VACUUM_SCALE_FACTOR = 0.2;
+export const AUTOVACUUM_ANALYZE_THRESHOLD = 50;
+export const AUTOVACUUM_ANALYZE_SCALE_FACTOR = 0.1;
+
+function latest(...dates: Array<Date | null>): Date | null {
+  let out: Date | null = null;
+  for (const d of dates) if (d && (!out || d > out)) out = d;
+  return out;
+}
+
+function setting(raw: string | null, fallback: number): number {
+  const n = raw === null ? Number.NaN : Number.parseFloat(raw);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+function toInt(raw: string | null): number {
+  const n = raw === null ? Number.NaN : Number.parseInt(raw, 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+interface MemberVerdict {
+  relname: string;
+  reasons: string[];
+  critical: boolean;
+  dead: number;
+  live: number;
+  mods: number;
+  lastVacuumActivity: Date | null;
+  lastAnalyzeActivity: Date | null;
+}
+
+function evaluateVacuumMember(row: VacuumRow, cutoff: Date): MemberVerdict {
+  const dead = toInt(row.n_dead_tup);
+  const live = toInt(row.n_live_tup);
+  const mods = toInt(row.n_mod_since_analyze);
+  // Manual and automatic runs are equivalent evidence. `last_vacuum` alone is
+  // manual VACUUM only, which a healthy autovacuum-managed table never has.
+  const lastVacuumActivity = latest(row.last_vacuum, row.last_autovacuum);
+  const lastAnalyzeActivity = latest(row.last_analyze, row.last_autoanalyze);
+
+  // The triggers autovacuum actually uses for THIS relation, so a table tuned
+  // to vacuum early is held to its tuned threshold, not the stock one.
+  const vacuumTrigger =
+    setting(row.vacuum_threshold, AUTOVACUUM_VACUUM_THRESHOLD) +
+    setting(row.vacuum_scale_factor, AUTOVACUUM_VACUUM_SCALE_FACTOR) * live;
+  const analyzeTrigger =
+    setting(row.analyze_threshold, AUTOVACUUM_ANALYZE_THRESHOLD) +
+    setting(row.analyze_scale_factor, AUTOVACUUM_ANALYZE_SCALE_FACTOR) * live;
+  const deadPct = dead + live === 0 ? 0 : (dead / (dead + live)) * 100;
+
+  const vacuumOverdue =
+    dead > vacuumTrigger && (lastVacuumActivity === null || lastVacuumActivity < cutoff);
+  const analyzeOverdue =
+    mods > analyzeTrigger && (lastAnalyzeActivity === null || lastAnalyzeActivity < cutoff);
+  const deadBloat = deadPct > DEAD_TUPLE_PCT_LIMIT && dead > vacuumTrigger;
+
+  const fmt = (d: Date | null): string => (d ? d.toISOString() : 'never');
+  const reasons: string[] = [];
+  if (vacuumOverdue) {
+    reasons.push(
+      `${row.relname}: ${dead} dead tuples past the autovacuum trigger (${Math.round(vacuumTrigger)}) ` +
+        `and no vacuum since ${fmt(lastVacuumActivity)}`,
+    );
+  }
+  if (deadBloat) {
+    reasons.push(`${row.relname}: dead_tup_pct=${deadPct.toFixed(2)}% over ${DEAD_TUPLE_PCT_LIMIT}%`);
+  }
+  if (analyzeOverdue) {
+    reasons.push(
+      `${row.relname}: ${mods} modifications past the autoanalyze trigger (${Math.round(analyzeTrigger)}) ` +
+        `and no analyze since ${fmt(lastAnalyzeActivity)}`,
+    );
+  }
+  return {
+    relname: row.relname,
+    reasons,
+    critical: vacuumOverdue || deadBloat,
+    dead,
+    live,
+    mods,
+    lastVacuumActivity,
+    lastAnalyzeActivity,
+  };
+}
+
+/**
+ * Evaluate one hot table from the vacuum statistics of every member of its
+ * partition tree (one row for a plain table).
+ */
+export function evaluateAutovacuumTable(
+  hotTable: string,
+  rows: readonly VacuumRow[],
   thresholds: ThresholdTable,
   now: Date,
 ): CheckOutcome {
   const limit = threshold(thresholds, 'AUTOVACUUM_STALENESS_HOURS');
+  const thresholdBlock = {
+    key: limit.key,
+    value: limit.value,
+    unit: limit.unit,
+    source: limit.source,
+  };
+  if (rows.length === 0) {
+    return notRunCheck(
+      'autovacuum_staleness',
+      hotTable,
+      `${hotTable} has no row in pg_stat_user_tables; vacuum statistics could not be measured`,
+    );
+  }
+
   const cutoff = new Date(now.getTime() - limit.value * HOURS);
-
-  const staleAnalyze = row.last_analyze === null || row.last_analyze < cutoff;
-  const missingVacuum = row.last_vacuum === null;
-  const missingAutovacuum = row.last_autovacuum === null;
-  const deadTuplePct = row.dead_tup_pct === null ? 0 : Number.parseFloat(row.dead_tup_pct);
-  const deadTuples = Number.parseInt(row.n_dead_tup, 10);
-
-  const hoursSinceAnalyze =
-    row.last_analyze === null ? null : (now.getTime() - row.last_analyze.getTime()) / HOURS;
-
-  const reasons = [
-    staleAnalyze
-      ? `last_analyze=${row.last_analyze ? row.last_analyze.toISOString() : 'never run'}`
-      : null,
-    missingVacuum ? 'last_vacuum=never run' : null,
-    missingAutovacuum ? 'last_autovacuum=never run' : null,
-    deadTuplePct > DEAD_TUPLE_PCT_LIMIT ? `dead_tup_pct=${deadTuplePct.toFixed(2)}%` : null,
-  ].filter((reason): reason is string => reason !== null);
-
+  const members = rows.map((row) => evaluateVacuumMember(row, cutoff));
+  const reasons = members.flatMap((m) => m.reasons);
   const tripped = reasons.length > 0;
   const severity: Severity | null = !tripped
     ? null
-    : missingVacuum ||
-        deadTuplePct > DEAD_TUPLE_PCT_LIMIT ||
-        (Number.isFinite(deadTuples) && deadTuples > DEAD_TUPLE_ABSOLUTE_LIMIT)
+    : members.some((m) => m.critical)
       ? 'critical'
       : 'warn';
 
+  const dead = members.reduce((a, m) => a + m.dead, 0);
+  const live = members.reduce((a, m) => a + m.live, 0);
+  const mods = members.reduce((a, m) => a + m.mods, 0);
+  const lastVacuum = latest(...members.map((m) => m.lastVacuumActivity));
+  const lastAnalyze = latest(...members.map((m) => m.lastAnalyzeActivity));
+  const hoursSinceVacuum =
+    lastVacuum === null ? null : (now.getTime() - lastVacuum.getTime()) / HOURS;
+  const idle = dead === 0 && mods === 0;
+
   const observedDetail =
-    `last_vacuum=${row.last_vacuum ? row.last_vacuum.toISOString() : 'never run'}, ` +
-    `last_autovacuum=${row.last_autovacuum ? row.last_autovacuum.toISOString() : 'never run'}, ` +
-    `last_analyze=${row.last_analyze ? row.last_analyze.toISOString() : 'never run'}, ` +
-    `dead_tup=${row.n_dead_tup}, live_tup=${row.n_live_tup}, ` +
-    `dead_tup_pct=${deadTuplePct.toFixed(2)}%`;
+    `relations=${members.length}, live_tup=${live}, dead_tup=${dead}, ` +
+    `mod_since_analyze=${mods}, ` +
+    `latest_vacuum=${lastVacuum ? lastVacuum.toISOString() : 'never'}, ` +
+    `latest_analyze=${lastAnalyze ? lastAnalyze.toISOString() : 'never'}`;
 
   return {
     check: 'autovacuum_staleness',
-    subject: row.relname,
+    subject: hotTable,
     status: tripped ? 'tripped' : 'pass',
     measured: {
-      value: hoursSinceAnalyze === null ? null : Number(hoursSinceAnalyze.toFixed(2)),
-      unit: 'hours since last_analyze',
+      value: hoursSinceVacuum === null ? null : Number(hoursSinceVacuum.toFixed(2)),
+      unit: 'hours since last vacuum (manual or auto)',
       display: observedDetail,
       observed: true,
     },
-    threshold: { key: limit.key, value: limit.value, unit: limit.unit, source: limit.source },
+    threshold: thresholdBlock,
     severity,
     detail: tripped
-      ? `vacuum/analyze signal on ${row.relname}: ${reasons.join(', ')}; ${observedDetail}`
-      : `${row.relname} vacuum/analyze within ${limit.value}h and dead tuples under ` +
-        `${DEAD_TUPLE_PCT_LIMIT}%; ${observedDetail}`,
+      ? `autovacuum is behind on ${hotTable}: ${reasons.join('; ')}; ${observedDetail}`
+      : idle
+        ? `${hotTable} has recorded no writes and no dead tuples since statistics were last ` +
+          `reset, so autovacuum has nothing to do; ${observedDetail}`
+        : `${hotTable} is under the autovacuum and autoanalyze triggers, or was processed ` +
+          `within ${limit.value}h; ${observedDetail}`,
   };
 }
 
@@ -480,43 +629,48 @@ export function evaluateSizeRow(row: SizeRow, thresholds: ThresholdTable): Check
   };
 }
 
+/**
+ * TOAST bloat is dead chunks in the TOAST relation: rows whose large values were
+ * updated or deleted and not yet vacuumed. The TOAST share of total size is not
+ * bloat. raw_payloads and odds_snapshots are append-only jsonb archives, so
+ * almost all of their bytes live in TOAST on a perfectly healthy table.
+ */
 export function evaluateToastRow(row: ToastBloatRow, thresholds: ThresholdTable): CheckOutcome {
-  const limit = threshold(thresholds, 'TOAST_BLOAT_RATIO_THRESHOLD');
+  const limit = threshold(thresholds, 'TOAST_DEAD_TUPLE_RATIO_THRESHOLD');
   const limitPct = limit.value * 100;
-  const toastPct = row.toast_pct === null ? null : Number.parseFloat(row.toast_pct);
+  const thresholdBlock = { key: limit.key, value: limitPct, unit: '%', source: limit.source };
 
-  if (toastPct === null || !Number.isFinite(toastPct)) {
+  if (row.toast_relname === null) {
     return {
       check: 'toast_bloat',
       subject: row.relname,
       status: 'not_run',
       measured: { value: null, unit: '%', display: row.total_size, observed: false },
-      threshold: { key: limit.key, value: limitPct, unit: '%', source: limit.source },
+      threshold: thresholdBlock,
       severity: null,
-      detail: `${row.relname} TOAST ratio was not computable (total relation size is zero or null)`,
+      detail: `${row.relname} has no TOAST relation, so there is no TOAST bloat to measure`,
     };
   }
 
-  const tripped = toastPct > limitPct;
+  const dead = toInt(row.toast_dead_tup);
+  const live = toInt(row.toast_live_tup);
+  const deadPct = dead + live === 0 ? 0 : (dead / (dead + live)) * 100;
+  const tripped =
+    deadPct > limitPct && dead > AUTOVACUUM_VACUUM_THRESHOLD + AUTOVACUUM_VACUUM_SCALE_FACTOR * live;
+  const display =
+    `toast=${row.toast_relname} (${row.toast_size ?? 'unknown'}), total=${row.total_size}, ` +
+    `toast_live_tup=${live}, toast_dead_tup=${dead}`;
+
   return {
     check: 'toast_bloat',
     subject: row.relname,
     status: tripped ? 'tripped' : 'pass',
-    measured: {
-      value: Number(toastPct.toFixed(1)),
-      unit: '%',
-      display:
-        `heap=${row.heap_size}, toast_plus_index=${row.toast_plus_index_size}, ` +
-        `total=${row.total_size}`,
-      observed: true,
-    },
-    threshold: { key: limit.key, value: limitPct, unit: '%', source: limit.source },
-    severity: tripped ? (toastPct > 90 ? 'critical' : 'warn') : null,
+    measured: { value: Number(deadPct.toFixed(1)), unit: '%', display, observed: true },
+    threshold: thresholdBlock,
+    severity: tripped ? (deadPct > Math.max(50, limitPct * 2) ? 'critical' : 'warn') : null,
     detail:
-      `${row.relname} TOAST+index ratio ${toastPct.toFixed(1)}% ` +
-      `${tripped ? 'exceeds' : 'is within'} ${limitPct.toFixed(0)}%; ` +
-      `heap=${row.heap_size}, toast_plus_index=${row.toast_plus_index_size}, ` +
-      `total=${row.total_size}`,
+      `${row.relname} TOAST dead-tuple share ${deadPct.toFixed(1)}% ` +
+      `${tripped ? 'exceeds' : 'is within'} ${limitPct.toFixed(0)}%; ${display}`,
   };
 }
 
