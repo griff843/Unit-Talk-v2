@@ -1,3 +1,6 @@
+---
+description: "Use when: a PR is red, BLOCKED, or stalled and the cause is not obvious"
+---
 # /pr-unblock
 
 A PR is red, `BLOCKED`, or stalled with no visible reason. This skill diagnoses which gate is actually refusing and why, and encodes the traps where GitHub's reported state is misleading.

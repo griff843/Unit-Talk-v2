@@ -1,3 +1,6 @@
+---
+description: "Use when: before any merge claim or `ops:truth-check` call"
+---
 # /verification
 
 Run tier-aware verification before any merge claim or `ops:truth-check`. Fail-closed: if a check is missing, uncertain, or stale, the verdict is FAIL.
@@ -129,3 +132,8 @@ Replace `NNN` with the issue number. Replace `APPROVED` with `CHANGES_REQUIRED` 
 | "I ran this last session" | Inspect the recorded evidence and its binding. Reuse it only if applicable policy and unchanged inputs permit it. |
 | "It's only T3, I can skip the checklist" | T3 still requires type-check + test + green CI. No tier skips verification. |
 | "The proof file exists" | Existence ≠ validity. Check the header SHA matches the merge SHA. |
+
+
+## Merge authority in practice (moved from CLAUDE.md, WORK-2026112502)
+
+**Merge Authority is defined once, mechanically, by `.github/workflows/merge-gate.yml`** (ratified 2026-05-18 under UTV2-979 for T2; this table must always match that workflow — if they diverge, the workflow wins and this table is stale). For T2, no PM presence or PM_VERDICT comment is mechanically required, for any executor (Claude or Codex). GitHub rejects `gh pr review --approve` when the reviewer is the PR's author, and Claude and Codex both open PRs as the same account, so the artifact that actually satisfies T2 in practice is the `EXECUTOR_RESULT: READY_FOR_REVIEW` / `schema: executor-result/v1` self-attestation comment (UTV2-1523; the T2 branch of `merge-gate.yml`). A GitHub PR review approval or a `pm-verdict/v1` comment also satisfies it. PM approval is never satisfied by a chat message; only the `t1-approved` label, a GitHub PR review approval, a `pm-verdict/v1` comment (schema: `docs/05_operations/schemas/pm-verdict-v1.md`) or, for T2 only, the `executor-result/v1` self-attestation count as approval artifacts.

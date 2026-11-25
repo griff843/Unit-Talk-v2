@@ -1,3 +1,6 @@
+---
+description: "Use when: 'clear the board' — routes entire Linear backlog, runs full loop autonomously"
+---
 # /dispatch-board
 
 Board-wide autonomous loop. Reads the entire Linear board, routes every executable issue via `/three-brain`, and runs the dispatch → execute → verify → close cycle until the board is empty or all remaining issues are blocked.

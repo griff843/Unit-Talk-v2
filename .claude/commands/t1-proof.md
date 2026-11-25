@@ -1,3 +1,6 @@
+---
+description: "Use when: assembling a T1 evidence bundle"
+---
 # /t1-proof
 
 Assemble a T1 evidence bundle for a bounded change. Wraps `pnpm proof:t1` and verifies the output against T1 gates.

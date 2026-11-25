@@ -1,3 +1,6 @@
+---
+description: "Use when: touching CanonicalPick, scoring, promotion, lifecycle, CLV, grading"
+---
 # /betting-domain
 
 Red-flag card for `@unit-talk/domain` purity. Domain is pure: no DB, no HTTP, no env, no I/O.

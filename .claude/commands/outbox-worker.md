@@ -1,3 +1,6 @@
+---
+description: "Use when: touching outbox polling, delivery adapter, retry, circuit breaker"
+---
 # /outbox-worker
 
 Red-flag card for `apps/worker/` and `distribution_outbox` changes. Exactly one DeliveryOutcome per attempt. Worker contains no business logic.

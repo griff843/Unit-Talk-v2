@@ -1,3 +1,6 @@
+---
+description: "Use when: live DB verification"
+---
 # /db-verify
 
 Verify live DB state for a change. Report truth first. Do not fix while checking.

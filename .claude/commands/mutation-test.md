@@ -1,3 +1,6 @@
+---
+description: "Use when: proving a control, guard, or test actually fails on the condition it names"
+---
 # /mutation-test
 
 Prove that a control actually works by making it **fail** on the condition it names.

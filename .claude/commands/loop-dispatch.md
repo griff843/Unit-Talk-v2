@@ -1,3 +1,6 @@
+---
+description: "Use when: continuous dispatch loop — runs /dispatch-board repeatedly until board empty or all blocked"
+---
 # /loop-dispatch
 
 Continuous dispatch loop. Invokes `/dispatch-board` repeatedly until the board is empty, all remaining issues are blocked/external-gated, or a circuit breaker trips. Hard limit: 5 cycles per invocation.

@@ -1,3 +1,6 @@
+---
+description: "Use when: forced state reload after `/clear` or when hook data is suspected stale"
+---
 # /system-state-loader
 
 Load current system state before acting. Run at session start and after `/clear`. Never assume state from memory.
