@@ -328,13 +328,17 @@ async function postAlert(checks: readonly CheckOutcome[]): Promise<AlertDisposit
     'All execution actions remain PM-gated.';
 
   try {
-    const open = await githubRest<Array<{ number: number; title: string; pull_request?: unknown }>>(
-      token,
-      repo,
-      'GET',
-      '/issues?state=open&per_page=100',
-    );
-    let issueNumber = open.find((issue) => !issue.pull_request && issue.title === ALERT_ISSUE_TITLE)?.number;
+    let issueNumber: number | undefined;
+    for (let page = 1; issueNumber === undefined && page <= 50; page++) {
+      const open = await githubRest<Array<{ number: number; title: string; pull_request?: unknown }>>(
+        token,
+        repo,
+        'GET',
+        `/issues?state=open&per_page=100&page=${page}`,
+      );
+      issueNumber = open.find((issue) => !issue.pull_request && issue.title === ALERT_ISSUE_TITLE)?.number;
+      if (open.length < 100) break;
+    }
     if (issueNumber === undefined) {
       const created = await githubRest<{ number: number }>(token, repo, 'POST', '/issues', {
         title: ALERT_ISSUE_TITLE,

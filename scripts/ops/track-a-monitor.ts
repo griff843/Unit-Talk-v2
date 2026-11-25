@@ -324,8 +324,20 @@ interface PriorState {
   hoursSinceLastReport: number | null;
 }
 
+/** GET every page of a list endpoint (100 per page) until a short page. */
+async function githubListAll<T>(ctx: GitHubContext, path: string, maxPages = 50): Promise<T[]> {
+  const out: T[] = [];
+  const sep = path.includes('?') ? '&' : '?';
+  for (let page = 1; page <= maxPages; page++) {
+    const batch = await githubRest<T[]>(ctx, 'GET', `${path}${sep}per_page=100&page=${page}`);
+    out.push(...batch);
+    if (batch.length < 100) return out;
+  }
+  throw new Error(`GitHub GET ${path}: more than ${maxPages} pages`);
+}
+
 async function findMonitorIssue(ctx: GitHubContext): Promise<number | null> {
-  const issues = await githubRest<GitHubIssue[]>(ctx, 'GET', '/issues?state=open&per_page=100');
+  const issues = await githubListAll<GitHubIssue>(ctx, '/issues?state=open');
   const match = issues.find((issue) => !issue.pull_request && issue.title === MONITOR_ISSUE_TITLE);
   return match?.number ?? null;
 }
@@ -335,11 +347,7 @@ async function loadPriorState(ctx: GitHubContext): Promise<PriorState> {
   if (issueNumber === null) {
     return { issueNumber: null, previous: null, hoursSinceLastReport: null };
   }
-  const comments = await githubRest<GitHubComment[]>(
-    ctx,
-    'GET',
-    `/issues/${issueNumber}/comments?per_page=100`,
-  );
+  const comments = await githubListAll<GitHubComment>(ctx, `/issues/${issueNumber}/comments`);
   const marked = comments
     .filter((c) => (c.body ?? '').includes(STATE_MARKER))
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
