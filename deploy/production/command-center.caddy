@@ -1,0 +1,45 @@
+# Command Center public site. Template: deploy/production/command-center-edge.sh
+# renders __COMMAND_CENTER_DOMAIN__ and writes the result to
+# $DEPLOY_PATH/caddy-sites/command-center.caddy ONLY when
+# UNIT_TALK_COMMAND_CENTER_PUBLIC is 'true'. The Caddyfile imports
+# /etc/caddy/sites/*.caddy, so with the file absent this site does not exist.
+#
+# Every request is checked by the Google sign-in gate (oauth2-proxy) before it
+# reaches the Command Center. There is no unauthenticated path, /api/health
+# included: liveness is probed on the Docker network, not through the edge.
+
+__COMMAND_CENTER_DOMAIN__ {
+    import security_headers
+    header {
+        Cache-Control "no-store"
+        Referrer-Policy "no-referrer"
+        X-Robots-Tag "noindex, nofollow"
+    }
+
+    # oauth2-proxy's own endpoints: sign-in start, Google callback, sign-out.
+    handle /oauth2/* {
+        reverse_proxy command-center-auth:4180 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Uri {uri}
+        }
+    }
+
+    handle {
+        forward_auth command-center-auth:4180 {
+            uri /oauth2/auth
+            header_up X-Real-IP {remote_host}
+            copy_headers X-Auth-Request-Email
+
+            # Not signed in, or signed in with an account that is not on the
+            # allow-list: send the browser to Google sign-in. A gate that is
+            # down answers 502, never a pass-through.
+            @unauthorized status 401
+            handle_response @unauthorized {
+                redir * /oauth2/start?rd={scheme}://{host}{uri} 302
+            }
+        }
+        reverse_proxy command-center:4300
+    }
+
+    import json_log
+}

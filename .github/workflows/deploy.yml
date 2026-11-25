@@ -84,6 +84,12 @@ jobs:
           SECRET_COMMAND_CENTER_AUTH_TOKEN: ${{ secrets.COMMAND_CENTER_AUTH_TOKEN }}
           SECRET_COMMAND_CENTER_AUTH_USERNAME: ${{ secrets.COMMAND_CENTER_AUTH_USERNAME }}
           SECRET_COMMAND_CENTER_AUTH_PASSWORD: ${{ secrets.COMMAND_CENTER_AUTH_PASSWORD }}
+          # Public Command Center edge (Google sign-in gate). A repository
+          # VARIABLE like CC_ENABLED; the hostname and allow-list are secrets
+          # like the other hostnames and ALLOWED_CAPPER_EMAILS.
+          CC_PUBLIC: ${{ vars.UNIT_TALK_COMMAND_CENTER_PUBLIC }}
+          SECRET_UNIT_TALK_COMMAND_CENTER_DOMAIN: ${{ secrets.UNIT_TALK_COMMAND_CENTER_DOMAIN }}
+          SECRET_COMMAND_CENTER_ALLOWED_EMAILS: ${{ secrets.COMMAND_CENTER_ALLOWED_EMAILS }}
         run: |
           missing=()
           test -n "$SECRET_SUPABASE_URL"              || missing+=(SUPABASE_URL)
@@ -146,6 +152,24 @@ jobs:
             echo "{\"service\":\"deploy\",\"event\":\"command_center.enabled\"}"
           else
             echo "{\"service\":\"deploy\",\"event\":\"command_center.disabled\"}"
+          fi
+          # The public edge is checked on the same terms: default-off, and when
+          # on, refused here before any container is touched.
+          if [ "${CC_PUBLIC:-}" = 'true' ]; then
+            if [ "${CC_ENABLED:-}" != 'true' ]; then
+              echo "::error::UNIT_TALK_COMMAND_CENTER_PUBLIC is 'true' but UNIT_TALK_COMMAND_CENTER_ENABLED is not. A public edge needs a running Command Center behind it."
+              exit 1
+            fi
+            edge_missing=()
+            test -n "${SECRET_UNIT_TALK_COMMAND_CENTER_DOMAIN:-}" || edge_missing+=(UNIT_TALK_COMMAND_CENTER_DOMAIN)
+            test -n "${SECRET_COMMAND_CENTER_ALLOWED_EMAILS:-}"   || edge_missing+=(COMMAND_CENTER_ALLOWED_EMAILS)
+            if [ ${#edge_missing[@]} -gt 0 ]; then
+              echo "::error::UNIT_TALK_COMMAND_CENTER_PUBLIC is 'true' but required secrets are not configured: ${edge_missing[*]}"
+              exit 1
+            fi
+            echo "{\"service\":\"deploy\",\"event\":\"command_center.public_edge.enabled\"}"
+          else
+            echo "{\"service\":\"deploy\",\"event\":\"command_center.public_edge.disabled\"}"
           fi
           case "$SECRET_SYNDICATE_MACHINE_ENABLED" in
             true) syndicate_machine_mode=active ;;
@@ -469,7 +493,7 @@ jobs:
             echo "         on disk is not what ran as $OUTGOING -- preserving snapshots" >&2
           fi
 
-          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center; do
+          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center .env.command-center-auth; do
             [ -f "$f" ] || continue
 
             if [ "$INFLIGHT" = 1 ] && [ -e "$f.$OUTGOING" ]; then
@@ -497,7 +521,7 @@ jobs:
           # not an error. This heredoc runs under `set -eu` today, but other
           # remote bodies in this workflow use `pipefail` and this line must not
           # become a silent step failure if it is ever hardened to match.
-          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center; do
+          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center .env.command-center-auth; do
             { ls -1t "$f".* 2>/dev/null || true; } | { grep -vxF "$f.$OUTGOING" || true; } | tail -n +6 | while read -r stale; do
               rm -f "$stale"
               echo "pruned $stale"
@@ -771,6 +795,9 @@ jobs:
           COMMAND_CENTER_AUTH_TOKEN: ${{ secrets.COMMAND_CENTER_AUTH_TOKEN }}
           COMMAND_CENTER_AUTH_USERNAME: ${{ secrets.COMMAND_CENTER_AUTH_USERNAME }}
           COMMAND_CENTER_AUTH_PASSWORD: ${{ secrets.COMMAND_CENTER_AUTH_PASSWORD }}
+          CC_PUBLIC: ${{ vars.UNIT_TALK_COMMAND_CENTER_PUBLIC }}
+          CC_DOMAIN: ${{ secrets.UNIT_TALK_COMMAND_CENTER_DOMAIN }}
+          CC_ALLOWED_EMAILS: ${{ secrets.COMMAND_CENTER_ALLOWED_EMAILS }}
         run: |
           set -eu
           # Fail closed a second time at the point of use. The verify job checked
@@ -903,6 +930,10 @@ jobs:
             ssh "$DEPLOY_USER@$DEPLOY_HOST" \
               "rm -f '$DEPLOY_PATH/.env.command-center' && echo 'env.command-center absent (Command Center disabled)'"
           fi
+          # Public Command Center edge: writes the sign-in gate's env, the
+          # allow-list and the Caddy site when UNIT_TALK_COMMAND_CENTER_PUBLIC
+          # is 'true', and removes all three otherwise.
+          bash deploy/production/command-center-edge.sh write
           echo "Next.js env files written; QA auth bypass absent."
 
       # UTV2-1648: replaces the long-lived GHCR_PAT secret. github.token is the
@@ -957,11 +988,15 @@ jobs:
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
           CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
+          CC_PUBLIC: ${{ vars.UNIT_TALK_COMMAND_CENTER_PUBLIC }}
         run: |
           set -eu
-          compose_profile=""
+          compose_profile="
           if [ "${CC_ENABLED:-}" = 'true' ]; then
             compose_profile="--profile command-center"
+            if [ "${CC_PUBLIC:-}" = 'true' ]; then
+              compose_profile="$compose_profile --profile command-center-public"
+            fi
           fi
           echo "resolving compose configuration for tag $IMAGE_TAG (profile: ${compose_profile:-default})"
           if ! services=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
@@ -984,6 +1019,15 @@ jobs:
               *" command-center "*) ;;
               *)
                 echo "::error::The command-center profile is selected but the resolved configuration does not include the command-center service. Refusing to proceed. Resolved services:$resolved"
+                exit 1
+                ;;
+            esac
+          fi
+          if [ "${CC_ENABLED:-}" = 'true' ] && [ "${CC_PUBLIC:-}" = 'true' ]; then
+            case "$resolved" in
+              *" command-center-auth "*) ;;
+              *)
+                echo "::error::The command-center-public profile is selected but the resolved configuration does not include the command-center-auth sign-in gate. Refusing to proceed. Resolved services:$resolved"
                 exit 1
                 ;;
             esac
@@ -1287,7 +1331,7 @@ jobs:
             echo "         on disk is not what ran as $OUTGOING -- preserving snapshots" >&2
           fi
 
-          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center; do
+          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center .env.command-center-auth; do
             [ -f "$f" ] || continue
 
             if [ "$INFLIGHT" = 1 ] && [ -e "$f.$OUTGOING" ]; then
@@ -1315,7 +1359,7 @@ jobs:
           # not an error. This heredoc runs under `set -eu` today, but other
           # remote bodies in this workflow use `pipefail` and this line must not
           # become a silent step failure if it is ever hardened to match.
-          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center; do
+          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center .env.command-center-auth; do
             { ls -1t "$f".* 2>/dev/null || true; } | { grep -vxF "$f.$OUTGOING" || true; } | tail -n +6 | while read -r stale; do
               rm -f "$stale"
               echo "pruned $stale"
@@ -1582,6 +1626,9 @@ jobs:
           COMMAND_CENTER_AUTH_TOKEN: ${{ secrets.COMMAND_CENTER_AUTH_TOKEN }}
           COMMAND_CENTER_AUTH_USERNAME: ${{ secrets.COMMAND_CENTER_AUTH_USERNAME }}
           COMMAND_CENTER_AUTH_PASSWORD: ${{ secrets.COMMAND_CENTER_AUTH_PASSWORD }}
+          CC_PUBLIC: ${{ vars.UNIT_TALK_COMMAND_CENTER_PUBLIC }}
+          CC_DOMAIN: ${{ secrets.UNIT_TALK_COMMAND_CENTER_DOMAIN }}
+          CC_ALLOWED_EMAILS: ${{ secrets.COMMAND_CENTER_ALLOWED_EMAILS }}
         run: |
           set -eu
           # Fail closed a second time at the point of use. The verify job checked
@@ -1714,6 +1761,10 @@ jobs:
             ssh "$DEPLOY_USER@$DEPLOY_HOST" \
               "rm -f '$DEPLOY_PATH/.env.command-center' && echo 'env.command-center absent (Command Center disabled)'"
           fi
+          # Public Command Center edge: writes the sign-in gate's env, the
+          # allow-list and the Caddy site when UNIT_TALK_COMMAND_CENTER_PUBLIC
+          # is 'true', and removes all three otherwise.
+          bash deploy/production/command-center-edge.sh write
           echo "Next.js env files written; QA auth bypass absent."
 
       # UTV2-1648: replaces the long-lived GHCR_PAT secret -- see the matching
@@ -1764,11 +1815,15 @@ jobs:
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
           CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
+          CC_PUBLIC: ${{ vars.UNIT_TALK_COMMAND_CENTER_PUBLIC }}
         run: |
           set -eu
-          compose_profile=""
+          compose_profile="
           if [ "${CC_ENABLED:-}" = 'true' ]; then
             compose_profile="--profile command-center"
+            if [ "${CC_PUBLIC:-}" = 'true' ]; then
+              compose_profile="$compose_profile --profile command-center-public"
+            fi
           fi
           echo "resolving compose configuration for tag $IMAGE_TAG (profile: ${compose_profile:-default})"
           if ! services=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
@@ -1795,6 +1850,15 @@ jobs:
                 ;;
             esac
           fi
+          if [ "${CC_ENABLED:-}" = 'true' ] && [ "${CC_PUBLIC:-}" = 'true' ]; then
+            case "$resolved" in
+              *" command-center-auth "*) ;;
+              *)
+                echo "::error::The command-center-public profile is selected but the resolved configuration does not include the command-center-auth sign-in gate. Refusing to proceed. Resolved services:$resolved"
+                exit 1
+                ;;
+            esac
+          fi
           echo "compose configuration resolves; services:$resolved"
 
       - name: Promote all production containers
@@ -1802,6 +1866,7 @@ jobs:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
           ROLLBACK_TAG: ${{ inputs.rollback_tag }}
           CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
+          CC_PUBLIC: ${{ vars.UNIT_TALK_COMMAND_CENTER_PUBLIC }}
         run: |
           # UTV2-1918: the `command-center` compose profile is activated here and
           # nowhere else. With the flag unset or not exactly 'true' this is the
@@ -1818,6 +1883,9 @@ jobs:
           if [ "${CC_ENABLED:-}" = 'true' ]; then
             compose_profile="--profile command-center"
             cc_rollback_flag="--command-center"
+            if [ "${CC_PUBLIC:-}" = 'true' ]; then
+              compose_profile="$compose_profile --profile command-center-public"
+            fi
           fi
 
           # UTV2-1922: this body used to assert three things before they were
@@ -1993,6 +2061,59 @@ jobs:
       #     itself release-tag- and image-verified) AND rejects the evidence
       #     outright if more than one container matches service+project, and
       #     verifies each service's exact image tag -- not service-label alone.
+      # Public Command Center edge. Caddy only reads its configuration at
+      # start, and is not recreated when a site file appears or changes, so it
+      # is reloaded here. `caddy reload` is atomic: an invalid configuration is
+      # rejected and the running one keeps serving. Then the edge is proven
+      # from the host itself: the gate answers, and an UNAUTHENTICATED request
+      # for a Command Center page is redirected to Google sign-in rather than
+      # served. Either failing fails the deploy.
+      - name: Reload edge and verify Command Center sign-in gate
+        env:
+          CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
+          CC_PUBLIC: ${{ vars.UNIT_TALK_COMMAND_CENTER_PUBLIC }}
+          CC_DOMAIN: ${{ secrets.UNIT_TALK_COMMAND_CENTER_DOMAIN }}
+        run: |
+          set -eu
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile"
+          echo "caddy configuration reloaded"
+          if [ "${CC_ENABLED:-}" != 'true' ] || [ "${CC_PUBLIC:-}" != 'true' ]; then
+            echo "public Command Center edge is off; nothing further to verify"
+            exit 0
+          fi
+          for attempt in $(seq 1 12); do
+            if ssh "$DEPLOY_USER@$DEPLOY_HOST" "docker exec caddy wget -qO- http://command-center-auth:4180/ping >/dev/null 2>&1"; then
+              break
+            fi
+            if [ "$attempt" = 12 ]; then
+              echo "::error::The Command Center sign-in gate (command-center-auth) does not answer /ping on the Docker network."
+              exit 1
+            fi
+            sleep 5
+          done
+          # TLS issuance for a new hostname can take a moment; retry, and accept
+          # only a redirect to /oauth2/start. A 200 here would mean the
+          # Command Center is reachable without Google sign-in.
+          for attempt in $(seq 1 12); do
+            result=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+              "curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 10 --resolve '$CC_DOMAIN:443:127.0.0.1' -H 'Accept: text/html' 'https://$CC_DOMAIN/picks'" || true)
+            echo "attempt $attempt: GET https://$CC_DOMAIN/picks (no session) -> $result"
+            case "$result" in
+              302\ https://$CC_DOMAIN/oauth2/start*)
+                echo "Command Center edge verified: unauthenticated requests are sent to Google sign-in"
+                exit 0
+                ;;
+              200*)
+                echo "::error::https://$CC_DOMAIN/picks answered 200 with no session. The sign-in gate is NOT in front of the Command Center."
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
+          echo "::error::Could not verify the Command Center sign-in redirect on https://$CC_DOMAIN (DNS, TLS issuance or the gate). Last result: $result"
+          exit 1
+
       - name: Confirm syndicate machine gate in production container
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}

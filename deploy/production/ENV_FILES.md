@@ -1,6 +1,6 @@
 # Production env files
 
-`.github/workflows/deploy.yml` writes four env files to the deploy host. This
+`.github/workflows/deploy.yml` writes these env files to the deploy host. This
 document records their SHAPE only — it is checked into the repository, so it
 must never contain a real value.
 
@@ -13,6 +13,7 @@ name, but `.gitignore` line 7 excludes `.env.*`, so the shapes live here instead
 | `.env.web` | `web` | public URLs only — no secret |
 | `.env.smart-form` | `smart-form` | Auth.js/Google credentials, capper allow-list |
 | `.env.edge` | `caddy` | hostnames only |
+| `.env.command-center-auth` | `command-center-auth` (oauth2-proxy) | Google sign-in gate for the public Command Center; written only when `UNIT_TALK_COMMAND_CENTER_PUBLIC=true` |
 
 Splitting them is deliberate. The public website and the public TLS edge have no
 reason to hold the Supabase service-role key, the Discord bot token or the SGO
@@ -91,6 +92,33 @@ deliberately absent. The QA authentication bypass is never enabled in production
 `scripts/ci/nextjs-deploy-wiring.test.ts` asserts that the deploy workflow never
 writes either name, and the workflow itself greps the written file and fails the
 deploy if one appears.
+
+## `.env.command-center-auth` (public Command Center edge)
+
+Written and removed only by `deploy/production/command-center-edge.sh`, from both
+the canary and promote jobs. Present only when the repository variable
+`UNIT_TALK_COMMAND_CENTER_PUBLIC` is `true` (which also requires
+`UNIT_TALK_COMMAND_CENTER_ENABLED=true`).
+
+```
+OAUTH2_PROXY_PROVIDER=google
+OAUTH2_PROXY_CLIENT_ID=<GOOGLE_CLIENT_ID, shared with smart-form>
+OAUTH2_PROXY_CLIENT_SECRET=<GOOGLE_CLIENT_SECRET, shared with smart-form>
+OAUTH2_PROXY_COOKIE_SECRET=<HMAC-SHA256(NEXTAUTH_SECRET, "unit-talk/command-center-auth/cookie/v1"), base64url>
+OAUTH2_PROXY_REDIRECT_URL=https://<UNIT_TALK_COMMAND_CENTER_DOMAIN>/oauth2/callback
+OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE=/etc/oauth2-proxy/allowed-emails.txt
+... (cookie, proxy and listen settings; see the script)
+```
+
+Beside it the script writes `command-center-auth/allowed-emails.txt` (from the
+secret `COMMAND_CENTER_ALLOWED_EMAILS`, comma separated, 0644 so the non-root
+proxy can read it) and `caddy-sites/command-center.caddy` (the site template
+`deploy/production/command-center.caddy` with the hostname rendered from the
+secret `UNIT_TALK_COMMAND_CENTER_DOMAIN`). With the variable off, all three are
+removed.
+
+The Google OAuth client must list `https://<UNIT_TALK_COMMAND_CENTER_DOMAIN>/oauth2/callback`
+as an authorised redirect URI.
 
 ## The capper signing key is shared, deliberately
 

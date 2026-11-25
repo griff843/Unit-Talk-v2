@@ -7,6 +7,10 @@
 #   {$CADDY_DOMAIN}                  -> api:4000         (existing API)
 #   {$UNIT_TALK_WEB_DOMAIN}          -> web:4200         (public website)
 #   {$UNIT_TALK_SMART_FORM_DOMAIN}   -> smart-form:4400  (capper intake)
+#   sites/command-center.caddy       -> command-center:4300 behind Google sign-in
+#                                       (present only when the public Command
+#                                       Center edge is enabled; see
+#                                       command-center-edge.sh)
 #
 # Caddy fails to parse a site address that expands to an empty string, so an
 # unconfigured hostname stops the edge rather than silently serving the wrong
@@ -62,5 +66,9 @@
 
     import json_log
 }
+
+# Optional sites written by the deploy (today only the Command Center). A glob
+# that matches no file is not an error, so an absent site is simply absent.
+import /etc/caddy/sites/*.caddy
 
 # HTTP → HTTPS redirect handled automatically by Caddy

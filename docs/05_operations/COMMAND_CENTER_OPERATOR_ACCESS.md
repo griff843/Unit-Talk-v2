@@ -7,17 +7,36 @@ is and must do is governed solely by `docs/03_product/COMMAND_CENTER_PRODUCT_CON
 
 ## The boundary
 
-The Command Center is **internal-only**. PM decision 7 (2026-09-24) sets three rules:
+**Since 2026-11-25 (Griff, decision card in the project thread), the Command Center has a public
+hostname behind Google sign-in.** This supersedes PM decision 7 (2026-09-24, internal-only).
 
-- no public DNS and no public hostname;
-- no exposure of port 4300;
-- no Caddy site block.
+- The container still publishes only `127.0.0.1:4300` on the host. Port 4300 is never exposed.
+- The only public route is the Caddy site `caddy-sites/command-center.caddy`, rendered from
+  `deploy/production/command-center.caddy` by `deploy/production/command-center-edge.sh`. Every request
+  on it is checked by the `command-center-auth` gate (oauth2-proxy, Google provider). Only Google
+  accounts listed in the secret `COMMAND_CENTER_ALLOWED_EMAILS` get through. There is no
+  unauthenticated path, `/api/health` included.
+- Behind the gate, the Command Center's own operator sign-in still applies.
+- It is default-off. It is on only when the repository variables `UNIT_TALK_COMMAND_CENTER_ENABLED`
+  and `UNIT_TALK_COMMAND_CENTER_PUBLIC` are both `true` and a deploy has run. With
+  `UNIT_TALK_COMMAND_CENTER_PUBLIC` off, the deploy removes the site and the gate, and the SSH bridge
+  below is the only path.
 
-`deploy/production/docker-compose.yml` publishes the service on `127.0.0.1:4300` of the production
-host only. Nothing in this runbook changes that, and nothing here needs an sshd, firewall, DNS or
-compose change.
+### Turning the public URL on
 
-## The access path
+1. DNS: an `A` record for the chosen hostname (for example `cc.unit-talk.com`) pointing at the
+   production host, the same address `picks.unit-talk.com` resolves to.
+2. Google Cloud console: on the OAuth client Smart Form already uses, add the authorised redirect URI
+   `https://<hostname>/oauth2/callback`.
+3. GitHub repository settings: secret `UNIT_TALK_COMMAND_CENTER_DOMAIN` = the hostname; secret
+   `COMMAND_CENTER_ALLOWED_EMAILS` = the operator Google addresses, comma separated; variable
+   `UNIT_TALK_COMMAND_CENTER_PUBLIC` = `true` (and `UNIT_TALK_COMMAND_CENTER_ENABLED` = `true`).
+4. Dispatch a production deploy. The promote job reloads Caddy and refuses to finish unless an
+   unauthenticated `GET https://<hostname>/picks` is redirected to `/oauth2/start`.
+
+Turning it off is step 3 in reverse (variable to anything but `true`) and a deploy.
+
+## The SSH bridge (fallback path)
 
 ```bash
 pnpm ops:cc-bridge            # http://127.0.0.1:4300 on your machine

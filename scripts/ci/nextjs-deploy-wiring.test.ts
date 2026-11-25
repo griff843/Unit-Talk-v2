@@ -787,21 +787,41 @@ test('the Command Center is off unless a deploy deliberately enables it', () => 
   }
 });
 
-test('an enabled Command Center is reachable only from the deploy host', () => {
+test('the Command Center is never reachable from the internet without passing the sign-in gate', () => {
   const svc = service(COMMAND_CENTER);
 
-  // Internal-only means no public ingress at all, not "public behind a login".
+  // The container itself still publishes nothing beyond the host loopback. The
+  // only public route is through Caddy, and every request on it is checked by
+  // the Google sign-in gate first (Griff, 2026-11-25, superseding the
+  // internal-only rule of PM decision 7).
   const ports = (svc['ports'] as string[] | undefined) ?? [];
   assert.deepEqual(ports, ['127.0.0.1:4300:4300'], 'the Command Center must bind loopback only');
-  for (const port of ports) {
-    assert.ok(port.startsWith('127.0.0.1:'), `${port} would publish the surface on every interface`);
-  }
 
-  // No Caddy site block, so nothing resolves to it from the internet.
+  // No inline site in the main Caddyfile: the site exists only as an optional,
+  // deploy-written file under sites/, so with the public edge off there is none.
   assert.ok(
-    !caddyfile.includes(COMMAND_CENTER),
-    'the Command Center must have no Caddy route — it is reached by an SSH local forward',
+    !/reverse_proxy\s+command-center/.test(caddyfile),
+    'the main Caddyfile must not route to the Command Center directly',
   );
+  assert.ok(
+    caddyfile.includes('import /etc/caddy/sites/*.caddy'),
+    'the Caddyfile must import the optional deploy-written sites',
+  );
+
+  // In the site, forward_auth to the gate precedes the reverse_proxy to the app,
+  // inside the same catch-all handle, and no path skips it.
+  const site = readFileSync(resolve(ROOT, 'deploy/production/command-center.caddy'), 'utf8');
+  const code = site.split('\n').filter((line) => !line.trim().startsWith('#')).join('\n');
+  const gate = code.indexOf('forward_auth command-center-auth:4180');
+  const app = code.indexOf('reverse_proxy command-center:4300');
+  assert.ok(gate > -1 && app > gate, 'every Command Center request must pass forward_auth first');
+  assert.equal(code.match(/reverse_proxy command-center:4300/g)?.length, 1, 'exactly one route may reach the app');
+  assert.ok(!/@health|skip|\/api\/health/.test(code), 'no path may bypass the gate');
+
+  // The gate sits behind its own profile and publishes no host port.
+  const gateService = service('command-center-auth');
+  assert.deepEqual(gateService['profiles'], ['command-center-public']);
+  assert.equal(gateService['ports'], undefined, 'the sign-in gate must not publish a host port');
 
   // The probe must be one that exists. apps/command-center has no /login route,
   // so copying the smart-form healthcheck verbatim would fail closed forever.

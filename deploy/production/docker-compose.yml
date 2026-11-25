@@ -269,11 +269,13 @@ services:
     #      the `command-center` profile. A plain `docker compose up -d` on the
     #      deploy host starts every other service and leaves this one stopped, so
     #      merging this file changes nothing about what runs in production.
-    #   2. `ports:` bound to 127.0.0.1 rather than `expose:` — the Command Center
-    #      gets no Caddyfile site block and no public hostname. It is reached by
-    #      an SSH local forward (`ssh -L 4300:127.0.0.1:4300 <deploy host>`) and
-    #      is unreachable from the internet even while running. Internal-only
-    #      means internal, not "public behind a login".
+    #   2. `ports:` bound to 127.0.0.1 rather than `expose:` — the container
+    #      publishes nothing beyond the host loopback. Since 2026-11-25 (Griff,
+    #      superseding PM decision 7) its ONLY public route is the optional Caddy
+    #      site `caddy-sites/command-center.caddy`, where every request passes
+    #      the Google sign-in gate (`command-center-auth`) first, and the
+    #      Command Center's own operator sign-in still applies. With
+    #      UNIT_TALK_COMMAND_CENTER_PUBLIC off there is no public route at all.
     #   3. The healthcheck probes `/api/health`, not `/login`. Copying
     #      smart-form's probe verbatim would fail closed forever: this app has no
     #      `/login` route. `/api/health` answers 200 unauthenticated with only
@@ -307,6 +309,35 @@ services:
           memory: 512m
           cpus: '0.5'
 
+  command-center-auth:
+    # Google sign-in gate in front of the public Command Center (Griff,
+    # 2026-11-25, superseding PM decision 7's internal-only rule). Caddy calls
+    # it with forward_auth for every request to the Command Center hostname;
+    # only Google accounts on COMMAND_CENTER_ALLOWED_EMAILS get through, and the
+    # Command Center's own operator sign-in still applies behind it.
+    #
+    # Its own profile, so it runs only when the deploy selects
+    # `command-center-public` (UNIT_TALK_COMMAND_CENTER_PUBLIC=true). Not
+    # published on any host port: Caddy reaches it on the Docker network.
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.7.1
+    logging: *default-logging
+    profiles:
+      - command-center-public
+    env_file:
+      - .env.command-center-auth
+    volumes:
+      - ./command-center-auth:/etc/oauth2-proxy:ro
+    expose:
+      - "4180"
+    restart: unless-stopped
+    networks:
+      - unit-talk
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+          cpus: '0.1'
+
   caddy:
     image: caddy:2-alpine
     logging: *default-logging
@@ -326,6 +357,10 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Optional site files (command-center.caddy). Written or removed by
+      # command-center-edge.sh on every deploy; empty when the public Command
+      # Center edge is off.
+      - ./caddy-sites:/etc/caddy/sites:ro
       - caddy-data:/data
       - caddy-config:/config
     restart: unless-stopped
