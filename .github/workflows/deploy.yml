@@ -493,7 +493,8 @@ jobs:
             echo "         on disk is not what ran as $OUTGOING -- preserving snapshots" >&2
           fi
 
-          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center .env.command-center-auth; do
+          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center .env.command-center-auth \
+                   command-center-auth/allowed-emails.txt caddy-sites/command-center.caddy; do
             [ -f "$f" ] || continue
 
             if [ "$INFLIGHT" = 1 ] && [ -e "$f.$OUTGOING" ]; then
@@ -521,7 +522,8 @@ jobs:
           # not an error. This heredoc runs under `set -eu` today, but other
           # remote bodies in this workflow use `pipefail` and this line must not
           # become a silent step failure if it is ever hardened to match.
-          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center .env.command-center-auth; do
+          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center .env.command-center-auth \
+                   command-center-auth/allowed-emails.txt caddy-sites/command-center.caddy; do
             { ls -1t "$f".* 2>/dev/null || true; } | { grep -vxF "$f.$OUTGOING" || true; } | tail -n +6 | while read -r stale; do
               rm -f "$stale"
               echo "pruned $stale"
@@ -1331,7 +1333,8 @@ jobs:
             echo "         on disk is not what ran as $OUTGOING -- preserving snapshots" >&2
           fi
 
-          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center .env.command-center-auth; do
+          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center .env.command-center-auth \
+                   command-center-auth/allowed-emails.txt caddy-sites/command-center.caddy; do
             [ -f "$f" ] || continue
 
             if [ "$INFLIGHT" = 1 ] && [ -e "$f.$OUTGOING" ]; then
@@ -1359,7 +1362,8 @@ jobs:
           # not an error. This heredoc runs under `set -eu` today, but other
           # remote bodies in this workflow use `pipefail` and this line must not
           # become a silent step failure if it is ever hardened to match.
-          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center .env.command-center-auth; do
+          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center .env.command-center-auth \
+                   command-center-auth/allowed-emails.txt caddy-sites/command-center.caddy; do
             { ls -1t "$f".* 2>/dev/null || true; } | { grep -vxF "$f.$OUTGOING" || true; } | tail -n +6 | while read -r stale; do
               rm -f "$stale"
               echo "pruned $stale"
