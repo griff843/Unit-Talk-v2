@@ -139,8 +139,35 @@ if [ '$COMMAND_CENTER' = true ]; then
     echo 'WARNING: --command-center was requested, but $TAG has no .env.command-center snapshot - the profile is NOT selected and the rollback proceeds without the Command Center' >&2
   fi
 fi
+# Public Command Center edge (Google sign-in gate). Same rule: the target
+# release's own snapshot decides. Without a gate configuration the Caddy site is
+# removed too, so the hostname is not left pointing at a missing gate.
+# The gate env, the allow-list and the Caddy site are one configuration: all
+# three are restored together from the target's snapshots, or all three are
+# removed, so the hostname and access policy are those of the target release.
+if [ -f ".env.command-center-auth.$TAG" ] \
+   && [ -f "command-center-auth/allowed-emails.txt.$TAG" ] \
+   && [ -f "caddy-sites/command-center.caddy.$TAG" ]; then
+  mkdir -p command-center-auth caddy-sites
+  cp -p ".env.command-center-auth.$TAG" .env.command-center-auth
+  chmod 600 .env.command-center-auth
+  cp -p "command-center-auth/allowed-emails.txt.$TAG" command-center-auth/allowed-emails.txt
+  chmod 644 command-center-auth/allowed-emails.txt
+  cp -p "caddy-sites/command-center.caddy.$TAG" caddy-sites/command-center.caddy
+  chmod 644 caddy-sites/command-center.caddy
+  echo "restored the public Command Center edge (gate env, allow-list, site) from configuration snapshot $TAG"
+else
+  rm -f .env.command-center-auth command-center-auth/allowed-emails.txt caddy-sites/command-center.caddy
+  echo "no complete public Command Center edge snapshot for $TAG - public edge removed"
+fi
+if [ "\$ROLLBACK_PROFILES" = 'command-center' ] && [ -f .env.command-center-auth ] && [ -f caddy-sites/command-center.caddy ]; then
+  ROLLBACK_PROFILES='command-center,command-center-public'
+  echo 'command-center-public profile selected: $TAG ran the public Command Center edge'
+fi
 COMPOSE_PROFILES="\$ROLLBACK_PROFILES" UNIT_TALK_IMAGE_TAG='$TAG' docker compose pull
 COMPOSE_PROFILES="\$ROLLBACK_PROFILES" UNIT_TALK_IMAGE_TAG='$TAG' docker compose up -d --remove-orphans
+# Caddy reads its configuration only at start; pick up the site set above.
+docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || echo 'WARNING: caddy reload failed; the edge keeps its previous configuration' >&2
 # UTV2-1922: the release record is advanced only after the rollback has
 # actually activated. It used to be the FIRST thing written, so a rollback that
 # failed at \`docker compose up\` left the host naming a release it had not
