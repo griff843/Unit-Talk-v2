@@ -221,7 +221,7 @@ test('classifyMainCommit: an unknown/null author login with no PR is unauthorize
 // action (docs/mission/intent.md, DB_MIGRATION_WORKFLOW.md, SUPABASE_BRANCH_COST_POLICY.md):
 // those operator-approval requirements remain binding and are verified independently of this file.
 //
-// `mcp__claude_ai_Supabase__execute_sql` is write-capable and is NOT restricted by these rules.
+// `execute_sql` (under either Supabase prefix) is write-capable and is NOT restricted by these rules.
 // Closing that gap needs connector scoping (R2), not this change.
 type Permissions = { deny?: string[]; ask?: string[] };
 
@@ -274,22 +274,24 @@ const MUST_STILL_RUN = [
   'supabase migration list --linked',
   'curl -s http://127.0.0.1:4000/health',
 ];
-const MUST_DENY_TOOLS = [
-  'mcp__claude_ai_Supabase__deploy_edge_function',
-  'mcp__claude_ai_Supabase__create_edge_function_secret',
-  'mcp__claude_ai_Supabase__create_branch',
-  'mcp__claude_ai_Supabase__merge_branch',
-  'mcp__claude_ai_Supabase__reset_branch',
-  'mcp__claude_ai_Supabase__create_project',
-  'mcp__claude_ai_Supabase__pause_project',
-  'mcp__claude_ai_Supabase__restore_project',
-];
-const MUST_ASK_TOOLS = ['mcp__claude_ai_Supabase__apply_migration', 'mcp__claude_ai_Supabase__delete_branch'];
-const MUST_STAY_AVAILABLE_READ_TOOLS = [
-  'mcp__claude_ai_Supabase__list_tables',
-  'mcp__claude_ai_Supabase__query_logs',
-];
-const WRITE_CAPABLE_TOOL_NOT_RESTRICTED = 'mcp__claude_ai_Supabase__execute_sql';
+// The same Supabase connector is exposed under two tool-name prefixes: `mcp__claude_ai_Supabase__`
+// in local CLI sessions that load the claude.ai connector, and `mcp__Supabase__` in cloud and
+// project sessions. A rule written for one prefix does not match the other, so both are pinned.
+const SUPABASE_TOOL_PREFIXES = ['mcp__claude_ai_Supabase__', 'mcp__Supabase__'];
+const forEachPrefix = (tools: string[]) => SUPABASE_TOOL_PREFIXES.flatMap((prefix) => tools.map((tool) => prefix + tool));
+const MUST_DENY_TOOLS = forEachPrefix([
+  'deploy_edge_function',
+  'create_edge_function_secret',
+  'create_branch',
+  'merge_branch',
+  'reset_branch',
+  'create_project',
+  'pause_project',
+  'restore_project',
+]);
+const MUST_ASK_TOOLS = forEachPrefix(['apply_migration', 'delete_branch']);
+const MUST_STAY_AVAILABLE_READ_TOOLS = forEachPrefix(['list_tables', 'query_logs']);
+const WRITE_CAPABLE_TOOLS_NOT_RESTRICTED = forEachPrefix(['execute_sql']);
 
 test('claude settings permissions: dangerous direct and wrapped commands are denied', () => {
   for (const command of MUST_DENY) {
@@ -322,10 +324,12 @@ test('claude settings permissions: listed Supabase MCP write tools are denied or
 
 // Documents a known limitation; asserts no read-only isolation. execute_sql can write (DML/DDL).
 test('claude settings permissions: execute_sql is write-capable and is not restricted by these rules (limitation, needs R2)', () => {
-  assert.ok(
-    !deny.includes(WRITE_CAPABLE_TOOL_NOT_RESTRICTED) && !ask.includes(WRITE_CAPABLE_TOOL_NOT_RESTRICTED),
-    'execute_sql is now restricted: update this test and the limitation text deliberately',
-  );
+  for (const tool of WRITE_CAPABLE_TOOLS_NOT_RESTRICTED) {
+    assert.ok(
+      !deny.includes(tool) && !ask.includes(tool),
+      `${tool} is now restricted: update this test and the limitation text deliberately`,
+    );
+  }
 });
 
 test('claude settings permissions: existing hooks are untouched by the permissions block', () => {
