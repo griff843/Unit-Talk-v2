@@ -1,3 +1,6 @@
+---
+description: "Use when: touching package/app boundaries, imports, or generated files"
+---
 # /code-structure
 
 Architectural boundaries for the package/app graph. Canonical reference: `docs/CODEBASE_GUIDE.md`.

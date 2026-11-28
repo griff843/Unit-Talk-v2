@@ -1,3 +1,6 @@
+---
+description: "Use when: verify a specific pick end-to-end against live data"
+---
 # /verify-pick
 
 Verify the actual V2 lifecycle state and proof chain for a single pick.

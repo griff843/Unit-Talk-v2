@@ -1,3 +1,6 @@
+---
+description: "Use when: deciding if work is Done; reconciling narrative vs artifacts"
+---
 # /execution-truth
 
 Operational guard against narrative-vs-artifact drift. Apply when deciding if work is Done, whether a claim is authoritative, or when a state can be trusted.

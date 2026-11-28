@@ -1,3 +1,6 @@
+---
+description: "Use when: structured debugging when a fix resists quick diagnosis"
+---
 # /systematic-debugging
 
 Structured debugging for Unit Talk V2. Use when a test fails, a migration breaks, CI goes red, or a runtime error resists a quick fix. Do not guess-and-retry — diagnose first.

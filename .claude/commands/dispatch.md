@@ -1,3 +1,6 @@
+---
+description: "Use when: execute a specific issue or pick top candidates (single dispatch cycle)"
+---
 # /dispatch
 
 One-command lane execution. Pulls from the dispatch queue, routes to the right executor, and runs the full lane end-to-end.

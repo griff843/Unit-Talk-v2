@@ -1,3 +1,6 @@
+---
+description: "Use when: starting, progressing, blocking, closing any lane"
+---
 # /lane-management
 
 Govern lane lifecycle. The lane manifest is the sole authority for active lane state — not Linear, not chat.
@@ -95,3 +98,17 @@ Resume stranded lanes with `ops:lane:resume`.
 | "Preflight passed last time" | Preflight tokens are session-scoped. New session = new preflight. |
 | "I can close without truth-check, it's obvious" | No close without truth-check. Obvious is not verified. |
 | "Two lanes won't really overlap" | Overlap check is hard. If scopes touch, the second lane is refused. No exceptions. |
+
+
+## Pre-closure checklist and lane-close (moved from CLAUDE.md, WORK-2026112502)
+
+**Pre-closure checklist (7 steps — all required before `ops:lane-close`):**
+1. `pnpm verify` green on the branch
+2. R-level lookup in `docs/05_operations/r1-r5-rules.json` — all triggered `required[]` artifacts present
+3. Proof SHA binding automated — `post-merge-lane-close.yml` runs `ops:proof-generate --merge-sha` after merge; no manual append needed
+4. CI green on merge SHA (not just branch CI)
+5. For T1: `pnpm test:db` green + evidence bundle generated and validated
+6. Tier label auto-applied by `ops:lane-finalize`; verify tier label is set in Linear
+7. `ops:truth-check` runs and exits 0
+
+`ops:lane-close <ID>` is already the one-command post-merge entry point: it runs `ops:truth-check` internally, and on success marks the manifest `done` and transitions the Linear issue to Done — no separate manual truth-check invocation is required first. If the manifest is missing its merge SHA or drifted from the merged PR, `ops:lane-close <ID> --repair-merged` repairs it directly from GitHub's authoritative merge state (`pr.mergeSha`) before running truth-check, instead of requiring a manual `ops:lane-manifest record-merge` step. `ops:lane-finalize <ID>` remains a required separate call for tier-label application (step 6); `ops:lane-close` does not apply tier labels.

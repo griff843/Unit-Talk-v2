@@ -32,7 +32,7 @@ Mission card (compact; the full files are read on demand, not imported). Unit Ta
 
 **Stop conditions:** the mission runs continuously. Return to Griff only at a reserved decision with nothing else safe executable, a hard safety boundary that cannot be resolved within existing authority, or mission completion. These are NOT stop conditions: waiting on CI, review or a PR; finishing a lane or PR; having something to report; Griff asking a question, issuing a correction or giving steering (answer it, fold it in, continue). A reserved gate blocks only the work that depends on it: surface it and continue every other safe path. Continuing never licenses working around the lane, tier, proof or merge-authority contracts.
 
-**Before planning, executing, reviewing, delegating or resuming work (including after compaction), Read `docs/mission/intent.md` and `docs/mission/plan.md` (and `docs/mission/spec.md` for contract questions).** `intent.md` is Griff-owned: do not change its intent without Griff ratification. `plan.md` is Claude-owned: reconcile it against live GitHub and runtime truth. Live evidence establishes current state, and canonical contracts remain authoritative for their domains. Dated readings (current truth, production position, evidence batch) live in `docs/mission/plan-readings.md`; re-measure before relying on any figure. If the card and those files disagree, the files win. Claude owns orchestration from this context; do not require Griff to restate the mission in chat.
+**Before planning, executing, reviewing, delegating or resuming work (including after compaction), Read `docs/mission/plan.md` §0 (Direction) and the plan section for the task at hand. Read `docs/mission/intent.md` in full when the work touches a reserved decision, authority, the operating model or a stop condition, and `docs/mission/spec.md` for contract questions.** This card carries the reserved list, standing holds and stop conditions, so it is enough to start ordinary work. `intent.md` is Griff-owned: do not change its intent without Griff ratification. `plan.md` is Claude-owned: reconcile it against live GitHub and runtime truth. Live evidence establishes current state, and canonical contracts remain authoritative for their domains. Dated readings (current truth, production position, evidence batch) live in `docs/mission/plan-readings.md`; re-measure before relying on any figure. If the card and those files disagree, the files win. Claude owns orchestration from this context; do not require Griff to restate the mission in chat.
 
 @docs/05_operations/STANDING_GUARDRAILS.md
 
@@ -111,16 +111,7 @@ Start a lane with `ops:lane-start <UTV2-###>`. Close with `ops:lane-close <UTV2-
 
 Before starting: preflight token valid, tier label set, file scope declared, no overlap with active lanes.
 
-**Pre-closure checklist (7 steps — all required before `ops:lane-close`):**
-1. `pnpm verify` green on the branch
-2. R-level lookup in `docs/05_operations/r1-r5-rules.json` — all triggered `required[]` artifacts present
-3. Proof SHA binding automated — `post-merge-lane-close.yml` runs `ops:proof-generate --merge-sha` after merge; no manual append needed
-4. CI green on merge SHA (not just branch CI)
-5. For T1: `pnpm test:db` green + evidence bundle generated and validated
-6. Tier label auto-applied by `ops:lane-finalize`; verify tier label is set in Linear
-7. `ops:truth-check` runs and exits 0
-
-`ops:lane-close <ID>` is already the one-command post-merge entry point: it runs `ops:truth-check` internally, and on success marks the manifest `done` and transitions the Linear issue to Done — no separate manual truth-check invocation is required first. If the manifest is missing its merge SHA or drifted from the merged PR, `ops:lane-close <ID> --repair-merged` repairs it directly from GitHub's authoritative merge state (`pr.mergeSha`) before running truth-check, instead of requiring a manual `ops:lane-manifest record-merge` step. `ops:lane-finalize <ID>` remains a required separate call for tier-label application (step 6); `ops:lane-close` does not apply tier labels.
+Before closing: `pnpm verify` green, triggered R-level artifacts present, CI green on the merge SHA, T1 runtime proof, and `ops:truth-check` exit 0. The full 7-step pre-closure checklist and how `ops:lane-close` / `--repair-merged` / `ops:lane-finalize` fit together are in the `/lane-management` skill.
 
 Procedural details: `/lane-management` and `/verification` skills.
 Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations/TRUTH_CHECK_SPEC.md`.
@@ -137,84 +128,24 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 
 **Static proof** alone is never sufficient for T1. **Runtime proof** must run against real Supabase, not in-memory repos. Details: `/verification` skill.
 
-**Merge Authority is defined once, mechanically, by `.github/workflows/merge-gate.yml`** (ratified 2026-05-18 under UTV2-979 for T2; this table must always match that workflow — if they diverge, the workflow wins and this table is stale). For T2, no PM presence or PM_VERDICT comment is mechanically required, for any executor (Claude or Codex). GitHub rejects `gh pr review --approve` when the reviewer is the PR's author, and Claude and Codex both open PRs as the same account, so the artifact that actually satisfies T2 in practice is the `EXECUTOR_RESULT: READY_FOR_REVIEW` / `schema: executor-result/v1` self-attestation comment (UTV2-1523; the T2 branch of `merge-gate.yml`). A GitHub PR review approval or a `pm-verdict/v1` comment also satisfies it. PM approval is never satisfied by a chat message; only the `t1-approved` label, a GitHub PR review approval, a `pm-verdict/v1` comment (schema: `docs/05_operations/schemas/pm-verdict-v1.md`) or, for T2 only, the `executor-result/v1` self-attestation count as approval artifacts.
+**Merge Authority is defined once, mechanically, by `.github/workflows/merge-gate.yml`**; if this table and the workflow diverge, the workflow wins. PM approval is never a chat message. How T2 is satisfied in practice (the `executor-result/v1` self-attestation) is in the `/verification` skill.
 
 ---
 
 ## Authoritative documents
 
-| Topic | Document |
-|---|---|
-| Master execution map (phases 1–8) | `docs/05_operations/EXECUTION_MAP.md` |
-| Master modeling sequence (elite-core / human-like-core) | `docs/05_operations/MODELING_SEQUENCE.md` |
-| Three-lane workflow spec | `docs/05_operations/WORKFLOW_SPEC.md` |
-| Execution truth model | `docs/05_operations/EXECUTION_TRUTH_MODEL.md` |
-| Done-gate (`ops:truth-check`) | `docs/05_operations/TRUTH_CHECK_SPEC.md` |
-| Lane manifest schema + lifecycle | `docs/05_operations/LANE_MANIFEST_SPEC.md` |
-| Delegation policy (tiers, reshaping) | `docs/05_operations/DELEGATION_POLICY.md` |
-| Sonnet-5-era operating model (Outcome Contracts, PM gates, runtime validation by tier, cutover) | `docs/05_operations/OPERATING_MODEL_SONNET5.md` |
-| Evidence bundle template | `docs/05_operations/EVIDENCE_BUNDLE_TEMPLATE.md` |
-| Docs authority map | `docs/05_operations/docs_authority_map.md` |
-| Program status snapshot (dated; check its "Last verified" line; live evidence and `docs/mission/plan.md` override it. `PROGRAM_STATUS.md` is superseded audit history) | `docs/06_status/CURRENT_STATE.md` |
-| Codebase guide (architecture reference) | `docs/CODEBASE_GUIDE.md` |
-| Phase 7 ratification + execution plan | `docs/06_status/PHASE7R_RATIFICATION.md`, `docs/06_status/PHASE7E_EXECUTION_PLAN.md` |
-| SGO / provider knowledge | `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md` |
-| Known debt | `docs/06_status/KNOWN_DEBT.md` |
-| Executor result schema | `docs/05_operations/schemas/executor-result-v1.md` |
-| PM verdict schema | `docs/05_operations/schemas/pm-verdict-v1.md` |
-| Proof template | `docs/06_status/proof/PROOF-TEMPLATE.md` |
-| **Smart Form product intent** | `docs/03_product/smart-form/intent.md` |
-| **Command Center product contract** | `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md` — the sole authority for what Command Center is and must do |
+The full topic → document index is `docs/05_operations/AUTHORITATIVE_DOCS.md`, read on demand. The ones most often needed:
 
-### Product intent — required reading when you touch a product surface
-
-A product's intent document is required reading before any task that changes how that product
-behaves for its operator — **including backend work** in `apps/api`, `packages/domain` or the
-pipeline that changes what the product can do or what it records. Read it alongside the canonical
-contracts it indexes, and carry the applicable acceptance criteria into any delegated packet.
-
-| Product | Intent |
-|---|---|
-| Smart Form (operator pick intake) | `docs/03_product/smart-form/intent.md` |
-| Command Center (operator control plane + intelligence platform) | `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md` — a full product **contract**, not an intent doc. It is required reading, and unlike the intent documents below it is authority. |
-| Pipeline (grading, settlement, CLV) | *written when that product is next worked* |
-
-Product *intent* documents are not gates. They add no check, no approval artifact and no lane type,
-and no work waits on one being written.
-
-**Command Center is the exception, and deliberately so.** It is governed by a product *contract*,
-not an intent document, because more than twenty Command Center documents had accumulated on `main`
-and several independently claimed canonical authority over overlapping scope. All of them are now
-archived under `docs/archive/command-center/` and are historical evidence only. Answer "what should
-Command Center do?" from `COMMAND_CENTER_PRODUCT_CONTRACT.md` alone.
+- Current state and what is executable: `docs/mission/plan.md`
+- Execution truth, done-gate and lane manifest: `docs/05_operations/EXECUTION_TRUTH_MODEL.md`, `TRUTH_CHECK_SPEC.md`, `LANE_MANIFEST_SPEC.md`
+- Smart Form product intent (required reading before changing Smart Form behaviour, backend included): `docs/03_product/smart-form/intent.md`
+- Command Center: `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md` is the sole authority; everything under `docs/archive/command-center/` is history only.
 
 ---
 
 ## Skills (invoke by name)
 
-| Skill | When to use |
-|---|---|
-| `/dispatch-board` | "clear the board" — routes entire Linear backlog, runs full loop autonomously |
-| `/loop-dispatch` | continuous dispatch loop — runs /dispatch-board repeatedly until board empty or all blocked |
-| `/dispatch` | execute a specific issue or pick top candidates (single dispatch cycle) |
-| `/three-brain` | executor routing decision for any issue (Claude / Codex CLI / Codex Cloud / Explore / QA / Griff) |
-| `/execution-truth` | deciding if work is Done; reconciling narrative vs artifacts |
-| `/lane-management` | starting, progressing, blocking, closing any lane |
-| `/verification` | before any merge claim or `ops:truth-check` call |
-| `/lane-recovery` | a lane is stuck, a gate refuses, or manifest/Linear/GitHub disagree |
-| `/pr-unblock` | a PR is red, BLOCKED, or stalled and the cause is not obvious |
-| `/proof-authoring` | writing or correcting a proof bundle so it is true and passes all three gates |
-| `/mutation-test` | proving a control, guard, or test actually fails on the condition it names |
-| `/code-structure` | touching package/app boundaries, imports, or generated files |
-| `/betting-domain` | touching CanonicalPick, scoring, promotion, lifecycle, CLV, grading |
-| `/outbox-worker` | touching outbox polling, delivery adapter, retry, circuit breaker |
-| `/system-state-loader` | forced state reload after `/clear` or when hook data is suspected stale |
-| `/t1-proof` | assembling a T1 evidence bundle |
-| `/db-verify` | live DB verification |
-| `/systematic-debugging` | structured debugging when a fix resists quick diagnosis |
-| `/verify-pick` | verify a specific pick end-to-end against live data |
-
-All skills live in `.claude/commands/`. Add new skills there; do not expand this file.
+Skills live in `.claude/commands/`; each one's `description` says when to use it, and the app lists them every session. Add new skills there; do not expand this file.
 
 ---
 

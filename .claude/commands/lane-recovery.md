@@ -1,3 +1,6 @@
+---
+description: "Use when: a lane is stuck, a gate refuses, or manifest/Linear/GitHub disagree"
+---
 # /lane-recovery
 
 Triage and repair a lane whose state has already broken. `/lane-management` is the forward path — start, progress, close. This skill is the reverse path: a lane is stuck, a gate is refusing, or manifest / Linear / GitHub disagree, and you need to know which repair to run.

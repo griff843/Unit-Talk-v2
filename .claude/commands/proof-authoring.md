@@ -1,3 +1,6 @@
+---
+description: "Use when: writing or correcting a proof bundle so it is true and passes all three gates"
+---
 # /proof-authoring
 
 How to write a proof bundle that is **true** and that passes every gate that reads it. `/t1-proof` covers assembling a T1 evidence bundle; `/verification` covers whether work is verified. This skill covers the document itself — the file where fabrication is easiest and most damaging.
