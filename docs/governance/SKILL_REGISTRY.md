@@ -11,11 +11,10 @@ Existing `.agents/skills/` files do not declare a uniform owner/category/trigger
 | `.agents/skills/betting-domain/SKILL.md` | implementation | `codex-implementation` | Before changing `packages/contracts`, `packages/domain`, CanonicalPick, promotion scores, lifecycle rules, or grading | Guards domain and contract changes; keeps pure-domain invariants intact. |
 | `.agents/skills/branch-hygiene/SKILL.md` | governance | `codex-implementation` | When repo state is mixed, splitting work, staging slices, merging finished branches, or pruning stale branches | Keeps branch, worktree, and staging state clean. |
 | `.agents/skills/db-verify/SKILL.md` | verification | `codex-implementation` | After DB-writing changes or when runtime and persistence truth may disagree | Verifies live DB truth after implementation. |
-| `.agents/skills/dispatch/SKILL.md` | governance | `codex-implementation` | Manual dispatch requests, queue dispatch, or one-command Codex execution from Linear | Runs the Codex-native dispatch workflow. |
+| `.agents/skills/dispatch/SKILL.md` | governance | `codex-implementation` | Manual dispatch requests, queue dispatch, or one-command Codex execution from a work order | Runs the Codex-native dispatch workflow. |
 | `.agents/skills/doc-truth-audit/SKILL.md` | review | `codex-implementation` | When auditing docs that claim `metadata.domainAnalysis` runtime consumers or producers | Audits documentation truth claims for `metadata.domainAnalysis`. |
 | `.agents/skills/doc-truth-audit/check-doc-truth.ps1` | verification | `codex-implementation` | Invoked with `DocPath` during a doc truth audit | PowerShell helper used to normalize paths and validate doc-truth evidence. |
 | `.agents/skills/frontend-design/SKILL.md` | implementation | `codex-implementation` | When building frontend components, pages, or applications | Guides distinctive, production-grade frontend implementation. |
-| `.agents/skills/linear-execution/SKILL.md` | governance | `codex-implementation` | When work explicitly depends on Linear issue or lane state | Uses the repo's CLI-first Linear workflow. |
 | `.agents/skills/merge-conflict-resolution/SKILL.md` | implementation | `codex-implementation` | When a merge stops on a real conflict | Resolves merge conflicts while preserving valid behavior. |
 | `.agents/skills/operator-surface/SKILL.md` | implementation | `codex-implementation` | When touching operator snapshots, pick detail/search views, command-center actions, or operational truth surfaces | Guards operator-facing surfaces and their read-only/runtime invariants. |
 | `.agents/skills/outbox-worker/SKILL.md` | implementation | `codex-implementation` | Before changing worker, outbox, receipt, delivery-adapter, retry, or circuit-breaker behavior | Guards outbox and worker delivery invariants. |
@@ -62,9 +61,8 @@ canonical_ref: docs/05_operations/EVIDENCE_BUNDLE_TEMPLATE.md
 | `review-pr-proof` | `codex-return-reviewer` | `pr-hook` | review | `pr_number`, `tier`, `verify_output`, `r_level_output` | `APPROVE/REJECT verdict`, `review findings` |
 | `triage-ci-failure` | `claude-governance` | `event` | verification | `workflow_run`, `job_name`, `commit_sha` | `failure triage report`, `recommended next action` |
 | `validate-migration-lane` | `db-proof-reviewer` | `pr-hook` | verification | `pr_number`, `merge_sha`, `pnpm_test_db_output` | `VALID/INVALID verdict`, `proof completeness report` |
-| `audit-runtime-truth` | `lane-reconciler` | `scheduled` | governance | `lane_state`, `linear_state`, `github_state` | `reconciliation report`, `drift findings` |
-| `prepare-codex-issue` | `codex-dispatch-preparer` | `manual` | governance | `linear_issue_id`, `acceptance_criteria`, `allowed_files` | `READY/NOT_READY dispatch packet`, `blocker list` |
-| `closeout-linear-issue` | `claude-governance` | `event` | documentation | `issue_id`, `pr_number`, `merge_sha` | `closeout note`, `issue state transition` |
+| `audit-runtime-truth` | `lane-reconciler` | `scheduled` | governance | `lane_state`, `work_orders`, `github_state` | `reconciliation report`, `drift findings` |
+| `prepare-codex-issue` | `codex-dispatch-preparer` | `manual` | governance | `work_order_id`, `acceptance_criteria`, `allowed_files` | `READY/NOT_READY dispatch packet`, `blocker list` |
 
 ## 5. Migration and Compatibility Strategy
 

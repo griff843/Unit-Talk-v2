@@ -2,16 +2,16 @@
 /**
  * scope-suggest — suggest file scope for a lane before ops:lane-start
  *
- * Reads the Linear issue description and maps it to likely file paths,
+ * Reads the repo work order (.ops/work/<ID>.md) or lane manifest description
+ * and maps it to likely file paths,
  * reducing scope_bleed CI failures caused by under-declared scope locks.
  *
  * Usage:
- *   pnpm ops:scope-suggest --issue UTV2-###
+ *   pnpm ops:scope-suggest --issue WORK-###
  *   pnpm ops:scope-suggest --description "add CLV scoring to CanonicalPick"
- *   pnpm ops:scope-suggest --issue UTV2-### --json
+ *   pnpm ops:scope-suggest --issue WORK-### --json
  */
 
-import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -117,23 +117,11 @@ function matchKeywords(text: string): string[] {
   return [...suggested];
 }
 
-function fetchLinearDescription(issueId: string): string | null {
-  const token = process.env.LINEAR_API_TOKEN ?? process.env.LINEAR_API_KEY ?? '';
-  if (!token) return null;
-
-  const query = `{ issue(id: "${issueId}") { title description } }`;
+function readWorkOrderDescription(issueId: string): string | null {
+  const workPath = path.join(ROOT, '.ops', 'work', `${issueId.toUpperCase()}.md`);
+  if (!existsSync(workPath)) return null;
   try {
-    const res = spawnSync('curl', [
-      '-s', '-X', 'POST', 'https://api.linear.app/graphql',
-      '-H', 'Content-Type: application/json',
-      '-H', `Authorization: ${token}`,
-      '-d', JSON.stringify({ query }),
-    ], { encoding: 'utf8' });
-    if (res.status !== 0) return null;
-    const parsed = JSON.parse(res.stdout ?? '{}');
-    const issue = parsed?.data?.issue;
-    if (!issue) return null;
-    return `${issue.title ?? ''}\n\n${issue.description ?? ''}`;
+    return readFileSync(workPath, 'utf8');
   } catch {
     return null;
   }
@@ -156,7 +144,7 @@ interface ScopeSuggestion {
   keyword_paths: string[];
   suggested_files: string[];
   lane_start_flags: string;
-  source: 'linear' | 'manifest' | 'cli' | 'none';
+  source: 'work-order' | 'manifest' | 'cli' | 'none';
 }
 
 function main(argv = process.argv.slice(2)): number {
@@ -172,9 +160,9 @@ function main(argv = process.argv.slice(2)): number {
     description = cliDescription;
     source = 'cli';
   } else if (issueId) {
-    description = fetchLinearDescription(issueId);
+    description = readWorkOrderDescription(issueId);
     if (description) {
-      source = 'linear';
+      source = 'work-order';
     } else {
       description = readManifestDescription(issueId);
       if (description) source = 'manifest';
@@ -191,7 +179,7 @@ function main(argv = process.argv.slice(2)): number {
       source: 'none',
     };
     if (json) emitJson(result);
-    else process.stdout.write('[scope-suggest] no description available — pass --description or ensure LINEAR_API_TOKEN is set\n');
+    else process.stdout.write('[scope-suggest] no description available — pass --description or add .ops/work/<ID>.md\n');
     return 1;
   }
 

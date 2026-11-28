@@ -172,7 +172,7 @@ Every run writes artifacts to `apps/qa-agent/artifacts/<surface>-<flow>-<persona
 |---|---|
 | `result.json` | Full `QAResult` — schema v1, all expectations, preflight results, screenshots list, console errors, network observations |
 | `result.md` | Human-readable summary with status, step log, expectation results, UX friction items |
-| `issue-report.md` | If the run fails and has an `issueRecommendation`, a pre-filled Linear issue template |
+| `issue-report.md` | If the run fails and has an `issueRecommendation`, a pre-filled issue template |
 | `*.png` | Screenshots captured during the flow |
 
 The `artifacts/latest/` symlink points to the most recent run for quick access.

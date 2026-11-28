@@ -28,7 +28,7 @@ function write(root: string, relativePath: string, content: string): string {
 }
 
 function registry(root: string, overrides: Partial<AlignmentRegistry> = {}): AlignmentRegistry {
-  const active = write(root, 'docs/05_operations/ACTIVE.md', 'Linear is live.\n`docs/06_status/ISSUE_QUEUE.md` is historical only.\n');
+  const active = write(root, 'docs/05_operations/ACTIVE.md', 'Work orders are live.\n`docs/06_status/ISSUE_QUEUE.md` is historical only.\n');
   const historical = write(root, 'docs/06_status/ISSUE_QUEUE.md', '# Historical\n');
   for (const consumer of [
     'scripts/ops/lane-start.ts',

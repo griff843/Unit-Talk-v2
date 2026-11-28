@@ -9,7 +9,6 @@ import {
   buildOrchestrationReconcilerReport,
   gitBranches,
   type BranchSnapshot,
-  type LinearIssueSnapshot,
   type PullRequestSnapshot,
 } from './orchestration-reconciler.js';
 import { readAllLeases } from './lease-registry.js';
@@ -30,14 +29,12 @@ interface LaneCleanPlan {
 export function buildLaneCleanPlan(
   issueIdInput: string,
   surfaces: {
-    linearIssues?: LinearIssueSnapshot[];
     branches?: BranchSnapshot[];
     pullRequests?: PullRequestSnapshot[];
   } = {},
 ): LaneCleanPlan {
   const issueId = requireIssueId(issueIdInput);
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: surfaces.linearIssues ?? [],
     leases: readAllLeases(),
     manifests: readAllManifests(),
     branches: surfaces.branches ?? gitBranches(),

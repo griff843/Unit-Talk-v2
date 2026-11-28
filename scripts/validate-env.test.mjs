@@ -59,9 +59,9 @@ test('checkMissingSharedKeys flags required keys absent from the shared env map'
 test('checkLeakedSecrets flags discouraged keys that hold non-empty values', () => {
   const leaked = checkLeakedSecrets(
     new Map([
-      ['LINEAR_API_TOKEN', 'lin_api_xxx'],
+      ['DISCORD_BOT_TOKEN', 'discord-token-xxx'],
       ['SUPABASE_SERVICE_ROLE_KEY', ''],
     ]),
   );
-  assert.deepEqual(leaked, ['LINEAR_API_TOKEN']);
+  assert.deepEqual(leaked, ['DISCORD_BOT_TOKEN']);
 });

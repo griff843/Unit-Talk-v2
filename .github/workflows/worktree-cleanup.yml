@@ -1,7 +1,7 @@
 name: Worktree Cleanup
 
 # Nightly cleanup of stale lane worktrees in .out/worktrees/.
-# Runs after queue-grooming (3:07am UTC) to catch lanes closed the prior day.
+# Runs early each morning (UTC) to catch lanes closed the prior day.
 
 on:
   schedule:
@@ -39,7 +39,6 @@ jobs:
         run: pnpm ops:lane-clean --json > lane-clean-result.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
 
       - name: Upload cleanup report
         uses: actions/upload-artifact@v4

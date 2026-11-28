@@ -1,5 +1,7 @@
 # Delegation Policy — Claude Code Orchestrator
 
+> **2026-11-25:** the Linear workflow is retired. Read "Linear issue" in this document as the repo work order (`.ops/work/WORK-*.md`) and "Linear state" as the lane manifest status. No Linear transition, comment or label is performed or required.
+
 > Canonical policy for when the Claude Code orchestrator may act autonomously, when it must escalate to PM, and when it must stop regardless of apparent authorization.
 >
 > Adopted 2026-04-11. Authority: PM. Supersedes any ad-hoc decision-making defaults in `CLAUDE.md` that don't explicitly reference this document.
@@ -59,10 +61,10 @@ The orchestrator may plan, dispatch, review, merge, and update Linear state with
   - `docs/06_status/**` (status docs, progress reports, evidence bundles — **after** PM has accepted the underlying work)
   - `docs/05_operations/**` (operational playbooks and policies — **not** the delegation policy itself; self-amendment requires PM)
   - `.ut-issues/**.yaml` (issue metadata)
-- Stale Linear reconciliation (moving issues marked Done in main to Done in Linear when commit history confirms the merge)
+- Stale manifest reconciliation (`ops:lane-close --repair-merged` when commit history confirms the merge)
 - Housekeeping cleanup of known-stale files (e.g. expired `.claude/codex-queue/*.md` for Done issues) when the cleanup touches only the stale files
 - Bash/SQL **read-only** verification queries against live DB to produce evidence (no mutations, no DDL)
-- Opening Linear issues to track newly-discovered debt, follow-ups, or corrective work
+- Committing work orders to track newly-discovered debt, follow-ups, or corrective work
 - Dispatching Codex CLI lanes for work already classified as Tier A or Tier B by this policy
 - Running `pnpm type-check`, `pnpm test`, `pnpm test:db`, `pnpm lint`, `pnpm build` — any verification that does not mutate state
 
@@ -70,7 +72,7 @@ The orchestrator may plan, dispatch, review, merge, and update Linear state with
 
 **Required post-merge actions:**
 - Report merge SHA to PM in the next message
-- Update Linear state via the tooling (or rely on the `linear-auto-close.yml` workflow once the `LINEAR_API_TOKEN` secret is configured)
+- Close the lane with `pnpm ops:lane-close <ID>`
 - Confirm scanner quiescence and any other standing invariants are still in place
 
 ### Tier B — Review-before-merge

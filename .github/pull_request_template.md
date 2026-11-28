@@ -1,6 +1,6 @@
 ## Issue
 
-UTV2-####
+WORK-####
 
 ## Tier
 
@@ -47,6 +47,6 @@ UTV2-####
 
 ## Proof artifact
 
-<!-- T1: path to SHA-bound evidence bundle, e.g. docs/06_status/proof/UTV2-####.md -->
+<!-- T1: path to SHA-bound evidence bundle, e.g. ####.md -->
 <!-- T2 runtime path: diff-summary or verification log -->
 <!-- T3: "CI only" -->

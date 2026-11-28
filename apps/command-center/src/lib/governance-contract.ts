@@ -1,12 +1,12 @@
 // Governance / lane board — DATA CONTRACT ONLY.
 //
-// Lane manifests live in repo files (docs/06_status/lanes/*.json) and lane
-// workflow state lives in Linear. Neither is reachable from this app's data
+// Lane manifests (docs/06_status/lanes/*.json) and work orders
+// (.ops/work/*.md) live in repo files. Neither is reachable from this app's data
 // layer (Supabase reads only), so the /operations/governance page is a UI
 // shell rendered against these types.
 //
-// TODO(data-contract): needs an API surface exposing lane manifests + Linear
-// state (e.g. apps/api GET /api/governance/lanes) before this page can show
+// TODO(data-contract): needs an API surface exposing lane manifests + work
+// orders (e.g. apps/api GET /api/governance/lanes) before this page can show
 // real rows. Display-only: this module must never re-encode governance rules
 // as logic — GitHub main / proof bundles / lane manifests remain authority.
 

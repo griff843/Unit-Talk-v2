@@ -8,7 +8,7 @@ If this file and a canonical doc disagree, **the canonical doc wins**. Update th
 
 ## Mission
 
-Unit Talk V2 is a contract-first, fail-closed sports-betting pick pipeline. Claude Code is the execution orchestrator: work the Linear backlog, merge on green per tier policy, and keep execution truth mechanical rather than narrative.
+Unit Talk V2 is a contract-first, fail-closed sports-betting pick pipeline. Claude Code is the execution orchestrator: work the repo work orders (`.ops/work/WORK-*.md`), merge on green per tier policy, and keep execution truth mechanical rather than narrative.
 
 ---
 
@@ -50,10 +50,10 @@ pnpm verify            # env:check + lint + type-check + build + test
 pnpm verify:parallel   # lint + type-check in parallel, then build + test (faster)
 pnpm verify:quick      # fast pre-flight: sync-check + env + lint + type-check only
 pnpm supabase:types    # regenerate database.types.ts after a migration
-pnpm ops:brief         # current system state: lanes, Linear queue, runtime status
+pnpm ops:brief         # current system state: lanes, open work orders, runtime status
 pnpm ops:digest        # daily dispatch digest — surfaces executable candidates
-pnpm ops:truth-check   # done-gate for a lane (pass UTV2-### as argument)
-pnpm ops:scope-suggest # auto-suggest file scope before ops:lane-start (pass --issue UTV2-###)
+pnpm ops:truth-check   # done-gate for a lane (pass the WORK-### / legacy UTV2-### id)
+pnpm ops:scope-suggest # auto-suggest file scope before ops:lane-start (pass --issue WORK-###)
 
 # Run a single test file
 tsx --test apps/api/src/submission-service.test.ts
@@ -74,7 +74,7 @@ Never `sleep`-then-poll for CI/merge status — the harness blocks bare sleep ch
 | 1 | **GitHub `main`** | shipped code, merge SHAs, CI on merge |
 | 2 | **Proof bundle** (tied to merge SHA) | completion evidence |
 | 3 | **Lane manifest** (`docs/06_status/lanes/*.json`) | active lane state |
-| 4 | **Linear** | workflow intent, tier label, ownership |
+| 4 | **Work order** (`.ops/work/WORK-*.md`) | workflow intent, tier, acceptance criteria |
 | 5 | **Chat / memory / agent claims** | context only — never authoritative |
 
 Higher ranks win unconditionally. Full spec: `docs/05_operations/EXECUTION_TRUTH_MODEL.md`.
@@ -87,7 +87,7 @@ Higher ranks win unconditionally. Full spec: `docs/05_operations/EXECUTION_TRUTH
 2. No lane without preflight. No Done without `ops:truth-check` pass.
 3. One issue → one lane → one branch → one PR.
 4. Proof must tie to the merge SHA. Stale proof is invalid.
-5. Tier label (T1/T2/T3) is required before Ready.
+5. Tier (T1/T2/T3) is required in the work order before a lane starts.
 6. Lane manifest is the sole authority for active lane state.
 7. Domain (`@unit-talk/domain`) is pure. No I/O, no DB, no HTTP, no env.
 8. Apps own side effects. Packages never import from apps. Apps never import from apps.
@@ -107,9 +107,9 @@ Current state, what is executable, what is blocked, and what requires Griff: **`
 
 ## Lane execution expectations
 
-Start a lane with `ops:lane-start <UTV2-###>`. Close with `ops:lane-close <UTV2-###>`. These are the only sanctioned transitions. No Done without `ops:truth-check` pass.
+Work identity, tier and acceptance criteria come from the committed work order `.ops/work/WORK-<n>.md`; the Linear workflow was retired on 2026-11-25. Start a lane with `ops:lane-start <WORK-###>` on a `claude/work-<n>-<slug>` (or `codex/work-<n>-<slug>`) branch. Close with `ops:lane-close <WORK-###>`. Legacy `UTV2-###` lanes keep working by their manifests. These are the only sanctioned transitions. No Done without `ops:truth-check` pass.
 
-Before starting: preflight token valid, tier label set, file scope declared, no overlap with active lanes.
+Before starting: preflight token valid, work order committed with its tier, file scope declared, no overlap with active lanes.
 
 **Pre-closure checklist (7 steps — all required before `ops:lane-close`):**
 1. `pnpm verify` green on the branch
@@ -117,10 +117,10 @@ Before starting: preflight token valid, tier label set, file scope declared, no 
 3. Proof SHA binding automated — `post-merge-lane-close.yml` runs `ops:proof-generate --merge-sha` after merge; no manual append needed
 4. CI green on merge SHA (not just branch CI)
 5. For T1: `pnpm test:db` green + evidence bundle generated and validated
-6. Tier label auto-applied by `ops:lane-finalize`; verify tier label is set in Linear
+6. Tier recorded in the work order and lane manifest; `ops:lane-finalize` applies the PR tier label
 7. `ops:truth-check` runs and exits 0
 
-`ops:lane-close <ID>` is already the one-command post-merge entry point: it runs `ops:truth-check` internally, and on success marks the manifest `done` and transitions the Linear issue to Done — no separate manual truth-check invocation is required first. If the manifest is missing its merge SHA or drifted from the merged PR, `ops:lane-close <ID> --repair-merged` repairs it directly from GitHub's authoritative merge state (`pr.mergeSha`) before running truth-check, instead of requiring a manual `ops:lane-manifest record-merge` step. `ops:lane-finalize <ID>` remains a required separate call for tier-label application (step 6); `ops:lane-close` does not apply tier labels.
+`ops:lane-close <ID>` is already the one-command post-merge entry point: it runs `ops:truth-check` internally, and on success marks the manifest `done` — no separate manual truth-check invocation is required first. If the manifest is missing its merge SHA or drifted from the merged PR, `ops:lane-close <ID> --repair-merged` repairs it directly from GitHub's authoritative merge state (`pr.mergeSha`) before running truth-check, instead of requiring a manual `ops:lane-manifest record-merge` step. `ops:lane-finalize <ID>` remains a required separate call (step 6); `ops:lane-close` does not apply tier labels.
 
 Procedural details: `/lane-management` and `/verification` skills.
 Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations/TRUTH_CHECK_SPEC.md`.
@@ -194,14 +194,14 @@ Command Center do?" from `COMMAND_CENTER_PRODUCT_CONTRACT.md` alone.
 
 | Skill | When to use |
 |---|---|
-| `/dispatch-board` | "clear the board" — routes entire Linear backlog, runs full loop autonomously |
+| `/dispatch-board` | "clear the board" — routes every open work order, runs full loop autonomously |
 | `/loop-dispatch` | continuous dispatch loop — runs /dispatch-board repeatedly until board empty or all blocked |
 | `/dispatch` | execute a specific issue or pick top candidates (single dispatch cycle) |
 | `/three-brain` | executor routing decision for any issue (Claude / Codex CLI / Codex Cloud / Explore / QA / Griff) |
 | `/execution-truth` | deciding if work is Done; reconciling narrative vs artifacts |
 | `/lane-management` | starting, progressing, blocking, closing any lane |
 | `/verification` | before any merge claim or `ops:truth-check` call |
-| `/lane-recovery` | a lane is stuck, a gate refuses, or manifest/Linear/GitHub disagree |
+| `/lane-recovery` | a lane is stuck, a gate refuses, or manifest/work order/GitHub disagree |
 | `/pr-unblock` | a PR is red, BLOCKED, or stalled and the cause is not obvious |
 | `/proof-authoring` | writing or correcting a proof bundle so it is true and passes all three gates |
 | `/mutation-test` | proving a control, guard, or test actually fails on the condition it names |

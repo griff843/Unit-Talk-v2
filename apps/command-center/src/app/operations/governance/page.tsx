@@ -25,7 +25,7 @@ export default async function GovernancePage() {
       </div>
 
       <div className="cc-surface p-5 text-sm cc-text-muted">
-        <p>Source: <span className="font-mono">docs/06_status/lanes/*.json</span>. Linear-only fields are not inferred.</p>
+        <p>Source: <span className="font-mono">docs/06_status/lanes/*.json</span>. Fields absent from the manifest are not inferred.</p>
         {snapshot.missingSources.length > 0 ? <ul className="mt-2 list-disc space-y-1 pl-5">{snapshot.missingSources.map((source) => <li key={source}>{source}</li>)}</ul> : null}
       </div>
 

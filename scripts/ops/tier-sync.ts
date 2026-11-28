@@ -6,12 +6,12 @@
  *   pnpm ops:tier-sync <ISSUE_ID> --pr <PR_NUMBER> [--sync] [--json]
  *
  * Fails closed on:
- *   - Linear tier and PR label tier disagree
+ *   - manifest tier and PR label tier disagree
  *   - lane manifest missing or invalid
  *   - no authoritative tier
  *
  * Labels are evidence, not source of truth. The lane manifest carries
- * the authoritative tier mirrored from Linear; labels must match it.
+ * the authoritative tier; labels must match it.
  */
 
 import { execFileSync } from 'node:child_process';

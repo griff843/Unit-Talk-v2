@@ -23,7 +23,7 @@ Environment loading and workspace configuration. Three-layer env file merge with
 
 **Three-layer merge:** `.env.example` → `.env` → `local.env`. Later files override earlier. Process env vars take absolute precedence.
 
-**AppEnv interface:** typed keys for Linear, Notion, Slack, Supabase, SGO, Odds API, Discord, worker, API, ingestor, and operator config.
+**AppEnv interface:** typed keys for Notion, Slack, Supabase, SGO, Odds API, Discord, worker, API, ingestor, and operator config.
 
 **Supabase guard:** `requireSupabaseEnvironment()` throws if `SUPABASE_URL`, `SUPABASE_ANON_KEY`, or `SUPABASE_SERVICE_ROLE_KEY` are missing.
 

@@ -27,8 +27,6 @@ export default defineConfig({
         UNIT_TALK_API_RUNTIME_MODE: 'fail_open',
         UNIT_TALK_API_RATE_LIMIT_STORE: 'memory',
         UNIT_TALK_LEGACY_WORKSPACE: 'unused-by-smart-form-e2e',
-        LINEAR_TEAM_KEY: 'UTV2',
-        LINEAR_TEAM_NAME: 'unit-talk-v2',
         NOTION_WORKSPACE_NAME: 'unit-talk-v2',
         SLACK_WORKSPACE_NAME: 'unit-talk-v2',
         SYNDICATE_MACHINE_ENABLED: 'false',

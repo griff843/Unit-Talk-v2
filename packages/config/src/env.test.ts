@@ -92,8 +92,6 @@ test('loadEnvironment preserves syndicate-machine padding for strict validation'
       path.join(rootDir, '.env.example'),
       [
         'UNIT_TALK_LEGACY_WORKSPACE=C:\\\\dev\\\\unit-talk-production',
-        'LINEAR_TEAM_KEY=UTV2',
-        'LINEAR_TEAM_NAME=unit-talk-v2',
         'NOTION_WORKSPACE_NAME=unit-talk-v2',
         'SLACK_WORKSPACE_NAME=unit-talk-v2',
         'SYNDICATE_MACHINE_ENABLED= true ',
@@ -119,8 +117,6 @@ test('loadEnvironment preserves both configured SGO API keys in priority order',
     path.join(rootDir, '.env.example'),
     [
       'UNIT_TALK_LEGACY_WORKSPACE=C:\\\\dev\\\\unit-talk-production',
-      'LINEAR_TEAM_KEY=UTV2',
-      'LINEAR_TEAM_NAME=unit-talk-v2',
       'NOTION_WORKSPACE_NAME=unit-talk-v2',
       'SLACK_WORKSPACE_NAME=unit-talk-v2',
       'SGO_API_KEY=template-key',
@@ -148,8 +144,6 @@ test('loadEnvironment exposes provider-offer staging mode from env files', () =>
     path.join(rootDir, '.env.example'),
     [
       'UNIT_TALK_LEGACY_WORKSPACE=C:\\\\dev\\\\unit-talk-production',
-      'LINEAR_TEAM_KEY=UTV2',
-      'LINEAR_TEAM_NAME=unit-talk-v2',
       'NOTION_WORKSPACE_NAME=unit-talk-v2',
       'SLACK_WORKSPACE_NAME=unit-talk-v2',
       'UNIT_TALK_PROVIDER_OFFER_STAGING_MODE=off',
@@ -174,8 +168,6 @@ test('loadEnvironment exposes promotion target runtime env vars', () => {
     path.join(rootDir, '.env.example'),
     [
       'UNIT_TALK_LEGACY_WORKSPACE=C:\\\\dev\\\\unit-talk-production',
-      'LINEAR_TEAM_KEY=UTV2',
-      'LINEAR_TEAM_NAME=unit-talk-v2',
       'NOTION_WORKSPACE_NAME=unit-talk-v2',
       'SLACK_WORKSPACE_NAME=unit-talk-v2',
       'UNIT_TALK_DISTRIBUTION_TARGETS=discord:canary',
@@ -207,8 +199,6 @@ test('loadEnvironment exposes provider ingestion DB and archive policy env vars'
     path.join(rootDir, '.env.example'),
     [
       'UNIT_TALK_LEGACY_WORKSPACE=C:\\\\dev\\\\unit-talk-production',
-      'LINEAR_TEAM_KEY=UTV2',
-      'LINEAR_TEAM_NAME=unit-talk-v2',
       'NOTION_WORKSPACE_NAME=unit-talk-v2',
       'SLACK_WORKSPACE_NAME=unit-talk-v2',
       'UNIT_TALK_INGESTOR_DB_STATEMENT_TIMEOUT_MS=15000',
@@ -256,8 +246,6 @@ test('loadEnvironment exposes ingestor adaptive scheduling env vars (UTV2-1272)'
     path.join(rootDir, '.env.example'),
     [
       'UNIT_TALK_LEGACY_WORKSPACE=C:\\\\dev\\\\unit-talk-production',
-      'LINEAR_TEAM_KEY=UTV2',
-      'LINEAR_TEAM_NAME=unit-talk-v2',
       'NOTION_WORKSPACE_NAME=unit-talk-v2',
       'SLACK_WORKSPACE_NAME=unit-talk-v2',
       'UNIT_TALK_INGESTOR_SCHEDULING_ENABLED=false',
@@ -383,8 +371,6 @@ function makeProductionEnv(): AppEnv {
     UNIT_TALK_APP_ENV: 'production',
     UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\dev\\unit-talk-v2',
     UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
-    LINEAR_TEAM_KEY: 'UTV2',
-    LINEAR_TEAM_NAME: 'unit-talk-v2',
     NOTION_WORKSPACE_NAME: 'unit-talk-v2',
     SLACK_WORKSPACE_NAME: 'unit-talk-v2',
     SUPABASE_URL: 'https://example.supabase.co',
@@ -404,7 +390,7 @@ function makeProductionEnv(): AppEnv {
 // missing variable, and on being handed it reported the next. Six values were
 // demanded in total, and the surface reads none of them.
 //
-// Five were workspace metadata (`UNIT_TALK_LEGACY_WORKSPACE`, `LINEAR_TEAM_*`,
+// Five were workspace metadata (`UNIT_TALK_LEGACY_WORKSPACE`, the retired tracker team keys,
 // `NOTION_WORKSPACE_NAME`, `SLACK_WORKSPACE_NAME`) that no runtime service
 // reads. The sixth was `SUPABASE_ANON_KEY`, demanded by the credential check
 // even for a caller that opens the connection with the service-role key --
@@ -414,8 +400,6 @@ function makeProductionEnv(): AppEnv {
 
 const COMMAND_CENTER_ENV_ISOLATION = [
   'UNIT_TALK_LEGACY_WORKSPACE',
-  'LINEAR_TEAM_KEY',
-  'LINEAR_TEAM_NAME',
   'NOTION_WORKSPACE_NAME',
   'SLACK_WORKSPACE_NAME',
   'SUPABASE_URL',
@@ -550,8 +534,6 @@ test('loadEnvironment does not demand workspace metadata no runtime service read
         const env = loadEnvironment(rootDir);
 
         assert.equal(env.UNIT_TALK_LEGACY_WORKSPACE, undefined);
-        assert.equal(env.LINEAR_TEAM_KEY, undefined);
-        assert.equal(env.LINEAR_TEAM_NAME, undefined);
         assert.equal(env.NOTION_WORKSPACE_NAME, undefined);
         assert.equal(env.SLACK_WORKSPACE_NAME, undefined);
       },

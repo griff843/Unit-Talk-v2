@@ -2,8 +2,8 @@
 #
 # Mechanical enforcement of the P0 Runtime Hardening merge protocol (UTV2-948).
 #
-# For any PR whose Linear issue is in the Runtime Hardening P0 project
-# (id 46229dc4-c7c1-4ccb-af0d-dedaf8147a97), this gate requires:
+# For any PR whose lane manifest (docs/06_status/lanes/<ID>.json at the PR
+# head) declares `p0_protocol.required: true`, this gate requires:
 #
 #   1. claude-critique.md artifact present in docs/06_status/proof/<UTV2-###>/
 #   2. runtime-verification.md artifact present in same directory
@@ -14,7 +14,6 @@
 # Non-P0 PRs auto-pass (skip).
 #
 # Spec: docs/05_operations/P0_PROTOCOL_SPEC.md
-# Linear: UTV2-948
 
 name: P0 Protocol
 
@@ -50,14 +49,14 @@ jobs:
             const title = pr.title || '';
             const body = pr.body || '';
             const branch = pr.head?.ref || '';
-            const pattern = /(?:UTV2|UNI)-\d+/i;
+            const pattern = /(?:UTV2|UNI|WORK)-\d+/i;
             const match =
               title.match(pattern) ||
               body.match(pattern) ||
               branch.match(pattern);
             if (!match) {
               core.setOutput('issue_id', '');
-              core.info('No UTV2-### / UNI-### identifier found in PR title, body, or branch — treating as non-P0.');
+              core.info('No UTV2-### / UNI-### / WORK-### identifier found in PR title, body, or branch — treating as non-P0.');
               return;
             }
             const issueId = match[0].toUpperCase();
@@ -68,28 +67,22 @@ jobs:
         id: detect
         if: steps.issue.outputs.issue_id != ''
         env:
-          LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
           ISSUE_ID: ${{ steps.issue.outputs.issue_id }}
         run: |
           set -e
-          if [ -z "${LINEAR_API_TOKEN:-}" ]; then
-            echo "::error::LINEAR_API_TOKEN secret is required for P0 detection"
-            exit 1
+          MANIFEST="docs/06_status/lanes/${ISSUE_ID}.json"
+          if [ ! -f "$MANIFEST" ]; then
+            echo "is_p0=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$ISSUE_ID has no lane manifest at the PR head; not P0"
+            exit 0
           fi
-          response=$(curl -sS -X POST https://api.linear.app/graphql \
-            -H "Authorization: ${LINEAR_API_TOKEN}" \
-            -H "Content-Type: application/json" \
-            --data "$(jq -nc --arg id "$ISSUE_ID" '{query: "query($id: String!){issue(id:$id){identifier project{id name}}}", variables: {id: $id}}')")
-          project_id=$(echo "$response" | jq -r '.data.issue.project.id // ""')
-          project_name=$(echo "$response" | jq -r '.data.issue.project.name // ""')
-          echo "project_id=$project_id" >> "$GITHUB_OUTPUT"
-          echo "project_name=$project_name" >> "$GITHUB_OUTPUT"
-          if [ "$project_id" = "46229dc4-c7c1-4ccb-af0d-dedaf8147a97" ]; then
+          required=$(jq -r '.p0_protocol.required // false' "$MANIFEST")
+          if [ "$required" = "true" ]; then
             echo "is_p0=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::$ISSUE_ID IS P0 (project: $project_name)"
+            echo "::notice::$ISSUE_ID IS P0 (manifest p0_protocol.required=true)"
           else
             echo "is_p0=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::$ISSUE_ID is not P0 (project: ${project_name:-none})"
+            echo "::notice::$ISSUE_ID is not P0 (manifest)"
           fi
 
       - name: Verify P0 protocol artifacts
@@ -161,7 +154,7 @@ jobs:
             {
               echo "## P0 Protocol: BLOCKED"
               echo ""
-              echo "PR for $ISSUE_ID is in the Runtime Hardening P0 project but does not satisfy the P0 merge protocol (UTV2-948)."
+              echo "PR for $ISSUE_ID is a P0 lane but does not satisfy the P0 merge protocol (UTV2-948)."
               echo ""
               for err in "${errors[@]}"; do
                 echo "- $err"

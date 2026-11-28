@@ -16,15 +16,15 @@ Expected layout:
 
 ```text
 main checkout: /home/griff843/code/Unit-Talk-v2
-lane cwd:      /home/griff843/code/Unit-Talk-v2/.out/worktrees/<owner>__utv2-###-slug
+lane cwd:      /home/griff843/code/Unit-Talk-v2/.out/worktrees/<owner>__work-###-slug
 ```
 
 Each lane worktree must have isolated install/build state. Do not junction, symlink, or otherwise share `node_modules` from the main checkout into a lane worktree.
 
 **Usage:**
 - `/dispatch` — auto-pick the top dispatch candidate and execute
-- `/dispatch UTV2-###` — execute a specific issue
-- `/dispatch UTV2-### UTV2-### UTV2-###` — execute multiple in parallel within `docs/governance/CONCURRENCY_CONFIG.json` executor limits and singleton/forbidden-combination rules
+- `/dispatch WORK-###` — execute a specific issue
+- `/dispatch WORK-### WORK-### WORK-###` — execute multiple in parallel within `docs/governance/CONCURRENCY_CONFIG.json` executor limits and singleton/forbidden-combination rules
 - `/dispatch --dry-run` — show what would be dispatched without executing
 
 **Arguments:** `$ARGUMENTS`
@@ -39,7 +39,7 @@ Before resolving targets or routing any issue, run the live governor and reconci
 
 This five-command gate sequence is **canonical** in composition and order: `/dispatch-board` and `/loop-dispatch` run the same five gates, in this order, and a copy that drops or reorders a gate is stale — fix the copy rather than following it.
 
-Parity governs which gates run, not their flags. `/loop-dispatch` deliberately invokes `pnpm ops:substrate-guard --check-linear` because it dispatches a whole board across repeated cycles, where Linear/manifest drift accumulates between cycles; that flag adds the Linear conflict check described below. **Do not remove `--check-linear` from `/loop-dispatch` in the name of parity** — it is an intentional loop-only addition, not divergence.
+Parity governs which gates run, not their flags. (`--check-linear` was removed with the Linear workflow on 2026-11-25; manifest↔work-order drift is covered by `ops:orchestration-reconcile`.)
 
 ```bash
 pnpm ops:substrate-guard
@@ -49,7 +49,7 @@ pnpm ops:lane-maximizer
 pnpm ops:orchestration-reconcile --current --json
 ```
 
-`ops:substrate-guard` runs FIRST and is fail-closed: it refuses dispatch when the lane-execution substrate is unsafe — `.ops/leases/` missing and uninitializable, `.ops/merge-lock.json` present-but-invalid, an active lane whose worktree directory is missing, a board `hard_fail` lane (folds in `ops:merge-risk`), or (with `--check-linear`) a Linear/manifest conflict. It tolerates transient WSL ENOENT by retry-probing before declaring substrate genuinely absent. Exit code 1 ⇒ HALT. The same guard runs again mechanically inside `ops:lane-start` (local checks) so no lane can reserve a lease or create a worktree on unsafe substrate even if Phase 0 was skipped; break-glass is `--force-unsafe-substrate`.
+`ops:substrate-guard` runs FIRST and is fail-closed: it refuses dispatch when the lane-execution substrate is unsafe — `.ops/leases/` missing and uninitializable, `.ops/merge-lock.json` present-but-invalid, an active lane whose worktree directory is missing, or a board `hard_fail` lane (folds in `ops:merge-risk`). It tolerates transient WSL ENOENT by retry-probing before declaring substrate genuinely absent. Exit code 1 ⇒ HALT. The same guard runs again mechanically inside `ops:lane-start` (local checks) so no lane can reserve a lease or create a worktree on unsafe substrate even if Phase 0 was skipped; break-glass is `--force-unsafe-substrate`.
 
 Use `ops:execution-state` as the concurrency authority for active lanes by executor, available slots, stale heartbeats, singleton blockers, merge mutex state, proof readiness, and recommended actions.
 
@@ -78,30 +78,25 @@ Agent({
 })
 ```
 
-### Phase 0.5: Live Linear context pull
+### Phase 0.5: Live work-order context pull
 
-Before resolving targets, pull fresh Linear state for each candidate issue. Do not route from memory or stale manifests.
+Before resolving targets, read the committed work order for each candidate (`.ops/work/<ID>.md`, parsed by `scripts/ops/work-orders.ts`). Do not route from memory or stale manifests.
 
-For each candidate issue ID:
-```
-mcp__claude_ai_Linear__get_issue({"id": "<issue_id>"})
-```
-
-From the response, extract and record: current state, tier label, priority, blocking issue IDs, and assignee. Exclude any issue whose current state is Done, Cancelled, or Blocked — do not process further. This ensures routing decisions reflect Linear truth, not cache.
+From each work order, record: title, `Tier:`, `Lane type:`, `Executor:`, and acceptance criteria. Exclude any work order that already has a lane manifest in `done` status or has no `## Acceptance Criteria` section.
 
 ### Phase 1: Resolve targets
 
 **Mandatory three-brain routing:** Call `/three-brain` for every candidate before assigning an executor. Do not assign from memory or prior session routing. Three-brain owns the routing decision; this skill owns the lane lifecycle. If `/three-brain` is not called for a candidate, do not dispatch that candidate.
 
 If no issue IDs provided:
-1. Run the daily digest dispatch query by executing: `source local.env && export LINEAR_API_TOKEN && npx tsx scripts/ops/daily-digest.ts --json`
+1. Run the daily digest dispatch query by executing: `npx tsx scripts/ops/daily-digest.ts --json`
 2. Parse `dispatch_candidates` from the JSON output
-3. If empty: report "No dispatchable issues. Add tier labels to Ready issues in Linear." and stop.
+3. If empty: report "No dispatchable work orders. Commit a work order under .ops/work/ with a Tier: line and acceptance criteria." and stop.
 4. Pick candidates from `ops:lane-maximizer` recommendations up to the available executor slots reported by `ops:execution-state`; dangerous classes (Runtime, Migration, Modeling, Data/Canonical) remain singleton per config and policy.
 
 If issue IDs provided:
-1. For each issue ID, query Linear via MCP (`mcp__claude_ai_Linear__get_issue`) to get labels, state, description
-2. Determine tier from labels (tier:T1, tier:T2, tier:T3)
+1. For each id, read its work order `.ops/work/<ID>.md` for tier, lane type, executor and acceptance criteria
+2. Take the tier from the work order `Tier:` line
 3. Call `/three-brain` for each candidate — the routing decision returned by `/three-brain` is authoritative. Apply routing defaults only if `/three-brain` is unavailable: T1→Claude, T2 clear-scope→Codex, T2 with migration/contract→Claude, T3→Claude
 
 ### Phase 1.5: Deterministic skill discovery
@@ -109,7 +104,7 @@ If issue IDs provided:
 Before launching any executor (Phase 4/Codex), run skill discovery for each validated target. This is mechanical, not a judgment call: the same task contract must always select the same skills.
 
 ```bash
-npx tsx scripts/ops/execution-packet.ts UTV2-{number}
+npx tsx scripts/ops/execution-packet.ts WORK-{number}
 ```
 
 The packet's `skill_routing.selected_skills` field is the routing authority — never re-derive this from reading the issue yourself. `skill_routing.reasons` names the trigger condition matched for each selected skill, and `skill_routing.note` states explicitly when no skill matched ("No operational skill trigger matched..."). Record the selected skills in the dispatch report (Phase 6) and pass them into the background executor prompt (Phase 4) so the executor is told which skill(s) to consult before proceeding — an empty selection is passed through unchanged, not silently dropped.
@@ -132,7 +127,7 @@ than citing them by number. An executor should not have to resolve a cross-docum
 learn what it must satisfy. This is packet content, not a gate: nothing checks for it, and no
 dispatch is blocked by its absence.
 
-Multiple skills may be selected when triggers genuinely overlap (e.g. a ghost lane whose PR is also head-mismatched selects both `/lane-recovery` and `/pr-unblock`). If the packet refuses with `INSUFFICIENT_TASK_CONTRACT`, the issue's Linear description is missing where-to-look, definition-of-done, or verification/self-check content — fix the issue description before dispatching; do not fabricate the missing section on the executor's behalf.
+Multiple skills may be selected when triggers genuinely overlap (e.g. a ghost lane whose PR is also head-mismatched selects both `/lane-recovery` and `/pr-unblock`). If the packet refuses with `INSUFFICIENT_TASK_CONTRACT`, the work order is missing where-to-look, definition-of-done, or verification/self-check content — fix the work order before dispatching; do not fabricate the missing section on the executor's behalf.
 
 ### Phase 2: Validate prerequisites (for each target)
 
@@ -152,30 +147,29 @@ For `--dry-run`: stop here and report the dispatch plan as a table:
 
 For each validated target:
 
-1. Determine branch name: `claude/utv2-{number}-{slug}` or `codex/utv2-{number}-{slug}`
+1. Determine branch name: `claude/work-{number}-{slug}` or `codex/work-{number}-{slug}`
 2. Determine file scope from the issue description (look for explicit file paths first; fall back to package names or area labels). Declare the **narrowest possible scope** — list individual files when known (`apps/worker/src/processor.ts`), not directory globs (`apps/worker/**`), unless the issue explicitly requires changes across the full subtree. Overly broad locks block other lanes unnecessarily.
 3. Start the lane through the kernel. Do not hand-roll worktree eligibility, branch creation, manifest creation, or file-scope locking in prose. Do not check out the lane branch on the main checkout.
 
    ```bash
-   pnpm ops:merge-wrapper main-sync --issue UTV2-{number} --branch main
-   pnpm ops:lane-start UTV2-{number} --tier {T1|T2|T3} --branch {branch} --lane-type {lane_type} --executor {claude|codex-cli|codex-cloud} --files {file_scope_lock[0]} --files {file_scope_lock[1]}
+   pnpm ops:merge-wrapper main-sync --issue WORK-{number} --branch main
+   pnpm ops:lane-start WORK-{number} --tier {T1|T2|T3} --branch {branch} --lane-type {lane_type} --executor {claude|codex-cli|codex-cloud} --files {file_scope_lock[0]} --files {file_scope_lock[1]}
    ```
    **Codex executors only:** append `--model-profile {profile}` using the profile three-brain resolved (`/three-brain`'s Codex model-profile routing table). `ops:lane-start` rejects a Codex lane started without `--model-profile`, and rejects `--model-profile` on a `claude` executor. See `/three-brain` and `docs/05_operations/policies/codex-model-routing.json`.
 
    `ops:lane-start` owns branch/worktree creation, lease reservation, cwd coherence, and isolated install verification. Treat the `cwd`/`worktree_path` it reports as the only valid execution directory for that lane.
    For the T3 docs-only fast path only, replace lane creation with:
    ```bash
-   pnpm ops:lane-start UTV2-{number} --tier T3 --branch {branch} --docs-only-fast-path --files {file_scope[0]} --files {file_scope[1]}
+   pnpm ops:lane-start WORK-{number} --tier T3 --branch {branch} --docs-only-fast-path --files {file_scope[0]} --files {file_scope[1]}
    ```
-   A successful `code: "docs_only_fast_path"` response means lane-start intentionally created no worktree, manifest, lease, sync file, or proof scaffold. Continue on a normal PR branch and rely on CI, branch discipline, lane authority, merge gate, tier label, and Linear auto-close.
-4. Update Linear issue state to "In Claude" or "In Codex" via MCP
+   A successful `code: "docs_only_fast_path"` response means lane-start intentionally created no worktree, manifest, lease, sync file, or proof scaffold. Continue on a normal PR branch and rely on CI, branch discipline, lane authority, merge gate, and tier label.
 5. Confirm `ops:lane-start` created the lane manifest and per-issue sync file, then commit both to the branch:
    ```bash
-   git add docs/06_status/lanes/UTV2-{number}.json ".ops/sync/UTV2-{number}.yml"
-   git commit -m "chore(lanes): UTV2-{number} lane manifest and sync metadata"
+   git add docs/06_status/lanes/WORK-{number}.json ".ops/sync/WORK-{number}.yml"
+   git commit -m "chore(lanes): WORK-{number} lane manifest and sync metadata"
    ```
 
-   **Per-issue sync file schema** (`.ops/sync/UTV2-{number}.yml`):
+   **Per-issue sync file schema** (`.ops/sync/WORK-{number}.yml`):
    ```yaml
    version: 1
    approval:
@@ -183,18 +177,18 @@ For each validated target:
      skip_sync_required: false
    entities:
      issues:
-       - UTV2-{number}          # only this lane's issue — no other IDs
+       - WORK-{number}          # only this lane's issue — no other IDs
      findings: []
      controls: []
      proofs: []                 # populate from manifest.expected_proof_paths if non-empty
    ```
    If `expected_proof_paths` is non-empty in the manifest, each path becomes an entry under `entities.proofs`.
 
-   **Per-issue sync rule:** Each lane writes its own `.ops/sync/UTV2-{number}.yml`. Never mutate the shared `.ops/sync.yml` — that file stays neutral on main (`issues: []`). The `branch-discipline-guard` CI check reads the per-issue file automatically from the PR branch name.
+   **Per-issue sync rule:** Each lane writes its own `.ops/sync/WORK-{number}.yml`. Never mutate the shared `.ops/sync.yml` — that file stays neutral on main (`issues: []`). The `branch-discipline-guard` CI check reads the per-issue file automatically from the PR branch name.
 
 6. For long-running work, refresh the lease heartbeat before it expires:
    ```bash
-   pnpm ops:lease heartbeat --issue UTV2-{number} --branch {branch} --executor {claude|codex-cli|codex-cloud} --cwd {lane_start_cwd}
+   pnpm ops:lease heartbeat --issue WORK-{number} --branch {branch} --executor {claude|codex-cli|codex-cloud} --cwd {lane_start_cwd}
    ```
    `lane_start_cwd` must be the dedicated lane worktree path reported by `ops:lane-start`, not the main checkout.
 
@@ -255,15 +249,9 @@ Anything that warrants Griff review beyond the standard T1 gate.`
 
 Block on the planning result.
 
-**Deliver the plan to Linear for async PM review (mandatory for all T1):**
-After the planning subagent returns, immediately post the Outcome Contract as a Linear comment so Griff can review asynchronously without being in the same session:
-```
-mcp__claude_ai_Linear__save_comment({
-  issueId: "<issue_id>",
-  body: "## T1 Outcome Contract — awaiting PM approval\n\n<paste full Outcome Contract here>\n\n---\nPlanning model: sonnet\nStatus: awaiting Griff review before implementation begins."
-})
-```
-Do not begin implementation until Griff approves — either in-session or via a Linear reply/label change.
+**Deliver the plan for async PM review (mandatory for all T1):**
+After the planning subagent returns, open the lane's PR as a draft and post the Outcome Contract as a PR comment headed `## T1 Outcome Contract — awaiting PM approval`, so Griff can review asynchronously without being in the same session.
+Do not begin implementation until Griff approves — either in-session or via a PR reply/label change.
 
 **Execution — background subagent, orchestrator stays control-plane:**
 
@@ -303,7 +291,7 @@ The background agent's own instructions (steps 1–7 above) cover what used to b
 **Codex lanes** (T2 clear-scope, only when Codex health check passes):
 - Execute via the canonical Codex entry point — never call `codex exec` or `codex run` directly:
   ```bash
-  npx tsx scripts/ops/codex-exec.ts --issue UTV2-{number}
+  npx tsx scripts/ops/codex-exec.ts --issue WORK-{number}
   ```
   This script reads the lane manifest, embeds `agent-brief.md`, validates CWD, and runs Codex with standardized args. It also reads the manifest's `model_routing` block (or the documented legacy default for manifests predating it, with a visible warning), validates it against `docs/05_operations/policies/codex-model-routing.json`, and passes the resolved model and reasoning effort explicitly to `codex exec` — it never relies on the CLI's own default model. `--dry-run` flag previews the resolved profile/model/effort and the prompt without executing.
 - Codex must complete the following before opening the PR:
@@ -332,7 +320,7 @@ Paste the PASS output into PR body under `## R-level compliance`.
 Claude lanes are no longer single-threaded. Both executors run their implementation step as background agents, and the orchestrator's job for either is identical from here: dispatch, wait for a completion notification, review, merge, close. Never implement a lane directly in the orchestrator session, for either executor.
 
 1. Dispatch every validated Claude lane via Phase 4's background `Agent` call (one call per lane) — do not execute any of them directly.
-2. Dispatch every validated Codex lane via `npx tsx scripts/ops/codex-exec.ts --issue UTV2-{number}`, wrapped in a background call the same way.
+2. Dispatch every validated Codex lane via `npx tsx scripts/ops/codex-exec.ts --issue WORK-{number}`, wrapped in a background call the same way.
 3. Continue other control-plane work (board reads, monitoring) — you will be **automatically notified** when each background lane completes, Claude or Codex.
 4. On any lane's completion notification, spawn a background review agent — do not review inline in the orchestrator session. The same reviewer works for a returned Claude-lane PR as for Codex; it inspects the diff, not who wrote it:
 
@@ -349,8 +337,8 @@ Steps:
 1. Read the diff via: gh pr diff ${pr_number}
 2. Run the codex-return-reviewer checks (file scope, Tier C paths, test existence, commit format, tier label, R-level) — these apply the same way regardless of which executor produced the diff
 3. Check if diff touches any Tier C path: packages/domain/, packages/contracts/, supabase/migrations/, packages/db/src/lifecycle.ts, apps/api/src/auth.ts
-4. Post review result as Linear comment on ${issue_id}
-5. If REJECT or Tier C violation found: post a blocking comment on the PR and set Linear state to Blocked
+4. Post the review result as a PR comment
+5. If REJECT or Tier C violation found: make that comment blocking and mark the lane manifest blocked
 
 Return: APPROVE or REJECT with findings.`
 })
@@ -358,10 +346,10 @@ Return: APPROVE or REJECT with findings.`
 
 **Tier C detection:** Before spawning, check the PR diff with `gh pr diff --name-only <pr>`. If output contains any Tier C path, use `model: "opus"`. Otherwise `model: "sonnet"`.
 
-5. On APPROVE (and, for T1, after PM_VERDICT): `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`, then acquire the closeout mutex and close: `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close` → `pnpm ops:lane-close UTV2-###`. **Merge and close stay fully serialized through the merge mutex regardless of how many lanes finished implementation concurrently** — if two lanes both want to merge around the same time, queue the second: wait for the first's `ops:lane-close` to exit before acquiring the mutex for the next. Concurrent execution windows are fine; concurrent merge/close attempts are not.
+5. On APPROVE (and, for T1, after PM_VERDICT): `pnpm ops:merge-wrapper pr-merge --issue WORK-### --branch <branch> --pr <n> --method squash`, then acquire the closeout mutex and close: `pnpm ops:merge-lock acquire --issue WORK-### --branch <branch> --reason ops:lane-close` → `pnpm ops:lane-close WORK-###`. **Merge and close stay fully serialized through the merge mutex regardless of how many lanes finished implementation concurrently** — if two lanes both want to merge around the same time, queue the second: wait for the first's `ops:lane-close` to exit before acquiring the mutex for the next. Concurrent execution windows are fine; concurrent merge/close attempts are not.
 6. If abandoning an active lane before work begins, release the lease explicitly:
    ```bash
-   pnpm ops:lease release --issue UTV2-{number} --actor claude --reason "abandoned before implementation"
+   pnpm ops:lease release --issue WORK-{number} --actor claude --reason "abandoned before implementation"
    ```
 
 **Monitoring long-running shell commands:**
@@ -373,8 +361,8 @@ When dispatching multiple lanes, emit a merge-order table before starting:
 
 | Lane | Issue | Files touched | Must merge after |
 |------|-------|--------------|-----------------|
-| Claude | UTV2-NNN | apps/api/src/foo.ts | (none — base) |
-| Codex  | UTV2-MMM | apps/command-center/** | UTV2-NNN (imports its output) |
+| Claude | WORK-NNN | apps/api/src/foo.ts | (none — base) |
+| Codex  | UTV2-MMM | apps/command-center/** | WORK-NNN (imports its output) |
 
 Rules:
 - A lane must appear in "Must merge after" if it imports or calls output from another open lane.
@@ -403,8 +391,7 @@ Next: merge T3 PR (auto-close fires), then review Codex returns
 - **Singleton and forbidden-combination rules are config-backed.** Runtime, migration, modeling, and data/canonical lanes remain singleton per the live governor model.
 - **Never start a lane if file scope overlaps with an active lane.** Check manifests first.
 - **Fail closed.** If any prerequisite is unclear, skip the issue and report why.
-- **Commit message must include issue ID.** Format: `feat|fix|chore(scope): UTV2-### description`
-- **PR must include close marker.** Body or title must contain `Closes UTV2-###` for auto-close chain.
+- **Commit message must include issue ID.** Format: `feat|fix|chore(scope): WORK-### description`
 - **CI should confirm, not discover.** Run local preflight before opening a PR — see `docs/05_operations/OPERATING_MODEL_SONNET5.md`.
 - **Runtime validation is tier-scoped, not universal.** T1: required when runtime/product behavior is affected. T2: issue-specific/conditional. T3: N/A unless the issue says otherwise.
 - **Outcome Contracts are planning artifacts only.** They never replace the lane manifest, `file_scope_lock`, `expected_proof_paths`, R-level checks, or PM gates.
@@ -417,19 +404,19 @@ Next: merge T3 PR (auto-close fires), then review Codex returns
 ```json
 {
   "schema_version": 1,
-  "issue_id": "UTV2-###",
+  "issue_id": "WORK-###",
   "lane_type": "governance",
   "executor": "claude",
   "tier": "T3",
   "execution_location": {
     "mode": "worktree",
-    "cwd": ".out/worktrees/claude__utv2-###-slug",
+    "cwd": ".out/worktrees/claude__work-###-slug",
     "package_install": "verified",
     "setup_command": "pnpm install --frozen-lockfile",
     "main_checkout_control_only": false
   },
-  "worktree_path": ".out/worktrees/claude__utv2-###-slug",
-  "branch": "claude/utv2-###-slug",
+  "worktree_path": ".out/worktrees/claude__work-###-slug",
+  "branch": "claude/work-###-slug",
   "base_branch": "main",
   "commit_sha": null,
   "pr_url": null,

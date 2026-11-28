@@ -55,7 +55,7 @@ Discord slash command bot. 14 commands, 2 event handlers, role-based authorizati
 
 - Do not add direct database access
 - Do not duplicate scoring or promotion logic from domain
-- Do not create new Discord channels without a Linear issue
+- Do not create new Discord channels without a work order (`.ops/work/WORK-###.md`)
 - Do not bypass role-based command authorization
 
 

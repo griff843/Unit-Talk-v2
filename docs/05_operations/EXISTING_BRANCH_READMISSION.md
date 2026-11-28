@@ -5,17 +5,17 @@
 Use the same explicit flag during both steps:
 
 ```bash
-pnpm ops:preflight UTV2-123 \
+pnpm ops:preflight WORK-123 \
   --tier T1 \
-  --branch codex/utv2-123-example \
+  --branch codex/work-123-example \
   --lane-type governance \
   --executor codex-cli \
   --files scripts/ops/example.ts \
   --readmit-existing-branch
 
-pnpm ops:lane-start UTV2-123 \
+pnpm ops:lane-start WORK-123 \
   --tier T1 \
-  --branch codex/utv2-123-example \
+  --branch codex/work-123-example \
   --lane-type governance \
   --executor codex-cli \
   --model-profile standard \
@@ -31,7 +31,7 @@ Preflight requires all of the following:
 
 - the target branch exists locally or on `origin`, contains the exact issue identifier, has history related to current `main`, and has no worktree;
 - exactly one open PR has the exact head branch and head SHA, with head and base in the current repository, **and its base ref is exactly `main`**;
-- the Linear issue is in an explicit continuation state (`In Claude`, `In Codex`, either review state, or `In Progress`) and is not terminal;
+- the work order is committed on the branch and the lane is not terminal;
 - no active or stale-reclaim-required lease exists for the issue or branch;
 - no active merge mutex is owned by the issue;
 - existing lane metadata, when present, names the same issue and branch;

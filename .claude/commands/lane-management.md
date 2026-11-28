@@ -1,6 +1,6 @@
 # /lane-management
 
-Govern lane lifecycle. The lane manifest is the sole authority for active lane state — not Linear, not chat.
+Govern lane lifecycle. The lane manifest is the sole authority for active lane state — not the work order, not chat.
 
 **Done-gate / close checklist:** `/verification`
 **Specs:** `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations/EXECUTION_TRUTH_MODEL.md`
@@ -20,18 +20,18 @@ Ready → Started → In Progress → In Review → Merged → Done
 | Command | Purpose |
 |---|---|
 | `ops:preflight` | verify env/git/deps, emit preflight token |
-| `ops:lane-start <UTV2-###>` | create manifest, worktree, branch, file locks |
-| `ops:lane-close <UTV2-###>` | run truth-check, transition Linear, close manifest |
-| `ops:truth-check <UTV2-###>` | the done-gate |
-| `ops:lane:resume <UTV2-###>` | re-preflight and resume stranded/blocked lane |
-| `ops:lane:block <UTV2-###>` | mark blocked with reason |
+| `ops:lane-start <WORK-###>` | create manifest, worktree, branch, file locks |
+| `ops:lane-close <WORK-###>` | run truth-check, close manifest |
+| `ops:truth-check <WORK-###>` | the done-gate |
+| `ops:lane:resume <WORK-###>` | re-preflight and resume stranded/blocked lane |
+| `ops:lane:block <WORK-###>` | mark blocked with reason |
 
 **No start without preflight. No close without truth-check.**
 
 **T3 docs-only fast path:** T3 issues whose complete file set is limited to `docs/06_status/**` or `.claude/commands/*.md` may bypass worktree, manifest, lease, sync, and truth-check closeout ceremony after the scripts validate the boundary:
 ```bash
-pnpm ops:preflight UTV2-### --tier T3 --branch <branch> --docs-only-fast-path --files <path1> [--files <path2> ...]
-pnpm ops:lane-start UTV2-### --tier T3 --branch <branch> --docs-only-fast-path --files <path1> [--files <path2> ...]
+pnpm ops:preflight WORK-### --tier T3 --branch <branch> --docs-only-fast-path --files <path1> [--files <path2> ...]
+pnpm ops:lane-start WORK-### --tier T3 --branch <branch> --docs-only-fast-path --files <path1> [--files <path2> ...]
 ```
 `--files` must be repeated once per path (`--files a --files b`), never space-separated after a single `--files` — the parser only consumes the next token as each flag's value, so additional space-separated paths are silently dropped as ignored positionals and would let an undetected non-docs path through. The second command must return `code: "docs_only_fast_path"`. Any non-docs path, missing file list, or non-T3 tier fails closed and requires the normal lane lifecycle.
 
@@ -46,7 +46,7 @@ pnpm ops:lane-start UTV2-### --tier T3 --branch <branch> --docs-only-fast-path -
 - [ ] `expected_proof_paths[]` set (non-empty for T1/T2)
 - [ ] No prior manifest for this issue (unless `done`)
 
-For the T3 docs-only fast path, replace this checklist with the two script validations above plus normal PR CI, branch discipline, lane authority, merge gate, tier label, and Linear auto-close. Do not create a manifest or sync file for a validated fast-path lane.
+For the T3 docs-only fast path, replace this checklist with the two script validations above plus normal PR CI, branch discipline, lane authority, merge gate, and tier label auto-close. Do not create a manifest or sync file for a validated fast-path lane.
 
 ## Lane close checklist
 

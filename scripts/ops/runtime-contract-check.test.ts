@@ -35,10 +35,10 @@ test('--json flag emits valid JSON with ok and checks fields', () => {
   assert.ok(Array.isArray(output.checks), 'checks is an array');
 });
 
-test('--json output has exactly 5 checks', () => {
+test('--json output has exactly 4 checks', () => {
   const result = runScript(['--json']);
   const output = JSON.parse(result.stdout) as { checks: unknown[] };
-  assert.strictEqual(output.checks.length, 5, 'should have exactly 5 checks');
+  assert.strictEqual(output.checks.length, 4, 'should have exactly 4 checks');
 });
 
 test('each check has name, ok, message, and level fields', () => {
@@ -64,11 +64,8 @@ test('node-version check passes (Node >= 20 required)', () => {
   }
 });
 
-test('missing LINEAR_API_TOKEN causes linear check to fail', () => {
+test('the retired Linear tracker is not an execution precondition', () => {
   const result = runScript(['--json'], { LINEAR_API_TOKEN: '' });
-  const output = JSON.parse(result.stdout) as { checks: Array<{ name: string; ok: boolean; message: string }> };
-  const linearCheck = output.checks.find((c) => c.name === 'linear');
-  assert.ok(linearCheck, 'linear check should be present');
-  assert.strictEqual(linearCheck.ok, false, 'linear check should fail without token');
-  assert.ok(linearCheck.message.includes('LINEAR_API_TOKEN'), 'message should mention token');
+  const output = JSON.parse(result.stdout) as { checks: Array<{ name: string }> };
+  assert.equal(output.checks.find((c) => c.name === 'linear'), undefined);
 });

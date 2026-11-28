@@ -145,7 +145,7 @@ Result:
 
 ## Acceptance Criteria Mapping
 
-| Acceptance Criterion (verbatim from Linear) | Assertion # |
+| Acceptance Criterion (verbatim from the work order) | Assertion # |
 |---|---|
 | <verbatim criterion> | 1 |
 

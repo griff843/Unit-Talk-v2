@@ -147,7 +147,6 @@ test('codex-receive is idempotent when already in_review with the same PR URL', 
       branch,
       '--pr',
       'https://github.com/example/unit-talk/pull/201',
-      '--no-linear',
       '--json',
     ]);
     assert.strictEqual(result.status, 0);
@@ -156,13 +155,11 @@ test('codex-receive is idempotent when already in_review with the same PR URL', 
       code: string;
       status: string;
       pr_url: string;
-      linear_comment: string;
     };
     assert.strictEqual(payload.ok, true);
     assert.strictEqual(payload.code, 'receive_noop');
     assert.strictEqual(payload.status, 'in_review');
     assert.strictEqual(payload.pr_url, 'https://github.com/example/unit-talk/pull/201');
-    assert.strictEqual(payload.linear_comment, 'skipped');
   } finally {
     cleanup(issueId);
   }
@@ -182,7 +179,6 @@ test('codex-receive rejects conflicting PR URL from manifest truth', () => {
       branch,
       '--pr',
       'https://github.com/example/unit-talk/pull/999',
-      '--no-linear',
       '--json',
     ]);
     assert.strictEqual(result.status, 1);
@@ -210,8 +206,7 @@ test('codex-receive returns no-op for merged or done lanes when PR URL matches m
         branch,
         '--pr',
         'https://github.com/example/unit-talk/pull/203',
-        '--no-linear',
-        '--json',
+          '--json',
       ]);
       assert.strictEqual(result.status, 0);
       const payload = JSON.parse(result.stdout) as { ok: boolean; code: string; status: string };
@@ -237,7 +232,6 @@ test('codex-receive parses lane-link-pr JSON when pnpm emits text before JSON', 
       branch,
       '--pr',
       'https://github.com/example/unit-talk/pull/205',
-      '--no-linear',
       '--json',
     ]);
     assert.strictEqual(result.status, 0, result.stdout || result.stderr);

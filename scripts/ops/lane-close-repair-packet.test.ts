@@ -2,7 +2,7 @@
  * UTV2-1613 — the repair packet must never carry an unmeasured pass.
  *
  * The acceptance tests below are numbered to match the acceptance criteria on
- * the Linear issue, so a failure names the criterion it violates.
+ * the work order, so a failure names the criterion it violates.
  */
 
 import test from 'node:test';

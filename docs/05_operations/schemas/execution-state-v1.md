@@ -16,9 +16,9 @@ The execution-state report is a read-only observability snapshot for current lan
 - executor slot saturation
 - merge-risk condition counts
 - proof-readiness by lane
-- source-of-truth links back to manifests, Linear, and GitHub
+- source-of-truth links back to manifests, work orders, and GitHub
 
-This report is observational only. It must not write manifests, mutate files, call Linear write APIs, or push to GitHub.
+This report is observational only. It must not write manifests, mutate files, or push to GitHub.
 
 ## Shape
 
@@ -40,7 +40,7 @@ interface ExecutionStateReport {
   proof_readiness: ProofReadiness[];
   source_of_truth: {
     manifests_path: string;
-    linear_url: string;
+    work_orders_path: string;
     github_url: string;
   };
 }
@@ -133,10 +133,10 @@ This keeps the report observational. It does not attempt to re-grade proof conte
 `source_of_truth` must point to:
 
 - manifest directory path used by `readAllManifests()`
-- Linear workspace base URL for issue links
+- work order directory (`.ops/work`) for lane intent
 - GitHub repository base URL
 
-Each `LaneSummary.source_url` is the Linear issue URL for that lane.
+Each `LaneSummary.source_url` is the GitHub URL of that lane's manifest.
 
 ## Read-Only Contract
 
@@ -145,7 +145,6 @@ The producer script must not:
 - write or update manifest files
 - write any output file by default
 - mutate in-memory manifest inputs
-- call Linear mutation APIs
 - create or edit GitHub PRs
 - push commits or branches
 

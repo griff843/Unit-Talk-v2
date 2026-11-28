@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildDispatchPlan, rankDispatchCandidates } from './daily-digest.js';
+import { parseWorkOrder } from './work-orders.js';
 import type { LaneManifest } from './shared.js';
 
 function activeLane(overrides: Partial<LaneManifest> = {}): LaneManifest {
@@ -39,7 +40,7 @@ test('rankDispatchCandidates orders by readiness, capacity, and conflict risk de
         title: 'Runtime lane with active singleton conflict',
         tier: 'T2',
         recommended_executor: 'codex',
-        url: 'https://linear.app/unit-talk/issue/UTV2-99010',
+        url: '.ops/work/UTV2-99010.md',
         has_acceptance_criteria: true,
         labels: ['tier:T2', 'lane:runtime'],
       },
@@ -48,7 +49,7 @@ test('rankDispatchCandidates orders by readiness, capacity, and conflict risk de
         title: 'Safe Codex ops lane',
         tier: 'T2',
         recommended_executor: 'codex',
-        url: 'https://linear.app/unit-talk/issue/UTV2-99011',
+        url: '.ops/work/UTV2-99011.md',
         has_acceptance_criteria: true,
         labels: ['tier:T2', 'lane:hygiene', 'work:safe'],
       },
@@ -57,7 +58,7 @@ test('rankDispatchCandidates orders by readiness, capacity, and conflict risk de
         title: 'Missing AC lane',
         tier: 'T2',
         recommended_executor: 'codex',
-        url: 'https://linear.app/unit-talk/issue/UTV2-99012',
+        url: '.ops/work/UTV2-99012.md',
         has_acceptance_criteria: false,
         labels: ['tier:T2', 'lane:hygiene'],
       },
@@ -88,7 +89,7 @@ test('rankDispatchCandidates penalizes a full executor without reordering score 
         title: 'First full-capacity candidate',
         tier: 'T2',
         recommended_executor: 'codex',
-        url: 'https://linear.app/unit-talk/issue/UTV2-99020',
+        url: '.ops/work/UTV2-99020.md',
         has_acceptance_criteria: true,
         labels: ['tier:T2', 'lane:hygiene'],
       },
@@ -97,7 +98,7 @@ test('rankDispatchCandidates penalizes a full executor without reordering score 
         title: 'Second full-capacity candidate',
         tier: 'T2',
         recommended_executor: 'codex',
-        url: 'https://linear.app/unit-talk/issue/UTV2-99021',
+        url: '.ops/work/UTV2-99021.md',
         has_acceptance_criteria: true,
         labels: ['tier:T2', 'lane:hygiene'],
       },
@@ -129,7 +130,7 @@ test('buildDispatchPlan fills current Claude and Codex openings with safe ranked
         title: 'Safe Codex ops lane',
         tier: 'T2',
         recommended_executor: 'codex',
-        url: 'https://linear.app/unit-talk/issue/UTV2-99030',
+        url: '.ops/work/UTV2-99030.md',
         has_acceptance_criteria: true,
         labels: ['tier:T2', 'lane:hygiene', 'work:safe'],
       },
@@ -138,7 +139,7 @@ test('buildDispatchPlan fills current Claude and Codex openings with safe ranked
         title: 'Safe Claude governance lane',
         tier: 'T3',
         recommended_executor: 'claude',
-        url: 'https://linear.app/unit-talk/issue/UTV2-99031',
+        url: '.ops/work/UTV2-99031.md',
         has_acceptance_criteria: true,
         labels: ['tier:T3', 'lane:governance', 'work:safe'],
       },
@@ -147,7 +148,7 @@ test('buildDispatchPlan fills current Claude and Codex openings with safe ranked
         title: 'Second Safe Codex ops lane',
         tier: 'T2',
         recommended_executor: 'codex',
-        url: 'https://linear.app/unit-talk/issue/UTV2-99032',
+        url: '.ops/work/UTV2-99032.md',
         has_acceptance_criteria: true,
         labels: ['tier:T2', 'lane:verification', 'work:safe'],
       },
@@ -194,7 +195,7 @@ test('buildDispatchPlan blocks missing AC, singleton, forbidden, and capacity co
         title: 'Runtime follow-up lane',
         tier: 'T2',
         recommended_executor: 'codex',
-        url: 'https://linear.app/unit-talk/issue/UTV2-99040',
+        url: '.ops/work/UTV2-99040.md',
         has_acceptance_criteria: true,
         labels: ['tier:T2', 'lane:runtime'],
       },
@@ -203,7 +204,7 @@ test('buildDispatchPlan blocks missing AC, singleton, forbidden, and capacity co
         title: 'Modeling lane',
         tier: 'T2',
         recommended_executor: 'codex',
-        url: 'https://linear.app/unit-talk/issue/UTV2-99041',
+        url: '.ops/work/UTV2-99041.md',
         has_acceptance_criteria: true,
         labels: ['tier:T2', 'lane:modeling'],
       },
@@ -212,7 +213,7 @@ test('buildDispatchPlan blocks missing AC, singleton, forbidden, and capacity co
         title: 'Missing AC lane',
         tier: 'T2',
         recommended_executor: 'codex',
-        url: 'https://linear.app/unit-talk/issue/UTV2-99042',
+        url: '.ops/work/UTV2-99042.md',
         has_acceptance_criteria: false,
         labels: ['tier:T2', 'lane:hygiene'],
       },
@@ -244,4 +245,33 @@ test('buildDispatchPlan blocks missing AC, singleton, forbidden, and capacity co
     ],
   );
   assert.deepStrictEqual(plan.lane_saturation_forecast.active_singletons, ['runtime']);
+});
+
+test('parseWorkOrder reads tier, lane type, executor and acceptance criteria from a repo work order', () => {
+  const body = [
+    '# WORK-2026112501 — Example governance change',
+    '',
+    'Tier: T1 (mechanical floor: `.github/workflows/`) · Lane type: governance · Executor: claude',
+    '',
+    '## Objective',
+    '',
+    '- do the thing',
+    '',
+    '## Acceptance Criteria',
+    '',
+    '- it is done',
+  ].join('\n');
+  const parsed = parseWorkOrder('WORK-2026112501', body);
+  assert.equal(parsed.title, 'Example governance change');
+  assert.equal(parsed.tier, 'T1');
+  assert.equal(parsed.lane_type, 'governance');
+  assert.equal(parsed.executor, 'claude');
+  assert.equal(parsed.has_acceptance_criteria, true);
+});
+
+test('parseWorkOrder leaves tier null and AC false when the work order declares neither', () => {
+  const parsed = parseWorkOrder('WORK-1', '# WORK-1 — Untiered\n\nExecutor: codex-cli\n');
+  assert.equal(parsed.tier, null);
+  assert.equal(parsed.executor, 'codex');
+  assert.equal(parsed.has_acceptance_criteria, false);
 });

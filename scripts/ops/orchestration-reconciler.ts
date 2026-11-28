@@ -11,10 +11,8 @@ import {
   type LaneManifest,
 } from './shared.js';
 import { readAllLeases, type DispatchLease } from './lease-registry.js';
-import { linearQuery } from './linear-client.js';
 
 export type OrchestrationSurface =
-  | 'linear'
   | 'lease_registry'
   | 'lane_manifest'
   | 'git_branch'
@@ -43,26 +41,6 @@ export type CheckClassification =
   | 'warning'
   | 'infra_error'
   | 'informational';
-
-/**
- * How a Linear lookup failed. These are four genuinely different conditions and
- * must never be collapsed: a deleted entity is permanent and knowable, while a
- * transient or auth failure means we simply do not know the entity's state.
- */
-export type LinearLookupFailureKind = 'deleted' | 'transient' | 'auth' | 'unknown';
-
-export interface LinearLookupFailure {
-  issue_id: string;
-  kind: LinearLookupFailureKind;
-  message: string;
-}
-
-export interface LinearIssueSnapshot {
-  issue_id: string;
-  state_name: string;
-  state_type?: string;
-  updated_at?: string;
-}
 
 export interface GitHubCheckSnapshot {
   name: string;
@@ -225,7 +203,6 @@ export interface OrchestrationReconcileFilters {
 }
 
 export interface OrchestrationReconcilerInput {
-  linearIssues: LinearIssueSnapshot[];
   leases: DispatchLease[];
   manifests: LaneManifest[];
   branches: BranchSnapshot[];
@@ -239,8 +216,6 @@ export interface OrchestrationReconcilerInput {
   transitionWindowMinutes?: number;
   infraErrors?: string[];
   historicalDecayErrors?: string[];
-  /** Structured Linear lookup failures, classified by kind. */
-  linearFailures?: LinearLookupFailure[];
 }
 
 type ManifestWithRelatedPrs = LaneManifest & {
@@ -248,9 +223,6 @@ type ManifestWithRelatedPrs = LaneManifest & {
 };
 
 const DEFAULT_TRANSITION_WINDOW_MINUTES = 60;
-const ACTIVE_LINEAR_STATE_NAMES = new Set(['in codex', 'in claude']);
-const DONE_LINEAR_STATE_NAMES = new Set(['done']);
-const DONE_LINEAR_STATE_TYPES = new Set(['completed']);
 const CLOSED_MANIFEST_STATUSES = new Set(['merged', 'done']);
 
 interface FilteredInput extends OrchestrationReconcilerInput {
@@ -307,19 +279,6 @@ function normalizeIssueId(issueId: string): string {
   return issueId.trim().toUpperCase();
 }
 
-function normalizedStateName(issue: LinearIssueSnapshot): string {
-  return issue.state_name.trim().toLowerCase();
-}
-
-function isLinearActive(issue: LinearIssueSnapshot): boolean {
-  return ACTIVE_LINEAR_STATE_NAMES.has(normalizedStateName(issue));
-}
-
-function isLinearDone(issue: LinearIssueSnapshot): boolean {
-  return DONE_LINEAR_STATE_NAMES.has(normalizedStateName(issue))
-    || DONE_LINEAR_STATE_TYPES.has(String(issue.state_type ?? '').toLowerCase());
-}
-
 function isManifestActive(manifest: LaneManifest): boolean {
   return ACTIVE_LOCK_STATUSES.has(manifest.status);
 }
@@ -340,6 +299,18 @@ function evidence(
   return { surface, source, detail };
 }
 
+function mergeShaForManifest(manifest: LaneManifest, prs: PullRequestSnapshot[]): string | null {
+  const issueId = normalizeIssueId(manifest.issue_id);
+  const history = Array.isArray(manifest.truth_check_history) ? manifest.truth_check_history : [];
+  const historySha = history
+    .map((entry) => entry.merge_sha)
+    .find((sha): sha is string => typeof sha === 'string' && sha.trim() !== '');
+  const mergedPr = prs.find(
+    (pr) => pr.state === 'merged' && (issueIdFromBranch(pr.branch) === issueId || manifest.branch === pr.branch),
+  );
+  return manifest.commit_sha ?? historySha ?? mergedPr?.merge_sha ?? null;
+}
+
 function issueIdFromBranch(branch: string): string | null {
   const match = branch.match(/(?:^|\/)(utv2|uni)-(\d+)(?:-|$)/i);
   if (!match) {
@@ -350,7 +321,6 @@ function issueIdFromBranch(branch: string): string | null {
 
 function uniqueIssueIds(input: OrchestrationReconcilerInput): string[] {
   const issueIds = new Set<string>();
-  for (const issue of input.linearIssues) issueIds.add(normalizeIssueId(issue.issue_id));
   for (const lease of input.leases) issueIds.add(normalizeIssueId(lease.issue_id));
   for (const manifest of input.manifests) issueIds.add(normalizeIssueId(manifest.issue_id));
   for (const pr of input.pullRequests) {
@@ -388,11 +358,6 @@ function collectSinceIssueIds(input: OrchestrationReconcilerInput, sinceMs: numb
   if (sinceMs == null) {
     return issueIds;
   }
-  for (const issue of input.linearIssues) {
-    if (timestampInScope(issue.updated_at, sinceMs)) {
-      issueIds.add(normalizeIssueId(issue.issue_id));
-    }
-  }
   for (const lease of input.leases) {
     if (timestampInScope(lease.heartbeat_at, sinceMs) || timestampInScope(lease.expires_at, sinceMs)) {
       issueIds.add(normalizeIssueId(lease.issue_id));
@@ -414,10 +379,6 @@ function collectSinceIssueIds(input: OrchestrationReconcilerInput, sinceMs: numb
 
 function collectCurrentIssueIds(input: OrchestrationReconcilerInput): Set<string> {
   const issueIds = new Set<string>();
-  const linearByIssue = mapByIssueId(input.linearIssues);
-  for (const issue of input.linearIssues.filter(isLinearActive)) {
-    issueIds.add(normalizeIssueId(issue.issue_id));
-  }
   for (const lease of input.leases.filter(isLeaseActive)) {
     issueIds.add(normalizeIssueId(lease.issue_id));
   }
@@ -427,14 +388,6 @@ function collectCurrentIssueIds(input: OrchestrationReconcilerInput): Set<string
   for (const pr of input.pullRequests.filter((entry) => entry.state === 'open')) {
     const issueId = issueIdFromBranch(pr.branch);
     if (issueId) issueIds.add(issueId);
-  }
-  for (const pr of input.pullRequests.filter((entry) => entry.state === 'merged')) {
-    const issueId = issueIdFromBranch(pr.branch);
-    if (!issueId) continue;
-    const linearIssue = linearByIssue.get(issueId);
-    if (linearIssue && !isLinearDone(linearIssue)) {
-      issueIds.add(issueId);
-    }
   }
   return issueIds;
 }
@@ -497,7 +450,6 @@ function filterInput(input: OrchestrationReconcilerInput): FilteredInput {
     sinceIso,
     selectedIssueIds: [...selectedIssueIds].sort((left, right) => left.localeCompare(right)),
     currentIssueIds: [...currentIssueIds].sort((left, right) => left.localeCompare(right)),
-    linearIssues: input.linearIssues.filter((issue) => includeIssue(issue.issue_id)),
     leases: input.leases.filter((lease) => includeIssue(lease.issue_id)),
     manifests: input.manifests.filter((manifest) => includeIssue(manifest.issue_id)),
     branches: input.branches.filter((branch) => selectedBranches.has(branch.name) || includeIssue(issueIdFromBranch(branch.name))),
@@ -520,59 +472,6 @@ function branchEvidence(branches: BranchSnapshot[], branch: string): Orchestrati
     sources ? `git:${sources}` : 'git',
     sources ? `branch ${branch} exists on ${sources}` : `branch ${branch} not found locally or remotely`,
   );
-}
-
-function mergedPrForIssue(
-  issueId: string,
-  manifests: LaneManifest[],
-  prs: PullRequestSnapshot[],
-): PullRequestSnapshot | undefined {
-  const normalizedIssueId = normalizeIssueId(issueId);
-  const manifest = manifests.find((entry) => normalizeIssueId(entry.issue_id) === normalizedIssueId);
-  return prs.find((pr) => {
-    if (pr.state !== 'merged') return false;
-    return issueIdFromBranch(pr.branch) === normalizedIssueId || manifest?.branch === pr.branch;
-  });
-}
-
-function mergeShaForIssue(
-  issueId: string,
-  manifests: LaneManifest[],
-  prs: PullRequestSnapshot[],
-): string | null {
-  const normalizedIssueId = normalizeIssueId(issueId);
-  const manifest = manifests.find((entry) => normalizeIssueId(entry.issue_id) === normalizedIssueId);
-  const history = Array.isArray(manifest?.truth_check_history) ? manifest.truth_check_history : [];
-  const historySha = history
-    .map((entry) => entry.merge_sha)
-    .find((sha): sha is string => typeof sha === 'string' && sha.trim() !== '');
-  return manifest?.commit_sha ?? historySha ?? mergedPrForIssue(normalizedIssueId, manifests, prs)?.merge_sha ?? null;
-}
-
-/**
- * Transient/auth signatures are matched BEFORE deletion, and deletion requires
- * Linear's specific `Entity not found` wording. A bare "not found" — which a DNS
- * failure (ENOTFOUND) or a gateway page can also produce — falls through to
- * `unknown`, which is treated as blocking. The failure mode this guards against
- * is real: the same entity was classified `infra_error` on one run and
- * `historical_decay` on the next, decided purely by network luck.
- */
-export function classifyLinearLookupError(error: string): LinearLookupFailureKind {
-  const value = String(error ?? '').toLowerCase();
-  if (
-    /(timeout|timed out|aborted|abortederror|econnreset|etimedout|enotfound|econnrefused|socket hang up|network|fetch failed|rate limit|too many requests|ratelimited|\b(?:429|500|502|503|504)\b|service unavailable|bad gateway|gateway time)/.test(value)
-  ) {
-    return 'transient';
-  }
-  if (
-    /(unauthorized|unauthenticated|authentication|authentication required|invalid api key|invalid token|forbidden|access denied|\b(?:401|403)\b)/.test(value)
-  ) {
-    return 'auth';
-  }
-  if (/entity not found/.test(value)) {
-    return 'deleted';
-  }
-  return 'unknown';
 }
 
 /**
@@ -611,7 +510,6 @@ function buildCleanupPlan(input: FilteredInput): OrchestrationCleanupPlan {
   const activeIssues = new Set([
     ...input.leases.filter(isLeaseActive).map((entry) => normalizeIssueId(entry.issue_id)),
     ...input.manifests.filter(isManifestActive).map((entry) => normalizeIssueId(entry.issue_id)),
-    ...input.linearIssues.filter(isLinearActive).map((entry) => normalizeIssueId(entry.issue_id)),
   ]);
 
   for (const manifest of input.manifests) {
@@ -707,7 +605,6 @@ function classifyLane(
 ): LaneReconciliationSnapshot {
   const manifest = input.manifests.find((entry) => normalizeIssueId(entry.issue_id) === issueId);
   const lease = input.leases.find((entry) => normalizeIssueId(entry.issue_id) === issueId);
-  const linear = input.linearIssues.find((entry) => normalizeIssueId(entry.issue_id) === issueId);
   const pr = anyPrForIssue(issueId, input.pullRequests);
   const openPr = openPrForIssue(issueId, input.pullRequests);
   const activeLease = lease && isLeaseActive(lease) ? lease : undefined;
@@ -716,16 +613,15 @@ function classifyLane(
   const branch = manifest?.branch ?? lease?.branch ?? pr?.branch;
   const branchPresent = branch ? branchExists(input.branches, branch) : false;
   const expired = activeLease ? isLeaseExpired(activeLease, now) : false;
-  const linearActive = linear ? isLinearActive(linear) : false;
 
   if (activeLease && !activeManifest) {
-    if (expired && !linearActive && !openPr) {
+    if (expired && !openPr) {
       return {
         issue_id: issueId,
         state: 'stale_lease_safe_reclaim',
         lifecycle: 'orphaned',
         fail_closed: true,
-        detail: `Expired active lease has no active manifest and no active Linear/PR owner; reclaim is safe with audit history.`,
+        detail: `Expired active lease has no active manifest and no open PR owner; reclaim is safe with audit history.`,
       };
     }
     return {
@@ -799,7 +695,7 @@ function classifyLane(
     };
   }
 
-  if (activeLease || activeManifest || linearActive || openPr) {
+  if (activeLease || activeManifest || openPr) {
     return {
       issue_id: issueId,
       state: 'clean_active',
@@ -809,7 +705,7 @@ function classifyLane(
     };
   }
 
-  if (closedManifest || (linear && isLinearDone(linear))) {
+  if (closedManifest) {
     return {
       issue_id: issueId,
       state: 'clean_closed',
@@ -845,19 +741,18 @@ function buildStateMachineReport(input: FilteredInput, now: Date): Orchestration
     stale_criteria: [
       'lease.status is active or stale_reclaim_required',
       'lease.expires_at <= reconciliation clock',
-      'safe reclaim additionally requires no active manifest, no open PR, and Linear not active',
+      'safe reclaim additionally requires no active manifest and no open PR',
     ],
     cleanup_criteria: [
       'manifest status is merged or done',
       'merge SHA or merged PR evidence is preserved before branch cleanup',
-      'no active lease, active manifest, active Linear state, or open PR remains',
+      'no active lease, active manifest, or open PR remains',
       'worktree/branch cleanup is dry-run until explicitly applied',
     ],
     repair_semantics: [
       'missing manifests fail closed and route to manifest repair/reconstruction',
       'lease reclaim appends reclaim_history instead of deleting the lease',
       'merged PRs with active manifests route to lane-manifest record-merge before lane-close',
-      'historical Linear decay is advisory unless the issue is current or active',
       'all repair commands must be safe to rerun or must no-op when already repaired',
     ],
     lanes: input.selectedIssueIds.map((issueId) => classifyLane(issueId, input, now)),
@@ -896,7 +791,7 @@ function buildRepairPlan(
         id: 'reclaim_stale_lease',
         issue_id: lane.issue_id,
         state: lane.state,
-        command: `pnpm ops:lease reclaim --issue ${lane.issue_id} --actor ops:reconcile --reason "safe stale lease reclaim: expired lease without active manifest/open PR/active Linear" --branch-status ${branchExists(input.branches, lease.branch) ? 'present' : 'missing'} --pr-status none`,
+        command: `pnpm ops:lease reclaim --issue ${lane.issue_id} --actor ops:reconcile --reason "safe stale lease reclaim: expired lease without active manifest/open PR" --branch-status ${branchExists(input.branches, lease.branch) ? 'present' : 'missing'} --pr-status none`,
         reason: lane.detail,
         safe_to_apply: true,
         requires_pm: false,
@@ -984,7 +879,6 @@ export function buildOrchestrationReconcilerReport(
   const input = filterInput(rawInput);
   const now = input.now ?? new Date();
   const transitionWindowMinutes = input.transitionWindowMinutes ?? DEFAULT_TRANSITION_WINDOW_MINUTES;
-  const transitionWindowMs = transitionWindowMinutes * 60 * 1000;
   const manifestsByIssue = mapByIssueId(input.manifests);
   const activeLeasesByIssue = mapByIssueId(input.leases.filter(isLeaseActive));
   // Authoritative in-flight manifest resolution, applied once and used by every
@@ -1005,7 +899,6 @@ export function buildOrchestrationReconcilerReport(
     // The PR head wins over a main/working-tree copy of the same manifest.
     activeManifestsByIssue.set(issueId, pr.head_manifest);
   }
-  const linearByIssue = mapByIssueId(input.linearIssues);
   const requiredCheckNames = new Set(input.requiredCheckNames ?? []);
   const checks: OrchestrationCheck[] = [];
 
@@ -1027,109 +920,7 @@ export function buildOrchestrationReconcilerReport(
       verdict: 'historical_decay',
       issue_id: match ? normalizeIssueId(match[1] ?? '') : undefined,
       detail: message,
-      evidence: [evidence('linear', 'historical lookup', message)],
-    });
-  }
-
-  for (const failure of input.linearFailures ?? []) {
-    const issueId = normalizeIssueId(failure.issue_id);
-    const linearEvidence = evidence(
-      'linear',
-      `Linear:${issueId}`,
-      `lookup_failure_kind=${failure.kind}; error=${failure.message}`,
-    );
-
-    if (failure.kind !== 'deleted') {
-      // Transient, auth, and unclassifiable failures all mean the same thing:
-      // we do not know this entity's state. That is a blocking infra error and
-      // must never be demoted to historical debt.
-      addCheck(checks, {
-        id: 'ORCH-INFRA',
-        requirement: 'required',
-        verdict: 'infra_error',
-        issue_id: issueId,
-        detail: `Linear lookup for ${issueId} failed (${failure.kind}); entity state is unknown: ${failure.message}`,
-        evidence: [linearEvidence],
-      });
-      continue;
-    }
-
-    const activeManifest = activeManifestsByIssue.get(issueId);
-    const activeLease = activeLeasesByIssue.get(issueId);
-    if (activeManifest || activeLease) {
-      // Deleted Linear entity still holding lane state: an orphan. This is the
-      // one deletion case that is genuinely actionable, and it needs a PM.
-      addCheck(checks, {
-        id: 'ORCH-LINEAR-DELETED-ORPHAN',
-        requirement: 'required',
-        verdict: 'fail',
-        classification: 'dispatch_blocking',
-        issue_id: issueId,
-        branch: activeManifest?.branch ?? activeLease?.branch,
-        detail: `Linear entity ${issueId} is deleted but lane state is still active; PM disposition required before dispatch`,
-        evidence: [
-          linearEvidence,
-          evidence(
-            'lane_manifest',
-            `docs/06_status/lanes/${issueId}.json`,
-            activeManifest ? `status=${activeManifest.status}` : 'no active manifest',
-          ),
-          evidence(
-            'lease_registry',
-            `.ops/leases/${issueId}.json`,
-            activeLease ? `status=${activeLease.status}` : 'no active lease',
-          ),
-        ],
-      });
-      continue;
-    }
-
-    // Deleted Linear entity referenced only by terminal/historical artifacts.
-    // Reported as debt — never converted into a done or pass state.
-    const terminalManifest = manifestsByIssue.get(issueId);
-    addCheck(checks, {
-      id: 'ORCH-HISTORICAL-DECAY',
-      requirement: 'advisory',
-      verdict: 'historical_decay',
-      classification: 'warning',
-      issue_id: issueId,
-      branch: terminalManifest?.branch,
-      detail: `Linear entity ${issueId} is deleted; referenced only by ${terminalManifest ? `terminal manifest (status=${terminalManifest.status})` : 'historical artifacts'}`,
-      evidence: [
-        linearEvidence,
-        evidence(
-          'lane_manifest',
-          `docs/06_status/lanes/${issueId}.json`,
-          terminalManifest ? `status=${terminalManifest.status}` : 'no manifest',
-        ),
-      ],
-    });
-  }
-
-  for (const issue of input.linearIssues.filter(isLinearActive)) {
-    const issueId = normalizeIssueId(issue.issue_id);
-    const lease = activeLeasesByIssue.get(issueId);
-    const manifest = activeManifestsByIssue.get(issueId);
-    addCheck(checks, {
-      id: 'ORCH-LINEAR-ACTIVE-RECORD',
-      requirement: 'required',
-      verdict: lease || manifest ? 'pass' : 'fail',
-      issue_id: issueId,
-      branch: manifest?.branch ?? lease?.branch,
-      detail: lease || manifest
-        ? `Linear ${issue.state_name} has active orchestration record`
-        : `Linear ${issue.state_name} has no active lease or lane manifest`,
-      evidence: [
-        evidence('linear', `Linear:${issueId}`, `state=${issue.state_name}`),
-        evidence('lease_registry', `.ops/leases/${issueId}.json`, lease ? `status=${lease.status}` : 'missing active lease'),
-        evidence(
-          'lane_manifest',
-          `docs/06_status/lanes/${issueId}.json`,
-          manifest
-            ? `status=${manifest.status}; resolved from ${input.manifests.some((entry) => normalizeIssueId(entry.issue_id) === issueId && isManifestActive(entry)) ? 'working tree / main' : 'open PR head'}`
-            : 'missing active manifest at the PR head, on main, and in the working tree',
-        ),
-      ],
+      evidence: [evidence('scheduler', 'historical lookup', message)],
     });
   }
 
@@ -1281,78 +1072,27 @@ export function buildOrchestrationReconcilerReport(
     });
   }
 
-  for (const pr of input.pullRequests.filter((entry) => entry.state === 'merged')) {
-    const issueId = issueIdFromBranch(pr.branch);
-    if (!issueId) {
-      continue;
-    }
-    const linearIssue = linearByIssue.get(issueId);
-    if (!linearIssue || isLinearDone(linearIssue)) {
-      continue;
-    }
-    const mergedAtMs = Date.parse(pr.merged_at ?? '');
-    const ageMs = Number.isNaN(mergedAtMs) ? Number.POSITIVE_INFINITY : now.getTime() - mergedAtMs;
-    const ageMinutes = Math.max(0, Math.floor(ageMs / (60 * 1000)));
-    // Closeout debt only halts dispatch while the lane still holds something a
-    // new lane could collide with: an active lease, an active (locking)
-    // manifest, or an active Linear execution record. Once the lane holds none
-    // of those, the debt is real but carries no dispatch, capacity, authority,
-    // or production risk — so it is reported without blocking.
-    const holdsLease = activeLeasesByIssue.has(issueId);
-    const holdsManifestLock = activeManifestsByIssue.has(issueId);
-    const holdsLinearAuthority = isLinearActive(linearIssue);
-    const holdsAuthority = holdsLease || holdsManifestLock || holdsLinearAuthority;
-    addCheck(checks, {
-      id: 'ORCH-MERGED-PR-LINEAR-DONE',
-      requirement: 'required',
-      verdict: ageMs > transitionWindowMs ? 'fail' : 'warn',
-      classification: holdsAuthority ? 'dispatch_blocking' : 'closeout_debt',
-      issue_id: issueId,
-      branch: pr.branch,
-      pr_url: pr.url,
-      detail: `Merged PR is ${ageMinutes}m old but Linear state is ${linearIssue.state_name}`
-        + (holdsAuthority
-          ? ` (lane still holds ${[holdsLease && 'lease', holdsManifestLock && 'manifest lock', holdsLinearAuthority && 'active Linear record'].filter(Boolean).join(' + ')})`
-          : ' (lane holds no lease, lock, or active Linear record — closeout debt only)'),
-      evidence: [
-        evidence('github_pr', pr.url, `state=merged; merged_at=${pr.merged_at ?? 'unknown'}`),
-        evidence('linear', `Linear:${issueId}`, `state=${linearIssue.state_name}`),
-        evidence(
-          'lease_registry',
-          `.ops/leases/${issueId}.json`,
-          holdsLease ? 'active lease held' : 'no active lease',
-        ),
-        evidence(
-          'lane_manifest',
-          `docs/06_status/lanes/${issueId}.json`,
-          holdsManifestLock ? 'active manifest lock held' : 'no active manifest lock',
-        ),
-      ],
-    });
-  }
-
-  for (const issue of input.linearIssues.filter(isLinearDone)) {
-    const issueId = normalizeIssueId(issue.issue_id);
-    const mergeSha = mergeShaForIssue(issueId, input.manifests, input.pullRequests);
+  for (const manifest of input.manifests.filter((entry) => entry.status === 'done')) {
+    const issueId = normalizeIssueId(manifest.issue_id);
+    const mergeSha = mergeShaForManifest(manifest, input.pullRequests);
     addCheck(checks, {
       id: 'ORCH-DONE-MERGE-SHA',
       requirement: 'required',
       verdict: mergeSha ? 'pass' : 'fail',
-      // The issue is already Done in Linear and holds no lane authority, so a
+      // A done lane that holds no lease carries no dispatch authority, so a
       // missing merge SHA is provenance debt, not a dispatch hazard.
       classification: mergeSha
         ? 'informational'
-        : activeManifestsByIssue.has(issueId) || activeLeasesByIssue.has(issueId)
+        : activeLeasesByIssue.has(issueId)
           ? 'dispatch_blocking'
           : 'closeout_debt',
       issue_id: issueId,
-      branch: manifestsByIssue.get(issueId)?.branch,
+      branch: manifest.branch,
       detail: mergeSha
-        ? `Linear Done has merge SHA ${mergeSha}`
-        : 'Linear Done issue has no merge SHA in manifest truth history or merged PR data',
+        ? `Done lane has merge SHA ${mergeSha}`
+        : 'Done lane has no merge SHA in manifest truth history or merged PR data',
       evidence: [
-        evidence('linear', `Linear:${issueId}`, `state=${issue.state_name}`),
-        evidence('lane_manifest', `docs/06_status/lanes/${issueId}.json`, `merge_sha=${mergeSha ?? 'missing'}`),
+        evidence('lane_manifest', `docs/06_status/lanes/${issueId}.json`, `status=done; merge_sha=${mergeSha ?? 'missing'}`),
       ],
     });
   }
@@ -1462,7 +1202,7 @@ export function buildOrchestrationReconcilerReport(
     cleanup_plan: buildCleanupPlan(input),
     scheduling: {
       status: 'proposed',
-      detail: 'Safe wiring: run pnpm ops:orchestration-reconcile --current --cleanup-plan --json from a scheduled CI job after Linear/GitHub credentials are present.',
+      detail: 'Safe wiring: run pnpm ops:orchestration-reconcile --current --cleanup-plan --json from a scheduled CI job after GitHub credentials are present.',
     },
   };
 }
@@ -1642,65 +1382,6 @@ function normalizeCheckConclusion(input: string | null | undefined): GitHubCheck
   }
 }
 
-interface LinearIssueQueryData {
-  issue: {
-    identifier: string;
-    updatedAt?: string;
-    state?: {
-      name?: string;
-      type?: string;
-    } | null;
-  } | null;
-}
-
-async function fetchLinearIssues(
-  issueIds: string[],
-  infraErrors: string[],
-  linearFailures: LinearLookupFailure[],
-): Promise<LinearIssueSnapshot[]> {
-  const token = readConfiguredEnvValue('LINEAR_API_TOKEN') || readConfiguredEnvValue('LINEAR_API_KEY');
-  if (!token) {
-    infraErrors.push('Linear query skipped: LINEAR_API_TOKEN or LINEAR_API_KEY is required');
-    return [];
-  }
-
-  const issues: LinearIssueSnapshot[] = [];
-  for (const issueId of issueIds) {
-    const result = await linearQuery<LinearIssueQueryData>(
-      `query OrchestrationIssue($id: String!) {
-        issue(id: $id) {
-          identifier
-          updatedAt
-          archivedAt
-          state { name type }
-        }
-      }`,
-      { id: issueId },
-      { token, userAgent: 'unit-talk-orchestration-reconciler' },
-    );
-    if (!result.ok || !result.data?.issue) {
-      const rawError = result.error ?? 'not found';
-      // Classification is decided by the error signature alone, never by
-      // whether the issue happens to be in the current working set — that
-      // coupling is what let one entity be classified two different ways on
-      // two consecutive runs.
-      linearFailures.push({
-        issue_id: issueId,
-        kind: classifyLinearLookupError(rawError),
-        message: rawError,
-      });
-      continue;
-    }
-    issues.push({
-      issue_id: result.data.issue.identifier,
-      state_name: result.data.issue.state?.name ?? 'Unknown',
-      state_type: result.data.issue.state?.type,
-      updated_at: result.data.issue.updatedAt,
-    });
-  }
-  return issues;
-}
-
 export function renderHuman(report: OrchestrationReconcilerReport): string {
   const lines = [
     `[ops:orchestration-reconcile] generated_at=${report.generated_at} verdict=${report.verdict} mode=${report.mode}`,
@@ -1804,33 +1485,12 @@ async function main(argv = process.argv.slice(2)): Promise<void> {
   const transitionWindow = Number.parseInt(parsed.flags.get('transition-window-minutes')?.at(-1) ?? '', 10);
   const infraErrors: string[] = [];
   const historicalDecayErrors: string[] = [];
-  const linearFailures: LinearLookupFailure[] = [];
 
   const manifests = readAllManifests();
   const leases = readAllLeases();
   const branches = safeCollect(gitBranches, 'Git branch query failed', infraErrors);
   const pullRequests = githubPullRequests(infraErrors);
-  const issueIds = uniqueIssueIds({
-    linearIssues: [],
-    leases,
-    manifests,
-    branches,
-    pullRequests,
-  });
-  // The "is this issue in the current working set" signal is deliberately no
-  // longer collected here: Linear failure classification must not depend on it.
-  const linearIssueIds = new Set(issueIds);
-  if (issueId) {
-    linearIssueIds.add(issueId);
-  }
-  const linearIssues = await fetchLinearIssues(
-    [...linearIssueIds].sort((left, right) => left.localeCompare(right)),
-    infraErrors,
-    linearFailures,
-  );
-
   const report = buildOrchestrationReconcilerReport({
-    linearIssues,
     leases,
     manifests,
     branches,
@@ -1844,7 +1504,6 @@ async function main(argv = process.argv.slice(2)): Promise<void> {
     transitionWindowMinutes: Number.isFinite(transitionWindow) ? transitionWindow : undefined,
     infraErrors,
     historicalDecayErrors,
-    linearFailures,
   });
   if (applyCleanup) {
     throw new Error('Cleanup apply is not automated yet; run the dry-run cleanup_plan commands explicitly under the merge mutex.');

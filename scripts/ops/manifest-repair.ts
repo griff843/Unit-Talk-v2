@@ -84,7 +84,7 @@ export function buildManifestRepairPlan(argv = process.argv.slice(2)): ManifestR
     manifest_path: relativeToRoot(manifestPath),
     reconstruction_sources: sources,
     required_inputs: [
-      'authoritative Linear tier',
+      'authoritative tier (work order Tier: line)',
       'executor and lane_type',
       'file_scope_lock',
       'preflight_token',

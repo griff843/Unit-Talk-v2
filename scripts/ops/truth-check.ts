@@ -50,14 +50,14 @@ async function main(): Promise<void> {
         // Review finding P2-2: the earlier wording here said "re-run without
         // --dry-run to close the lane", which is wrong. A live ops:truth-check
         // only appends the truth_check_history entry and refreshes heartbeat_at.
-        // `status: done`, `closed_at`, the Linear transition and lock release are
+        // `status: done`, `closed_at` and lock release are
         // all performed by ops:lane-close. Following the old instruction left the
         // lane merged and open.
         console.log(
           'DRY RUN: no truth_check_history entry was recorded, and nothing was closed.\n' +
             'A live `ops:truth-check` only records the gate result — it does NOT close the lane.\n' +
             'To actually close: `pnpm ops:lane-close <ISSUE>` (it runs truth-check internally, then sets\n' +
-            'status=done + closed_at, transitions Linear, and releases the lane\'s locks).',
+            'status=done + closed_at, and releases the lane\'s locks).',
         );
       }
     }

@@ -21,7 +21,6 @@ import {
   findPostMergeTouches,
   formatP0Failures,
   hasRuntimeReferences,
-  isLinearStatePermittedForL3,
   normalizeRequiredChecks,
   parseRequiredChecksFromBranchProtectionScript,
   type CommitCheckResult,
@@ -1202,7 +1201,6 @@ function closeoutInput(
       expected_proof_paths: ['docs/06_status/proof/UTV2-1058/verification.md'],
       created_by: 'codex-cli',
     },
-    linear_state: 'Done',
     pr_merged: true,
     pr_merge_sha: mergeSha,
     pr_head_sha: 'head456',
@@ -1215,7 +1213,6 @@ function closeoutInput(
     ],
     merge_timestamp_ms: 1000,
     runtime_proof_required: false,
-    transition_age_ms: 0,
     ...overrides,
   };
 }
@@ -1230,11 +1227,10 @@ test('closeout truth gate passes clean merged closeout', () => {
   assert.deepStrictEqual(failedCloseoutIds(closeoutInput()), []);
 });
 
-test('closeout truth gate fails Done without merged PR SHA', () => {
-  assert.deepStrictEqual(
-    failedCloseoutIds(closeoutInput({ pr_merge_sha: null })),
-    ['C1'],
-  );
+test('closeout truth gate fails a Done manifest without any merge SHA', () => {
+  const input = closeoutInput({ pr_merge_sha: null });
+  input.manifest = { ...input.manifest, status: 'done', commit_sha: null };
+  assert.ok(failedCloseoutIds(input).includes('C1'));
 });
 
 test('closeout truth gate fails completed work without manifest merge SHA', () => {
@@ -1351,7 +1347,6 @@ test('P3/C4 fail before model-routing rebind and pass after genuine merge bindin
 
 test('closeout truth gate can use head SHA only when no merge SHA is available', () => {
   const input = closeoutInput({
-    linear_state: 'In Review',
     pr_merged: false,
     pr_merge_sha: null,
     merge_timestamp_ms: null,
@@ -1449,20 +1444,6 @@ test('closeout truth gate accepts runtime-proof with live evidence references', 
   );
 });
 
-test('closeout truth gate fails manifest and Linear drift beyond transition window', () => {
-  assert.deepStrictEqual(
-    failedCloseoutIds(
-      closeoutInput({
-        linear_state: 'In Review',
-        pr_merged: true,
-        transition_age_ms: 60 * 60 * 1000,
-        allowed_transition_ms: 30 * 60 * 1000,
-      }),
-    ),
-    ['C7'],
-  );
-});
-
 test('closeout truth gate fails Done manifest with unmerged PR', () => {
   assert.deepStrictEqual(
     failedCloseoutIds(
@@ -1471,9 +1452,7 @@ test('closeout truth gate fails Done manifest with unmerged PR', () => {
           ...closeoutInput().manifest,
           status: 'done',
         },
-        linear_state: 'In Review',
         pr_merged: false,
-        transition_age_ms: 60 * 60 * 1000,
       }),
     ),
     ['C7'],
@@ -1605,104 +1584,6 @@ test('G3: SHA absent from all of main history → reachable=false, firstParent=f
   assert.strictEqual(result.firstParent, false);
 });
 
-test('L3: accepts the actual workspace PM-review state "In PM Review"', () => {
-  assert.strictEqual(isLinearStatePermittedForL3('In PM Review'), true);
-});
-
-test('L3: accepts the canonical "Ready to Close" state', () => {
-  assert.strictEqual(isLinearStatePermittedForL3('Ready to Close'), true);
-});
-
-test('L3: accepts "Done"', () => {
-  assert.strictEqual(isLinearStatePermittedForL3('Done'), true);
-});
-
-test('L3: rejects the stale "In Review" state that does not exist in this workspace', () => {
-  assert.strictEqual(isLinearStatePermittedForL3('In Review'), false);
-});
-
-test('L3: rejects non-closeout state names when Linear reported no state type', () => {
-  // Name-only callers keep the strict UTV2-1590 behaviour: with no type to
-  // consult, anything outside the canonical closeout allowlist fails closed.
-  for (const state of [
-    'Backlog',
-    'Blocked',
-    'Blocked Internal',
-    'Cancelled',
-    'Abandoned',
-    'Todo',
-    'In Progress',
-    'In Codex',
-    'In Claude',
-    'In Proof',
-  ]) {
-    assert.strictEqual(isLinearStatePermittedForL3(state), false, `expected ${state} to fail closed`);
-  }
-});
-
-test('L3: rejects empty/unknown state', () => {
-  assert.strictEqual(isLinearStatePermittedForL3(''), false);
-  assert.strictEqual(isLinearStatePermittedForL3(undefined), false);
-});
-
-// ── UTV2-1689 (UTV2-1619 capability 17): lane readiness vs issue workflow state ──
-//
-// A lane may close while its parent issue remains active. The regression fixture
-// is UTV2-1619 itself: an issue with outstanding capabilities whose merged
-// increment (PR #1400, merge SHA b58a2f35) passed all 37 other checks and was
-// blocked from closing solely because the issue sat in "Blocked Internal".
-
-test('L3: an active issue does not block one of its increments from truth-closing', () => {
-  // The three states PM named explicitly in capability 17.
-  for (const state of ['In Claude', 'In Codex', 'Blocked Internal']) {
-    assert.strictEqual(
-      isLinearStatePermittedForL3(state, 'started'),
-      true,
-      `expected active state ${state} to permit an increment to close`,
-    );
-  }
-});
-
-test('L3: gates on state type, not on a configurable state name', () => {
-  // A workspace-renamed active state must still be admitted -- the whole point
-  // of gating on the Linear-defined type rather than a name allowlist.
-  assert.strictEqual(isLinearStatePermittedForL3('Some Renamed Active State', 'started'), true);
-  assert.strictEqual(isLinearStatePermittedForL3('Done', 'completed'), true);
-});
-
-test('L3: still fails closed for abandoned, superseded, and never-started work', () => {
-  // These are the conditions the gate names. Each must actually FAIL -- a
-  // control is only proven by making it fail on the condition it names.
-  const refused: Array<[string, string]> = [
-    ['Cancelled', 'canceled'],
-    ['Duplicate', 'duplicate'],
-    ['Backlog', 'backlog'],
-    ['Ready for Claude', 'unstarted'],
-    ['Triage', 'triage'],
-  ];
-  for (const [name, type] of refused) {
-    assert.strictEqual(
-      isLinearStatePermittedForL3(name, type),
-      false,
-      `expected ${name} (type ${type}) to fail closed`,
-    );
-  }
-});
-
-test('L3: an absent or unrecognized state type never widens the gate', () => {
-  // Fail-closed direction (invariant 10): a missing type must not be read as
-  // permission, and an unknown future type must not be admitted by default.
-  assert.strictEqual(isLinearStatePermittedForL3('In Claude', undefined), false);
-  assert.strictEqual(isLinearStatePermittedForL3('In Claude', ''), false);
-  assert.strictEqual(isLinearStatePermittedForL3('In Claude', null), false);
-  assert.strictEqual(isLinearStatePermittedForL3('In Claude', 'some_future_type'), false);
-});
-
-test('L3: state type matching is case- and whitespace-insensitive', () => {
-  assert.strictEqual(isLinearStatePermittedForL3('In Claude', ' Started '), true);
-  assert.strictEqual(isLinearStatePermittedForL3('In Claude', 'STARTED'), true);
-});
-
 // ── classifyRuntimeProofGap (UTV2-1537) ─────────────────────────────────────────
 //
 // Regression coverage for docs/06_status/INCIDENTS/INC-2026-07-14-utv2-1533-direct-main-push.md:
@@ -1721,8 +1602,6 @@ function originalIncidentFailureFixture(): CheckResult[] {
     checkResult('M1', 'pass'),
     checkResult('M2', 'pass'),
     checkResult('M3', 'pass'),
-    checkResult('L1', 'pass'),
-    checkResult('L2', 'pass'),
     checkResult('G1', 'pass'),
     checkResult('G2', 'pass'),
     checkResult('P1', 'pass'),
@@ -2430,7 +2309,7 @@ test('UTV2-1691: dry and live produce an identical verdict, check list and failu
 test('UTV2-1691: the dry-run guarantee holds only while one write site exists — guard the audit', () => {
   // An exhaustive write audit established that the evaluation path performs
   // exactly one mutation of any kind. `dryRun` gates that one site, so the
-  // guarantee ("no manifest writes, no proof writes, no Linear mutations, no
+  // guarantee ("no manifest writes, no proof writes, no tracker mutations, no
   // GitHub mutations") is only true while that remains so. This test fails if a
   // future edit adds a write surface, rather than letting the guarantee rot into
   // a stale comment.
@@ -2475,11 +2354,11 @@ test('UTV2-1691: the dry-run guarantee holds only while one write site exists �
     'the sole persistence site must remain gated behind !input.dryRun',
   );
 
-  // No Linear or GitHub mutation verbs.
+  // No GitHub mutation verbs.
   assert.strictEqual(
     /method:\s*'(PUT|PATCH|DELETE)'/.test(source),
     false,
-    'no GitHub/Linear write verb may appear in the evaluation path',
+    'no GitHub write verb may appear in the evaluation path',
   );
   assert.strictEqual(
     /\bspawnSync\s*\(|\bexecSync\s*\(/.test(source),
@@ -2521,7 +2400,7 @@ test('UTV2-1691 P2-1: a dry run is machine-distinguishable from a certifying liv
 test('UTV2-1691 P2-2: dry-run remediation text points at lane-close, not truth-check', () => {
   // The defect: the message said re-running without --dry-run would "close the
   // lane". A live truth-check only appends history and heartbeat; status=done,
-  // closed_at, the Linear transition and lock release belong to ops:lane-close.
+  // closed_at and lock release belong to ops:lane-close.
   // Following the old text left the lane merged and open.
   const source = fs.readFileSync(
     path.join(getRepoRoot(), 'scripts', 'ops', 'truth-check.ts'),
@@ -3064,14 +2943,8 @@ test('UTV2-1776: P10 fails closed when the GitHub merged-PR attestation is missi
 });
 
 // ---------------------------------------------------------------------------
-// UTV2-1837 — tracker independence in the closeout gate.
-//
-// Two of C7's three failure modes are about the tracker; the third compares the
-// repo's own manifest to GitHub and is NOT relaxed. C1's entire subject is the
-// tracker's Done state, so it skips outright. The pairs below are written as
-// inversions: the same input with `tracker_available` flipped must produce
-// different verdicts, which is what proves the relaxation is conditional rather
-// than a blanket disable.
+// Tracker retirement (WORK-2026112501): C1 and C7 read only the lane manifest
+// and GitHub. Each control is proven by an input that makes it fail.
 // ---------------------------------------------------------------------------
 
 const closeoutStatusFor = (
@@ -3079,81 +2952,27 @@ const closeoutStatusFor = (
   id: string,
 ): string | undefined => evaluateCloseoutTruthGate(input).find((check) => check.id === id)?.status;
 
-test('UTV2-1837: C1 fails on tracker Done without a merge SHA when a tracker IS available', () => {
-  assert.equal(closeoutStatusFor(closeoutInput({ pr_merge_sha: null }), 'C1'), 'fail');
-});
-
-test('UTV2-1837: C1 SKIPS the same input when the lane has no tracker', () => {
-  assert.equal(
-    closeoutStatusFor(closeoutInput({ pr_merge_sha: null, tracker_available: false }), 'C1'),
-    'skip',
-  );
-});
-
-test('UTV2-1837: C1 skips rather than passes — a pass would assert an unevaluated requirement', () => {
-  assert.notEqual(
-    closeoutStatusFor(closeoutInput({ tracker_available: false }), 'C1'),
-    'pass',
-  );
-});
-
-test('UTV2-1837: C7 fails on a tracker/PR transition mismatch when a tracker IS available', () => {
-  assert.equal(
-    closeoutStatusFor(
-      closeoutInput({ linear_state: 'Done', pr_merged: false, pr_merge_sha: null }),
-      'C7',
-    ),
-    'fail',
-  );
-});
-
-test('UTV2-1837: C7 KEEPS the manifest/PR mode with no tracker — real protection is not lost', () => {
-  const input = closeoutInput({ pr_merged: false, pr_merge_sha: null, tracker_available: false });
-  input.manifest = { ...input.manifest, status: 'done' };
-  assert.equal(
-    closeoutStatusFor(input, 'C7'),
-    'fail',
-    'manifest Done with an unmerged PR is computable without a tracker and must still fail',
-  );
-});
-
-test('UTV2-1837: C7 skips only the tracker-transition modes with no tracker', () => {
-  assert.equal(
-    closeoutStatusFor(
-      closeoutInput({ linear_state: '', pr_merged: true, tracker_available: false }),
-      'C7',
-    ),
-    'skip',
-  );
-});
-
-test('UTV2-1837 AC4 inversion: tracker_available defaults to true, so every existing caller is unchanged', () => {
+test('C1 fails when a Done manifest has no merge SHA from the manifest or the PR', () => {
   const input = closeoutInput({ pr_merge_sha: null });
-  assert.equal(Object.hasOwn(input, 'tracker_available'), false);
+  input.manifest = { ...input.manifest, status: 'done', commit_sha: null };
   assert.equal(closeoutStatusFor(input, 'C1'), 'fail');
 });
 
-test('UTV2-1837: an EMPTY tracker state is not the same as an absent tracker', () => {
-  // `linear_state: ''` read FROM a tracker is a real finding. Collapsing it into
-  // "no tracker" would turn a genuine failure into a silent skip.
-  const asRead = closeoutInput({ linear_state: '', pr_merged: false, pr_merge_sha: null });
-  const asAbsent = closeoutInput({
-    linear_state: '',
-    pr_merged: false,
-    pr_merge_sha: null,
-    tracker_available: false,
-  });
-  // Same empty state, different meaning. Read from a tracker, C1 is EVALUATED
-  // and passes on its merits. With no tracker, C1 is not evaluated at all.
-  assert.equal(closeoutStatusFor(asRead, 'C1'), 'pass');
-  assert.equal(closeoutStatusFor(asAbsent, 'C1'), 'skip');
-  assert.notEqual(
-    closeoutStatusFor(asRead, 'C1'),
-    closeoutStatusFor(asAbsent, 'C1'),
-    'an empty tracker state must not be collapsed into an absent tracker',
-  );
+test('C1 passes when a Done manifest carries a merge SHA', () => {
+  const input = closeoutInput();
+  input.manifest = { ...input.manifest, status: 'done' };
+  assert.equal(closeoutStatusFor(input, 'C1'), 'pass');
 });
 
+test('C7 fails when the manifest is Done but the PR is not merged', () => {
+  const input = closeoutInput({ pr_merged: false, pr_merge_sha: null });
+  input.manifest = { ...input.manifest, status: 'done' };
+  assert.equal(closeoutStatusFor(input, 'C7'), 'fail');
+});
+
+test('C7 passes when manifest and PR state agree', () => {
+  assert.equal(closeoutStatusFor(closeoutInput(), 'C7'), 'pass');
+});
 
 // ---------------------------------------------------------------------------
 // UTV2-1848 -- G6, the closeout obligation created by deferring preflight PT1

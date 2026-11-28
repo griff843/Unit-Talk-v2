@@ -321,7 +321,6 @@ Key categories (from `.env.example`): [CONFIRMED]
 | Worker | `UNIT_TALK_WORKER_*`, `UNIT_TALK_DISTRIBUTION_TARGETS`, `UNIT_TALK_DISCORD_TARGET_MAP` |
 | Alert agent | `ALERT_AGENT_ENABLED`, `ALERT_DRY_RUN`, `ALERT_THRESHOLD_*` |
 | Discord bot | `DISCORD_BOT_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_GUILD_ID`, role IDs |
-| Linear | `LINEAR_API_TOKEN`, `LINEAR_TEAM_ID` |
 | Notion | `NOTION_API_KEY`, `NOTION_DATABASE_ID` |
 | OpenAI | `OPENAI_API_KEY` |
 | Odds API | `ODDS_API_KEY` |
@@ -366,7 +365,6 @@ Key categories (from `.env.example`): [CONFIRMED]
 `scripts/` contains operational tooling run via `pnpm <script-name>`: [CONFIRMED — root package.json scripts, `ls` of root]
 
 - `ops-brief.ts` — one-command system snapshot
-- `linear-workflow.ts` — Linear issue management
 - `github-workflow.ts` — PR/check status
 - `worker-supervisor.ts` / `ingestor-supervisor.ts` — process management
 - `t1-proof-bundle.ts` — T1 verification gate

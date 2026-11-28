@@ -2235,8 +2235,6 @@ function makeProductionApiEnvironment(
     UNIT_TALK_APP_ENV: 'production' as const,
     UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\dev\\unit-talk-v2',
     UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
-    LINEAR_TEAM_KEY: 'UTV2',
-    LINEAR_TEAM_NAME: 'unit-talk-v2',
     NOTION_WORKSPACE_NAME: 'unit-talk-v2',
     SLACK_WORKSPACE_NAME: 'unit-talk-v2',
     SUPABASE_URL: 'https://example.supabase.co',

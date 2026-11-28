@@ -52,31 +52,6 @@ import {
 import { assertSingleIssueArgs } from './cli-args-guard.js';
 
 type PreflightVerdict = PreflightResult['verdict'];
-type LinearIssueRecord = {
-  id: string;
-  identifier: string;
-  title: string;
-  description?: string | null;
-  state?: { name: string } | null;
-  labels?: { nodes: Array<{ name: string }> } | null;
-};
-
-const CONTINUATION_ELIGIBLE_STATES = new Set([
-  'In Claude',
-  'In Codex',
-  'In Claude Review',
-  'In Codex Review',
-  'In Progress',
-]);
-
-const TERMINAL_LINEAR_STATES = new Set([
-  'Done',
-  'Canceled',
-  'Cancelled',
-  'Failed',
-  'Duplicate',
-]);
-
 export interface ExistingBranchReadmissionContext {
   mode: 'existing-branch-readmission';
   branch_head_sha: string;
@@ -131,14 +106,6 @@ export function branchContainsExactIssue(branch: string, issueId: string): boole
   return new RegExp(`(?:^|[/_-])${escaped}(?:$|[/_-])`).test(branch.toLowerCase());
 }
 
-export function isContinuationEligibleLinearState(state: string): boolean {
-  return CONTINUATION_ELIGIBLE_STATES.has(state);
-}
-
-export function isTerminalLinearState(state: string): boolean {
-  return TERMINAL_LINEAR_STATES.has(state);
-}
-
 export function parseAheadBehind(value: string): { behind: number; ahead: number } | null {
   const [behindRaw, aheadRaw, ...rest] = value.trim().split(/\s+/);
   const behind = Number.parseInt(behindRaw ?? '', 10);
@@ -172,12 +139,13 @@ const WAIVABLE_CHECKS: Record<LaneTier, Set<string>> = {
 const RUN_COMMAND_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 
 // Read by runRepoOwnedWorkChecks, which `main()` reaches synchronously -- there is
-// no `await` before runLinearChecks. Declared here, above the module-level
+// no `await` before runWorkOrderChecks. Declared here, above the module-level
 // `main()` invocation, for the reason given for RUN_COMMAND_MAX_BUFFER_BYTES:
 // declared below it they were still in their temporal dead zone, and every
 // WORK-### preflight crashed with a ReferenceError that no import-based unit
 // test can observe. The structural test in preflight.test.ts pins the rule.
 const WORK_ORDER_TIER_PATTERN = /^Tier:\s*(T[123])\b/mu;
+const WORK_ORDER_LANE_TYPE_PATTERN = /Lane type:\s*([a-z0-9/-]+)/iu;
 const TERMINAL_MANIFEST_STATUSES = new Set(['done', 'superseded', 'cancelled', 'failed']);
 
 // Slot ownership, liveness, reclaim and the operator view all live in
@@ -247,7 +215,7 @@ async function main(): Promise<number> {
   // UTV2-1546: delegation kill switch. This must run before every other check
   // below -- including validatePreflightSchemaDependencies(), which is cheap
   // but is still the first real work this function does -- and long before any
-  // Linear call, baseline verify/test run, or token write. A suspended (or
+  // baseline verify/test run or token write. A suspended (or
   // missing/malformed) delegation state fails preflight closed here,
   // unconditionally, regardless of tier or any --skip/--waiver-reason
   // combination (delegation is not a WAIVABLE_CHECKS entry and never will be).
@@ -400,17 +368,15 @@ async function main(): Promise<number> {
   runRepoChecks(issueId, branch, addCheck, readmitExistingBranch, readmissionContext);
   runDependencyChecks(addCheck);
   validateDocsOnlyFastPath(tier, docsOnlyFastPath, normalizedCandidateFiles, addCheck);
-  const linearState = await runLinearChecks(
+  const workOrder = runWorkOrderChecks(
     issueId,
     tier,
-    env,
     normalizedCandidateFiles,
-    refresh,
     addCheck,
     readmitExistingBranch,
     branch,
   );
-  runRequiredDocChecks(tier, linearState.labels, requireDocs, addCheck);
+  runRequiredDocChecks(tier, requireDocs, addCheck);
   runGateEquivalentChecks(issueId, tier, branch, headSha, addCheck);
   if (tier === 'T1') {
     await runT1Checks(env, addCheck);
@@ -424,7 +390,7 @@ async function main(): Promise<number> {
     docsOnlyFastPath,
     headSha,
     readPreflightBaselineCache(),
-    linearState.labels,
+    workOrder.laneType,
     addCheck,
   );
 
@@ -457,7 +423,7 @@ async function main(): Promise<number> {
           runAt,
           waivers,
           baseline.cacheHit,
-          collectCheckedDocs(requireDocs, tier, linearState.labels),
+          collectCheckedDocs(requireDocs, tier),
           readmissionContext,
           checks.some(
             (check) => check.id === 'PT1' && check.status === 'blocked_by_containment',
@@ -482,7 +448,7 @@ async function main(): Promise<number> {
 
   // A prior passing readmission token must not survive a later terminal,
   // non-startable, or infrastructure result. Lane-start deliberately does not
-  // call Linear again, so leaving that token in place would allow stale
+  // re-run these checks, so leaving that token in place would allow stale
   // continuation authority to remain usable until its TTL expires. Preserve
   // normal-mode behavior; this stricter invalidation belongs to the explicit
   // readmission contract.
@@ -561,10 +527,6 @@ function runEnvCheck(
       addCheck('PE3', 'fail', 'GITHUB_TOKEN must be present and non-empty');
     } else {
       addCheck('PE3', 'pass', 'GitHub credential present');
-    }
-
-    if (env.LINEAR_API_TOKEN?.trim() || process.env.LINEAR_API_KEY?.trim()) {
-      addCheck('PE2', 'pass', 'Linear credential present');
     }
 
     if (tier === 'T3') {
@@ -1140,7 +1102,7 @@ function runGateEquivalentChecks(
   void headSha;
 }
 
-/** Repo-minted work identity: no tracker issue exists by this name. */
+/** Repo-minted work identity (`WORK-###`). */
 export function isRepoOwnedWorkId(issueId: string): boolean {
   return /^WORK-\d+$/.test(issueId);
 }
@@ -1163,8 +1125,8 @@ function acceptanceCriteriaBody(workOrder: string): string {
 }
 
 /**
- * PE2's mechanical floor, shared by every path that has no tracker tier label
- * to read. The floor can refuse a declared tier; it never sets or lowers one.
+ * PE2's mechanical floor. The floor can refuse a declared tier; it never sets
+ * or lowers one.
  */
 function checkMechanicalFloor(
   tier: LaneTier,
@@ -1183,13 +1145,13 @@ function checkMechanicalFloor(
       'fail',
       `${context}, and declared --tier ${tier} is below the mechanical floor ` +
         `${mechanicalMinimum} implied by the declared file scope (${offending}). ` +
-        'A tier is never lowered to avoid tracker bookkeeping.',
+        'A tier is never lowered below the floor.',
     );
   } else {
     addCheck(
       'PE2',
       'skip',
-      `${context}; tracker checks are optional and non-blocking. ` +
+      `${context}. ` +
         `Declared --tier ${tier} satisfies the mechanical floor ${mechanicalMinimum}.`,
     );
   }
@@ -1197,11 +1159,10 @@ function checkMechanicalFloor(
 }
 
 /**
- * WORK-2026092622: the tracker checks' repo-owned equivalents. Each tracker
- * question has a repository answer, so none is skipped:
+ * WORK-2026092622: the work-order checks. None is skipped:
  * PL1 the contract exists and is committed; PL2 its tier equals --tier;
  * PL3 it is startable (or, on readmission, not terminal); PL4 it states
- * acceptance criteria; PL5/PL6 are the same manifest checks a tracker lane gets.
+ * acceptance criteria; PL5/PL6 are the manifest ownership checks.
  */
 export function runRepoOwnedWorkChecks(
   issueId: string,
@@ -1213,7 +1174,7 @@ export function runRepoOwnedWorkChecks(
   readWorkOrder: WorkOrderReader = readCommittedWorkOrder,
 ): void {
   const workPath = `.ops/work/${issueId}.md`;
-  const floor = checkMechanicalFloor(tier, candidateFiles, addCheck, `repo-owned identity ${issueId} has no tracker issue`);
+  const floor = checkMechanicalFloor(tier, candidateFiles, addCheck, `work order ${issueId}`);
 
   const workOrder = readWorkOrder(issueId);
   const heading = workOrder?.match(/^#\s+(\S+)/mu)?.[1] ?? null;
@@ -1242,7 +1203,7 @@ export function runRepoOwnedWorkChecks(
   } else if (readmitExistingBranch) {
     addCheck('PL3', 'pass', `lane ${issueId} is not terminal (${manifest?.status ?? 'no manifest'})`);
   } else {
-    addCheck('PL3', 'pass', 'repo-owned identity has no tracker state; lane ownership is checked by PL5');
+    addCheck('PL3', 'pass', 'work order lanes are startable; lane ownership is checked by PL5');
   }
 
   if (workOrder === null) {
@@ -1299,123 +1260,42 @@ function runManifestOwnershipChecks(
   }
 }
 
-export async function runLinearChecks(
+/**
+ * Work-order checks for every lane (tracker retired, WORK-2026112501).
+ *
+ * A `WORK-###` lane, or any lane whose work order is committed at
+ * `.ops/work/<ID>.md`, runs the full PL1-PL6 work-order checks. A legacy
+ * `UTV2-###`/`UNI-###` lane opened before work orders existed has no committed
+ * contract to check, so its declared `--tier` stands only at or above the
+ * mechanical floor computed from the declared file scope, and PL1-PL6 skip.
+ */
+export function runWorkOrderChecks(
   issueId: string,
   tier: LaneTier,
-  env: ReturnType<typeof loadEnvironment> | null,
   candidateFiles: string[],
-  refresh: boolean,
   addCheck: (id: string, status: CheckResult['status'], detail: string) => void,
   readmitExistingBranch = false,
   branch = '',
   readWorkOrder: WorkOrderReader = readCommittedWorkOrder,
-): Promise<{ labels: string[]; stateName: string }> {
-  // WORK-2026092622: a repo-minted `WORK-###` names no tracker issue, so asking
-  // the tracker about it can only answer "not found". That made PL1 fail for any
-  // executor holding a Linear credential -- the credential-free path below was
-  // the only way in. The identity is validated against its repo-owned contract
-  // instead, and the decision does not depend on which credentials are present.
-  if (isRepoOwnedWorkId(issueId)) {
+): { laneType: string | null } {
+  const workOrder = readWorkOrder(issueId);
+  if (isRepoOwnedWorkId(issueId) || workOrder !== null) {
     runRepoOwnedWorkChecks(issueId, tier, candidateFiles, addCheck, readmitExistingBranch, branch, readWorkOrder);
-    return { labels: [], stateName: '' };
+    return { laneType: workOrder?.match(WORK_ORDER_LANE_TYPE_PATTERN)?.[1]?.toLowerCase() ?? null };
   }
 
-  const token = env?.LINEAR_API_TOKEN?.trim() || process.env.LINEAR_API_KEY?.trim();
-  if (!token) {
-    // Tracker independence (ratified 2026-09-05, `docs/mission/intent.md`
-    // "Execution must not depend on the tracker"). An absent tracker
-    // credential is not an infrastructure failure and not a policy refusal --
-    // it is the tracker being optional. Reporting it as `infra_error` made
-    // `resolveVerdict` return INFRA, which wrote no token, which made
-    // `ops:lane-start` fail with "validated preflight token is unavailable".
-    // That cascade is the single hard block on the whole open->PR path.
-    //
-    // What must NOT be lost with the tracker is the tier decision PL2
-    // otherwise carries. Without Linear there is no label to read, so the
-    // declared `--tier` stands -- but only when it is at or above the
-    // MECHANICAL FLOOR computed from the declared file scope. The floor is a
-    // floor in both directions: it can raise a declared tier's requirement
-    // and refuse, and it can never lower one. `classifyMechanicalMinimum` is
-    // pure -- no Linear, no network, no git -- so it is computable in exactly
-    // the situation this branch exists for.
-    //
-    // The floor is binary (T1 or T3) and blind to semantic risk, so it is
-    // used ONLY to refuse a declared tier beneath it, never to set a tier.
-    const mechanicalMinimum = checkMechanicalFloor(tier, candidateFiles, addCheck, 'no tracker credential');
-    addCheck('PL1', 'skip', 'PL1 skipped: no tracker credential');
-    addCheck('PL2', 'skip', `PL2 skipped: no tracker credential; --tier ${tier} stands above floor ${mechanicalMinimum}`);
-    addCheck('PL3', 'skip', 'PL3 skipped: no tracker credential');
-    addCheck('PL4', 'skip', 'PL4 skipped: no tracker credential');
-    addCheck('PL5', 'skip', 'PL5 skipped: no tracker credential');
-    addCheck('PL6', 'skip', 'PL6 skipped without issue context');
-    return { labels: [], stateName: '' };
-  }
-
-  const issue = await fetchLinearIssue(issueId, token, addCheck);
-  if (!issue) {
-    addCheck('PL2', 'skip', 'PL2 skipped because the issue could not be resolved');
-    addCheck('PL3', 'skip', 'PL3 skipped because the issue could not be resolved');
-    addCheck('PL4', 'skip', 'PL4 skipped because the issue could not be resolved');
-    addCheck('PL5', 'skip', 'PL5 skipped because the issue could not be resolved');
-    addCheck('PL6', 'skip', 'PL6 skipped without issue context');
-    return { labels: [], stateName: '' };
-  }
-
-  const labels = (issue.labels?.nodes ?? []).map((label) => label.name.toLowerCase());
-  // Normalize labels: strip optional "tier:" prefix so both "t1" and "tier:t1" match
-  const normalizeTierLabel = (l: string) => l.replace(/^tier:/, '');
-  const tierLabels = [
-    ...new Set(
-      labels
-        .map(normalizeTierLabel)
-        .filter((label) => label === 't1' || label === 't2' || label === 't3'),
-    ),
-  ];
-  if (tierLabels.length !== 1 || tierLabels[0] !== tier.toLowerCase()) {
-    addCheck('PL2', 'fail', `issue tier labels ${tierLabels.join(', ') || '(none)'} do not match --tier ${tier}`);
-  } else {
-    addCheck('PL2', 'pass', `issue tier label matches ${tier}`);
-  }
-
-  const stateName = issue.state?.name ?? '';
-  // Accept workflow-specific state names alongside generic "Ready" / "In Progress"
-  const startableStates = new Set([
-    'Ready',
-    'In Progress',
-    'Ready for Claude',
-    'Ready for Codex',
-    'In Claude Review',
-    'In Codex Review',
-    'Needs Standard',
-  ]);
-  if (readmitExistingBranch && isTerminalLinearState(stateName)) {
-    addCheck('PL3', 'fail', `terminal issue state ${stateName} cannot be readmitted`);
-  } else if (readmitExistingBranch && isContinuationEligibleLinearState(stateName)) {
-    addCheck('PL3', 'pass', `issue state ${stateName} is explicitly continuation-eligible`);
-  } else if (readmitExistingBranch) {
-    addCheck('PL3', 'fail', `issue state ${stateName || 'Unknown'} is not continuation-eligible`);
-  } else if (startableStates.has(stateName)) {
-    addCheck('PL3', 'pass', `issue state ${stateName} is startable`);
-  } else if (stateName === 'Backlog' && refresh) {
-    addCheck('PL3', 'waived', 'issue state Backlog tolerated via --refresh');
-  } else {
-    addCheck('PL3', 'fail', `issue state ${stateName || 'Unknown'} is not startable`);
-  }
-
-  if ((issue.description ?? '').trim().length > 0) {
-    addCheck('PL4', 'pass', 'issue description is non-empty');
-  } else {
-    addCheck('PL4', 'fail', 'issue description is empty');
-  }
-
-  runManifestOwnershipChecks(issueId, candidateFiles, addCheck, readmitExistingBranch, branch);
-
-  return { labels, stateName };
+  const mechanicalMinimum = checkMechanicalFloor(tier, candidateFiles, addCheck, `legacy lane ${issueId} has no committed work order`);
+  addCheck('PL1', 'skip', 'PL1 skipped: legacy lane has no committed work order');
+  addCheck('PL2', 'skip', `PL2 skipped: --tier ${tier} stands above floor ${mechanicalMinimum}`);
+  addCheck('PL3', 'skip', 'PL3 skipped: legacy lane has no committed work order');
+  addCheck('PL4', 'skip', 'PL4 skipped: legacy lane has no committed work order');
+  addCheck('PL5', 'skip', 'PL5 skipped: legacy lane has no committed work order');
+  addCheck('PL6', 'skip', 'PL6 skipped without work order context');
+  return { laneType: null };
 }
 
 function runRequiredDocChecks(
   tier: LaneTier,
-  linearLabels: string[],
   requireDocs: string[],
   addCheck: (id: string, status: CheckResult['status'], detail: string) => void,
 ): void {
@@ -1431,11 +1311,10 @@ function runRequiredDocChecks(
     addCheck('PR6', 'skip', 'PR6 skipped for T3');
   }
 
-  const hasPhase2Label = linearLabels.some((label) => /phase ?2/i.test(label));
-  if (tier === 'T1' || hasPhase2Label) {
+  if (tier === 'T1') {
     checkDoc('PR7', 'docs/02_architecture/PHASE2_SCHEMA_CONTRACT.md', addCheck);
   } else {
-    addCheck('PR7', 'skip', 'PR7 skipped because no active phase contract label was detected');
+    addCheck('PR7', 'skip', 'PR7 skipped below T1');
   }
 
   if (requireDocs.length === 0) {
@@ -1495,7 +1374,7 @@ async function runBaselineChecks(
   docsOnlyFastPath: boolean,
   headSha: string,
   cache: PreflightBaselineCache | null,
-  linearLabels: string[],
+  laneType: string | null,
   addCheck: (id: string, status: CheckResult['status'], detail: string) => void,
 ): Promise<{ cacheHit: boolean; updatedCache: PreflightBaselineCache | null }> {
   let updatedCache: PreflightBaselineCache | null = null;
@@ -1507,7 +1386,7 @@ async function runBaselineChecks(
     return { cacheHit, updatedCache };
   }
 
-  if (fast && fastBaselineAllowed(tier, linearLabels)) {
+  if (fast && fastBaselineAllowed(tier, laneType)) {
     if (cache?.head_sha === headSha && cache.type_check_passed_at && cache.tests_passed_at) {
       cacheHit = true;
       addCheck('PB1', 'skip', `PB1 skipped via --fast using trusted cache ${relativeToRoot(PREFLIGHT_BASELINE_CACHE_PATH)}`);
@@ -1685,7 +1564,6 @@ export function createToken(
 function collectCheckedDocs(
   requireDocs: string[],
   tier: LaneTier,
-  linearLabels: string[],
 ): string[] {
   const docs = [
     'docs/05_operations/EXECUTION_TRUTH_MODEL.md',
@@ -1697,7 +1575,7 @@ function collectCheckedDocs(
   if (tier === 'T1' || tier === 'T2') {
     docs.push(relativeToRoot(EVIDENCE_BUNDLE_SCHEMA_PATH));
   }
-  if (tier === 'T1' || linearLabels.some((label) => /phase ?2/i.test(label))) {
+  if (tier === 'T1') {
     docs.push('docs/02_architecture/PHASE2_SCHEMA_CONTRACT.md');
   }
   docs.push(...requireDocs);
@@ -1801,17 +1679,18 @@ export function isLaneRegistryPath(repoRelativePath: string): boolean {
   );
 }
 
-function fastBaselineAllowed(tier: LaneTier, linearLabels: string[]): boolean {
+/**
+ * T3 may always reuse the baseline cache. T2 may only for the safe lane types
+ * its work order declares (`Lane type:`); a lane with no work order may not.
+ */
+function fastBaselineAllowed(tier: LaneTier, laneType: string | null): boolean {
   if (tier === 'T3') {
     return true;
   }
-  if (tier !== 'T2') {
+  if (tier !== 'T2' || !laneType) {
     return false;
   }
-  const normalizedLabels = linearLabels.map((label) => label.toLowerCase().replace(/^area:/, '').replace(/^kind:/, '').replace(/^lane:/, ''));
-  return normalizedLabels.some((label) =>
-    ['governance', 'tooling', 'hygiene', 'verification', 'delivery-ui', 'delivery/ui', 'proof'].includes(label),
-  );
+  return ['governance', 'tooling', 'hygiene', 'verification', 'delivery-ui', 'delivery/ui', 'proof'].includes(laneType);
 }
 
 export function validateDocsOnlyFastPath(
@@ -1888,57 +1767,6 @@ function compareVersions(left: string, right: string): number {
     }
   }
   return 0;
-}
-
-async function fetchLinearIssue(
-  issueId: string,
-  token: string,
-  addCheck: (id: string, status: CheckResult['status'], detail: string) => void,
-): Promise<LinearIssueRecord | null> {
-  try {
-    const payload = await fetchJson<{
-      data?: { issue: LinearIssueRecord | null };
-      errors?: Array<{ message?: string }>;
-    }>('https://api.linear.app/graphql', {
-      method: 'POST',
-      headers: {
-        Authorization: token,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: `
-          query PreflightIssue($id: String!) {
-            issue(id: $id) {
-              id
-              identifier
-              title
-              description
-              state { name }
-              labels(first: 20) { nodes { name } }
-            }
-          }
-        `,
-        variables: { id: issueId },
-      }),
-    });
-    if (payload.errors?.length) {
-      const message = payload.errors.map((entry) => entry.message ?? 'Unknown Linear error').join('; ');
-      if (/entity not found|not found/i.test(message)) {
-        addCheck('PL1', 'fail', `Linear issue not found: ${issueId}`);
-        return null;
-      }
-      throw new Error(message);
-    }
-    if (!payload.data?.issue) {
-      addCheck('PL1', 'fail', `Linear issue not found: ${issueId}`);
-      return null;
-    }
-    addCheck('PL1', 'pass', `Linear issue ${issueId} exists`);
-    return payload.data.issue;
-  } catch (error) {
-    addCheck('PL1', 'infra_error', error instanceof Error ? error.message : String(error));
-    return null;
-  }
 }
 
 /**

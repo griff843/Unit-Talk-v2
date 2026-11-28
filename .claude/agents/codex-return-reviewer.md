@@ -35,7 +35,7 @@ If the script is unavailable, skip to manual checks below.
 ## Required inputs (ask if missing)
 
 - PR number or URL
-- Issue ID (UTV2-### or UNI-###)
+- Issue ID (WORK-### or UNI-###)
 - Declared file scope from the lane manifest
 
 ## Checks — run all, report all findings
@@ -82,7 +82,7 @@ For every new `.ts` service, handler, or adapter file in the diff, a correspondi
 gh pr view {PR} --json commits --jq '.commits[].messageHeadline'
 ```
 
-Every commit must reference the issue ID (e.g., `feat(api): UTV2-### description` or `feat(api): UNI-### description`). Missing issue ID = flag.
+Every commit must reference the issue ID (e.g., `feat(api): WORK-### description` or `feat(api): UNI-### description`). Missing issue ID = flag.
 
 ### Check 6: tier label
 
@@ -118,7 +118,7 @@ If pr-review-packet `ci_status_summary` is provided: use it, but also run the li
 
 ### Check 10: Closes marker
 
-PR body or title must contain `Closes UTV2-###` or `Closes UNI-###`. Missing = flag (auto-close chain breaks).
+PR body or title must contain `Closes WORK-###` or `Closes UNI-###`. Missing = flag (auto-close chain breaks).
 
 ### Check 11: no hallucinated imports
 

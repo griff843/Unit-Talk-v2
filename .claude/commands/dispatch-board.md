@@ -1,6 +1,6 @@
 # /dispatch-board
 
-Board-wide autonomous loop. Reads the entire Linear board, routes every executable issue via `/three-brain`, and runs the dispatch → execute → verify → close cycle until the board is empty or all remaining issues are blocked.
+Board-wide autonomous loop. Reads every open work order (`.ops/work/`), routes every executable issue via `/three-brain`, and runs the dispatch → execute → verify → close cycle until the board is empty or all remaining issues are blocked.
 
 ## Mandatory merge wrapper
 
@@ -12,11 +12,10 @@ All PR merge, PR branch refresh, and post-merge `main` sync operations must go t
 
 Before counting a lane as active, confirm `/dispatch` started it through `pnpm ops:lane-start` and recorded a lane-specific `worktree_path`/cwd. If worktree creation or isolated install verification fails, do not consume a parallel slot; mark the issue blocked with the specific setup failure.
 
-Worktrees increase execution concurrency, not merge concurrency. PR merge, branch refresh, Linear Done transition, and lane closeout remain one-at-a-time through the merge mutex.
+Worktrees increase execution concurrency, not merge concurrency. PR merge, branch refresh, and lane closeout remain one-at-a-time through the merge mutex.
 
 **Usage:**
 - `/dispatch-board` — run all executable issues
-- `/dispatch-board --milestone <id>` — scope to a Linear milestone
 - `/dispatch-board --dry-run` — show routing plan without executing
 - `/dispatch-board --tier T2` — restrict to a single tier this cycle
 - `/dispatch-board --check-codex` — review returned Codex PRs (async re-entry)
@@ -71,17 +70,15 @@ Repair command: {first repair_plan action command | none available}
 ## Phase 1: Read the board
 
 1. `pnpm ops:brief` — current context
-2. Query Linear (MCP `mcp__claude_ai_Linear__list_issues`):
-   - **Include:** Ready / Ready for Codex / Ready for Claude / Backlog with a tier label
-   - **Exclude:** In Claude, In Codex (already active), Done, Cancelled, Blocked, untiered
+2. List open work orders (`.ops/work/WORK-*.md` with no lane manifest yet; `openWorkOrders()` in `scripts/ops/work-orders.ts`, surfaced by `pnpm ops:digest`):
+   - **Include:** work orders with a `Tier:` line and acceptance criteria
+   - **Exclude:** work orders that already have a lane manifest (started or done), untiered work orders
 3. Read `docs/06_status/lanes/*.json` — enumerate active manifests (`status ∈ {started, in_progress, in_review, blocked, reopened}`), note `file_scope_lock[]`, executor counts, and worktree paths. Slot limits come from `docs/governance/CONCURRENCY_CONFIG.json` through the live gate outputs; see `docs/governance/LANE_CONCURRENCY_POLICY.md §10`.
 4. Build candidate list — exclude:
    - File-scope overlap with any active lane
-   - Missing tier label
-   - Linked blockers not in Done
-   - External-gate labels (skip silently, surface in report):
-     - `needs:operator-action`, `needs:live-data`, `needs:hetzner`
-5. If `--milestone <id>`: filter via `mcp__claude_ai_Linear__get_milestone`
+   - Missing `Tier:` line
+   - Work orders whose stated blockers are not yet done
+   - Work orders naming an external gate (operator action, live data, Hetzner); skip silently, surface in report
 6. Empty after filtering → report what blocks each issue and stop
 
 ---
@@ -118,8 +115,8 @@ If any T1 in routing:
 1. Dispatch all non-T1 issues first — Claude lanes run concurrently as background agents (Phase 5), so this is a sequencing preference (get T1 plan gates in front of PM early), not a concurrency limitation
 2. Surface T1 gates one at a time:
    ```
-   [dispatch-board] T1 PLAN GATE — UTV2-### {title}
-   Reply "approved UTV2-###" to begin, "skip UTV2-###" to defer.
+   [dispatch-board] T1 PLAN GATE — WORK-### {title}
+   Reply "approved WORK-###" to begin, "skip WORK-###" to defer.
    ```
 3. Wait for explicit approval before opening any T1 lane
 
@@ -127,7 +124,7 @@ If any T1 in routing:
 
 ## Phase 4: Dispatch
 
-For each approved issue: `/dispatch UTV2-###`. That skill owns branch creation, lane manifest, Linear state, file-scope lock, dedicated worktree creation/resume, pre-PR verification, R-level check, tier label, and PR opening.
+For each approved issue: `/dispatch WORK-###`. That skill owns branch creation, lane manifest, file-scope lock, dedicated worktree creation/resume, pre-PR verification, R-level check, tier label, and PR opening.
 
 Dispatch order:
 1. Approved T1 Claude lanes first
@@ -153,16 +150,16 @@ Parallel dispatch guard:
 1. CI green on PR (on the PR head)
 2. Run `/verification` (tier-appropriate)
 3. Confirm merge-readiness pre-merge (NOT truth-check):
-   - proof artifacts present and well-formed: `pnpm ops:proof-check --issue UTV2-###`
-   - merge-readiness: `pnpm ops:merge-ready --issue UTV2-### --pr <n>`
-   - R-level required artifacts present: `npx tsx scripts/ci/r-level-check.ts --issue UTV2-###`
+   - proof artifacts present and well-formed: `pnpm ops:proof-check --issue WORK-###`
+   - merge-readiness: `pnpm ops:merge-ready --issue WORK-### --pr <n>`
+   - R-level required artifacts present: `npx tsx scripts/ci/r-level-check.ts --issue WORK-###`
    - For a Codex lane, also diff-review: files within `file_scope_lock`, no scope bleed
-4. Pre-merge diagnostic: `pnpm ops:pr-block-diagnostic --pr <n>` → if genuine branch update is required, run `pnpm ops:merge-wrapper pr-update-branch --issue UTV2-### --branch <branch> --pr <n>`
+4. Pre-merge diagnostic: `pnpm ops:pr-block-diagnostic --pr <n>` → if genuine branch update is required, run `pnpm ops:merge-wrapper pr-update-branch --issue WORK-### --branch <branch> --pr <n>`
 5. For a Codex lane specifically: `gh pr review <n> --approve` before merging (Claude lanes don't self-review their own PR — a Claude-authored PR proceeds straight to merge on PASS, same as before).
-6. On PASS: `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`
-7. Acquire closeout mutex ownership, then close: `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close` → `pnpm ops:lane-close UTV2-###`
-8. `ops:lane-close` runs `ops:truth-check` (the done-gate, against the merge SHA) and owns Linear Done, manifest closeout, dispatch lease release, and merge mutex release. If `ops:lane-close` exits non-zero, the lane is **merged-but-not-closed** — repair and re-run close before moving on.
-9. After `ops:lane-close` exits 0: `pnpm ops:lane-clean UTV2-###` — prunes the closed lane's git worktree. Non-blocking: if worktree already absent, command exits 0.
+6. On PASS: `pnpm ops:merge-wrapper pr-merge --issue WORK-### --branch <branch> --pr <n> --method squash`
+7. Acquire closeout mutex ownership, then close: `pnpm ops:merge-lock acquire --issue WORK-### --branch <branch> --reason ops:lane-close` → `pnpm ops:lane-close WORK-###`
+8. `ops:lane-close` runs `ops:truth-check` (the done-gate, against the merge SHA) and owns manifest closeout, dispatch lease release, and merge mutex release. If `ops:lane-close` exits non-zero, the lane is **merged-but-not-closed** — repair and re-run close before moving on.
+9. After `ops:lane-close` exits 0: `pnpm ops:lane-clean WORK-###` — prunes the closed lane's git worktree. Non-blocking: if worktree already absent, command exits 0.
 10. Then dispatch the next candidate (Claude or Codex, whichever has an open slot).
 11. On pre-merge FAIL / scope bleed: mark blocked with the specific failing check, leave PR open → dispatch next from unblocked pool.
 
@@ -170,7 +167,7 @@ Parallel dispatch guard:
 
 While a lane runs in the background, emit a check-in note so a returning session knows what to expect:
 ```
-[dispatch-board] Lane(s) dispatched in background: UTV2-### [claude], UTV2-### [codex]
+[dispatch-board] Lane(s) dispatched in background: WORK-### [claude], WORK-### [codex]
 You'll be notified automatically as each completes.
 ```
 
@@ -181,13 +178,13 @@ After T1 PR open + evidence bundle:
 2. Confirm evidence bundle path in PR body
 3. Surface merge gate:
    ```
-   [dispatch-board] T1 MERGE GATE — UTV2-### {title}
+   [dispatch-board] T1 MERGE GATE — WORK-### {title}
    Post on PR #NNN:
      PM_VERDICT: APPROVED
      schema: pm-verdict/v1
-     Issue: UTV2-###
+     Issue: WORK-###
    ```
-4. On `PM_VERDICT: APPROVED` detected: run `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`, then `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close`, then `pnpm ops:lane-close UTV2-###`.
+4. On `PM_VERDICT: APPROVED` detected: run `pnpm ops:merge-wrapper pr-merge --issue WORK-### --branch <branch> --pr <n> --method squash`, then `pnpm ops:merge-lock acquire --issue WORK-### --branch <branch> --reason ops:lane-close`, then `pnpm ops:lane-close WORK-###`.
 
 ### Gate matrix — when is a PM verdict required?
 
@@ -242,7 +239,7 @@ Board: 2 merged, 1 awaiting PM, 2 blocked, 2 deferred
 
 After all merges, sync main through the merge wrapper before any ops cleanup:
 ```bash
-pnpm ops:merge-wrapper main-sync --issue UTV2-### --branch main
+pnpm ops:merge-wrapper main-sync --issue WORK-### --branch main
 # If .ops/sync.yml cleanup is still needed, make it a normal ops PR. Do not push directly from the board loop.
 ```
 
@@ -255,10 +252,10 @@ pnpm ops:merge-wrapper main-sync --issue UTV2-### --branch main
 - **T2 clear-scope: Claude diff-review is the sole gate.** No PM_VERDICT — but see the Gate matrix: a T2 that changes governance-critical command behavior, runtime/deploy/prod behavior, or DB/retention behavior is PM-visible.
 - **`ops:truth-check` is the post-merge done-gate, never a pre-merge check.** It requires a merged/Done lane + merge SHA; `ops:lane-close` runs it. Pre-merge, gate on verification + proof-check + merge-ready + R-level only.
 - **A PM gate pauses the lane, not the board.** Keep dispatching safe unrelated lanes unless the gated lane holds a singleton / file-scope / merge-mutex lock.
-- **P0 lanes never auto-merge.** Before any merge attempt, run `pnpm ops:p0-detect <UTV2-###>`. If `is_p0: true`, the merge protocol (UTV2-948) overrides tier policy: the orchestrator surfaces the merge gate to PM and waits. PM merges manually. Required artifacts: `docs/06_status/proof/<UTV2-###>/claude-critique.md` and `runtime-verification.md`, both checked by the `P0 Protocol` workflow before merge is allowed.
+- **P0 lanes never auto-merge.** Before any merge attempt, run `pnpm ops:p0-detect <WORK-###>`. If `is_p0: true`, the merge protocol (UTV2-948) overrides tier policy: the orchestrator surfaces the merge gate to PM and waits. PM merges manually. Required artifacts: `docs/06_status/proof/<WORK-###>/claude-critique.md` and `runtime-verification.md`, both checked by the `P0 Protocol` workflow before merge is allowed.
 - **Auto-skip external-gate labels.** No user qualifier needed.
 - **Executor limits are config-backed.** Use `docs/governance/CONCURRENCY_CONFIG.json` through `ops:execution-state` and `ops:lane-maximizer`; do not self-authorize lane expansion or duplicate numeric caps in prose.
 - **Singleton and forbidden-combination rules are config-backed.** Runtime, migration, modeling, and data/canonical lanes remain singleton per the live governor model. Queue — never stack.
 - **No scope overlap.** Check `file_scope_lock` before every dispatch.
 - **Codex lanes are async.** Dispatch and continue. Review on `--check-codex` re-entry.
-- **Board truth over Linear truth.** If `docs/06_status/lanes/*.json` manifests say active but Linear says Done, reconcile before dispatching (`pnpm ops:orchestration-reconcile --current --json`).
+- **Board truth from manifests.** If `docs/06_status/lanes/*.json` manifests disagree with GitHub (merged PR, open manifest), reconcile before dispatching (`pnpm ops:orchestration-reconcile --current --json`).

@@ -31,7 +31,7 @@ Preflight replaces "the agent should have checked X before starting" as a conven
 pnpm ops:preflight -- <UTV2-###> --tier <T1|T2|T3> --branch <branch> [flags]
 
 Positional:
-  <UTV2-###>                 Linear issue id the lane will serve (required)
+  <WORK-###>                 work order id the lane will serve (required; legacy UTV2-### accepted)
 
 Required flags:
   --tier <T1|T2|T3>          tier the lane will run under; gates tier-specific checks
@@ -84,7 +84,7 @@ Check IDs are stable contracts: additions append, no renumbering.
 | ID | Check | Severity |
 |---|---|---|
 | `PE1` | `local.env` exists at repo root (or `.env` if the former is absent) and is parseable by `@unit-talk/config` without throwing | infra |
-| `PE2` | `LINEAR_API_TOKEN` or `LINEAR_API_KEY` present and non-empty **when a tracker credential is present**. When neither is set, PE2 is `skip`, not `fail` — see §3.4.1 | fail / skip |
+| `PE2` | The declared `--tier` is at or above the mechanical floor computed from the declared file scope (`classifyMechanicalMinimum()`). No tracker credential is read since the Linear workflow was retired (2026-11-25) | fail |
 | `PE3` | `GITHUB_TOKEN` present and non-empty | fail |
 | `PE4` | For T1 or T2: `SUPABASE_SERVICE_ROLE_KEY` present and non-empty (required downstream by `test:db` and by T1 runtime proof) | fail |
 | `PE5` | No credential-shaped value is wrapped in unescaped quotes that would survive as a literal (env parser guard — the class of bug that produced commit `1212856`) | fail |
@@ -99,41 +99,35 @@ Check IDs are stable contracts: additions append, no renumbering.
 | `PD4` | TypeScript project references are resolvable (`tsconfig.json` parse succeeds; referenced projects exist on disk) | fail |
 | `PD5` | No lockfile conflict markers anywhere in the tree | fail |
 
-### 3.4 Linear / issue checks (always)
+### 3.4 Work-order checks (always)
+
+The Linear tracker was retired on 2026-11-25. Work identity, tier and acceptance criteria
+come from the committed work order `.ops/work/<ID>.md` (`scripts/ops/work-orders.ts`).
+Preflight makes no tracker call.
 
 | ID | Check | Severity |
 |---|---|---|
-| `PL1` | Linear issue `<UTV2-###>` exists | infra on 401/403/5xx, else fail |
-| `PL2` | Issue has exactly one tier label (`t1` / `t2` / `t3`) and it matches `--tier` | fail |
-| `PL3` | Issue state is `Ready` or `In Progress` (or `Backlog` with an explicit `--refresh` justification — see §5 waiver rules) | fail |
-| `PL4` | Issue has a non-empty description (acceptance criteria surface) | fail |
-| `PL5` | No other active manifest already owns this issue (one-manifest-per-issue rule — prior manifest must be `done` to start a new lane) | fail |
-| `PL6` | No overlap with `file_scope_lock` of any active manifest **if** the caller passed a candidate file list via `--files` (optional early warning; lane-start is the authoritative check) | warn |
+| `PL1` | Work order `.ops/work/<ID>.md` is committed at HEAD and its title heading names `<ID>` | fail |
+| `PL2` | The work order's `Tier:` line matches `--tier`, and `--tier` is at or above the mechanical floor | fail |
+| `PL3` | The lane is not terminal (readmission) / work order lanes are startable | fail |
+| `PL4` | The work order has a non-empty `## Acceptance Criteria` section | fail |
+| `PL5` | No other active manifest already owns this id (one-manifest-per-id rule) | fail |
+| `PL6` | No overlap with `file_scope_lock` of any active manifest **if** the caller passed `--files` (lane-start is the authoritative check) | warn |
 
-#### 3.4.1 Tracker independence — PE2 and PL1–PL6 when no credential is present
+#### 3.4.1 Legacy lanes with no work order
 
-Ratified 2026-09-05 (`docs/mission/intent.md` § "Execution must not depend on the
-tracker"). An ordinary product task must be able to proceed from discovery through
-delegation, verification, PR and closeout **without tracker access and without an issue
-ID**. A transient `curl ETIMEDOUT` on a metadata fetch must not abort a lane whose work
-needs nothing from the tracker.
-
-When neither `LINEAR_API_TOKEN` nor `LINEAR_API_KEY` is set:
-
-| ID | Status | Detail |
-|---|---|---|
-| `PE2` | `skip` — unless the declared `--tier` is **below** the mechanical floor, in which case `fail` | The absence of a tracker credential is neither an infrastructure failure nor a policy refusal; it is the tracker being optional. Conflating the two is the `infra_error` verdict this replaces. |
-| `PL1`–`PL6` | `skip` | Tracker checks are optional and non-blocking. `skip` is deliberate and is never `pass`: a `pass` would assert a requirement was satisfied that was never evaluated. |
-
-**The tier is not waived — it is floored.** With no tracker to author a tier label, the
-tier comes from `--tier`, raised by `classifyMechanicalMinimum()`
-(`scripts/ops/tier-classifier.ts`) applied to the declared file scope. A `--tier` below
-that floor is a **hard `fail` on PE2**, naming the offending paths. Actual risk
-classifications are never lowered merely to eliminate tracker bookkeeping.
+A legacy `UTV2-###` / `UNI-###` lane opened before work orders existed has no committed
+contract to check. PL1–PL6 report `skip` (never `pass`), and the declared `--tier` stands
+only at or above the mechanical floor: a `--tier` below the floor is a hard `fail` on
+`PE2`, naming the offending paths.
 
 The floor is a floor and never a tier source: the classifier is binary — every match
 hard-codes `T1` and the reduce seeds `T3`, so it can never emit `T2`. It can only raise a
 declared tier, never replace one.
+
+The T2 fast-baseline path is allowed when the work order's `Lane type:` is one of the
+safe classes (governance, tooling, hygiene, verification, delivery-ui, proof); T3 is always
+allowed.
 
 ### 3.5 Required-doc / prerequisite-artifact checks (tier-gated)
 
@@ -147,7 +141,7 @@ Preflight accepts an expected set of documents that must exist before a lane of 
 | `PR4` | Lane manifest schema exists at `docs/05_operations/schemas/lane_manifest_v1.schema.json` | all tiers |
 | `PR5` | Truth-check result schema exists | all tiers |
 | `PR6` | Evidence bundle schema exists at `docs/05_operations/schemas/evidence_bundle_v1.schema.json` | T1, T2 |
-| `PR7` | Current active phase contract exists (e.g. `PHASE2_SCHEMA_CONTRACT.md`) when the issue is labelled against that phase | T1 |
+| `PR7` | Current active phase contract exists (e.g. `PHASE2_SCHEMA_CONTRACT.md`) | T1 |
 | `PR8` | Any `--require-doc` paths | caller-driven |
 
 `PR*` checks are mechanical existence checks. Preflight does not evaluate doc content.
@@ -190,7 +184,7 @@ A baseline cache record has shape `{ head_sha, tests_passed_at, type_check_passe
 | PG1–PG9 (git) | required | required | required |
 | PE1–PE5 (env) | required | required | required, PE4 skipped |
 | PD1–PD5 (deps) | required | required | required |
-| PL1–PL6 (Linear) | required when a tracker credential is present; otherwise `skip` (§3.4.1) | same | same |
+| PL1–PL6 (work order) | required; `skip` for legacy lanes with no work order (§3.4.1) | same | same |
 | PR1–PR5 (core docs + schemas) | required | required | required |
 | PR6 (evidence bundle schema) | required | required | not required |
 | PR7 (active phase contract) | required | if applicable | not required |
@@ -217,7 +211,7 @@ Top-level verdicts:
 - `PASS` — zero `fail`, zero `infra_error`; `skip`/`waived` allowed per tier rules; token is written
 - `FAIL` — one or more `fail` results; token is not written and any stale token for the same branch is removed
 - `INFRA` — one or more `infra_error` results; token is not written, stale token not touched
-- `NOT_APPLICABLE` — Linear issue is not in a startable state or tier label is missing; token is not written
+- `NOT_APPLICABLE` — the work order is missing, uncommitted, or has no tier; token is not written
 
 **Waivable checks (T3 only):** `PB2`, `PG3`, `PL4`, `PR7`. Waivers require `--skip <id> --waiver-reason "<text>"`. Each waiver is recorded in the token under `waivers[]` with reason + timestamp, visible to `lane-start` and appearing in the daily digest. Waivers do not suppress check execution — they downgrade a `fail` to `waived` and the check detail remains in the output.
 
@@ -266,8 +260,8 @@ Directory is created if missing. Must honor `.gitignore` entry `.out/ops/preflig
 - `schema_version`: must be `1`. Unknown versions are rejected by `validatePreflightToken()`.
 - `branch`: lane target branch; must match the file path slug and the `--branch` argument.
 - `head_sha`: full SHA of `HEAD` at the moment of generation. Token becomes invalid if HEAD moves.
-- `tier`: the tier the lane will run under; must match Linear label and `--tier` argument.
-- `issue_id`: the Linear issue id; uppercase `UTV2-###`.
+- `tier`: the tier the lane will run under; must match the work order `Tier:` and `--tier` argument.
+- `issue_id`: the work order id; uppercase `WORK-###` (or legacy `UTV2-###`).
 - `generated_at`: ISO-8601 UTC, moment of write.
 - `expires_at`: ISO-8601 UTC, `generated_at + TTL` (see §7).
 - `checks`: condensed rollup — one of `pass` / `fail` / `skip` per group (`git` | `env` | `deps`). This matches the existing `PreflightToken.checks` shape in `shared.ts`. Group-level detail is for humans; the full check list is persisted separately (see §6.4).
@@ -348,7 +342,7 @@ Additionally, **preflight itself** must delete any stale token for the same bran
 
 A preflight token binds three identifiers together:
 
-- `issue_id` — the Linear issue the lane will serve
+- `issue_id` — the work order the lane will serve
 - `branch` — the local/remote branch the lane will use
 - `head_sha` — the SHA the local clone is at when the token was issued
 
@@ -416,7 +410,7 @@ Output schema (target): `docs/05_operations/schemas/preflight_result_v1.schema.j
 
 - At `generated_at`, the git tree was clean and on the declared `head_sha`.
 - At `generated_at`, the environment had the required credentials for the declared tier.
-- At `generated_at`, Linear believed the issue existed, was at the declared tier, and was in a startable state.
+- At `generated_at`, the work order was committed at HEAD at the declared tier.
 - At `generated_at`, required docs/schemas for the tier existed.
 - At `generated_at`, the baseline was green per tier policy.
 - The token has not expired.
@@ -445,7 +439,7 @@ Preflight is a local snapshot. It is silent on:
 - Supabase preview-branch workflow health
 - Remote lockfile conflicts introduced after preflight
 - Codex return scope bleed (`codex:receive` owns this)
-- Whether the Linear issue will stay in a startable state (it may be changed in the 30-minute TTL window)
+- Whether the work order will stay unchanged (it may be edited in the 30-minute TTL window)
 - Whether the baseline will stay green after another commit lands on `main`
 - Runtime proof for T1 (that lives in `ops:truth-check`)
 
@@ -462,7 +456,7 @@ Preflight is a **necessary** condition for starting a lane, not a **sufficient**
 | Local dep resolution (`pnpm`, `node_modules`, lockfile) | **Preflight** |
 | Required docs/schemas present on disk | **Preflight** |
 | Local baseline (`type-check`, `test`) green | **Preflight** |
-| Linear issue state snapshot | **Preflight** (authoritative at generation time only) |
+| Work order snapshot | **Preflight** (authoritative at generation time only) |
 | GitHub branch protection rules | **`ops:ci-doctor`** (not preflight) |
 | GitHub required-checks configuration | **`ops:ci-doctor`** |
 | Secret rotation / CI secret presence | **`ops:ci-doctor`** |
@@ -472,7 +466,7 @@ Preflight is a **necessary** condition for starting a lane, not a **sufficient**
 | Manifest schema validation | **`ops:lane-manifest` / `ops:lane-close`** |
 | Merge-time done-gate | **`ops:truth-check`** |
 
-Preflight does not call GitHub. Preflight does not evaluate CI. If a check would require remote infra access beyond Linear and Supabase health-ping, it belongs in `ops:ci-doctor` instead.
+Preflight does not call GitHub. Preflight does not evaluate CI. If a check would require remote infra access beyond a Supabase health-ping, it belongs in `ops:ci-doctor` instead.
 
 ---
 
@@ -485,7 +479,7 @@ Preflight must be rerun when any of the following is true, even if the existing 
 3. `local.env` has been modified.
 4. `node_modules` has been reinstalled or `pnpm-lock.yaml` has changed.
 5. The target branch name has changed.
-6. The Linear issue's tier label has changed.
+6. The work order's `Tier:` line has changed.
 7. The existing token has been deleted, moved, or edited.
 8. The existing token's TTL has elapsed.
 9. An `ops:*` command or the agent explicitly invalidated the token.
@@ -510,12 +504,12 @@ Rerun is cheap for T3 (cache-eligible) and moderately expensive for T1/T2 (basel
 - **Reuse `shared.ts` primitives.** `getRepoRoot`, `git`, `currentHeadSha`, `preflightTokenPathForBranch`, `validateBranchName`, `validateTier`, `writeJsonFile`, `ensureDir`, `relativeToRoot` already exist and are the canonical helpers.
 - **Preserve the `PreflightToken` interface shape exactly.** `lane-start` already reads it via `validatePreflightToken`. Do not add required fields without a `schema_version` bump.
 - **One run must execute all checks.** Do not short-circuit on first failure — the point of the control is to surface every blocker in one pass. Short-circuit only on `PG1` (no repo) and `PE1` (no env file) where subsequent checks cannot run meaningfully.
-- **Linear and Supabase calls must use 10s timeout with 1 retry**, matching `truth-check-lib.ts`. Failures become `infra_error`, not `fail`.
+- **Supabase calls must use 10s timeout with 1 retry**, matching `truth-check-lib.ts`. Failures become `infra_error`, not `fail`.
 - **Baseline cache** lives at `.out/ops/preflight/.baseline-cache.json`. Schema: `{ head_sha, type_check_passed_at, tests_passed_at }`. Cache is trusted only when `head_sha` matches current `HEAD`. Never trust cache across HEAD changes.
 - **Token deletion on FAIL must be atomic.** Use `fs.rmSync(path, { force: true })` inside a try/catch that logs but does not throw — token deletion failure is not itself a preflight failure.
 - **Every check must have a unit test fixture** for pass and fail. Check IDs are the test contract.
 - **Integration test:** run `ops:preflight` on a clean repo for a real T3 issue, assert exit 0 and token file present with correct fields. Then corrupt `local.env` and assert exit 1 and token deleted.
-- **No side effects outside `.out/ops/preflight/`** except log writes to stderr and network reads for Linear/Supabase.
+- **No side effects outside `.out/ops/preflight/`** except log writes to stderr and network reads for Supabase.
 - **Do not call `ops:lane-start` from `ops:preflight` automatically.** They are separate commands. The agent or script orchestrating a lane start calls them in sequence.
 - **Deterministic check order.** Same order every run. Test fixtures depend on stable order.
 - **`--json` output is the integration contract.** All other output is informational. Agents and CI must read JSON, not scrape stderr.

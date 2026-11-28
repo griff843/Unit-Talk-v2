@@ -149,20 +149,9 @@ export interface LaneManifest {
   schema_version: LaneManifestSchemaVersion;
   issue_id: string;
   /**
-   * The tracker key for this lane, or `null` when the lane has no tracker
-   * issue (tracker independence, ratified 2026-09-05).
-   *
-   * Three-valued on purpose:
-   *   - a string  -- this lane corresponds to that tracker issue
-   *   - `null`    -- this lane deliberately has no tracker issue; every
-   *                  tracker-dependent check SKIPS rather than failing
-   *   - `undefined` (absent) -- a manifest written before this field existed.
-   *                  `resolveTrackerRef` falls back to `issue_id` for those,
-   *                  so historical lanes keep the exact behaviour they had.
-   *
-   * A missing field must never be read as `null`: that would silently turn
-   * every pre-existing lane's tracker checks into skips, which is the
-   * unconditional-skip failure mode acceptance criterion 4 exists to refuse.
+   * Legacy: the external tracker key a lane was opened against. The tracker
+   * was retired (WORK-2026112501); historical manifests keep the field as
+   * inert data and nothing reads it.
    */
   tracker_ref?: string | null;
   lane_type: LaneType;
@@ -430,16 +419,10 @@ export const REQUIRED_CI_CHECKS_SCHEMA_PATH = path.join(
 
 // Tracker independence (ratified 2026-09-05). `issue_id` is REPO-OWNED work
 // identity, not a tracker key. `WORK-###` is the repo-minted namespace for work
-// that has no tracker issue at all; `UTV2-###`/`UNI-###` remain legal and, when
-// a lane genuinely corresponds to a Linear issue, the tracker key is carried
-// explicitly and nullably in `tracker_ref` rather than being inferred from this
-// field. See LaneManifest.tracker_ref.
-//
-// KNOWN BOUND: `merge-gate.yml`, `p0-protocol.yml` and
-// `executor-result-validator.yml` are RESERVED surfaces under the same
-// ratification and still resolve a lane by `UTV2-###`. A `WORK-###` lane is
-// therefore fully usable for discovery, delegation, verification, PR and
-// closeout, and is NOT yet mergeable. Do not widen those workflows here.
+// for all new work; `UTV2-###`/`UNI-###` remain legal for historical lanes,
+// which were minted when a Linear tracker existed. The Linear workflow was
+// retired on 2026-11-25: no script reads or writes any tracker. A historical
+// manifest may still carry `tracker_ref`; it is inert data.
 // The single source of truth for which identifier namespaces name a unit of work.
 // `branch-discipline-guard.ts` kept its own copy of this alternation and was not
 // widened when `WORK-###` was minted, which silently made an issue-ID-free task
@@ -459,9 +442,6 @@ const ISSUE_PATTERN = new RegExp(`^(?:${ISSUE_NAMESPACE_ALTERNATION})-\\d+$`);
 // requireIssueId()/ISSUE_PATTERN's UNI- acceptance let a UNI-### target silently pass
 // validation while disagreeing with the documented JSON schema (Codex review, PR #1215).
 const VERIFICATION_TARGET_PATTERN = /^(?:UTV2|WORK)-\d+$/;
-// A tracker key is a Linear issue identifier. `WORK-###` is deliberately NOT
-// one: it is repo-minted and no tracker issue exists by that name.
-const TRACKER_REF_PATTERN = /^(?:UTV2|UNI)-\d+$/;
 const BRANCH_PATTERN = /^(?<owner>[a-z]+)\/(?<issue>(?:utv2|uni|work)-\d+)-(?<slug>[a-z0-9]+(?:-[a-z0-9]+)*)$/;
 const LEGACY_DISPATCH_AUTO_PREFLIGHT_TOKEN = 'dispatch-auto';
 /**
@@ -746,28 +726,6 @@ export function requireIssueId(issueId: string): string {
  * UNI-### value pass despite disagreeing with the documented JSON schema (Codex review,
  * PR #1215).
  */
-/**
- * Resolve the tracker key a lane's tracker-dependent checks should use.
- *
- * Tracker independence (ratified 2026-09-05). Returns `null` exactly when the
- * lane declares it has no tracker issue. Absence of the field is NOT absence of
- * a tracker: every manifest written before `tracker_ref` existed falls back to
- * `issue_id`, so historical lanes keep the behaviour they had.
- *
- * A tracker key that is not a legal tracker identifier (for example a
- * repo-minted `WORK-###` used as `issue_id`) also resolves to `null` -- there is
- * no issue by that name to look up, and inventing one would produce a lookup
- * that always fails rather than a check that correctly skips.
- */
-export function resolveTrackerRef(
-  manifest: Pick<LaneManifest, 'issue_id'> & { tracker_ref?: string | null },
-): string | null {
-  if (manifest.tracker_ref === null) return null;
-  const candidate = (manifest.tracker_ref ?? manifest.issue_id ?? '').trim();
-  if (!candidate) return null;
-  return TRACKER_REF_PATTERN.test(candidate.toUpperCase()) ? candidate.toUpperCase() : null;
-}
-
 export function requireVerificationTarget(value: string): string {
   const normalized = value.toUpperCase();
   if (!VERIFICATION_TARGET_PATTERN.test(normalized)) {

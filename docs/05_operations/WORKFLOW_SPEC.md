@@ -4,6 +4,8 @@
 **Ratified by:** Claude (governance) + PM (sequencing) — UTV2-639  
 **Effective:** 2026-04-21
 
+> **2026-11-25:** the Linear workflow is retired. Read "Linear issue" in this document as the repo work order (`.ops/work/WORK-*.md`) and "Linear state" as the lane manifest status. No Linear transition, comment or label is performed or required.
+
 ---
 
 ## Why this exists

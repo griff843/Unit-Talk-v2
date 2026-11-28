@@ -17,7 +17,7 @@ Branch CI ≠ merge CI. A PR that passes all checks on the branch can fail after
 
 ## Inputs (ask if missing)
 
-- Issue ID (UTV2-### or UNI-###)
+- Issue ID (WORK-### or UNI-###)
 - PR number
 - Tier (T1/T2/T3)
 - Merge SHA (if PR already merged) — NOT branch HEAD SHA
@@ -132,4 +132,3 @@ Next step:
 - Does not re-run `pnpm test`, `pnpm verify`, or `pnpm test:db`
 - Does not modify proof files or manifests
 - Does not push commits, apply labels, or approve PRs
-- Does not call Linear write APIs

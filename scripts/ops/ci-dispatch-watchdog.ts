@@ -3,8 +3,8 @@
  *
  * GitHub can silently fail to dispatch `pull_request`-triggered workflows for
  * a real commit with no error signal anywhere `gh pr checks` or a webhook
- * consumer can see -- observed for 10+ hours on PR #1182 (2026-07-10, see
- * Linear UTV2-1517 for the incident writeup). This script flags any open PR
+ * consumer can see -- observed for 10+ hours on PR #1182 (2026-07-10,
+ * incident UTV2-1517). This script flags any open PR
  * whose latest commit has zero associated Actions runs after a threshold.
  *
  * Remediation is intentionally partial: of the four branch-protection-required
@@ -14,7 +14,7 @@
  * only trigger on `push`/`pull_request` events, so a genuinely dropped webhook
  * for those requires an actual `synchronize`-triggering push -- this watchdog
  * does not push to another lane's branch unattended, so it alerts instead so
- * a human/agent can apply the nudge deliberately (see NUDGE_FINDING below).
+ * (as a comment on the stalled PR itself) so a human/agent can apply the nudge deliberately (see NUDGE_FINDING below).
  *
  * Usage:
  *   tsx scripts/ops/ci-dispatch-watchdog.ts --output-json artifacts/ci-dispatch-watchdog.json
@@ -33,7 +33,6 @@ import { dirname } from 'node:path';
 export const DEFAULT_THRESHOLD_MINUTES = 15;
 const ISSUE_BRANCH_PATTERN = /(?:^|[/_-])(UTV2-\d+)(?:$|[/_-])/i;
 const STATE_MARKER = 'CI_DISPATCH_WATCHDOG_STATE:';
-const LINEAR_TEAM_KEY = 'UTV2';
 
 /**
  * Documented finding from the 2026-07-10 incident: an `--allow-empty` nudge
@@ -157,77 +156,46 @@ function remediateViaMergeGate(pr: StalledPr, errors: string[]): boolean {
   return true;
 }
 
-// --- IO: Linear alert (dedup via a state marker in the comment body) -------
+// --- IO: PR comment alert (dedup via a state marker in the comment body) ---
 
-async function linearGraphql<T>(token: string, query: string, variables: unknown): Promise<T> {
-  const res = await fetch('https://api.linear.app/graphql', {
-    method: 'POST',
-    headers: { Authorization: token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables }),
-  });
-  const json = (await res.json()) as { data?: T; errors?: unknown };
-  if (json.errors) throw new Error(`Linear GraphQL: ${JSON.stringify(json.errors)}`);
-  return json.data as T;
-}
-
-interface IssueLookup {
-  issues: { nodes: Array<{ id: string; comments: { nodes: Array<{ body: string }> } }> };
-}
-
-function alreadyAlerted(comments: Array<{ body: string }>, headSha: string): boolean {
+export function alreadyAlerted(comments: Array<{ body: string }>, headSha: string): boolean {
   return comments.some((c) => c.body.includes(STATE_MARKER) && c.body.includes(headSha));
 }
 
-async function alertStalledPr(
-  token: string,
-  pr: StalledPr,
-  remediated: boolean,
-  errors: string[],
-): Promise<void> {
-  if (!pr.issueId) {
-    errors.push(`PR #${pr.number} has no parseable UTV2-### in its branch name; cannot post a Linear alert`);
+function alertStalledPr(pr: StalledPr, remediated: boolean, errors: string[]): void {
+  const existing = runGh(['api', `repos/{owner}/{repo}/issues/${pr.number}/comments?per_page=100`]);
+  if (!existing.ok) {
+    errors.push(`could not read comments for PR #${pr.number}: ${existing.error}`);
     return;
   }
+  let comments: Array<{ body: string }> = [];
   try {
-    const data = await linearGraphql<IssueLookup>(
-      token,
-      `query($key:String!,$num:Float!){
-        issues(filter:{team:{key:{eq:$key}},number:{eq:$num}},first:1){
-          nodes{ id comments(first:50){ nodes{ body } } }
-        }
-      }`,
-      { key: LINEAR_TEAM_KEY, num: Number(pr.issueId.split('-')[1]) },
-    );
-    const issue = data.issues.nodes[0];
-    if (!issue) {
-      errors.push(`Linear issue ${pr.issueId} not found; cannot post alert`);
-      return;
-    }
-    if (alreadyAlerted(issue.comments.nodes, pr.headRefOid)) {
-      return; // already alerted for this exact commit -- do not spam every run
-    }
-    const body = [
-      '## CI dispatch watchdog -- stalled PR detected',
-      '',
-      `PR #${pr.number} (\`${pr.headRefName}\`) has had **zero GitHub Actions runs** for its ` +
-        `latest commit (\`${pr.headRefOid.slice(0, 12)}\`) for ${Math.round(pr.minutesSinceUpdate)} minutes.`,
-      '',
-      remediated
-        ? 'Attempted remediation: re-dispatched Merge Gate via `workflow_dispatch`. This only covers ' +
-          'one of the four required checks -- see note below.'
-        : 'Remediation attempt failed or was skipped -- see workflow logs.',
-      '',
-      NUDGE_FINDING,
-      '',
-      `${STATE_MARKER} ${pr.headRefOid}`,
-    ].join('\n');
-    await linearGraphql(
-      token,
-      `mutation($issueId:String!,$body:String!){ commentCreate(input:{issueId:$issueId,body:$body}){ success } }`,
-      { issueId: issue.id, body },
-    );
+    comments = (JSON.parse(existing.stdout) as Array<{ body?: string }>).map((c) => ({ body: c.body ?? '' }));
   } catch (err) {
-    errors.push(`Linear alert failed for PR #${pr.number}: ${(err as Error).message}`);
+    errors.push(`PR #${pr.number} comments were unparseable: ${(err as Error).message}`);
+    return;
+  }
+  if (alreadyAlerted(comments, pr.headRefOid)) {
+    return; // already alerted for this exact commit -- do not spam every run
+  }
+  const body = [
+    '## CI dispatch watchdog -- stalled PR detected',
+    '',
+    `PR #${pr.number} (\`${pr.headRefName}\`) has had **zero GitHub Actions runs** for its ` +
+      `latest commit (\`${pr.headRefOid.slice(0, 12)}\`) for ${Math.round(pr.minutesSinceUpdate)} minutes.`,
+    '',
+    remediated
+      ? 'Attempted remediation: re-dispatched Merge Gate via `workflow_dispatch`. This only covers ' +
+        'one of the four required checks -- see note below.'
+      : 'Remediation attempt failed or was skipped -- see workflow logs.',
+    '',
+    NUDGE_FINDING,
+    '',
+    `${STATE_MARKER} ${pr.headRefOid}`,
+  ].join('\n');
+  const posted = runGh(['pr', 'comment', String(pr.number), '--body', body]);
+  if (!posted.ok) {
+    errors.push(`PR comment alert failed for PR #${pr.number}: ${posted.error}`);
   }
 }
 
@@ -271,12 +239,7 @@ async function main(): Promise<void> {
     for (const pr of stalled) {
       const remediated = remediateViaMergeGate(pr, errors);
       remediations.push({ pr: pr.number, remediated });
-      const token = process.env.LINEAR_API_TOKEN ?? '';
-      if (token) {
-        await alertStalledPr(token, pr, remediated, errors);
-      } else {
-        errors.push('LINEAR_API_TOKEN not set; skipped Linear alert');
-      }
+      alertStalledPr(pr, remediated, errors);
     }
   }
 

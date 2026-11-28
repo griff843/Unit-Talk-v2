@@ -6,7 +6,7 @@
 ## Fields
 
 - `issue_id: string`
-  The Linear or tracking issue id associated with the lane manifest.
+  The work order (or legacy tracking issue) id associated with the lane manifest.
 - `pr_number: number`
   The GitHub pull request number.
 - `pr_url: string`

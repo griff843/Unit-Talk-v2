@@ -14,8 +14,6 @@
  */
 const PLACEHOLDERS: Record<string, string> = {
   UNIT_TALK_LEGACY_WORKSPACE: 'test-workspace',
-  LINEAR_TEAM_KEY: 'TEST',
-  LINEAR_TEAM_NAME: 'Test',
   NOTION_WORKSPACE_NAME: 'test',
   SLACK_WORKSPACE_NAME: 'test',
 };

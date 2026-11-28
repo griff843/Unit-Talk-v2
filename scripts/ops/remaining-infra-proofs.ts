@@ -187,7 +187,7 @@ async function main(): Promise<void> {
 
     proofs.push({ control: 'Superseded docs are clearly marked', category: 'Governance',
       verdict: docTruthGate ? 'PROVEN' : 'PARTIALLY_PROVEN',
-      evidence: { doc_truth_gate: docTruthGate, enforcement: 'doc-truth-gate.yml — docs/02_architecture is read-only except PM', authority_map: 'docs/05_operations/docs_authority_map.md — maps doc to owner', truth_hierarchy: 'CLAUDE.md truth hierarchy: GitHub > proof > lanes > Linear > chat' },
+      evidence: { doc_truth_gate: docTruthGate, enforcement: 'doc-truth-gate.yml — docs/02_architecture is read-only except PM', authority_map: 'docs/05_operations/docs_authority_map.md — maps doc to owner', truth_hierarchy: 'CLAUDE.md truth hierarchy: GitHub > proof > lanes > work orders > chat' },
       notes: 'doc-truth-gate.yml enforces documentation authority. Authority map defines per-doc ownership. Truth hierarchy ranked in CLAUDE.md.',
     });
   }

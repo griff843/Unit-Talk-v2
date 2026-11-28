@@ -20,15 +20,13 @@ import {
   FULL_VERIFY_THROTTLE_DIR,
   FULL_VERIFY_THROTTLE_STALE_MS,
   configuredFullVerifyConcurrency,
-  isContinuationEligibleLinearState,
-  isTerminalLinearState,
   isContainmentPlaceholderSupabaseUrl,
   parseAheadBehind,
   resolveVerdict,
   isLaneRegistryPath,
   isRepoOwnedWorkId,
   readCommittedWorkOrder,
-  runLinearChecks,
+  runWorkOrderChecks,
   runT1Checks,
 } from './preflight.js';
 import { DEFAULT_HARD_DEADLINE_MS, DEFAULT_VERIFY_SEMAPHORE_DIR } from './verify-semaphore.js';
@@ -184,7 +182,7 @@ test('preflight raises the baseline spawn buffer so pnpm test output cannot ENOB
 });
 
 // UTV2-1546: delegation kill switch is the very first check preflight performs --
-// before validatePreflightSchemaDependencies(), before any Linear call, and before
+// before validatePreflightSchemaDependencies(), before any work-order check, and before
 // any baseline verify/test run or preflight-token write. See delegation-state.ts's
 // full behavioral coverage (delegation-state.test.ts) for missing/malformed/
 // suspended/active state handling.
@@ -280,22 +278,6 @@ test('readmission 22: the readmission context binds open_pr_base_ref from the li
   );
 });
 
-test('readmission 07: terminal Linear states are rejected', () => {
-  for (const state of ['Done', 'Canceled', 'Cancelled', 'Failed', 'Duplicate']) {
-    assert.equal(isTerminalLinearState(state), true, state);
-    assert.equal(isContinuationEligibleLinearState(state), false, state);
-  }
-});
-
-test('readmission 08: only explicit continuation states are eligible', () => {
-  for (const state of ['In Claude', 'In Codex', 'In Claude Review', 'In Codex Review', 'In Progress']) {
-    assert.equal(isContinuationEligibleLinearState(state), true, state);
-  }
-  for (const state of ['Backlog', 'Ready for Codex', 'Todo', 'Unknown']) {
-    assert.equal(isContinuationEligibleLinearState(state), false, state);
-  }
-});
-
 test('readmission 09: existing worktrees, active leases, and issue-owned merge locks are all checked', () => {
   const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'preflight.ts'), 'utf8');
   assert.match(source, /git\(\['worktree', 'list', '--porcelain'\]\)/);
@@ -345,14 +327,10 @@ test('readmission invalidates a prior token after terminal or infrastructure pre
 });
 
 // ---------------------------------------------------------------------------
-// UTV2-1837 — tracker independence. Ratified 2026-09-05, `docs/mission/intent.md`
-// "Execution must not depend on the tracker".
+// Work-order preflight checks (tracker retired, WORK-2026112501).
 //
-// The measured cascade these tests pin: no credential -> PL1-PL5 `infra_error`
-// -> `resolveVerdict` returns INFRA -> no preflight token is written -> every
-// `ops:lane-start` fails with "validated preflight token is unavailable".
-// Each step is asserted separately so a future regression names which link
-// broke rather than only that the chain broke.
+// A legacy UTV2/UNI lane with no committed work order skips PL1-PL6 and stands
+// on the mechanical floor; any lane with a work order is checked against it.
 // ---------------------------------------------------------------------------
 
 const collectChecks = (): {
@@ -370,121 +348,35 @@ const collectChecks = (): {
   };
 };
 
-test('UTV2-1837 AC1: with no tracker credential, PL1-PL5 skip instead of infra_error', async () => {
-  const sink = collectChecks();
-  const previous = process.env.LINEAR_API_KEY;
-  delete process.env.LINEAR_API_KEY;
-  try {
-    const state = await runLinearChecks(
-      'UTV2-1837',
-      'T2',
-      null,
-      ['docs/06_status/CURRENT_STATE.md'],
-      false,
-      sink.addCheck,
-    );
-    assert.deepEqual(state, { labels: [], stateName: '' });
-  } finally {
-    if (previous !== undefined) process.env.LINEAR_API_KEY = previous;
-  }
+const noWorkOrder = (): string | null => null;
 
+test('a legacy lane with no work order skips PL1-PL6 and resolves PASS', () => {
+  const sink = collectChecks();
+  runWorkOrderChecks('UTV2-1837', 'T2', ['README.md'], sink.addCheck, false, '', noWorkOrder);
   for (const id of ['PL1', 'PL2', 'PL3', 'PL4', 'PL5', 'PL6']) {
-    assert.equal(sink.byId(id)?.status, 'skip', `${id} must skip without a tracker credential`);
+    assert.equal(sink.byId(id)?.status, 'skip', `${id} must skip for a legacy lane`);
   }
   assert.equal(sink.byId('PE2')?.status, 'skip');
-  assert.equal(
-    sink.checks.some((check) => check.status === 'infra_error'),
-    false,
-    'an absent optional tracker is not an infrastructure error',
-  );
-});
-
-test('UTV2-1837 AC1: those skips produce verdict PASS, which is what writes the token', async () => {
-  const sink = collectChecks();
-  const previous = process.env.LINEAR_API_KEY;
-  delete process.env.LINEAR_API_KEY;
-  try {
-    await runLinearChecks('UTV2-1837', 'T2', null, ['README.md'], false, sink.addCheck);
-  } finally {
-    if (previous !== undefined) process.env.LINEAR_API_KEY = previous;
-  }
+  assert.equal(sink.checks.some((check) => check.status === 'infra_error'), false);
   assert.equal(resolveVerdict(sink.checks), 'PASS');
 });
 
-test('UTV2-1837 AC5: a declared tier BELOW the mechanical floor is refused, not skipped', async () => {
+test('a legacy lane declaring a tier BELOW the mechanical floor is refused', () => {
+  // packages/domain is a Tier C path: its mechanical minimum is T1.
   const sink = collectChecks();
-  const previous = process.env.LINEAR_API_KEY;
-  delete process.env.LINEAR_API_KEY;
-  try {
-    // packages/domain is a Tier C path: its mechanical minimum is T1, so a
-    // declared T3 is below the floor and must fail rather than pass through.
-    await runLinearChecks(
-      'UTV2-1837',
-      'T3',
-      null,
-      ['packages/domain/src/scoring.ts'],
-      false,
-      sink.addCheck,
-    );
-  } finally {
-    if (previous !== undefined) process.env.LINEAR_API_KEY = previous;
-  }
+  runWorkOrderChecks('UTV2-1837', 'T3', ['packages/domain/src/scoring.ts'], sink.addCheck, false, '', noWorkOrder);
   const pe2 = sink.byId('PE2');
   assert.equal(pe2?.status, 'fail');
   assert.match(pe2?.detail ?? '', /below the mechanical floor T1/u);
   assert.equal(resolveVerdict(sink.checks), 'FAIL');
 });
 
-test('UTV2-1837 AC5: a declared tier AT OR ABOVE the floor is accepted', async () => {
+test('a legacy lane declaring a tier AT OR ABOVE the floor is accepted', () => {
   const sink = collectChecks();
-  const previous = process.env.LINEAR_API_KEY;
-  delete process.env.LINEAR_API_KEY;
-  try {
-    await runLinearChecks(
-      'UTV2-1837',
-      'T1',
-      null,
-      ['packages/domain/src/scoring.ts'],
-      false,
-      sink.addCheck,
-    );
-  } finally {
-    if (previous !== undefined) process.env.LINEAR_API_KEY = previous;
-  }
+  runWorkOrderChecks('UTV2-1837', 'T1', ['packages/domain/src/scoring.ts'], sink.addCheck, false, '', noWorkOrder);
   assert.equal(sink.byId('PE2')?.status, 'skip');
   assert.equal(resolveVerdict(sink.checks), 'PASS');
 });
-
-test('UTV2-1837 AC4 inversion: the skip is conditional on absence, never unconditional', async () => {
-  const sink = collectChecks();
-  // A present-but-invalid credential must NOT take the skip path. If it did,
-  // supplying a token would silently disable every tracker check -- the exact
-  // unconditional-skip failure mode acceptance criterion 4 exists to refuse.
-  await runLinearChecks(
-    'UTV2-1837',
-    'T2',
-    { LINEAR_API_TOKEN: 'lin_api_not_a_real_token' } as never,
-    ['README.md'],
-    false,
-    sink.addCheck,
-  );
-  assert.notEqual(
-    sink.byId('PL1')?.status,
-    'skip',
-    'PL1 must not skip when a credential IS present',
-  );
-});
-
-// ---------------------------------------------------------------------------
-// WORK-2026092622: a repo-owned WORK identity is admitted without Linear.
-//
-// Measured failure: Codex's governed preflight for WORK-2026092606 failed PL1
-// `Linear issue not found`, because an executor holding a Linear credential sent
-// the repo-minted identity to the tracker. The only Linear-free route was the
-// no-credential branch. These tests pin that a WORK identity (a) never reaches
-// the tracker, with or without a credential, and (b) is validated against its
-// committed work order instead of being waved through.
-// ---------------------------------------------------------------------------
 
 const VALID_WORK_ORDER = [
   '# WORK-2026099901 — a fixture work order',
@@ -506,42 +398,26 @@ const runWorkChecks = async (
     workOrder?: string | null;
     tier?: 'T1' | 'T2' | 'T3';
     files?: string[];
-    credential?: string | null;
     issueId?: string;
   } = {},
-): Promise<{ sink: ReturnType<typeof collectChecks>; trackerCalls: number }> => {
+): Promise<{ sink: ReturnType<typeof collectChecks> }> => {
   const sink = collectChecks();
   const issueId = options.issueId ?? 'WORK-2026099901';
   const workOrder = options.workOrder === undefined ? VALID_WORK_ORDER : options.workOrder;
-  const previousKey = process.env.LINEAR_API_KEY;
-  const previousFetch = globalThis.fetch;
-  let trackerCalls = 0;
-  globalThis.fetch = (async () => {
-    trackerCalls += 1;
-    return new Response(JSON.stringify({ errors: [{ message: 'Entity not found: Issue' }] }), { status: 200 });
-  }) as typeof fetch;
-  delete process.env.LINEAR_API_KEY;
-  try {
-    await runLinearChecks(
-      issueId,
-      options.tier ?? 'T2',
-      options.credential ? ({ LINEAR_API_TOKEN: options.credential } as never) : null,
-      options.files ?? ['README.md'],
-      false,
-      sink.addCheck,
-      false,
-      '',
-      (id) => (id === issueId ? workOrder : null),
-    );
-  } finally {
-    globalThis.fetch = previousFetch;
-    if (previousKey !== undefined) process.env.LINEAR_API_KEY = previousKey;
-  }
-  return { sink, trackerCalls };
+  runWorkOrderChecks(
+    issueId,
+    options.tier ?? 'T2',
+    options.files ?? ['README.md'],
+    sink.addCheck,
+    false,
+    '',
+    (id) => (id === issueId ? workOrder : null),
+  );
+  return { sink };
 };
 
 test('preflight declares every module-level binding above its main() invocation', () => {
-  // `main()` runs at module load and reaches runLinearChecks with no `await`
+  // `main()` runs at module load and reaches runWorkOrderChecks with no `await`
   // first, so a top-level const/let/class declared below the invocation is
   // still in its temporal dead zone when main() reads it. That shipped once:
   // every WORK-### preflight crashed with
@@ -568,9 +444,8 @@ test('WORK-2026092622: isRepoOwnedWorkId names only the repo-minted namespace', 
   }
 });
 
-test('WORK-2026092622 AC: a WORK identity with a credential present passes PL1 without calling the tracker', async () => {
-  const { sink, trackerCalls } = await runWorkChecks({ credential: 'lin_api_present' });
-  assert.equal(trackerCalls, 0, 'a repo-owned identity must never reach Linear');
+test('WORK-2026092622 AC: a WORK identity with a committed work order passes PL1', async () => {
+  const { sink } = await runWorkChecks();
   assert.equal(sink.byId('PL1')?.status, 'pass');
   assert.match(sink.byId('PL1')?.detail ?? '', /\.ops\/work\/WORK-2026099901\.md is committed at HEAD/u);
   assert.equal(sink.byId('PL2')?.status, 'pass');
@@ -578,16 +453,8 @@ test('WORK-2026092622 AC: a WORK identity with a credential present passes PL1 w
   assert.equal(resolveVerdict(sink.checks), 'PASS');
 });
 
-test('WORK-2026092622 AC: the verdict does not depend on which credentials are present', async () => {
-  const withCredential = await runWorkChecks({ credential: 'lin_api_present' });
-  const without = await runWorkChecks({ credential: null });
-  const shape = (checks: CheckResult[]) => checks.map((check) => `${check.id}:${check.status}`).sort();
-  assert.deepEqual(shape(withCredential.sink.checks), shape(without.sink.checks));
-  assert.equal(without.trackerCalls, 0);
-});
-
 test('WORK-2026092622 AC: PL5 and PL6 still run for a WORK identity -- they are not skipped', async () => {
-  const { sink } = await runWorkChecks({ credential: 'lin_api_present' });
+  const { sink } = await runWorkChecks();
   for (const id of ['PL5', 'PL6']) {
     assert.notEqual(sink.byId(id), undefined, `${id} must be evaluated`);
     assert.notEqual(sink.byId(id)?.status, 'skip', `${id} must not be skipped for a WORK identity`);
@@ -595,8 +462,7 @@ test('WORK-2026092622 AC: PL5 and PL6 still run for a WORK identity -- they are 
 });
 
 test('WORK-2026092622 AC: a WORK identity with no committed work order FAILS PL1', async () => {
-  const { sink, trackerCalls } = await runWorkChecks({ workOrder: null, credential: 'lin_api_present' });
-  assert.equal(trackerCalls, 0, 'a missing work order must not fall back to the tracker');
+  const { sink } = await runWorkChecks({ workOrder: null });
   assert.equal(sink.byId('PL1')?.status, 'fail');
   assert.match(sink.byId('PL1')?.detail ?? '', /not committed at HEAD/u);
   assert.equal(resolveVerdict(sink.checks), 'FAIL');
@@ -613,8 +479,7 @@ test('WORK-2026092622 AC: PL2 requires the work order tier to equal --tier', asy
   const mismatch = await runWorkChecks({ tier: 'T3' });
   assert.equal(mismatch.sink.byId('PL2')?.status, 'fail');
   assert.match(mismatch.sink.byId('PL2')?.detail ?? '', /declares Tier: T2, which does not match --tier T3/u);
-  // A PL2 failure is NOT_APPLICABLE, exactly as a tracker tier-label mismatch
-  // is; only PASS writes a preflight token.
+  // A PL2 failure is NOT_APPLICABLE; only PASS writes a preflight token.
   assert.equal(resolveVerdict(mismatch.sink.checks), 'NOT_APPLICABLE');
 
   const absent = await runWorkChecks({ workOrder: VALID_WORK_ORDER.replace(/^Tier:.*$/mu, 'Lane type: governance') });
@@ -649,11 +514,11 @@ test('WORK-2026092622 AC: PL4 requires a non-empty Acceptance Criteria section',
   assert.equal(missing.sink.byId('PL4')?.status, 'fail');
 });
 
-test('WORK-2026092622 AC: a UTV2 identity with a credential still reaches the tracker', async () => {
-  const { sink, trackerCalls } = await runWorkChecks({ issueId: 'UTV2-999973', credential: 'lin_api_present' });
-  assert.ok(trackerCalls > 0, 'tracker identities are unchanged: they are looked up');
-  assert.equal(sink.byId('PL1')?.status, 'fail');
-  assert.match(sink.byId('PL1')?.detail ?? '', /Linear issue not found: UTV2-999973/u);
+test('a UTV2 identity with a committed work order is checked against it', async () => {
+  const workOrder = VALID_WORK_ORDER.replace('# WORK-2026099901', '# UTV2-999973');
+  const { sink } = await runWorkChecks({ issueId: 'UTV2-999973', workOrder });
+  assert.equal(sink.byId('PL1')?.status, 'pass');
+  assert.equal(sink.byId('PL2')?.status, 'pass');
 });
 
 test('WORK-2026092622: readCommittedWorkOrder reads HEAD, never an absent file', () => {

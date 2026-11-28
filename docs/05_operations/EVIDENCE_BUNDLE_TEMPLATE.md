@@ -242,7 +242,7 @@ Every acceptance criterion from the Linear issue must map to one or more asserti
 ```markdown
 ## Acceptance Criteria Mapping
 
-| Acceptance Criterion (verbatim from Linear) | Assertion # |
+| Acceptance Criterion (verbatim from the work order) | Assertion # |
 |---|---|
 | Non-human-produced picks can land in `awaiting_approval` | 1 |
 | Those picks do not auto-queue | 2 |

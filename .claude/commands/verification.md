@@ -60,7 +60,7 @@ Do not proceed to ops:truth-check without a PASS from r-level-check.ts.
 **T1 additions:**
 - [ ] `pnpm test:db` against live Supabase — green
 - [ ] runtime proof captured (row counts, receipts, audit entries — SHA-tied)
-- [ ] evidence bundle generated: `pnpm evidence:new UTV2-###`
+- [ ] evidence bundle generated: `pnpm evidence:new WORK-###`
 - [ ] evidence bundle validated: `pnpm evidence:validate <path>`
 - [ ] both `static_proof` and `runtime_proof` populated
 - [ ] `verifier.identity` distinct from implementing agent
@@ -98,7 +98,7 @@ Required for every T1 merge. For T2 it is one of the three accepted approval art
 ```
 PM_VERDICT: APPROVED
 schema: pm-verdict/v1
-Issue: UTV2-NNN
+Issue: WORK-NNN
 ```
 
 Replace `NNN` with the issue number. Replace `APPROVED` with `CHANGES_REQUIRED` to block. See full schema: `docs/05_operations/schemas/pm-verdict-v1.md`.

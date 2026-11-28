@@ -15,7 +15,7 @@ Ghost lane detection and repair. Finds manifests where status is active but bran
 - After `/loop-dispatch` reports STALLED (two consecutive zero-merge cycles)
 - When `ops:brief` shows active lanes with heartbeats older than 24h
 - Before starting a new dispatch cycle after a long pause
-- When Linear and manifest state have drifted (e.g., PR merged but manifest still `in_review`)
+- When GitHub and manifest state have drifted (e.g., PR merged but manifest still `in_review`)
 
 ---
 
@@ -46,7 +46,7 @@ pnpm ops:reconcile --dry-run
 
 Once `/lane-reconciler` completes:
 1. Review the transition report — confirm no legitimate active lanes were incorrectly blocked
-2. For lanes transitioned to `blocked/stranded`: decide whether to resume (`pnpm ops:lane-start UTV2-###` with existing branch) or close (`pnpm ops:lane-close UTV2-###`)
+2. For lanes transitioned to `blocked/stranded`: decide whether to resume (`pnpm ops:lane-start WORK-###` with existing branch) or close (`pnpm ops:lane-close WORK-###`)
 3. Re-invoke `/loop-dispatch` once the board state is clean
 
 ---

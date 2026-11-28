@@ -39,13 +39,14 @@ on:
           Diagnostic only. JSON object of threshold overrides for this run, e.g.
           {"SYSTEM_RUNS_SIZE_THRESHOLD_MB":"1"}. Used to demonstrate that the
           check logic evaluates rather than merely starts. Unknown keys fail the
-          run closed, and any override suppresses the Linear alert so a
+          run closed, and any override suppresses the GitHub issue alert so a
           demonstration can never be mistaken for a production finding.
         required: false
         default: ''
 
 permissions:
   contents: read
+  issues: write
 
 env:
   SYSTEM_RUNS_SIZE_THRESHOLD_MB: '500'
@@ -94,7 +95,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          LINEAR_API_KEY: ${{ secrets.LINEAR_API_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           TRIPWIRE_THRESHOLD_OVERRIDES: ${{ inputs.threshold_overrides }}
           SYSTEM_RUNS_SIZE_THRESHOLD_MB: ${{ env.SYSTEM_RUNS_SIZE_THRESHOLD_MB }}
           RAW_PAYLOADS_SIZE_THRESHOLD_MB: ${{ env.RAW_PAYLOADS_SIZE_THRESHOLD_MB }}

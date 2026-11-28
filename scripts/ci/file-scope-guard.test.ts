@@ -689,7 +689,7 @@ test('trusted resolution (UTV2-1521 regression): a manifest-embedded scope_overr
           scope_override: {
             approved_by: 'PM',
             reason: 'legitimate scope correction, documented with evidence',
-            evidence: 'https://linear.app/unit-talk-v2/issue/UTV2-1496#comment-123',
+            evidence: 'https://github.com/griff843/Unit-Talk-v2/issues/1496#issuecomment-123',
           },
         }),
       },

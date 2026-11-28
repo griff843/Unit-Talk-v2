@@ -5,11 +5,9 @@ import path from 'node:path';
 import test from 'node:test';
 import {
   buildOrchestrationReconcilerReport,
-  classifyLinearLookupError,
   readConfiguredEnvValue,
   renderHuman,
   type BranchSnapshot,
-  type LinearIssueSnapshot,
   type PullRequestSnapshot,
 } from './orchestration-reconciler.js';
 import type { DispatchLease } from './lease-registry.js';
@@ -66,16 +64,6 @@ function lease(overrides: Partial<DispatchLease> = {}): DispatchLease {
   };
 }
 
-function linear(overrides: Partial<LinearIssueSnapshot> = {}): LinearIssueSnapshot {
-  return {
-    issue_id: 'UTV2-1059',
-    state_name: 'In Codex',
-    state_type: 'started',
-    updated_at: '2026-05-18T11:00:00.000Z',
-    ...overrides,
-  };
-}
-
 function branch(name = 'codex/utv2-1059-orchestration-reconciler'): BranchSnapshot {
   return { name, source: 'local' };
 }
@@ -97,25 +85,8 @@ function check(reportChecks: ReturnType<typeof buildOrchestrationReconcilerRepor
   return found;
 }
 
-test('fails when Linear In Codex has no active lease or lane record', () => {
-  const report = buildOrchestrationReconcilerReport({
-    linearIssues: [linear()],
-    leases: [],
-    manifests: [],
-    branches: [],
-    pullRequests: [],
-    now: NOW,
-  });
-
-  const entry = check(report.checks, 'ORCH-LINEAR-ACTIVE-RECORD');
-  assert.equal(entry.verdict, 'fail');
-  assert.equal(report.verdict, 'FAIL');
-  assert.equal(report.exit_code, 1);
-});
-
 test('fails when an active lease branch is missing', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [],
     leases: [lease()],
     manifests: [],
     branches: [],
@@ -130,7 +101,6 @@ test('fails when an active lease branch is missing', () => {
 
 test('fails when an active manifest branch is missing even without an active lease', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [],
     leases: [],
     manifests: [lane()],
     branches: [],
@@ -146,7 +116,6 @@ test('fails when an active manifest branch is missing even without an active lea
 
 test('fails when an active lease has no matching active manifest', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [],
     leases: [lease()],
     manifests: [],
     branches: [branch()],
@@ -161,7 +130,6 @@ test('fails when an active lease has no matching active manifest', () => {
 
 test('fails when active lease and manifest branches disagree', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [],
     leases: [lease({ branch: 'codex/utv2-1059-lease-branch' })],
     manifests: [lane({ branch: 'codex/utv2-1059-manifest-branch' })],
     branches: [
@@ -179,7 +147,6 @@ test('fails when active lease and manifest branches disagree', () => {
 
 test('matches manifests and leases with normalized issue IDs', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [linear()],
     leases: [lease({ issue_id: 'utv2-1059' })],
     manifests: [lane({ issue_id: 'utv2-1059' })],
     branches: [branch()],
@@ -187,13 +154,12 @@ test('matches manifests and leases with normalized issue IDs', () => {
     now: NOW,
   });
 
-  assert.equal(check(report.checks, 'ORCH-LINEAR-ACTIVE-RECORD').verdict, 'pass');
   assert.equal(check(report.checks, 'ORCH-LEASE-MANIFEST').verdict, 'pass');
+  assert.equal(check(report.checks, 'ORCH-LEASE-MANIFEST').issue_id, 'UTV2-1059');
 });
 
 test('fails when an open PR is not recorded in the manifest PR URL', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [],
     leases: [],
     manifests: [lane({ pr_url: null })],
     branches: [branch()],
@@ -217,7 +183,6 @@ test('accepts open PRs recorded in related_prs for multi-PR lane manifests', () 
   ];
 
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [],
     leases: [],
     manifests: [manifest],
     branches: [branch('codex/utv2-1059-secondary-pr')],
@@ -236,34 +201,8 @@ test('accepts open PRs recorded in related_prs for multi-PR lane manifests', () 
   assert.equal(entry.pr_url, 'https://github.com/unit-talk/v2/pull/886');
 });
 
-test('warns inside transition window and fails after it when merged PR is not Linear Done', () => {
-  const fresh = buildOrchestrationReconcilerReport({
-    linearIssues: [linear({ state_name: 'In Codex' })],
-    leases: [],
-    manifests: [lane({ status: 'merged' })],
-    branches: [],
-    pullRequests: [pr({ state: 'merged', merged_at: '2026-05-18T11:30:00.000Z' })],
-    now: NOW,
-    transitionWindowMinutes: 60,
-  });
-  const stale = buildOrchestrationReconcilerReport({
-    linearIssues: [linear({ state_name: 'In Claude' })],
-    leases: [],
-    manifests: [lane({ status: 'merged' })],
-    branches: [],
-    pullRequests: [pr({ state: 'merged', merged_at: '2026-05-18T10:00:00.000Z' })],
-    now: NOW,
-    transitionWindowMinutes: 60,
-  });
-
-  assert.equal(check(fresh.checks, 'ORCH-MERGED-PR-LINEAR-DONE').verdict, 'warn');
-  assert.equal(check(stale.checks, 'ORCH-MERGED-PR-LINEAR-DONE').verdict, 'fail');
-  assert.equal(stale.exit_code, 1);
-});
-
 test('fails when merged PR still has an active manifest and recommends record-merge repair', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [],
     leases: [],
     manifests: [
       lane({
@@ -298,22 +237,6 @@ test('fails when merged PR still has an active manifest and recommends record-me
   assert.equal(report.exit_code, 1);
 });
 
-test('fails when Linear Done has no merge SHA evidence', () => {
-  const report = buildOrchestrationReconcilerReport({
-    linearIssues: [linear({ state_name: 'Done', state_type: 'completed' })],
-    leases: [],
-    manifests: [lane({ status: 'done', commit_sha: null })],
-    branches: [],
-    pullRequests: [],
-    mode: 'all',
-    now: NOW,
-  });
-
-  const entry = check(report.checks, 'ORCH-DONE-MERGE-SHA');
-  assert.equal(entry.verdict, 'fail');
-  assert.match(entry.detail, /no merge SHA/);
-});
-
 test('handles legacy manifests without truth_check_history while checking merge SHA evidence', () => {
   const legacyManifest = lane({ status: 'done', commit_sha: null }) as LaneManifest & {
     truth_check_history?: LaneManifest['truth_check_history'];
@@ -321,7 +244,6 @@ test('handles legacy manifests without truth_check_history while checking merge 
   delete legacyManifest.truth_check_history;
 
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [linear({ state_name: 'Done', state_type: 'completed' })],
     leases: [],
     manifests: [legacyManifest],
     branches: [],
@@ -337,7 +259,6 @@ test('handles legacy manifests without truth_check_history while checking merge 
 
 test('marks active expired lease as stale reclaim required', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [],
     leases: [lease({ expires_at: '2026-05-18T11:59:59.000Z' })],
     manifests: [],
     branches: [branch()],
@@ -352,7 +273,6 @@ test('marks active expired lease as stale reclaim required', () => {
 
 test('classifies expired orphan lease as safe reclaim with audit command', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [linear({ state_name: 'Done', state_type: 'completed' })],
     leases: [lease({ expires_at: '2026-05-18T11:59:59.000Z' })],
     manifests: [],
     branches: [branch()],
@@ -370,12 +290,12 @@ test('classifies expired orphan lease as safe reclaim with audit command', () =>
 });
 
 test('keeps active owner stale lease in manual repair lane', () => {
+  // An open PR on the lane branch means the owner may still be working.
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [linear({ state_name: 'In Codex', state_type: 'started' })],
     leases: [lease({ expires_at: '2026-05-18T11:59:59.000Z' })],
     manifests: [],
     branches: [branch()],
-    pullRequests: [],
+    pullRequests: [pr()],
     now: NOW,
   });
 
@@ -389,7 +309,6 @@ test('keeps active owner stale lease in manual repair lane', () => {
 
 test('marks branch for closed lane as cleanup candidate', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [],
     leases: [],
     manifests: [lane({ status: 'done', commit_sha: 'abc123' })],
     branches: [branch()],
@@ -410,7 +329,6 @@ test('marks branch for closed lane as cleanup candidate', () => {
 
 test('cleanup plan refuses active current lanes', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [linear({ state_name: 'In Codex' })],
     leases: [lease()],
     manifests: [lane()],
     branches: [branch()],
@@ -426,7 +344,6 @@ test('cleanup plan refuses active current lanes', () => {
 
 test('open PR without manifest fails closed with deterministic manifest repair action', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [],
     leases: [],
     manifests: [],
     branches: [branch()],
@@ -444,7 +361,6 @@ test('open PR without manifest fails closed with deterministic manifest repair a
 
 test('cleanup plan treats released leases as no-op safe state', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [linear({ state_name: 'Done', state_type: 'completed' })],
     leases: [lease({ status: 'released' })],
     manifests: [],
     branches: [],
@@ -460,7 +376,6 @@ test('cleanup plan treats released leases as no-op safe state', () => {
 
 test('defaults to current actionable issues instead of historical all debt', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [linear({ state_name: 'Done', state_type: 'completed' })],
     leases: [],
     manifests: [lane({ status: 'done', commit_sha: null })],
     branches: [branch()],
@@ -476,7 +391,6 @@ test('defaults to current actionable issues instead of historical all debt', () 
 
 test('all mode still reports historical debt, but as non-blocking closeout debt (UTV2-1758)', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [linear({ state_name: 'Done', state_type: 'completed' })],
     leases: [],
     manifests: [lane({ status: 'done', commit_sha: null })],
     branches: [branch()],
@@ -488,8 +402,7 @@ test('all mode still reports historical debt, but as non-blocking closeout debt 
   assert.equal(report.mode, 'all');
   assert.deepEqual(report.filters.selected_issue_ids, ['UTV2-1059']);
   // The findings are still reported in full — only their dispatch authority
-  // changed. A terminal lane holding no lease, lock, or active Linear record
-  // carries no dispatch, capacity, or production risk.
+  // changed. A terminal lane holding no lease or lock carries no dispatch, capacity, or production risk.
   const doneMergeSha = check(report.checks, 'ORCH-DONE-MERGE-SHA');
   assert.equal(doneMergeSha.verdict, 'fail');
   assert.equal(doneMergeSha.classification, 'closeout_debt');
@@ -500,10 +413,6 @@ test('all mode still reports historical debt, but as non-blocking closeout debt 
 
 test('issue mode filters reconciliation to one issue', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [
-      linear({ issue_id: 'UTV2-1059' }),
-      linear({ issue_id: 'UTV2-1060' }),
-    ],
     leases: [lease({ issue_id: 'UTV2-1059' })],
     manifests: [lane({ issue_id: 'UTV2-1059' })],
     branches: [branch()],
@@ -515,18 +424,11 @@ test('issue mode filters reconciliation to one issue', () => {
   assert.equal(report.mode, 'issue');
   assert.equal(report.filters.issue_id, 'UTV2-1060');
   assert.deepEqual(report.filters.selected_issue_ids, ['UTV2-1060']);
-  const entry = check(report.checks, 'ORCH-LINEAR-ACTIVE-RECORD');
-  assert.equal(entry.issue_id, 'UTV2-1060');
-  assert.equal(entry.verdict, 'fail');
   assert.equal(report.checks.some((item) => item.issue_id === 'UTV2-1059'), false);
 });
 
 test('since filter includes recent historical records without forcing all history', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [
-      linear({ issue_id: 'UTV2-1059', state_name: 'Done', state_type: 'completed', updated_at: '2026-05-17T11:00:00.000Z' }),
-      linear({ issue_id: 'UTV2-1060', state_name: 'Done', state_type: 'completed', updated_at: '2026-05-18T11:00:00.000Z' }),
-    ],
     leases: [],
     manifests: [
       lane({
@@ -559,7 +461,6 @@ test('since filter includes recent historical records without forcing all histor
 
 test('human output separates the four reconciliation buckets', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [linear({ state_name: 'Done', state_type: 'completed' })],
     leases: [],
     manifests: [lane({ status: 'done', commit_sha: null })],
     branches: [branch()],
@@ -581,16 +482,15 @@ test('human output separates the four reconciliation buckets', () => {
   assert.match(output, /repair plan:/);
 });
 
-test('historical Linear decay is advisory and does not become infra failure', () => {
+test('historical lookup decay is advisory and does not become infra failure', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [],
     leases: [],
     manifests: [lane({ status: 'done', commit_sha: 'abc123' })],
     branches: [],
     pullRequests: [],
     mode: 'all',
     now: NOW,
-    historicalDecayErrors: ['Linear issue query failed for UTV2-1059: Entity not found: Issue'],
+    historicalDecayErrors: ['GitHub PR lookup failed for UTV2-1059: Not Found'],
   });
 
   const decay = check(report.checks, 'ORCH-HISTORICAL-DECAY');
@@ -603,7 +503,6 @@ test('historical Linear decay is advisory and does not become infra failure', ()
 
 test('distinguishes required and advisory GitHub checks', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [],
     leases: [],
     manifests: [],
     branches: [],
@@ -626,9 +525,8 @@ test('distinguishes required and advisory GitHub checks', () => {
   assert.equal(githubChecks[1]?.verdict, 'warn');
 });
 
-test('passes when Linear, lease, manifest, branch, PR, and checks agree', () => {
+test('passes when lease, manifest, branch, PR, and checks agree', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [linear({ state_name: 'Done', state_type: 'completed' })],
     leases: [lease({ status: 'released' })],
     manifests: [
       lane({
@@ -664,13 +562,13 @@ test('passes when Linear, lease, manifest, branch, PR, and checks agree', () => 
   assert.equal(report.summary.stale_reclaim_required, 0);
 });
 
-test('reads Linear token from repo env files when process env is empty', () => {
+test('reads a configured value from repo env files when process env is empty', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-reconcile-env-'));
   try {
-    fs.writeFileSync(path.join(root, 'local.env'), 'LINEAR_API_TOKEN=\n', 'utf8');
-    fs.writeFileSync(path.join(root, '.env'), 'LINEAR_API_TOKEN=lin_from_env\n', 'utf8');
+    fs.writeFileSync(path.join(root, 'local.env'), 'GITHUB_TOKEN=\n', 'utf8');
+    fs.writeFileSync(path.join(root, '.env'), 'GITHUB_TOKEN=gh_from_env\n', 'utf8');
 
-    assert.equal(readConfiguredEnvValue('LINEAR_API_TOKEN', root, {}), 'lin_from_env');
+    assert.equal(readConfiguredEnvValue('GITHUB_TOKEN', root, {}), 'gh_from_env');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -679,11 +577,11 @@ test('reads Linear token from repo env files when process env is empty', () => {
 test('process env wins over repo env files for reconciler token lookup', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-reconcile-env-'));
   try {
-    fs.writeFileSync(path.join(root, 'local.env'), 'LINEAR_API_TOKEN=lin_from_file\n', 'utf8');
+    fs.writeFileSync(path.join(root, 'local.env'), 'GITHUB_TOKEN=gh_from_file\n', 'utf8');
 
     assert.equal(
-      readConfiguredEnvValue('LINEAR_API_TOKEN', root, { LINEAR_API_TOKEN: 'lin_from_process' }),
-      'lin_from_process',
+      readConfiguredEnvValue('GITHUB_TOKEN', root, { GITHUB_TOKEN: 'gh_from_process' }),
+      'gh_from_process',
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -705,78 +603,6 @@ function bucketIds(
 ): string[] {
   return report.buckets[bucket].map((entry) => entry.id);
 }
-
-test('classifyLinearLookupError separates deletion from transient, auth, and unknown failures', () => {
-  assert.equal(classifyLinearLookupError('Entity not found: Issue'), 'deleted');
-  assert.equal(classifyLinearLookupError('The operation was aborted due to timeout'), 'transient');
-  assert.equal(classifyLinearLookupError('fetch failed: ETIMEDOUT'), 'transient');
-  assert.equal(classifyLinearLookupError('429 Too Many Requests'), 'transient');
-  assert.equal(classifyLinearLookupError('503 Service Unavailable'), 'transient');
-  assert.equal(classifyLinearLookupError('401 Unauthorized'), 'auth');
-  assert.equal(classifyLinearLookupError('Authentication required'), 'auth');
-  assert.equal(classifyLinearLookupError('something else entirely'), 'unknown');
-
-  // ENOTFOUND is a DNS failure whose text contains "not found". It must never
-  // be read as a deleted entity.
-  assert.equal(classifyLinearLookupError('getaddrinfo ENOTFOUND api.linear.app'), 'transient');
-});
-
-test('fixture 1: deleted Linear entity holding an active manifest is a PM-required orphan', () => {
-  const orphan = lane({
-    issue_id: 'UTV2-1512',
-    branch: 'codex/utv2-1512-reconciler-write-path',
-    status: 'in_progress',
-  });
-  const report = buildOrchestrationReconcilerReport({
-    linearIssues: [],
-    leases: [],
-    manifests: [orphan],
-    branches: [branch('codex/utv2-1512-reconciler-write-path')],
-    pullRequests: [],
-    linearFailures: [
-      { issue_id: 'UTV2-1512', kind: 'deleted', message: 'Entity not found: Issue' },
-    ],
-    now: NOW,
-  });
-
-  const entry = check(report.checks, 'ORCH-LINEAR-DELETED-ORPHAN');
-  assert.equal(entry.verdict, 'fail');
-  assert.equal(entry.classification, 'dispatch_blocking');
-  assert.equal(entry.issue_id, 'UTV2-1512');
-  assert.match(entry.detail, /PM disposition required/);
-  assert.ok(bucketIds(report, 'dispatch_blocking_failures').includes('ORCH-LINEAR-DELETED-ORPHAN'));
-  assert.equal(report.exit_code, 1);
-
-  // Mutation: the same deleted entity, now referenced only by a terminal
-  // manifest, must drop to historical debt — and must not fabricate a pass.
-  const mutated = buildOrchestrationReconcilerReport({
-    linearIssues: [],
-    leases: [],
-    manifests: [lane({ ...orphan, status: 'done', closed_at: '2026-05-17T10:00:00.000Z' })],
-    branches: [],
-    pullRequests: [],
-    linearFailures: [
-      { issue_id: 'UTV2-1512', kind: 'deleted', message: 'Entity not found: Issue' },
-    ],
-    mode: 'all',
-    now: NOW,
-  });
-  assert.equal(
-    mutated.checks.find((entry_) => entry_.id === 'ORCH-LINEAR-DELETED-ORPHAN'),
-    undefined,
-  );
-  const decayed = check(mutated.checks, 'ORCH-HISTORICAL-DECAY');
-  assert.equal(decayed.verdict, 'historical_decay');
-  assert.equal(decayed.classification, 'warning');
-  assert.match(decayed.detail, /terminal manifest \(status=done\)/);
-  assert.equal(mutated.buckets.dispatch_blocking_failures.length, 0);
-  assert.equal(mutated.exit_code, 0);
-  // No check anywhere may report this deleted entity as passing.
-  assert.equal(
-    mutated.checks.some((entry_) => entry_.issue_id === 'UTV2-1512' && entry_.verdict === 'pass'),
-    false,
-  );
-});
 
 test('fixture 2: UTV2-1736 manifest present at the exact PR head does not fail ORCH-OPEN-PR-MANIFEST-URL', () => {
   const prUrl = 'https://github.com/unit-talk/v2/pull/1451';
@@ -804,7 +630,6 @@ test('fixture 2: UTV2-1736 manifest present at the exact PR head does not fail O
   });
 
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [],
     leases: [],
     manifests: [staleRootCopy],
     branches: [branch('codex/utv2-1736-offer-history-partitions')],
@@ -820,7 +645,6 @@ test('fixture 2: UTV2-1736 manifest present at the exact PR head does not fail O
   // Mutation: remove the head manifest and the stale working-tree copy is all
   // that remains — the check must fail again.
   const mutated = buildOrchestrationReconcilerReport({
-    linearIssues: [],
     leases: [],
     manifests: [staleRootCopy],
     branches: [branch('codex/utv2-1736-offer-history-partitions')],
@@ -849,7 +673,6 @@ test('fixture 3: UTV2-1652 on-branch manifest passes, and a wrong PR URL at the 
   });
 
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [],
     leases: [],
     manifests: [],
     branches: [branch('codex/utv2-1652-worktree-retirement')],
@@ -862,7 +685,6 @@ test('fixture 3: UTV2-1652 on-branch manifest passes, and a wrong PR URL at the 
   // Mutation: the head manifest exists but records a different PR. Presence of
   // a head manifest must not be enough on its own.
   const mutated = buildOrchestrationReconcilerReport({
-    linearIssues: [],
     leases: [],
     manifests: [],
     branches: [branch('codex/utv2-1652-worktree-retirement')],
@@ -895,7 +717,6 @@ test('fixture 4: a genuinely missing manifest still blocks — suppression is he
   });
 
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [],
     leases: [],
     manifests: [],
     branches: [branch('codex/utv2-1460-missing-manifest')],
@@ -912,7 +733,6 @@ test('fixture 4: a genuinely missing manifest still blocks — suppression is he
   // Mutation: supply the manifest at the head and the same open PR passes.
   // This is what proves the fail above came from the manifest, not the PR.
   const mutated = buildOrchestrationReconcilerReport({
-    linearIssues: [],
     leases: [],
     manifests: [],
     branches: [branch('codex/utv2-1460-missing-manifest')],
@@ -933,140 +753,12 @@ test('fixture 4: a genuinely missing manifest still blocks — suppression is he
   assert.equal(mutated.exit_code, 0);
 });
 
-test('fixture 5: a transient Linear timeout stays a blocking infra error and is never demoted to historical debt', () => {
-  const report = buildOrchestrationReconcilerReport({
-    linearIssues: [],
-    leases: [],
-    manifests: [],
-    branches: [],
-    pullRequests: [],
-    linearFailures: [
-      {
-        issue_id: 'UTV2-1432',
-        kind: classifyLinearLookupError('The operation was aborted due to timeout'),
-        message: 'The operation was aborted due to timeout',
-      },
-    ],
-    now: NOW,
-  });
-
-  const entry = check(report.checks, 'ORCH-INFRA');
-  assert.equal(entry.verdict, 'infra_error');
-  assert.equal(entry.classification, 'infra_error');
-  assert.equal(entry.issue_id, 'UTV2-1432');
-  assert.match(entry.detail, /transient/);
-  assert.equal(bucketIds(report, 'warnings').includes('ORCH-HISTORICAL-DECAY'), false);
-  assert.equal(report.verdict, 'INFRA');
-  assert.equal(report.exit_code, 3);
-
-  // Mutation: the same issue, now genuinely deleted with no lane state, is
-  // historical debt — and stops blocking.
-  const mutated = buildOrchestrationReconcilerReport({
-    linearIssues: [],
-    leases: [],
-    manifests: [],
-    branches: [],
-    pullRequests: [],
-    linearFailures: [
-      {
-        issue_id: 'UTV2-1432',
-        kind: classifyLinearLookupError('Entity not found: Issue'),
-        message: 'Entity not found: Issue',
-      },
-    ],
-    now: NOW,
-  });
-  assert.equal(check(mutated.checks, 'ORCH-HISTORICAL-DECAY').classification, 'warning');
-  assert.equal(mutated.buckets.infra_errors.length, 0);
-  assert.equal(mutated.exit_code, 0);
-
-  // An auth failure is likewise blocking, never deletion.
-  const authFailure = buildOrchestrationReconcilerReport({
-    linearIssues: [],
-    leases: [],
-    manifests: [],
-    branches: [],
-    pullRequests: [],
-    linearFailures: [
-      {
-        issue_id: 'UTV2-1432',
-        kind: classifyLinearLookupError('401 Unauthorized'),
-        message: '401 Unauthorized',
-      },
-    ],
-    now: NOW,
-  });
-  assert.match(check(authFailure.checks, 'ORCH-INFRA').detail, /auth/);
-  assert.equal(authFailure.exit_code, 3);
-});
-
-test('fixture 6: merged terminal lane with Linear closeout debt is reported without halting dispatch', () => {
-  const merged = pr({
-    number: 1409,
-    branch: 'claude/utv2-1691-proof-repair',
-    url: 'https://github.com/unit-talk/v2/pull/1409',
-    state: 'merged',
-    merged_at: '2026-05-17T10:00:00.000Z',
-    merge_sha: 'eeeeeeee0000000000000000000000000000ffff',
-  });
-  const terminalManifest = lane({
-    issue_id: 'UTV2-1691',
-    branch: 'claude/utv2-1691-proof-repair',
-    status: 'done',
-    closed_at: '2026-05-17T10:05:00.000Z',
-  });
-
-  const report = buildOrchestrationReconcilerReport({
-    linearIssues: [linear({ issue_id: 'UTV2-1691', state_name: 'In Review', state_type: 'started' })],
-    leases: [],
-    manifests: [terminalManifest],
-    branches: [],
-    pullRequests: [merged],
-    now: NOW,
-  });
-
-  const entry = check(report.checks, 'ORCH-MERGED-PR-LINEAR-DONE');
-  assert.equal(entry.verdict, 'fail');
-  assert.equal(entry.classification, 'closeout_debt');
-  assert.match(entry.detail, /holds no lease, lock, or active Linear record/);
-  assert.ok(bucketIds(report, 'closeout_debt').includes('ORCH-MERGED-PR-LINEAR-DONE'));
-  assert.equal(report.buckets.dispatch_blocking_failures.length, 0);
-  assert.equal(report.verdict, 'WARN');
-  assert.equal(report.exit_code, 0);
-
-  // Mutation: the same debt while the lane still holds an active lease is a
-  // genuine dispatch hazard and must block.
-  const mutated = buildOrchestrationReconcilerReport({
-    linearIssues: [linear({ issue_id: 'UTV2-1691', state_name: 'In Review', state_type: 'started' })],
-    leases: [
-      lease({
-        issue_id: 'UTV2-1691',
-        branch: 'claude/utv2-1691-proof-repair',
-        status: 'active',
-      }),
-    ],
-    manifests: [terminalManifest],
-    branches: [branch('claude/utv2-1691-proof-repair')],
-    pullRequests: [merged],
-    now: NOW,
-  });
-  const mutatedEntry = check(mutated.checks, 'ORCH-MERGED-PR-LINEAR-DONE');
-  assert.equal(mutatedEntry.classification, 'dispatch_blocking');
-  assert.ok(bucketIds(mutated, 'dispatch_blocking_failures').includes('ORCH-MERGED-PR-LINEAR-DONE'));
-  assert.equal(mutated.exit_code, 1);
-});
-
 test('every emitted check lands in exactly one of the four buckets', () => {
   const report = buildOrchestrationReconcilerReport({
-    linearIssues: [linear()],
     leases: [lease()],
     manifests: [lane()],
     branches: [],
     pullRequests: [pr({ head_sha: 'feedface', head_manifest: null })],
-    linearFailures: [
-      { issue_id: 'UTV2-1432', kind: 'transient', message: 'timeout' },
-      { issue_id: 'UTV2-1512', kind: 'deleted', message: 'Entity not found: Issue' },
-    ],
     now: NOW,
   });
 
@@ -1079,69 +771,3 @@ test('every emitted check lands in exactly one of the four buckets', () => {
   assert.ok(report.checks.length > 0);
 });
 
-test('an active manifest at the open PR head satisfies ORCH-LINEAR-ACTIVE-RECORD (UTV2-1758)', () => {
-  const prUrl = 'https://github.com/unit-talk/v2/pull/1452';
-  const openPr = pr({
-    number: 1452,
-    branch: 'codex/utv2-1744-outbox-triage',
-    url: prUrl,
-    head_sha: '11111111000000000000000000000000000022222',
-    head_manifest: lane({
-      issue_id: 'UTV2-1744',
-      branch: 'codex/utv2-1744-outbox-triage',
-      status: 'in_review',
-      pr_url: prUrl,
-    }),
-  });
-  const linearIssues = [
-    linear({ issue_id: 'UTV2-1744', state_name: 'In Codex', state_type: 'started' }),
-  ];
-
-  const report = buildOrchestrationReconcilerReport({
-    linearIssues,
-    leases: [],
-    manifests: [], // nothing on main yet — the lane is still in flight
-    branches: [branch('codex/utv2-1744-outbox-triage')],
-    pullRequests: [openPr],
-    now: NOW,
-  });
-
-  const entry = check(report.checks, 'ORCH-LINEAR-ACTIVE-RECORD');
-  assert.equal(entry.verdict, 'pass');
-  assert.ok(entry.evidence.some((item) => item.detail.includes('resolved from open PR head')));
-  assert.equal(report.buckets.dispatch_blocking_failures.length, 0);
-
-  // Mutation: with no manifest at the head either, the lane genuinely has no
-  // record and the check must fail again.
-  const mutated = buildOrchestrationReconcilerReport({
-    linearIssues,
-    leases: [],
-    manifests: [],
-    branches: [branch('codex/utv2-1744-outbox-triage')],
-    pullRequests: [pr({ ...openPr, head_manifest: null })],
-    now: NOW,
-  });
-  const mutatedEntry = check(mutated.checks, 'ORCH-LINEAR-ACTIVE-RECORD');
-  assert.equal(mutatedEntry.verdict, 'fail');
-  assert.equal(mutatedEntry.classification, 'dispatch_blocking');
-
-  // Mutation: a head manifest that is terminal must not count as active.
-  const terminalHead = buildOrchestrationReconcilerReport({
-    linearIssues,
-    leases: [],
-    manifests: [],
-    branches: [branch('codex/utv2-1744-outbox-triage')],
-    pullRequests: [
-      pr({
-        ...openPr,
-        head_manifest: lane({
-          issue_id: 'UTV2-1744',
-          branch: 'codex/utv2-1744-outbox-triage',
-          status: 'done',
-        }),
-      }),
-    ],
-    now: NOW,
-  });
-  assert.equal(check(terminalHead.checks, 'ORCH-LINEAR-ACTIVE-RECORD').verdict, 'fail');
-});

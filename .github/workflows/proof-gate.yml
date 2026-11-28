@@ -9,7 +9,7 @@
 # Each downstream job runs only when its conditions are met; the detect job is cheap (~30s).
 # This replaces three separate workflows that could race and fire redundantly.
 #
-# Linear check sequence enforced via `needs:` — C1 (proof-auditor) and C2 (runtime-verifier)
+# Sequential check order enforced via `needs:` — C1 (proof-auditor) and C2 (runtime-verifier)
 # complete before C3 (t1-proof) begins.
 #
 # Spec / rationale: UTV2-1378
@@ -288,8 +288,6 @@ jobs:
           COMMAND_CENTER_AUTH_TOKEN=ci-command-center-token
           AUTH_SECRET=ci-auth-secret
           NEXTAUTH_SECRET=ci-nextauth-secret
-          LINEAR_API_TOKEN=
-          LINEAR_TEAM_ID=
           NOTION_TOKEN=
           SLACK_BOT_TOKEN=
           SLACK_SIGNING_SECRET=

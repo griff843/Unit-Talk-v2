@@ -242,7 +242,7 @@ export default async function ApprovalsPage({
       <div className="space-y-1">
         <p className="text-sm cc-text-muted">
           What can the PM approve right now? Governance-brake awaiting_approval picks, held picks, and the legacy review queue.
-          Tier labels live in Linear and are not surfaced by the data layer yet.
+          Lane tiers live in the lane manifests and are not surfaced by the data layer yet.
         </p>
       </div>
 

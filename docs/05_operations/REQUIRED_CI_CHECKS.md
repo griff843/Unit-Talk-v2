@@ -148,11 +148,9 @@ The following workflows exist under `.github/workflows/` but are intentionally *
 - **Why excluded:** cadence control, not a per-PR gating control. Per `CI_DOCTOR_SPEC.md` §9, ci-doctor is a daily airbag, not a merge gate. It runs on `schedule` and `workflow_dispatch` only; it has no `pull_request` trigger to produce a check run against.
 - **Status:** permanently excluded by design. Do not add.
 
-### 5.5 `Linear Auto-Close` (`linear-auto-close.yml`)
+### 5.5 `Linear Auto-Close` (retired)
 
-- **Job:** `linear-auto-close`
-- **Why excluded:** post-merge automation, triggered by `push` to `main` (i.e. after the merge has already happened). Cannot be a required check for PR merge.
-- **Status:** permanently excluded by design. Do not add.
+- **Status:** `linear-auto-close.yml` was deleted on 2026-11-25 with the Linear workflow. Nothing to require.
 
 ### 5.6 `Proof Auditor Gate` (`proof-auditor-gate.yml`) — required check candidate
 

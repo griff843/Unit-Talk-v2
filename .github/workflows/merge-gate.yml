@@ -4,7 +4,7 @@
 # Branch protection defers review policy to this check — no universal
 # PR review is required at the branch level.
 #
-# Reads tier from the lane manifest mirrored from Linear. GitHub tier labels
+# Reads tier from the lane manifest (repo-owned authority). GitHub tier labels
 # remain required evidence, but automation applies/syncs them; labels are not
 # authoritative. Verifies PM verdict is from an authorized CODEOWNERS member.
 #

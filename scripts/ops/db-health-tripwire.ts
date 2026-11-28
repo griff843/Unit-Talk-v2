@@ -51,7 +51,7 @@
  * `TRIPWIRE_THRESHOLD_OVERRIDES`. That exists so the check logic can be shown
  * to *evaluate* rather than merely start: lower a threshold, watch a check
  * trip. Overrides are restricted to known threshold keys, are recorded per
- * check in the receipt, and suppress the Linear alert so a demonstration can
+ * check in the receipt, and suppress the alert so a demonstration can
  * never be mistaken for a production finding.
  *
  * No writes, no DDL, no mutations.
@@ -77,7 +77,7 @@ import {
   EXIT_HARNESS_ERROR,
   HOT_TABLES,
   HarnessError,
-  LINEAR_ISSUE_ID,
+  ALERT_ISSUE_TITLE,
   RECEIPT_SCHEMA,
   TABLE_SIZE_SQL,
   TOAST_BLOAT_TABLES,
@@ -94,7 +94,7 @@ import {
   renderCheckTable,
   resolveThresholds,
   type CheckOutcome,
-  type LinearAlertDisposition,
+  type AlertDisposition,
   type SizeRow,
   type ThresholdTable,
   type ToastBloatRow,
@@ -282,46 +282,39 @@ async function runStatementTimeoutCheck(thresholds: ThresholdTable): Promise<Che
   }
 }
 
-async function linearGraphql(
-  apiKey: string,
-  query: string,
-  variables: Record<string, unknown>,
-): Promise<Record<string, unknown> | null> {
-  const resp = await fetch('https://api.linear.app/graphql', {
-    method: 'POST',
-    headers: { Authorization: apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables }),
+async function githubRest<T>(
+  token: string,
+  repo: string,
+  method: string,
+  apiPath: string,
+  body?: unknown,
+): Promise<T> {
+  const resp = await fetch(`https://api.github.com/repos/${repo}${apiPath}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      'User-Agent': 'unit-talk-db-health-tripwire',
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const body = (await resp.json()) as { data?: Record<string, unknown>; errors?: unknown };
-  if (body.errors) {
-    console.warn('[tripwire] Linear API error:', JSON.stringify(body.errors));
-    return null;
+  if (!resp.ok) {
+    throw new Error(`GitHub ${method} ${apiPath}: HTTP ${resp.status}`);
   }
-  return body.data ?? null;
+  return (await resp.json()) as T;
 }
 
 /**
- * `commentCreate` takes the issue's UUID, not its human identifier. The previous
- * implementation passed `'UTV2-1300'` straight through, so every alert this
- * monitor would ever have raised failed with "Issue 'UTV2-1300' not found" —
- * a third way the tripwire was dark, invisible for the same reason as the other
- * two: the failure was logged as a warning and swallowed.
+ * Alerts go to one standing GitHub issue (found by title, created on first
+ * alert). A failure to notify is returned as `failed`, never swallowed.
  */
-async function resolveLinearIssueUuid(apiKey: string, identifier: string): Promise<string | null> {
-  const data = await linearGraphql(
-    apiKey,
-    'query IssueByIdentifier($id: String!) { issue(id: $id) { id identifier } }',
-    { id: identifier },
-  );
-  const issue = data?.['issue'] as { id?: string } | null | undefined;
-  return typeof issue?.id === 'string' ? issue.id : null;
-}
-
-async function postLinearAlert(checks: readonly CheckOutcome[]): Promise<LinearAlertDisposition> {
-  const apiKey = process.env['LINEAR_API_KEY'];
+async function postAlert(checks: readonly CheckOutcome[]): Promise<AlertDisposition> {
+  const token = process.env['GITHUB_TOKEN']?.trim();
+  const repo = process.env['GITHUB_REPOSITORY']?.trim();
   const tripped = checks.filter((c) => c.status === 'tripped');
   if (tripped.length === 0) return 'not_applicable';
-  if (!apiKey) return 'skipped_no_api_key';
+  if (!token || !repo) return 'skipped_no_token';
 
   const lines = tripped.map(
     (c) =>
@@ -335,28 +328,29 @@ async function postLinearAlert(checks: readonly CheckOutcome[]): Promise<LinearA
     'All execution actions remain PM-gated.';
 
   try {
-    const issueUuid = await resolveLinearIssueUuid(apiKey, LINEAR_ISSUE_ID);
-    if (!issueUuid) {
-      console.warn(`[tripwire] Linear issue ${LINEAR_ISSUE_ID} could not be resolved to a UUID`);
-      return 'failed';
+    let issueNumber: number | undefined;
+    for (let page = 1; issueNumber === undefined && page <= 50; page++) {
+      const open = await githubRest<Array<{ number: number; title: string; pull_request?: unknown }>>(
+        token,
+        repo,
+        'GET',
+        `/issues?state=open&per_page=100&page=${page}`,
+      );
+      issueNumber = open.find((issue) => !issue.pull_request && issue.title === ALERT_ISSUE_TITLE)?.number;
+      if (open.length < 100) break;
     }
-
-    const data = await linearGraphql(
-      apiKey,
-      `mutation CreateComment($issueId: String!, $body: String!) {
-         commentCreate(input: { issueId: $issueId, body: $body }) { success }
-       }`,
-      { issueId: issueUuid, body },
-    );
-    const created = data?.['commentCreate'] as { success?: boolean } | undefined;
-    if (created?.success !== true) {
-      console.warn('[tripwire] Linear comment failed:', JSON.stringify(data));
-      return 'failed';
+    if (issueNumber === undefined) {
+      const created = await githubRest<{ number: number }>(token, repo, 'POST', '/issues', {
+        title: ALERT_ISSUE_TITLE,
+        body: 'Standing alert channel for `db-health-tripwire.yml`. Each comment is one tripped run.',
+      });
+      issueNumber = created.number;
     }
-    console.log(`[tripwire] Alert posted to Linear ${LINEAR_ISSUE_ID} (${issueUuid})`);
+    await githubRest(token, repo, 'POST', `/issues/${issueNumber}/comments`, { body });
+    console.log(`[tripwire] Alert posted to GitHub issue #${issueNumber}`);
     return 'posted';
   } catch (err) {
-    console.warn('[tripwire] Linear post error:', (err as Error).message);
+    console.warn('[tripwire] GitHub alert error:', (err as Error).message);
     return 'failed';
   }
 }
@@ -458,7 +452,7 @@ export async function runTripwire(receiptPath: string): Promise<number> {
       threshold_override_active: false,
       counts: countChecks([]),
       checks: [],
-      linear_alert: 'not_applicable',
+      alert: 'not_applicable',
       ...extra,
     });
     writeStepSummary(`### DB Health Tripwire: harness error\n\n\`\`\`\n${message}\n\`\`\``);
@@ -517,9 +511,9 @@ export async function runTripwire(receiptPath: string): Promise<number> {
   const outcome = deriveOutcome(checks);
 
   // A demonstration must never be able to raise a production alert.
-  const linearAlert: LinearAlertDisposition = overridden
+  const alert: AlertDisposition = overridden
     ? 'suppressed_threshold_override'
-    : await postLinearAlert(checks);
+    : await postAlert(checks);
 
   const receipt: TripwireReceipt = {
     schema: RECEIPT_SCHEMA,
@@ -537,7 +531,7 @@ export async function runTripwire(receiptPath: string): Promise<number> {
     threshold_override_active: overridden,
     counts: countChecks(checks),
     checks,
-    linear_alert: linearAlert,
+    alert,
   };
 
   writeReceipt(receiptPath, receipt);
@@ -546,10 +540,10 @@ export async function runTripwire(receiptPath: string): Promise<number> {
   // monitor that never runs, so it is annotated rather than left in the receipt
   // alone. It is deliberately NOT a job failure: conflating "could not notify"
   // with "the database is unhealthy" is what this lane exists to undo.
-  if (linearAlert === 'failed') {
+  if (alert === 'failed') {
     console.log(
-      '::warning title=DB Health Tripwire::Checks tripped but the Linear alert could not be ' +
-        `delivered to ${LINEAR_ISSUE_ID}. The finding is in the receipt artifact; the ` +
+      '::warning title=DB Health Tripwire::Checks tripped but the alert could not be ' +
+        `delivered to the "${ALERT_ISSUE_TITLE}" GitHub issue. The finding is in the receipt artifact; the ` +
         'notification path needs repair.',
     );
   }
@@ -568,7 +562,7 @@ export async function runTripwire(receiptPath: string): Promise<number> {
       `transaction_read_only=\`${observedReadOnly ?? 'unknown'}\`` +
       `${
         overridden
-          ? ' — **threshold override active (diagnostic run; Linear alert suppressed)**'
+          ? ' — **threshold override active (diagnostic run; alert suppressed)**'
           : ''
       }\n\n${table}`,
   );

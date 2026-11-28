@@ -20,7 +20,7 @@ When current state is disputed, `docs/05_operations/EXECUTION_TRUTH_MODEL.md` §
 1. GitHub `main`: shipped code, merge SHAs, CI on the merge.
 2. The proof bundle tied to the merge SHA.
 3. The lane manifest in `docs/06_status/lanes/*.json`, active statuses only.
-4. Linear issue state: workflow intent, ownership and tier label; never proof that code is merged.
+4. Work orders (`.ops/work/WORK-*.md`): workflow intent, tier and acceptance criteria; never proof that code is merged. The Linear workflow was retired on 2026-11-25; Linear references in older documents are historical.
 5. Chat, memory and agent claims: context only, never authoritative.
 
 Runtime commands such as `pnpm runtime:health`, `pnpm pipeline:health` and `pnpm readiness:report` establish current runtime state and override any status snapshot. `docs/06_status/CURRENT_STATE.md` is the dated status snapshot (its "Last verified" line states when; it is not current runtime or readiness truth, and `docs/mission/plan.md` plus the readiness ledger are newer); `docs/06_status/PROGRAM_STATUS.md` is superseded (its first line says so, and `docs/mission/spec.md` agrees) and is audit history only, as are `ISSUE_QUEUE.md`, closed proof bundles, dated audits, archived phase evidence, and superseded schemas.
@@ -114,7 +114,7 @@ defines no product behaviour and points at the contract.
 | `docs/05_operations/DB_*.md` and `docs/05_operations/SUPABASE_*.md`                                   | Database operation, migration, rollback, and Supabase policy                                           | Platform      |
 | `docs/05_operations/*CONTRACT.md`, `docs/05_operations/*STANDARD.md`, `docs/05_operations/*POLICY.md` | Active operational contracts and standards unless explicitly marked historical inside the file         | Owning lane   |
 | `docs/05_operations/lane-manager.md`                                                                  | Retired. Superseded by `LANE_MANIFEST_SPEC.md`; retained only because older references still exist.    | Historical    |
-| `docs/05_operations/QUEUE_ORCHESTRATION_DESIGN.md`                                                    | Historical queue design. Linear and lane manifests supersede `ISSUE_QUEUE.md` as live execution truth. | Historical    |
+| `docs/05_operations/QUEUE_ORCHESTRATION_DESIGN.md`                                                    | Historical queue design. Work orders and lane manifests supersede `ISSUE_QUEUE.md` as live execution truth. | Historical    |
 | `docs/archive/GOVERNED_LOOP_SPEC.md`                                                                  | Archived. Governed loop is in production; spec is now implementation history.                          | Archived      |
 | `docs/archive/CODEX_*_INTEGRATION_SPEC.md`                                                            | Archived. Codex integration is implemented; specs are implementation history.                          | Archived      |
 | `docs/archive/codex_wave_execution_playbook.md`                                                       | Archived. Wave execution model is implemented; playbook is historical reference.                       | Archived      |
@@ -130,7 +130,7 @@ defines no product behaviour and points at the contract.
 | `docs/06_status/proof/**`               | Proof and evidence archive. Current only when referenced by an active lane, PR, or recent closeout.                                                   | Evidence archive      |
 | `docs/06_status/KNOWN_DEBT.md`          | Known-debt pointer index                                                                                                                              | Debt index            |
 | `docs/06_status/INCIDENTS/**`           | Incident history                                                                                                                                      | Operational history   |
-| `docs/06_status/ISSUE_QUEUE.md`         | Deprecated historical work queue. Linear is live execution state.                                                                                     | Historical only       |
+| `docs/06_status/ISSUE_QUEUE.md`         | Deprecated historical work queue. Work orders and lane manifests are live execution state.                                                                                     | Historical only       |
 | `docs/06_status/PROOF_BUNDLE_SCHEMA.md` | Superseded proof schema. New bundles use `EVIDENCE_BUNDLE_TEMPLATE.md`.                                                                               | Historical only       |
 | `docs/06_status/PROOF_TEMPLATE.md`      | Historical T1 proof template. New simple proofs use `docs/06_status/proof/PROOF-TEMPLATE.md`; full bundles use `EVIDENCE_BUNDLE_TEMPLATE.md`.         | Historical template   |
 | Dated audits and phase evidence bundles | Historical evidence snapshots                                                                                                                         | Historical only       |
@@ -140,7 +140,7 @@ defines no product behaviour and points at the contract.
 1. Tier 5 never overrides Tier 2 or Tier 3.
 2. Operational docs must not contradict principles, contracts, or product identity.
 3. Status snapshots (`CURRENT_STATE.md`; `PROGRAM_STATUS.md` is superseded history) are not runtime proof; live runtime commands win.
-4. Linear is authoritative for current issue state. GitHub is authoritative for PR/check state.
+4. Work orders are authoritative for work intent; lane manifests for active lane state. GitHub is authoritative for PR/check state.
 5. Lane manifests are the repo-local execution record. Closed/done/merged manifests are history, not active work.
 6. `ISSUE_QUEUE.md` is historical only.
 7. Closed proof bundles, dated audits, and phase evidence do not prove current runtime health.
